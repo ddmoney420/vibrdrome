@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var engine: AudioEngine { AudioEngine.shared }
     @State private var showMiniPlayer = true
@@ -12,7 +13,13 @@ struct ContentView: View {
     var body: some View {
         Group {
             if appState.isConfigured {
-                mainTabView
+                if sizeClass == .regular {
+                    // iPad — sidebar layout
+                    SidebarContentView()
+                } else {
+                    // iPhone — tab bar layout
+                    mainTabView
+                }
             } else {
                 ServerConfigView()
                     .environment(appState)

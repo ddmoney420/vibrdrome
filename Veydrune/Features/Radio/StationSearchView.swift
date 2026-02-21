@@ -134,7 +134,7 @@ struct StationSearchView: View {
                             .background(
                                 browseTag == tag
                                 ? Color.accentColor.opacity(0.2)
-                                : Color(.secondarySystemGroupedBackground),
+                                : Color.secondary.opacity(0.15),
                                 in: Capsule()
                             )
                             .foregroundColor(browseTag == tag ? .accentColor : .primary)

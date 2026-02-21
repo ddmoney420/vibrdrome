@@ -3,6 +3,7 @@ import NukeUI
 
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showNowPlaying = false
     @AppStorage("reduceMotion") private var reduceMotion = false
 
@@ -82,10 +83,7 @@ struct MiniPlayerView: View {
             showNowPlaying = true
         }
         #if os(iOS)
-        .fullScreenCover(isPresented: $showNowPlaying) {
-            NowPlayingView()
-                .environment(appState)
-        }
+        .modifier(NowPlayingPresentation(isPresented: $showNowPlaying, isRegular: sizeClass == .regular, appState: appState))
         #else
         .sheet(isPresented: $showNowPlaying) {
             NowPlayingView()
@@ -115,3 +113,29 @@ struct MiniPlayerView: View {
         return ""
     }
 }
+
+#if os(iOS)
+/// Uses sheet on iPad, fullScreenCover on iPhone.
+private struct NowPlayingPresentation: ViewModifier {
+    @Binding var isPresented: Bool
+    let isRegular: Bool
+    let appState: AppState
+
+    func body(content: Content) -> some View {
+        if isRegular {
+            content
+                .sheet(isPresented: $isPresented) {
+                    NowPlayingView()
+                        .environment(appState)
+                        .presentationDetents([.large])
+                }
+        } else {
+            content
+                .fullScreenCover(isPresented: $isPresented) {
+                    NowPlayingView()
+                        .environment(appState)
+                }
+        }
+    }
+}
+#endif

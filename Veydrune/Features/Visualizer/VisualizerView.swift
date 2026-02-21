@@ -81,7 +81,9 @@ struct VisualizerView: View {
                 }
             }
         }
+        #if os(iOS)
         .statusBarHidden(true)
+        #endif
         .onReceive(timer) { _ in
             guard !reduceMotion else { return }
             updateTime()

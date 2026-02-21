@@ -132,7 +132,7 @@ struct SmartPlaylistView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(selectedType == type
                           ? type.color.opacity(0.15)
-                          : Color(.secondarySystemGroupedBackground))
+                          : Color.secondary.opacity(0.15))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -223,7 +223,7 @@ struct SmartPlaylistView: View {
                         }
                     }
                 }
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 16)
             }
         }

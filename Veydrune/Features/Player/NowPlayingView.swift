@@ -21,7 +21,7 @@ struct NowPlayingView: View {
 
     private var artWidth: CGFloat {
         #if os(iOS)
-        UIScreen.main.bounds.width - 150
+        min(UIScreen.main.bounds.width - 150, 400)
         #else
         340
         #endif
