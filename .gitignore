@@ -1,0 +1,18 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+
+# SPM
+.build/
+.swiftpm/
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# Claude Code
+.claude/

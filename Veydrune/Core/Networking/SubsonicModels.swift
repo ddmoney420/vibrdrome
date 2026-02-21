@@ -1,0 +1,278 @@
+import Foundation
+
+// MARK: - Top-level Response Wrapper
+
+struct SubsonicResponse: Decodable {
+    let subsonicResponse: SubsonicResponseBody
+
+    enum CodingKeys: String, CodingKey {
+        case subsonicResponse = "subsonic-response"
+    }
+}
+
+struct SubsonicResponseBody: Decodable {
+    let status: String
+    let version: String
+    let type: String?
+    let serverVersion: String?
+    let openSubsonic: Bool?
+    let error: SubsonicAPIError?
+
+    // Payload keys — each endpoint uses a different one
+    let artists: ArtistsResponse?
+    let artist: Artist?
+    let album: Album?
+    let song: Song?
+    let searchResult3: SearchResult3?
+    let playlists: PlaylistsWrapper?
+    let playlist: Playlist?
+    let genres: GenresWrapper?
+    let starred2: Starred2?
+    let albumList2: AlbumList2Response?
+    let randomSongs: RandomSongsResponse?
+    let internetRadioStations: InternetRadioStationsWrapper?
+    let lyricsList: LyricsList?
+    let playQueue: PlayQueue?
+    let bookmarks: BookmarksWrapper?
+
+    enum CodingKeys: String, CodingKey {
+        case status, version, type, serverVersion, openSubsonic, error
+        case artists, artist, album, song, searchResult3
+        case playlists, playlist, genres, starred2, albumList2, randomSongs
+        case internetRadioStations, lyricsList, playQueue, bookmarks
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(String.self, forKey: .status)
+        version = try container.decode(String.self, forKey: .version)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        serverVersion = try container.decodeIfPresent(String.self, forKey: .serverVersion)
+        openSubsonic = try container.decodeIfPresent(Bool.self, forKey: .openSubsonic)
+        error = try container.decodeIfPresent(SubsonicAPIError.self, forKey: .error)
+        artists = try container.decodeIfPresent(ArtistsResponse.self, forKey: .artists)
+        artist = try container.decodeIfPresent(Artist.self, forKey: .artist)
+        album = try container.decodeIfPresent(Album.self, forKey: .album)
+        song = try container.decodeIfPresent(Song.self, forKey: .song)
+        searchResult3 = try container.decodeIfPresent(SearchResult3.self, forKey: .searchResult3)
+        playlists = try container.decodeIfPresent(PlaylistsWrapper.self, forKey: .playlists)
+        playlist = try container.decodeIfPresent(Playlist.self, forKey: .playlist)
+        genres = try container.decodeIfPresent(GenresWrapper.self, forKey: .genres)
+        starred2 = try container.decodeIfPresent(Starred2.self, forKey: .starred2)
+        albumList2 = try container.decodeIfPresent(AlbumList2Response.self, forKey: .albumList2)
+        randomSongs = try container.decodeIfPresent(RandomSongsResponse.self, forKey: .randomSongs)
+        internetRadioStations = try container.decodeIfPresent(InternetRadioStationsWrapper.self, forKey: .internetRadioStations)
+        lyricsList = try container.decodeIfPresent(LyricsList.self, forKey: .lyricsList)
+        playQueue = try container.decodeIfPresent(PlayQueue.self, forKey: .playQueue)
+        bookmarks = try container.decodeIfPresent(BookmarksWrapper.self, forKey: .bookmarks)
+    }
+}
+
+struct SubsonicAPIError: Decodable {
+    let code: Int
+    let message: String
+}
+
+// MARK: - Artist Models
+
+struct ArtistIndex: Decodable, Identifiable, Sendable {
+    let name: String
+    let artist: [Artist]?
+    var id: String { name }
+}
+
+struct ArtistsResponse: Decodable, Sendable {
+    let index: [ArtistIndex]?
+    let ignoredArticles: String?
+}
+
+struct Artist: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let coverArt: String?
+    let albumCount: Int?
+    let starred: String?
+    let album: [Album]?
+}
+
+// MARK: - Album Models
+
+struct Album: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let artist: String?
+    let artistId: String?
+    let coverArt: String?
+    let songCount: Int?
+    let duration: Int?
+    let year: Int?
+    let genre: String?
+    let starred: String?
+    let created: String?
+    let song: [Song]?
+    let replayGain: ReplayGain?
+}
+
+struct AlbumList2Response: Decodable, Sendable {
+    let album: [Album]?
+}
+
+struct RandomSongsResponse: Decodable, Sendable {
+    let song: [Song]?
+}
+
+// MARK: - Song Model
+
+struct Song: Decodable, Identifiable, Sendable {
+    let id: String
+    let parent: String?
+    let title: String
+    let album: String?
+    let artist: String?
+    let albumId: String?
+    let artistId: String?
+    let track: Int?
+    let year: Int?
+    let genre: String?
+    let coverArt: String?
+    let size: Int?
+    let contentType: String?
+    let suffix: String?
+    let duration: Int?
+    let bitRate: Int?
+    let path: String?
+    let discNumber: Int?
+    let created: String?
+    let starred: String?
+    let bpm: Int?
+    let replayGain: ReplayGain?
+    let musicBrainzId: String?
+}
+
+struct ReplayGain: Decodable, Sendable {
+    let trackGain: Double?
+    let albumGain: Double?
+    let trackPeak: Double?
+    let albumPeak: Double?
+    let baseGain: Double?
+}
+
+// MARK: - Playlist Models
+
+struct PlaylistsWrapper: Decodable, Sendable {
+    let playlist: [Playlist]?
+}
+
+struct Playlist: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let songCount: Int?
+    let duration: Int?
+    let created: String?
+    let changed: String?
+    let coverArt: String?
+    let owner: String?
+    let isPublic: Bool?
+    let entry: [Song]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, songCount, duration, created, changed
+        case coverArt, owner, entry
+        case isPublic = "public"
+    }
+}
+
+// MARK: - Search Results
+
+struct SearchResult3: Decodable, Sendable {
+    let artist: [Artist]?
+    let album: [Album]?
+    let song: [Song]?
+}
+
+// MARK: - Starred
+
+struct Starred2: Decodable, Sendable {
+    let artist: [Artist]?
+    let album: [Album]?
+    let song: [Song]?
+}
+
+// MARK: - Internet Radio
+
+struct InternetRadioStationsWrapper: Decodable, Sendable {
+    let internetRadioStation: [InternetRadioStation]?
+}
+
+struct InternetRadioStation: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let streamUrl: String
+    let homePageUrl: String?
+}
+
+// MARK: - Lyrics (OpenSubsonic)
+
+struct LyricsList: Decodable, Sendable {
+    let structuredLyrics: [StructuredLyrics]?
+}
+
+struct StructuredLyrics: Decodable, Sendable {
+    let displayArtist: String?
+    let displayTitle: String?
+    let lang: String
+    let synced: Bool
+    let offset: Int?
+    let line: [LyricLine]?
+}
+
+struct LyricLine: Decodable, Sendable, Identifiable {
+    let start: Int?
+    let value: String
+
+    // Use a UUID for stable, unique identity in ForEach
+    private let _id = UUID()
+    var id: UUID { _id }
+
+    enum CodingKeys: String, CodingKey {
+        case start, value
+    }
+}
+
+// MARK: - Play Queue
+
+struct PlayQueue: Decodable, Sendable {
+    let current: String?
+    let position: Int?
+    let changed: String?
+    let changedBy: String?
+    let entry: [Song]?
+}
+
+// MARK: - Genres
+
+struct GenresWrapper: Decodable, Sendable {
+    let genre: [Genre]?
+}
+
+struct Genre: Decodable, Identifiable, Sendable {
+    let songCount: Int?
+    let albumCount: Int?
+    let value: String
+    var id: String { value }
+}
+
+// MARK: - Bookmarks
+
+struct BookmarksWrapper: Decodable, Sendable {
+    let bookmark: [Bookmark]?
+}
+
+struct Bookmark: Decodable, Sendable {
+    let position: Int
+    let username: String
+    let comment: String?
+    let created: String
+    let changed: String
+    let entry: Song?
+}
