@@ -43,13 +43,13 @@ struct ContentView: View {
         TabView {
             LibraryView()
                 .tabItem { Label("Library", systemImage: "music.note.house") }
-            SearchView()
+            NavigationStack { SearchView() }
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
-            PlaylistsView()
+            NavigationStack { PlaylistsView() }
                 .tabItem { Label("Playlists", systemImage: "music.note.list") }
-            RadioView()
+            NavigationStack { RadioView() }
                 .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
-            SettingsView()
+            NavigationStack { SettingsView() }
                 .tabItem { Label("Settings", systemImage: "gear") }
         }
         .overlay(alignment: .bottom) {

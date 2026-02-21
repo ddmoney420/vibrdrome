@@ -9,60 +9,81 @@ struct PlaylistsView: View {
     @State private var showSmartSheet = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Action buttons
-                    actionButtons
-                        .padding(.horizontal, 16)
-                        .padding(.top, 4)
+        ScrollView {
+            VStack(spacing: 24) {
+                // Action buttons
+                #if os(iOS)
+                actionButtons
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                #endif
 
-                    // Playlists grid
-                    if !playlists.isEmpty {
-                        playlistGrid
-                    }
-                }
-                .padding(.bottom, 80)
-            }
-            .navigationTitle("Playlists")
-            .sheet(isPresented: $showCreateSheet) {
-                PlaylistEditorView(mode: .create) {
-                    await loadPlaylists()
-                }
-                .environment(appState)
-            }
-            .sheet(isPresented: $showSmartSheet) {
-                SmartPlaylistView()
-                    .environment(appState)
-            }
-            .onChange(of: showSmartSheet) { _, isPresented in
-                if !isPresented {
-                    Task { await loadPlaylists() }
+                // Playlists grid
+                if !playlists.isEmpty {
+                    playlistGrid
                 }
             }
-            .overlay {
-                if isLoading && playlists.isEmpty {
-                    ProgressView("Loading playlists...")
-                } else if let error, playlists.isEmpty {
-                    ContentUnavailableView {
-                        Label("Error", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Retry") { Task { await loadPlaylists() } }
-                            .buttonStyle(.bordered)
-                    }
-                } else if !isLoading && playlists.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Playlists", systemImage: "music.note.list")
-                    } description: {
-                        Text("Create a playlist or generate a smart mix")
-                    }
-                }
-            }
-            .task { await loadPlaylists() }
-            .refreshable { await loadPlaylists() }
+            #if os(iOS)
+            .padding(.bottom, 80)
+            #endif
         }
+        .navigationTitle("Playlists")
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { showCreateSheet = true } label: {
+                    Label("New Playlist", systemImage: "plus")
+                }
+            }
+            ToolbarItem {
+                Button { showSmartSheet = true } label: {
+                    Label("Smart Mix", systemImage: "sparkles")
+                }
+            }
+            ToolbarItem {
+                Button { Task { await loadPlaylists() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
+        .sheet(isPresented: $showCreateSheet) {
+            PlaylistEditorView(mode: .create) {
+                await loadPlaylists()
+            }
+            .environment(appState)
+        }
+        .sheet(isPresented: $showSmartSheet) {
+            SmartPlaylistView()
+                .environment(appState)
+        }
+        .onChange(of: showSmartSheet) { _, isPresented in
+            if !isPresented {
+                Task { await loadPlaylists() }
+            }
+        }
+        .overlay {
+            if isLoading && playlists.isEmpty {
+                ProgressView("Loading playlists...")
+            } else if let error, playlists.isEmpty {
+                ContentUnavailableView {
+                    Label("Error", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await loadPlaylists() } }
+                        .buttonStyle(.bordered)
+                }
+            } else if !isLoading && playlists.isEmpty {
+                ContentUnavailableView {
+                    Label("No Playlists", systemImage: "music.note.list")
+                } description: {
+                    Text("Create a playlist or generate a smart mix")
+                }
+            }
+        }
+        .task { await loadPlaylists() }
+        .refreshable { await loadPlaylists() }
     }
 
     // MARK: - Action Buttons
@@ -107,8 +128,7 @@ struct PlaylistsView: View {
 
     private var playlistGrid: some View {
         LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 16),
-            GridItem(.flexible(), spacing: 16)
+            GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
         ], spacing: 20) {
             ForEach(playlists) { playlist in
                 NavigationLink {
@@ -118,6 +138,28 @@ struct PlaylistsView: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
+                    Button {
+                        Task {
+                            if let detail = try? await appState.subsonicClient.getPlaylist(id: playlist.id),
+                               let songs = detail.entry, let first = songs.first {
+                                AudioEngine.shared.play(song: first, from: songs, at: 0)
+                            }
+                        }
+                    } label: {
+                        Label("Play", systemImage: "play.fill")
+                    }
+                    Button {
+                        Task {
+                            if let detail = try? await appState.subsonicClient.getPlaylist(id: playlist.id),
+                               var songs = detail.entry, !songs.isEmpty {
+                                songs.shuffle()
+                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                            }
+                        }
+                    } label: {
+                        Label("Shuffle", systemImage: "shuffle")
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         deletePlaylist(playlist)
                     } label: {
@@ -131,7 +173,7 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            AlbumArtView(coverArtId: playlist.coverArt, size: 170, cornerRadius: 12)
+            AlbumArtView(coverArtId: playlist.coverArt, size: Theme.playlistCardSize, cornerRadius: 12)
                 .frame(maxWidth: .infinity)
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 

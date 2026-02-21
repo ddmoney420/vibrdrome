@@ -283,6 +283,13 @@ final class AudioEngine {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
+    // MARK: - Volume
+
+    var volume: Float {
+        get { player?.volume ?? 1.0 }
+        set { player?.volume = max(0, min(1, newValue)) }
+    }
+
     // MARK: - Shuffle / Repeat
 
     func toggleShuffle() {

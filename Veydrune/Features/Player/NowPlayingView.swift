@@ -16,6 +16,10 @@ struct NowPlayingView: View {
     @State private var albumImage: PlatformImage?
     @State private var loadedCoverArtId: String?
     @AppStorage("reduceMotion") private var reduceMotion = false
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    @State private var nsWindow: NSWindow?
+    #endif
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -28,6 +32,87 @@ struct NowPlayingView: View {
     }
 
     var body: some View {
+        mainContent
+            .task(id: engine.currentSong?.coverArt) {
+                await loadAlbumArt()
+            }
+            .sheet(isPresented: $showQueue) {
+                QueueView()
+                    .environment(appState)
+            }
+            .sheet(isPresented: $showLyrics) {
+                if let song = engine.currentSong {
+                    LyricsView(songId: song.id)
+                        .environment(appState)
+                }
+            }
+            #if os(iOS)
+            .fullScreenCover(isPresented: $showVisualizer) {
+                VisualizerView()
+            }
+            #endif
+            .onAppear {
+                isStarred = engine.currentSong?.starred != nil
+            }
+            .onChange(of: engine.currentSong?.id) {
+                isStarred = engine.currentSong?.starred != nil
+                isDragging = false
+                sliderValue = 0
+            }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        #if os(macOS)
+        GeometryReader { geo in
+            let controlsNeeded: CGFloat = 360
+            let artSize = max(150, min(geo.size.width - 120, geo.size.height - controlsNeeded))
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 8)
+
+                albumArt(size: artSize)
+                    .padding(.bottom, 12)
+
+                songInfo
+                    .padding(.bottom, 4)
+
+                metadataBadges
+                    .padding(.bottom, 4)
+
+                Spacer(minLength: 0)
+
+                progressSlider
+                    .padding(.bottom, 10)
+
+                playbackControls
+                    .padding(.bottom, 10)
+
+                bottomToolbar
+                    .padding(.bottom, 10)
+            }
+            .padding(.horizontal, 40)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .background {
+                ZStack {
+                    Color.black
+                    if let albumImage {
+                        Image(platformImage: albumImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .blur(radius: 30)
+                            .scaleEffect(1.5)
+                            .saturation(1.3)
+                            .clipped()
+                            .overlay(Color.black.opacity(0.2))
+                    }
+                }
+                .ignoresSafeArea()
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: loadedCoverArtId)
+            }
+            .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
+        }
+        #else
         artworkBackground
             .overlay {
                 VStack(spacing: 0) {
@@ -56,37 +141,7 @@ struct NowPlayingView: View {
                 }
                 .padding(.horizontal, 40)
             }
-        .task(id: engine.currentSong?.coverArt) {
-            await loadAlbumArt()
-        }
-        .sheet(isPresented: $showQueue) {
-            QueueView()
-                .environment(appState)
-        }
-        .sheet(isPresented: $showLyrics) {
-            if let song = engine.currentSong {
-                LyricsView(songId: song.id)
-                    .environment(appState)
-            }
-        }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showVisualizer) {
-            VisualizerView()
-        }
-        #else
-        .sheet(isPresented: $showVisualizer) {
-            VisualizerView()
-                .frame(minWidth: 500, minHeight: 400)
-        }
         #endif
-        .onAppear {
-            isStarred = engine.currentSong?.starred != nil
-        }
-        .onChange(of: engine.currentSong?.id) {
-            isStarred = engine.currentSong?.starred != nil
-            isDragging = false
-            sliderValue = 0
-        }
     }
 
     // MARK: - Image Loading
@@ -290,7 +345,13 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            Button { showVisualizer = true } label: {
+            Button {
+                #if os(macOS)
+                openWindow(id: "visualizer")
+                #else
+                showVisualizer = true
+                #endif
+            } label: {
                 Image(systemName: "waveform.path")
             }
 
@@ -342,6 +403,17 @@ struct NowPlayingView: View {
                 Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
                     .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.4))
             }
+
+            #if os(macOS)
+            Spacer()
+
+            Button {
+                nsWindow?.collectionBehavior.insert(.fullScreenPrimary)
+                nsWindow?.toggleFullScreen(nil)
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+            #endif
         }
         .font(.title3)
         .buttonStyle(.plain)
@@ -360,3 +432,29 @@ private extension Image {
         #endif
     }
 }
+
+// MARK: - macOS Window Reader
+
+#if os(macOS)
+private struct WindowReader: NSViewRepresentable {
+    var onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                onWindow(window)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                onWindow(window)
+            }
+        }
+    }
+}
+#endif

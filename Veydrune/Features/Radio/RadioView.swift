@@ -22,100 +22,121 @@ struct RadioView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Action buttons
-                    HStack(spacing: 12) {
-                        Button { showSearchSheet = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.purple)
-                                Text("Find Stations")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        ScrollView {
+            VStack(spacing: 20) {
+                // Action buttons (iOS inline, macOS uses toolbar)
+                #if os(iOS)
+                HStack(spacing: 12) {
+                    Button { showSearchSheet = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.purple)
+                            Text("Find Stations")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
 
-                        Button { showAddSheet = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.accentColor)
-                                Text("Add URL")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    Button { showAddSheet = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.accentColor)
+                            Text("Add URL")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                #endif
 
-                    // Now Playing station highlight
-                    if let current = engine.currentRadioStation,
-                       stations.contains(where: { $0.id == current.id }) {
-                        nowPlayingCard(current)
-                            .padding(.horizontal, 16)
-                    }
+                // Now Playing station highlight
+                if let current = engine.currentRadioStation,
+                   stations.contains(where: { $0.id == current.id }) {
+                    nowPlayingCard(current)
+                        .padding(.horizontal, 16)
+                }
 
-                    // Station grid
-                    if !filteredStations.isEmpty {
-                        stationGrid
-                    } else if !searchText.isEmpty {
-                        ContentUnavailableView.search(text: searchText)
-                            .padding(.top, 40)
-                    }
-                }
-                .padding(.bottom, 80)
-            }
-            .navigationTitle("Radio")
-            .searchable(text: $searchText, prompt: "Filter stations...")
-            .sheet(isPresented: $showAddSheet) {
-                AddStationView {
-                    await loadStations()
-                }
-                .environment(appState)
-            }
-            .sheet(isPresented: $showSearchSheet) {
-                StationSearchView {
-                    await loadStations()
-                }
-                .environment(appState)
-            }
-            .overlay {
-                if isLoading && stations.isEmpty {
-                    ProgressView("Loading stations...")
-                } else if let error, stations.isEmpty {
-                    ContentUnavailableView {
-                        Label("Error", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Retry") { Task { await loadStations() } }
-                            .buttonStyle(.bordered)
-                    }
-                } else if !isLoading && stations.isEmpty && searchText.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Stations", systemImage: "antenna.radiowaves.left.and.right")
-                    } description: {
-                        Text("Tap + to add a radio station")
-                    }
+                // Station grid
+                if !filteredStations.isEmpty {
+                    stationGrid
+                } else if !searchText.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                        .padding(.top, 40)
                 }
             }
-            .task { await loadStations() }
-            .refreshable { await loadStations() }
+            #if os(iOS)
+            .padding(.bottom, 80)
+            #endif
         }
+        .navigationTitle("Radio")
+        .searchable(text: $searchText, prompt: "Filter stations...")
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { showSearchSheet = true } label: {
+                    Label("Find Stations", systemImage: "magnifyingglass")
+                }
+            }
+            ToolbarItem {
+                Button { showAddSheet = true } label: {
+                    Label("Add URL", systemImage: "plus")
+                }
+            }
+            ToolbarItem {
+                Button { Task { await loadStations() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
+        .sheet(isPresented: $showAddSheet) {
+            AddStationView {
+                await loadStations()
+            }
+            .environment(appState)
+        }
+        .sheet(isPresented: $showSearchSheet) {
+            StationSearchView {
+                await loadStations()
+            }
+            .environment(appState)
+        }
+        .overlay {
+            if isLoading && stations.isEmpty {
+                ProgressView("Loading stations...")
+            } else if let error, stations.isEmpty {
+                ContentUnavailableView {
+                    Label("Error", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await loadStations() } }
+                        .buttonStyle(.bordered)
+                }
+            } else if !isLoading && stations.isEmpty && searchText.isEmpty {
+                ContentUnavailableView {
+                    Label("No Stations", systemImage: "antenna.radiowaves.left.and.right")
+                } description: {
+                    Text("Tap + to add a radio station")
+                }
+            }
+        }
+        .task { await loadStations() }
+        .refreshable { await loadStations() }
     }
 
     // MARK: - Now Playing Card

@@ -70,6 +70,15 @@ struct BookmarksView: View {
                 }
             }
         }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { Task { await loadBookmarks() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
         .task { await loadBookmarks() }
         .refreshable { await loadBookmarks() }
     }

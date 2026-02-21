@@ -3,7 +3,14 @@ import SwiftUI
 /// Sidebar-based navigation layout used on iPad and macOS.
 struct SidebarContentView: View {
     @Environment(AppState.self) private var appState
-    @State private var selection: SidebarItem? = .artists
+    @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.artists.rawValue
+
+    private var selection: Binding<SidebarItem?> {
+        Binding(
+            get: { SidebarItem(rawValue: selectionRaw) },
+            set: { selectionRaw = $0?.rawValue ?? SidebarItem.artists.rawValue }
+        )
+    }
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -17,9 +24,9 @@ struct SidebarContentView: View {
         case settings
     }
 
-    var body: some View {
+    private var splitView: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: selection) {
                 Section("Library") {
                     Label("Artists", systemImage: "music.mic")
                         .tag(SidebarItem.artists)
@@ -54,10 +61,12 @@ struct SidebarContentView: View {
                     Label("Stations", systemImage: "antenna.radiowaves.left.and.right")
                         .tag(SidebarItem.radio)
                 }
+                #if os(iOS)
                 Section {
                     Label("Settings", systemImage: "gear")
                         .tag(SidebarItem.settings)
                 }
+                #endif
             }
             .navigationTitle("Veydrune")
         } detail: {
@@ -65,16 +74,30 @@ struct SidebarContentView: View {
                 detailView
             }
         }
-        .safeAreaInset(edge: .bottom) {
+    }
+
+    var body: some View {
+        #if os(macOS)
+        VStack(spacing: 0) {
+            splitView
             if engine.currentSong != nil || engine.currentRadioStation != nil {
-                MiniPlayerView()
+                Divider()
+                MacMiniPlayerView()
             }
         }
+        #else
+        splitView
+            .safeAreaInset(edge: .bottom) {
+                if engine.currentSong != nil || engine.currentRadioStation != nil {
+                    MiniPlayerView()
+                }
+            }
+        #endif
     }
 
     @ViewBuilder
     private var detailView: some View {
-        switch selection {
+        switch selection.wrappedValue {
         case .artists:
             ArtistsView()
         case .albums:

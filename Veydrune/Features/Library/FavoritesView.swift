@@ -71,6 +71,15 @@ struct FavoritesView: View {
                 }
             }
         }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { Task { await loadStarred() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
         .task { await loadStarred() }
         .refreshable { await loadStarred() }
     }

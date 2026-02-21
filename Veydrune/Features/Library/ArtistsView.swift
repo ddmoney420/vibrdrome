@@ -36,6 +36,15 @@ struct ArtistsView: View {
                 }
             }
         }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { Task { await loadArtists() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
         .task { await loadArtists() }
         .refreshable { await loadArtists() }
     }

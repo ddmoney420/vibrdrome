@@ -55,6 +55,9 @@ struct VisualizerView: View {
     @State private var showControls = true
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
+    #if os(macOS)
+    @State private var nsWindow: NSWindow?
+    #endif
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -73,6 +76,9 @@ struct VisualizerView: View {
                         .colorEffect(preset.shader(size: geo.size, time: time, energy: energy))
                 }
                 .ignoresSafeArea()
+                #if os(macOS)
+                .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
+                #endif
 
                 // Controls overlay
                 if showControls {
@@ -144,8 +150,20 @@ struct VisualizerView: View {
 
                 Spacer()
 
+                #if os(macOS)
+                Button {
+                    nsWindow?.collectionBehavior.insert(.fullScreenPrimary)
+                    nsWindow?.toggleFullScreen(nil)
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .shadow(radius: 4)
+                }
+                #else
                 // Placeholder for symmetry
                 Color.clear.frame(width: 28, height: 28)
+                #endif
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -277,3 +295,29 @@ struct VisualizerView: View {
         }
     }
 }
+
+// MARK: - macOS Window Reader
+
+#if os(macOS)
+private struct WindowReader: NSViewRepresentable {
+    var onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                onWindow(window)
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                onWindow(window)
+            }
+        }
+    }
+}
+#endif

@@ -9,50 +9,50 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                if let results {
-                    resultsContent(results)
-                } else if let searchError, !query.isEmpty {
-                    errorContent(searchError)
-                } else if query.isEmpty {
-                    emptyContent
-                }
+        ScrollView {
+            if let results {
+                resultsContent(results)
+            } else if let searchError, !query.isEmpty {
+                errorContent(searchError)
+            } else if query.isEmpty {
+                emptyContent
             }
-            .padding(.bottom, 80)
-            .navigationTitle("Search")
-            .searchable(text: $query, prompt: "Artists, albums, songs...")
-            .onChange(of: query) { _, newValue in
-                searchTask?.cancel()
+        }
+        #if os(iOS)
+        .padding(.bottom, 80)
+        #endif
+        .navigationTitle("Search")
+        .searchable(text: $query, prompt: "Artists, albums, songs...")
+        .onChange(of: query) { _, newValue in
+            searchTask?.cancel()
 
-                guard newValue.count >= 2 else {
-                    results = nil
-                    return
-                }
+            guard newValue.count >= 2 else {
+                results = nil
+                return
+            }
 
-                searchTask = Task {
-                    try? await Task.sleep(for: .milliseconds(300))
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+
+                isSearching = true
+                defer { isSearching = false }
+
+                do {
+                    let searchResults = try await appState.subsonicClient.search(query: newValue)
                     guard !Task.isCancelled else { return }
-
-                    isSearching = true
-                    defer { isSearching = false }
-
-                    do {
-                        let searchResults = try await appState.subsonicClient.search(query: newValue)
-                        guard !Task.isCancelled else { return }
-                        searchError = nil
-                        results = searchResults
-                    } catch {
-                        guard !Task.isCancelled else { return }
-                        searchError = error.localizedDescription
-                        results = nil
-                    }
+                    searchError = nil
+                    results = searchResults
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    searchError = error.localizedDescription
+                    results = nil
                 }
             }
-            .overlay {
-                if isSearching {
-                    ProgressView()
-                }
+        }
+        .overlay {
+            if isSearching {
+                ProgressView()
             }
         }
     }
@@ -141,7 +141,7 @@ struct SearchView: View {
 
     private func artistBubble(_ artist: Artist) -> some View {
         VStack(spacing: 8) {
-            AlbumArtView(coverArtId: artist.coverArt, size: 80, cornerRadius: 40)
+            AlbumArtView(coverArtId: artist.coverArt, size: Theme.artistBubbleSize, cornerRadius: Theme.artistBubbleSize / 2)
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
             Text(artist.name)
@@ -151,14 +151,14 @@ struct SearchView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .frame(width: 88)
+        .frame(width: Theme.artistBubbleSize + 8)
     }
 
     // MARK: - Album Tile
 
     private func albumTile(_ album: Album) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: album.coverArt, size: 140, cornerRadius: 10)
+            AlbumArtView(coverArtId: album.coverArt, size: Theme.searchAlbumTileSize, cornerRadius: 10)
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(album.name)
@@ -172,7 +172,7 @@ struct SearchView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: 140)
+        .frame(width: Theme.searchAlbumTileSize)
     }
 
     // MARK: - Song Row (with album art)

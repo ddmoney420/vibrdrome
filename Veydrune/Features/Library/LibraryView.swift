@@ -47,7 +47,9 @@ struct LibraryView: View {
                     // More section
                     moreSection
                 }
+                #if os(iOS)
                 .padding(.bottom, 80)
+                #endif
             }
             .navigationTitle("Library")
             .task {
@@ -60,11 +62,16 @@ struct LibraryView: View {
 
     // MARK: - Quick Access
 
+    private var quickAccessColumns: [GridItem] {
+        #if os(macOS)
+        [GridItem(.adaptive(minimum: 140), spacing: 10)]
+        #else
+        [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        #endif
+    }
+
     private var quickAccessBar: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 10),
-            GridItem(.flexible(), spacing: 10)
-        ], spacing: 10) {
+        LazyVGrid(columns: quickAccessColumns, spacing: 10) {
             quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
             quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
             quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
@@ -143,7 +150,7 @@ struct LibraryView: View {
 
     private func albumCard(_ album: Album) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: album.coverArt, size: 160, cornerRadius: 10)
+            AlbumArtView(coverArtId: album.coverArt, size: Theme.albumCardSize, cornerRadius: 10)
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(album.name)
@@ -157,7 +164,7 @@ struct LibraryView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: 160)
+        .frame(width: Theme.albumCardSize)
     }
 
     // MARK: - Rediscover Section
@@ -195,7 +202,7 @@ struct LibraryView: View {
 
     private func songCard(_ song: Song) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: song.coverArt, size: 130, cornerRadius: 10)
+            AlbumArtView(coverArtId: song.coverArt, size: Theme.songCardSize, cornerRadius: 10)
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(song.title)
@@ -209,7 +216,7 @@ struct LibraryView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: 130)
+        .frame(width: Theme.songCardSize)
     }
 
     // MARK: - More Section

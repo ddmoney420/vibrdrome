@@ -39,7 +39,9 @@ struct AlbumDetailView: View {
                     // Album info footer
                     albumFooter(album)
                 }
+                #if os(iOS)
                 .padding(.bottom, 80)
+                #endif
             }
         }
         .navigationTitle(album?.name ?? "Album")
@@ -65,6 +67,48 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func albumHeader(_ album: Album) -> some View {
+        #if os(macOS)
+        HStack(alignment: .top, spacing: 20) {
+            AlbumArtView(coverArtId: album.coverArt, size: 200, cornerRadius: 12)
+                .shadow(radius: 8)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(album.name)
+                    .font(.title2)
+                    .bold()
+
+                if let artist = album.artist {
+                    Text(artist)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 8) {
+                    if let year = album.year {
+                        Text(verbatim: "\(year)")
+                    }
+                    if let genre = album.genre {
+                        Text("·")
+                        Text(genre)
+                    }
+                    if let count = album.songCount {
+                        Text("·")
+                        Text(verbatim: "\(count) songs")
+                    }
+                    if let duration = album.duration {
+                        Text("·")
+                        Text(formatDuration(duration))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        #else
         VStack(spacing: 12) {
             AlbumArtView(coverArtId: album.coverArt, size: 240, cornerRadius: 12)
                 .shadow(radius: 8)
@@ -102,6 +146,7 @@ struct AlbumDetailView: View {
             .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 20)
+        #endif
     }
 
     @ViewBuilder

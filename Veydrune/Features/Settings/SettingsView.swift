@@ -73,44 +73,42 @@ struct SettingsView: View {
     @Query private var downloadedSongs: [DownloadedSong]
 
     var body: some View {
-        NavigationStack {
-            List {
-                serverSection
-                playbackSection
-                downloadsSection
-                appearanceSection
-                #if os(iOS)
-                carPlaySection
-                #endif
-                accessibilitySection
-                aboutSection
+        List {
+            serverSection
+            playbackSection
+            downloadsSection
+            appearanceSection
+            #if os(iOS)
+            carPlaySection
+            #endif
+            accessibilitySection
+            aboutSection
+        }
+        .navigationTitle("Settings")
+        .sheet(isPresented: $showServerConfig) {
+            ServerConfigView()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showServerManager) {
+            ServerManagerView()
+                .environment(appState)
+        }
+        .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                DownloadManager.shared.deleteAllDownloads()
             }
-            .navigationTitle("Settings")
-            .sheet(isPresented: $showServerConfig) {
-                ServerConfigView()
-                    .environment(appState)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove all downloaded songs from this device.")
+        }
+        .alert("Sign Out?", isPresented: $showLogoutConfirmation) {
+            Button("Sign Out", role: .destructive) {
+                AudioEngine.shared.stop()
+                appState.clearCredentials()
             }
-            .sheet(isPresented: $showServerManager) {
-                ServerManagerView()
-                    .environment(appState)
-            }
-            .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
-                Button("Delete", role: .destructive) {
-                    DownloadManager.shared.deleteAllDownloads()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will remove all downloaded songs from this device.")
-            }
-            .alert("Sign Out?", isPresented: $showLogoutConfirmation) {
-                Button("Sign Out", role: .destructive) {
-                    AudioEngine.shared.stop()
-                    appState.clearCredentials()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will disconnect from the server. You can reconnect anytime.")
-            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will disconnect from the server. You can reconnect anytime.")
         }
     }
 

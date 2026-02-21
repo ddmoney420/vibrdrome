@@ -15,12 +15,20 @@ class VeydruneAppDelegate: NSObject, UIApplicationDelegate {
         DownloadManager.shared.completionHandler = completionHandler
     }
 }
+#elseif os(macOS)
+class VeydruneMacDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
 #endif
 
 @main
 struct VeydruneApp: App {
     #if os(iOS)
     @UIApplicationDelegateAdaptor(VeydruneAppDelegate.self) var appDelegate
+    #elseif os(macOS)
+    @NSApplicationDelegateAdaptor(VeydruneMacDelegate.self) var appDelegate
     #endif
     @State private var appState = AppState.shared
     @AppStorage("appColorScheme") private var appColorScheme: String = "system"
@@ -46,6 +54,7 @@ struct VeydruneApp: App {
         WindowGroup {
             #if os(macOS)
             MacContentView()
+                .frame(minWidth: 800, minHeight: 500)
                 .environment(appState)
                 .modelContainer(persistenceController.container)
                 .preferredColorScheme(colorScheme)
@@ -71,6 +80,7 @@ struct VeydruneApp: App {
             #endif
         }
         #if os(macOS)
+        .defaultSize(width: 1100, height: 750)
         .commands {
             CommandMenu("Playback") {
                 Button("Play/Pause") {
@@ -101,7 +111,60 @@ struct VeydruneApp: App {
                     AudioEngine.shared.cycleRepeatMode()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Volume Up") {
+                    AudioEngine.shared.volume = min(1, AudioEngine.shared.volume + 0.1)
+                }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+
+                Button("Volume Down") {
+                    AudioEngine.shared.volume = max(0, AudioEngine.shared.volume - 0.1)
+                }
+                .keyboardShortcut(.downArrow, modifiers: .command)
             }
+        }
+        #endif
+
+        #if os(macOS)
+        Window("Now Playing", id: "now-playing") {
+            NowPlayingView()
+                .environment(appState)
+                .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+        }
+        .defaultSize(width: 500, height: 700)
+
+        Window("Visualizer", id: "visualizer") {
+            VisualizerView()
+                .environment(appState)
+                .modelContainer(persistenceController.container)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 700, height: 500)
+
+        Window("Mini Player", id: "mini-player") {
+            PopOutPlayerView()
+                .environment(appState)
+                .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 320, height: 88)
+        .windowResizability(.contentSize)
+
+        Settings {
+            NavigationStack {
+                SettingsView()
+            }
+            .environment(appState)
+            .modelContainer(persistenceController.container)
+            .preferredColorScheme(colorScheme)
+            .tint(accentColor)
+            .frame(width: 500, height: 600)
         }
         #endif
     }

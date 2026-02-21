@@ -7,6 +7,17 @@ struct MacContentView: View {
 
     private var engine: AudioEngine { AudioEngine.shared }
 
+    private var windowTitle: String {
+        if let song = engine.currentSong {
+            let artist = song.artist ?? ""
+            return artist.isEmpty ? "\(song.title) — Veydrune" : "\(song.title) - \(artist) — Veydrune"
+        }
+        if let station = engine.currentRadioStation {
+            return "\(station.name) — Veydrune"
+        }
+        return "Veydrune"
+    }
+
     var body: some View {
         Group {
             if appState.isConfigured {
@@ -16,6 +27,7 @@ struct MacContentView: View {
                     .environment(appState)
             }
         }
+        .navigationTitle(windowTitle)
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
             switch newPhase {

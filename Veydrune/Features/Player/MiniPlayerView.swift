@@ -3,7 +3,6 @@ import NukeUI
 
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showNowPlaying = false
     @AppStorage("reduceMotion") private var reduceMotion = false
 
@@ -83,7 +82,10 @@ struct MiniPlayerView: View {
             showNowPlaying = true
         }
         #if os(iOS)
-        .modifier(NowPlayingPresentation(isPresented: $showNowPlaying, isRegular: sizeClass == .regular, appState: appState))
+        .fullScreenCover(isPresented: $showNowPlaying) {
+            NowPlayingView()
+                .environment(appState)
+        }
         #else
         .sheet(isPresented: $showNowPlaying) {
             NowPlayingView()
@@ -114,28 +116,221 @@ struct MiniPlayerView: View {
     }
 }
 
-#if os(iOS)
-/// Uses sheet on iPad, fullScreenCover on iPhone.
-private struct NowPlayingPresentation: ViewModifier {
-    @Binding var isPresented: Bool
-    let isRegular: Bool
-    let appState: AppState
+// MARK: - macOS Player Bar
 
-    func body(content: Content) -> some View {
-        if isRegular {
-            content
-                .sheet(isPresented: $isPresented) {
-                    NowPlayingView()
-                        .environment(appState)
-                        .presentationDetents([.large])
+#if os(macOS)
+struct MacMiniPlayerView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("reduceMotion") private var reduceMotion = false
+
+    private var engine: AudioEngine { AudioEngine.shared }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Thin progress bar across full width
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(.quaternary)
+
+                    Rectangle()
+                        .fill(.tint)
+                        .frame(width: engine.duration > 0
+                               ? geo.size.width * (engine.currentTime / engine.duration)
+                               : 0)
+                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
                 }
-        } else {
-            content
-                .fullScreenCover(isPresented: $isPresented) {
-                    NowPlayingView()
-                        .environment(appState)
+            }
+            .frame(height: 3)
+
+            HStack(spacing: 16) {
+                // Album art
+                AlbumArtView(
+                    coverArtId: engine.currentSong?.coverArt,
+                    size: 40,
+                    cornerRadius: 6
+                )
+
+                // Song info
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(displayTitle)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+
+                    Text(displaySubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
+                .frame(minWidth: 120, alignment: .leading)
+
+                Spacer()
+
+                // Transport controls — centered
+                HStack(spacing: 16) {
+                    Button { engine.previous() } label: {
+                        Image(systemName: "backward.fill")
+                            .font(.body)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { engine.togglePlayPause() } label: {
+                        Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { engine.next() } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.body)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(engine.queue.isEmpty)
+                }
+
+                Spacer()
+
+                // Volume slider
+                HStack(spacing: 6) {
+                    Image(systemName: "speaker.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Slider(value: Binding(
+                        get: { engine.volume },
+                        set: { engine.volume = $0 }
+                    ).animation(nil), in: 0...1)
+                    .frame(width: 100)
+
+                    Image(systemName: "speaker.wave.3.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Pop-out mini player
+                Button {
+                    openWindow(id: "mini-player")
+                } label: {
+                    Image(systemName: "pip.enter")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Pop out mini player")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
+        .background(.bar)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            openWindow(id: "now-playing")
+        }
+    }
+
+    private var displayTitle: String {
+        if let song = engine.currentSong {
+            return song.title
+        }
+        if let station = engine.currentRadioStation {
+            return station.name
+        }
+        return "Not Playing"
+    }
+
+    private var displaySubtitle: String {
+        if let song = engine.currentSong {
+            return song.artist ?? ""
+        }
+        if engine.currentRadioStation != nil {
+            return "Internet Radio"
+        }
+        return ""
+    }
+}
+
+// MARK: - Pop-Out Mini Player (floating window)
+
+struct PopOutPlayerView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("reduceMotion") private var reduceMotion = false
+
+    private var engine: AudioEngine { AudioEngine.shared }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(.quaternary)
+                    Rectangle()
+                        .fill(.tint)
+                        .frame(width: engine.duration > 0
+                               ? geo.size.width * (engine.currentTime / engine.duration)
+                               : 0)
+                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
+                }
+            }
+            .frame(height: 2)
+
+            HStack(spacing: 10) {
+                // Album art
+                AlbumArtView(
+                    coverArtId: engine.currentSong?.coverArt,
+                    size: 52,
+                    cornerRadius: 8
+                )
+                .onTapGesture {
+                    openWindow(id: "now-playing")
+                }
+
+                // Song info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(engine.currentSong?.title ?? engine.currentRadioStation?.name ?? "Not Playing")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+
+                    Text(engine.currentSong?.artist ?? (engine.currentRadioStation != nil ? "Internet Radio" : ""))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                // Transport controls
+                HStack(spacing: 12) {
+                    Button { engine.previous() } label: {
+                        Image(systemName: "backward.fill")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { engine.togglePlayPause() } label: {
+                        Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.body)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { engine.next() } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(engine.queue.isEmpty)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .background(.bar)
+        .frame(width: 320, height: 76)
     }
 }
 #endif
+

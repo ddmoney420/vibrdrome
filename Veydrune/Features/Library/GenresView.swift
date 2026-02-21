@@ -45,6 +45,15 @@ struct GenresView: View {
                 }
             }
         }
+        #if os(macOS)
+        .toolbar {
+            ToolbarItem {
+                Button { Task { await loadGenres() } } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        #endif
         .task { await loadGenres() }
         .refreshable { await loadGenres() }
     }
