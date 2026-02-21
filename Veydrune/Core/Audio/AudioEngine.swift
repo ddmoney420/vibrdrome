@@ -155,6 +155,15 @@ final class AudioEngine {
     }
 
     func resume() {
+        // If we have a song but no player item (e.g. restored play queue), load it first
+        if let song = currentSong, player?.currentItem == nil {
+            let savedTime = currentTime
+            let url = resolveURL(for: song)
+            replacePlayerItem(with: url)
+            if savedTime > 0 {
+                seek(to: savedTime)
+            }
+        }
         player?.play()
         isPlaying = true
         NowPlayingManager.shared.updatePlaybackState(isPlaying: true, elapsed: currentTime)
