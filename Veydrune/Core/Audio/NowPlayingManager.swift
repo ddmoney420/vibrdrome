@@ -4,6 +4,19 @@ import MediaPlayer
 import AppKit
 #endif
 
+// Free function outside @MainActor class so the closure doesn't inherit MainActor isolation.
+// MPMediaItemArtwork calls its requestHandler on an internal background queue (*/accessQueue),
+// which would crash if the closure were @MainActor-isolated.
+#if os(iOS)
+private func makeArtwork(from image: UIImage) -> MPMediaItemArtwork {
+    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+}
+#else
+private func makeArtwork(from image: NSImage) -> MPMediaItemArtwork {
+    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+}
+#endif
+
 @MainActor
 final class NowPlayingManager {
     static let shared = NowPlayingManager()
@@ -38,11 +51,10 @@ final class NowPlayingManager {
                     guard AudioEngine.shared.currentSong?.id == songId else { return }
                     #if os(iOS)
                     guard let image = UIImage(data: data) else { return }
-                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                     #else
                     guard let image = NSImage(data: data) else { return }
-                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                     #endif
+                    let artwork = makeArtwork(from: image)
                     self.currentInfo[MPMediaItemPropertyArtwork] = artwork
                     self.infoCenter.nowPlayingInfo = self.currentInfo
                 } catch {

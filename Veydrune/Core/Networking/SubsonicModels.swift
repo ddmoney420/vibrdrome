@@ -34,12 +34,15 @@ struct SubsonicResponseBody: Decodable {
     let lyricsList: LyricsList?
     let playQueue: PlayQueue?
     let bookmarks: BookmarksWrapper?
+    let similarSongs2: SimilarSongs2Response?
+    let topSongs: TopSongsResponse?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
         case artists, artist, album, song, searchResult3
         case playlists, playlist, genres, starred2, albumList2, randomSongs
         case internetRadioStations, lyricsList, playQueue, bookmarks
+        case similarSongs2, topSongs
     }
 
     init(from decoder: Decoder) throws {
@@ -65,6 +68,8 @@ struct SubsonicResponseBody: Decodable {
         lyricsList = try container.decodeIfPresent(LyricsList.self, forKey: .lyricsList)
         playQueue = try container.decodeIfPresent(PlayQueue.self, forKey: .playQueue)
         bookmarks = try container.decodeIfPresent(BookmarksWrapper.self, forKey: .bookmarks)
+        similarSongs2 = try container.decodeIfPresent(SimilarSongs2Response.self, forKey: .similarSongs2)
+        topSongs = try container.decodeIfPresent(TopSongsResponse.self, forKey: .topSongs)
     }
 }
 
@@ -118,6 +123,14 @@ struct AlbumList2Response: Decodable, Sendable {
 }
 
 struct RandomSongsResponse: Decodable, Sendable {
+    let song: [Song]?
+}
+
+struct SimilarSongs2Response: Decodable, Sendable {
+    let song: [Song]?
+}
+
+struct TopSongsResponse: Decodable, Sendable {
     let song: [Song]?
 }
 

@@ -40,6 +40,7 @@ final class AudioEngine {
     private var itemEndObserver: Any?
     private var bufferingObserver: AnyCancellable?
     private var durationObserver: AnyCancellable?
+    private var statusObserver: AnyCancellable?
     private var scrobbleSubmitted = false
     private var trackStartTime: Date?
     /// Monotonically increasing counter to detect stale observer callbacks
@@ -438,6 +439,17 @@ final class AudioEngine {
                 self.isBuffering = empty
             }
 
+        // Status — detect failed streams (especially radio)
+        statusObserver = item.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self, self.generation == observerGeneration else { return }
+                if status == .failed {
+                    self.isPlaying = false
+                    self.isBuffering = false
+                }
+            }
+
         // Track ended — capture the item to verify it's still current
         let endItem = item
         itemEndObserver = NotificationCenter.default.addObserver(
@@ -467,6 +479,8 @@ final class AudioEngine {
         durationObserver = nil
         bufferingObserver?.cancel()
         bufferingObserver = nil
+        statusObserver?.cancel()
+        statusObserver = nil
     }
 
     private func handleTrackEnd() {

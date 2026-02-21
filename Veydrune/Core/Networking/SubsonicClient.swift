@@ -219,6 +219,14 @@ final class SubsonicClient: Sendable {
         return body.internetRadioStations?.internetRadioStation ?? []
     }
 
+    func createRadioStation(streamUrl: String, name: String, homepageUrl: String? = nil) async throws {
+        try await performAction(.createInternetRadioStation(streamUrl: streamUrl, name: name, homepageUrl: homepageUrl))
+    }
+
+    func deleteRadioStation(id: String) async throws {
+        try await performAction(.deleteInternetRadioStation(id: id))
+    }
+
     func getPlayQueue() async throws -> PlayQueue? {
         let body = try await request(.getPlayQueue)
         return body.playQueue
@@ -239,6 +247,16 @@ final class SubsonicClient: Sendable {
 
     func deleteBookmark(id: String) async throws {
         try await performAction(.deleteBookmark(id: id))
+    }
+
+    func getSimilarSongs(id: String, count: Int = 50) async throws -> [Song] {
+        let body = try await request(.getSimilarSongs2(id: id, count: count))
+        return body.similarSongs2?.song ?? []
+    }
+
+    func getTopSongs(artist: String, count: Int = 50) async throws -> [Song] {
+        let body = try await request(.getTopSongs(artist: artist, count: count))
+        return body.topSongs?.song ?? []
     }
 
     // MARK: - Reconfigure

@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SwiftData
 
 final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
@@ -15,16 +16,35 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
     private let lock = NSLock()
     private var activeDownloads: [String: URLSessionDownloadTask] = [:]
+    private let networkMonitor = NWPathMonitor()
+    private var _isOnCellular = false
+    var isOnCellular: Bool {
+        lock.withLock { _isOnCellular }
+    }
     private var _completionHandler: (() -> Void)?
     var completionHandler: (() -> Void)? {
         get { lock.withLock { _completionHandler } }
         set { lock.withLock { _completionHandler = newValue } }
     }
 
+    override init() {
+        super.init()
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            self.lock.withLock { self._isOnCellular = path.usesInterfaceType(.cellular) }
+        }
+        networkMonitor.start(queue: DispatchQueue(label: "com.veydrune.download.network"))
+    }
+
     // MARK: - Public API
 
     @MainActor
     func download(song: Song, client: SubsonicClient) {
+        // Block downloads over cellular if setting is off
+        if isOnCellular && !UserDefaults.standard.bool(forKey: "downloadOverCellular") {
+            return
+        }
+
         // Prevent duplicate downloads
         let alreadyActive = lock.withLock { activeDownloads[song.id] != nil }
         guard !alreadyActive else { return }

@@ -1,37 +1,47 @@
 import SwiftUI
+import NukeUI
 
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @State private var showNowPlaying = false
+    @AppStorage("reduceMotion") private var reduceMotion = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Progress bar
+            // Animated progress bar
             GeometryReader { geo in
-                Rectangle()
-                    .fill(Color.accentColor)
-                    .frame(width: engine.duration > 0
-                           ? geo.size.width * (engine.currentTime / engine.duration)
-                           : 0)
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(.white.opacity(0.1))
+
+                    Rectangle()
+                        .fill(.white.opacity(0.8))
+                        .frame(width: engine.duration > 0
+                               ? geo.size.width * (engine.currentTime / engine.duration)
+                               : 0)
+                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
+                }
             }
             .frame(height: 2)
 
             HStack(spacing: 12) {
-                // Cover art thumbnail
+                // Album art — rounded
                 AlbumArtView(
                     coverArtId: engine.currentSong?.coverArt,
                     size: 44,
-                    cornerRadius: 6
+                    cornerRadius: 10
                 )
+                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
                 // Song info
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayTitle)
                         .font(.subheadline)
-                        .bold()
+                        .fontWeight(.semibold)
                         .lineLimit(1)
+
                     Text(displaySubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -40,16 +50,21 @@ struct MiniPlayerView: View {
 
                 Spacer()
 
-                // Controls
+                // Play/Pause — larger hit target
                 Button { engine.togglePlayPause() } label: {
                     Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                         .font(.title3)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
+                // Next
                 Button { engine.next() } label: {
                     Image(systemName: "forward.fill")
                         .font(.body)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(engine.queue.isEmpty)
@@ -58,6 +73,10 @@ struct MiniPlayerView: View {
             .padding(.vertical, 8)
         }
         .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, 8)
+        .padding(.bottom, 2)
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             showNowPlaying = true

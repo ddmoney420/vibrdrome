@@ -39,6 +39,7 @@ struct AlbumDetailView: View {
                     // Album info footer
                     albumFooter(album)
                 }
+                .padding(.bottom, 80)
             }
         }
         .navigationTitle(album?.name ?? "Album")
@@ -105,64 +106,75 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func actionButtons(_ album: Album) -> some View {
-        HStack(spacing: 20) {
-            Button {
-                if let songs = album.song, let first = songs.first {
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                }
-            } label: {
-                Label("Play", systemImage: "play.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(album.song?.isEmpty ?? true)
-
-            Button {
-                if var songs = album.song, !songs.isEmpty {
-                    songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                }
-            } label: {
-                Label("Shuffle", systemImage: "shuffle")
-            }
-            .buttonStyle(.bordered)
-            .disabled(album.song?.isEmpty ?? true)
-
-            // Download album
-            Button {
-                if let songs = album.song {
-                    DownloadManager.shared.downloadAlbum(
-                        songs: songs,
-                        client: appState.subsonicClient
-                    )
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-            }
-            .disabled(album.song?.isEmpty ?? true)
-
-            Spacer()
-
-            Button {
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Task {
-                    do {
-                        if wasStarred {
-                            try await appState.subsonicClient.unstar(albumId: albumId)
-                        } else {
-                            try await appState.subsonicClient.star(albumId: albumId)
-                        }
-                    } catch {
-                        isStarred = wasStarred
+        VStack(spacing: 12) {
+            // Play / Shuffle row
+            HStack(spacing: 12) {
+                Button {
+                    if let songs = album.song, let first = songs.first {
+                        AudioEngine.shared.play(song: first, from: songs, at: 0)
                     }
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
                 }
-            } label: {
-                Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .foregroundStyle(isStarred ? .pink : .secondary)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(album.song?.isEmpty ?? true)
+
+                Button {
+                    if var songs = album.song, !songs.isEmpty {
+                        songs.shuffle()
+                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    }
+                } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(album.song?.isEmpty ?? true)
+            }
+
+            // Secondary actions row
+            HStack(spacing: 24) {
+                Button {
+                    if let songs = album.song {
+                        DownloadManager.shared.downloadAlbum(
+                            songs: songs,
+                            client: appState.subsonicClient
+                        )
+                    }
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.title3)
+                }
+                .disabled(album.song?.isEmpty ?? true)
+
+                Spacer()
+
+                Button {
+                    let wasStarred = isStarred
+                    isStarred = !wasStarred
+                    Task {
+                        do {
+                            if wasStarred {
+                                try await appState.subsonicClient.unstar(albumId: albumId)
+                            } else {
+                                try await appState.subsonicClient.star(albumId: albumId)
+                            }
+                        } catch {
+                            isStarred = wasStarred
+                        }
+                    }
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .font(.title3)
+                        .foregroundStyle(isStarred ? .pink : .secondary)
+                }
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder

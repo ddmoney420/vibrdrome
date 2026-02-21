@@ -13,11 +13,11 @@ struct AlbumArtView: View {
             LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: Int(size * 2))) { state in
                 if let image = state.image {
                     image.resizable().aspectRatio(contentMode: .fill)
+                        .transition(.opacity.animation(.easeIn(duration: 0.2)))
                 } else if state.error != nil {
                     placeholderView
                 } else {
                     placeholderView
-                        .overlay { ProgressView() }
                 }
             }
             .frame(width: size, height: size)

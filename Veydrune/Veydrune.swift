@@ -23,7 +23,24 @@ struct VeydruneApp: App {
     @UIApplicationDelegateAdaptor(VeydruneAppDelegate.self) var appDelegate
     #endif
     @State private var appState = AppState.shared
+    @AppStorage("appColorScheme") private var appColorScheme: String = "system"
+    @AppStorage("accentColorTheme") private var accentColorTheme: String = "blue"
+    @AppStorage("largerText") private var largerText: Bool = false
+    @AppStorage("boldText") private var boldText: Bool = false
+    @AppStorage("reduceMotion") private var reduceMotion: Bool = false
     private let persistenceController = PersistenceController.shared
+
+    private var colorScheme: ColorScheme? {
+        switch appColorScheme {
+        case "dark": .dark
+        case "light": .light
+        default: nil
+        }
+    }
+
+    private var accentColor: Color {
+        (AccentColorTheme(rawValue: accentColorTheme) ?? .blue).color
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -31,6 +48,10 @@ struct VeydruneApp: App {
             MacContentView()
                 .environment(appState)
                 .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+                .dynamicTypeSize(largerText ? .xxxLarge : .large)
+                .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.veydrune.images"))
                     RemoteCommandManager.shared.setup()
@@ -39,6 +60,10 @@ struct VeydruneApp: App {
             ContentView()
                 .environment(appState)
                 .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+                .dynamicTypeSize(largerText ? .xxxLarge : .large)
+                .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.veydrune.images"))
                     RemoteCommandManager.shared.setup()

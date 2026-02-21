@@ -37,6 +37,17 @@ struct ServerConfigView: View {
                 }
 
                 Section {
+                    Button("Save & Connect") {
+                        appState.saveCredentials(url: url, username: username, password: password)
+                        if appState.isConfigured {
+                            dismiss()
+                        } else {
+                            testResult = "Invalid server URL. Please enter a valid https:// URL."
+                        }
+                    }
+                    .disabled(url.isEmpty || username.isEmpty || password.isEmpty)
+                    .bold()
+
                     Button {
                         testConnection()
                     } label: {
@@ -55,19 +66,6 @@ struct ServerConfigView: View {
                             .foregroundColor(testResult.contains("Success") ? .green : .red)
                             .font(.caption)
                     }
-                }
-
-                Section {
-                    Button("Save & Connect") {
-                        appState.saveCredentials(url: url, username: username, password: password)
-                        if appState.isConfigured {
-                            dismiss()
-                        } else {
-                            testResult = "Invalid server URL. Please enter a valid https:// URL."
-                        }
-                    }
-                    .disabled(url.isEmpty || username.isEmpty || password.isEmpty)
-                    .bold()
                 }
             }
             .navigationTitle("Server Setup")

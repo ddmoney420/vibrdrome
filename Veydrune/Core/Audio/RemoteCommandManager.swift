@@ -81,8 +81,11 @@ final class RemoteCommandManager {
         commandCenter.likeCommand.isEnabled = true
         commandCenter.likeCommand.addTarget { _ in
             if let song = AudioEngine.shared.currentSong {
-                Task {
+                Task { @MainActor in
                     try? await AppState.shared.subsonicClient.star(id: song.id)
+                    if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                        DownloadManager.shared.download(song: song, client: AppState.shared.subsonicClient)
+                    }
                 }
             }
             return .success

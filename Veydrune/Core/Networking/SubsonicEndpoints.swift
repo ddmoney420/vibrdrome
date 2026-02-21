@@ -37,11 +37,15 @@ enum SubsonicEndpoint: Sendable {
     case getCoverArt(id: String, size: Int? = nil)
     case getLyricsBySongId(id: String)
     case getInternetRadioStations
+    case createInternetRadioStation(streamUrl: String, name: String, homepageUrl: String? = nil)
+    case deleteInternetRadioStation(id: String)
     case getPlayQueue
     case savePlayQueue(ids: [String], current: String? = nil, position: Int? = nil)
     case getBookmarks
     case createBookmark(id: String, position: Int, comment: String? = nil)
     case deleteBookmark(id: String)
+    case getSimilarSongs2(id: String, count: Int = 50)
+    case getTopSongs(artist: String, count: Int = 50)
 
     var path: String {
         switch self {
@@ -69,11 +73,15 @@ enum SubsonicEndpoint: Sendable {
         case .getCoverArt: "/rest/getCoverArt"
         case .getLyricsBySongId: "/rest/getLyricsBySongId"
         case .getInternetRadioStations: "/rest/getInternetRadioStations"
+        case .createInternetRadioStation: "/rest/createInternetRadioStation"
+        case .deleteInternetRadioStation: "/rest/deleteInternetRadioStation"
         case .getPlayQueue: "/rest/getPlayQueue"
         case .savePlayQueue: "/rest/savePlayQueue"
         case .getBookmarks: "/rest/getBookmarks"
         case .createBookmark: "/rest/createBookmark"
         case .deleteBookmark: "/rest/deleteBookmark"
+        case .getSimilarSongs2: "/rest/getSimilarSongs2"
+        case .getTopSongs: "/rest/getTopSongs"
         }
     }
 
@@ -200,6 +208,17 @@ enum SubsonicEndpoint: Sendable {
         case .getLyricsBySongId(let id):
             return [URLQueryItem(name: "id", value: id)]
 
+        case .createInternetRadioStation(let streamUrl, let name, let homepageUrl):
+            var items = [
+                URLQueryItem(name: "streamUrl", value: streamUrl),
+                URLQueryItem(name: "name", value: name)
+            ]
+            if let homepageUrl { items.append(URLQueryItem(name: "homepageUrl", value: homepageUrl)) }
+            return items
+
+        case .deleteInternetRadioStation(let id):
+            return [URLQueryItem(name: "id", value: id)]
+
         case .savePlayQueue(let ids, let current, let position):
             var items: [URLQueryItem] = []
             for id in ids {
@@ -219,6 +238,18 @@ enum SubsonicEndpoint: Sendable {
 
         case .deleteBookmark(let id):
             return [URLQueryItem(name: "id", value: id)]
+
+        case .getSimilarSongs2(let id, let count):
+            return [
+                URLQueryItem(name: "id", value: id),
+                URLQueryItem(name: "count", value: "\(count)")
+            ]
+
+        case .getTopSongs(let artist, let count):
+            return [
+                URLQueryItem(name: "artist", value: artist),
+                URLQueryItem(name: "count", value: "\(count)")
+            ]
         }
     }
 }

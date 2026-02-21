@@ -73,6 +73,7 @@ private struct SyncedLyricsContent: View {
     let engine: AudioEngine
 
     @State private var activeLineIndex: Int = 0
+    @AppStorage("reduceMotion") private var reduceMotion = false
     // V7: Extract timer publisher so it's not recreated on every body evaluation
     private let timer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
 
@@ -117,7 +118,7 @@ private struct SyncedLyricsContent: View {
                 }
             }
             .onChange(of: activeLineIndex) { _, newIndex in
-                withAnimation(.easeInOut(duration: 0.3)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
             }

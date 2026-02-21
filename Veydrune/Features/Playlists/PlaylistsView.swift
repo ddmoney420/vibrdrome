@@ -6,52 +6,39 @@ struct PlaylistsView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showCreateSheet = false
+    @State private var showSmartSheet = false
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(playlists) { playlist in
-                    NavigationLink {
-                        PlaylistDetailView(playlistId: playlist.id)
-                    } label: {
-                        HStack(spacing: 12) {
-                            AlbumArtView(coverArtId: playlist.coverArt, size: 50)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Action buttons
+                    actionButtons
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(playlist.name)
-                                    .font(.body)
-                                    .lineLimit(1)
-                                HStack(spacing: 4) {
-                                    Text(verbatim: "\(playlist.songCount ?? 0) songs")
-                                    if let duration = playlist.duration {
-                                        Text("·")
-                                        Text(formatDuration(duration))
-                                    }
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-                        }
+                    // Playlists grid
+                    if !playlists.isEmpty {
+                        playlistGrid
                     }
                 }
-                .onDelete(perform: deletePlaylists)
+                .padding(.bottom, 80)
             }
-            .listStyle(.plain)
             .navigationTitle("Playlists")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
             .sheet(isPresented: $showCreateSheet) {
                 PlaylistEditorView(mode: .create) {
                     await loadPlaylists()
                 }
                 .environment(appState)
+            }
+            .sheet(isPresented: $showSmartSheet) {
+                SmartPlaylistView()
+                    .environment(appState)
+            }
+            .onChange(of: showSmartSheet) { _, isPresented in
+                if !isPresented {
+                    Task { await loadPlaylists() }
+                }
             }
             .overlay {
                 if isLoading && playlists.isEmpty {
@@ -69,7 +56,7 @@ struct PlaylistsView: View {
                     ContentUnavailableView {
                         Label("No Playlists", systemImage: "music.note.list")
                     } description: {
-                        Text("Tap + to create a playlist")
+                        Text("Create a playlist or generate a smart mix")
                     }
                 }
             }
@@ -77,6 +64,90 @@ struct PlaylistsView: View {
             .refreshable { await loadPlaylists() }
         }
     }
+
+    // MARK: - Action Buttons
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button { showCreateSheet = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                    Text("New Playlist")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+
+            Button { showSmartSheet = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.pink)
+                    Text("Smart Mix")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Playlist Grid
+
+    private var playlistGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16)
+        ], spacing: 20) {
+            ForEach(playlists) { playlist in
+                NavigationLink {
+                    PlaylistDetailView(playlistId: playlist.id)
+                } label: {
+                    playlistCard(playlist)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        deletePlaylist(playlist)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func playlistCard(_ playlist: Playlist) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AlbumArtView(coverArtId: playlist.coverArt, size: 170, cornerRadius: 12)
+                .frame(maxWidth: .infinity)
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(playlist.name)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Data
 
     private func loadPlaylists() async {
         isLoading = true
@@ -89,13 +160,10 @@ struct PlaylistsView: View {
         }
     }
 
-    private func deletePlaylists(at offsets: IndexSet) {
-        let toDelete = offsets.map { playlists[$0] }
-        playlists.remove(atOffsets: offsets)
-        for playlist in toDelete {
-            Task {
-                try? await appState.subsonicClient.deletePlaylist(id: playlist.id)
-            }
+    private func deletePlaylist(_ playlist: Playlist) {
+        playlists.removeAll { $0.id == playlist.id }
+        Task {
+            try? await appState.subsonicClient.deletePlaylist(id: playlist.id)
         }
     }
 }

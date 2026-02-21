@@ -65,6 +65,9 @@ struct TrackContextMenuModifier: ViewModifier {
                             try? await appState.subsonicClient.unstar(id: song.id)
                         } else {
                             try? await appState.subsonicClient.star(id: song.id)
+                            if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                                DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                            }
                         }
                     }
                 } label: {

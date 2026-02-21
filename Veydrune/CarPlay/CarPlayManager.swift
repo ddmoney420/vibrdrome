@@ -57,12 +57,16 @@ final class CarPlayManager {
         configObservation?.cancel()
         configObservation = nil
 
-        let tabs: [CPTemplate] = [
+        var tabs: [CPTemplate] = [
             makeLibraryTab(),
             makePlaylistsTab(),
-            makeRadioTab(),
-            makeSearchTab(),
         ]
+        if UserDefaults.standard.bool(forKey: "carPlayShowRadio") ||
+           !UserDefaults.standard.dictionaryRepresentation().keys.contains("carPlayShowRadio") {
+            // Default to showing radio (true) if key not set
+            tabs.append(makeRadioTab())
+        }
+        tabs.append(makeSearchTab())
 
         let tabBar = CPTabBarTemplate(templates: tabs)
         interfaceController.setRootTemplate(tabBar, animated: false) { _, _ in }
@@ -116,7 +120,7 @@ final class CarPlayManager {
     // MARK: - Library Tab
 
     private func makeLibraryTab() -> CPListTemplate {
-        let items = [
+        var items = [
             CPListItem(text: "Artists", detailText: nil, image: UIImage(systemName: "music.mic")),
             CPListItem(text: "Albums", detailText: nil, image: UIImage(systemName: "square.stack")),
             CPListItem(text: "Recently Added", detailText: nil, image: UIImage(systemName: "clock")),
@@ -145,10 +149,54 @@ final class CarPlayManager {
             completion()
         }
 
+        // Add Genres if setting is enabled (default: true)
+        let showGenres = UserDefaults.standard.bool(forKey: "carPlayShowGenres") ||
+            !UserDefaults.standard.dictionaryRepresentation().keys.contains("carPlayShowGenres")
+        if showGenres {
+            let genreItem = CPListItem(text: "Genres", detailText: nil, image: UIImage(systemName: "guitars"))
+            genreItem.handler = { [weak self] _, completion in
+                self?.showGenres()
+                completion()
+            }
+            items.insert(genreItem, at: 3)
+        }
+
         let section = CPListSection(items: items)
         let template = CPListTemplate(title: "Library", sections: [section])
         template.tabImage = UIImage(systemName: "music.note.house")
         return template
+    }
+
+    private func showGenres() {
+        navigateTo { [weak self] in
+            let client = AppState.shared.subsonicClient
+            let genres = try await client.getGenres()
+            let sorted = genres.sorted { ($0.songCount ?? 0) > ($1.songCount ?? 0) }
+            let items = sorted.prefix(30).map { genre in
+                let detail = genre.songCount.map { "\($0) songs" }
+                let item = CPListItem(text: genre.value, detailText: detail)
+                item.handler = { [weak self] _, completion in
+                    self?.playGenre(genre.value)
+                    completion()
+                }
+                return item
+            }
+            return CPListTemplate(title: "Genres",
+                                  sections: [CPListSection(items: items)])
+        }
+    }
+
+    private func playGenre(_ genre: String) {
+        trackTask {
+            do {
+                let client = AppState.shared.subsonicClient
+                let songs = try await client.getRandomSongs(size: 30, genre: genre)
+                guard let first = songs.first else { return }
+                AudioEngine.shared.play(song: first, from: songs)
+            } catch {
+                print("Genre play failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Artists drill-down
@@ -249,7 +297,10 @@ final class CarPlayManager {
     private func showAlbums(type: AlbumListType) {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
-            let albums = try await client.getAlbumList(type: type, size: 50)
+            let size = type == .newest
+                ? max(10, UserDefaults.standard.integer(forKey: "carPlayRecentCount"))
+                : 50
+            let albums = try await client.getAlbumList(type: type, size: size == 0 ? 25 : size)
             let items = albums.map { album in
                 let item = CPListItem(text: album.name,
                                       detailText: album.artist ?? "")

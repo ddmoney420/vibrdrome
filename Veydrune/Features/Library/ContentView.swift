@@ -5,6 +5,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var engine: AudioEngine { AudioEngine.shared }
+    @State private var showMiniPlayer = true
+    @State private var hideTask: Task<Void, Never>?
+    @AppStorage("reduceMotion") private var reduceMotion = false
 
     var body: some View {
         Group {
@@ -30,26 +33,43 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        ZStack(alignment: .bottom) {
-            TabView {
-                LibraryView()
-                    .tabItem { Label("Library", systemImage: "music.note.house") }
-                SearchView()
-                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                PlaylistsView()
-                    .tabItem { Label("Playlists", systemImage: "music.note.list") }
-                RadioView()
-                    .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
-                SettingsView()
-                    .tabItem { Label("Settings", systemImage: "gear") }
-            }
-
-            // Persistent mini player above tab bar
+        TabView {
+            LibraryView()
+                .tabItem { Label("Library", systemImage: "music.note.house") }
+            SearchView()
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }
+            PlaylistsView()
+                .tabItem { Label("Playlists", systemImage: "music.note.list") }
+            RadioView()
+                .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gear") }
+        }
+        .overlay(alignment: .bottom) {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
-                    .padding(.bottom, 49)
+                    .padding(.bottom, 68)
+                    .offset(y: showMiniPlayer ? 0 : 140)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showMiniPlayer)
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 15)
+                .onChanged { _ in
+                    hideTask?.cancel()
+                    if showMiniPlayer {
+                        showMiniPlayer = false
+                    }
+                }
+                .onEnded { _ in
+                    hideTask?.cancel()
+                    hideTask = Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        guard !Task.isCancelled else { return }
+                        showMiniPlayer = true
+                    }
+                }
+        )
     }
 
     // MARK: - Play Queue Persistence
