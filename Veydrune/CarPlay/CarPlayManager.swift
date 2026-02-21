@@ -194,7 +194,7 @@ final class CarPlayManager {
                 guard let first = songs.first else { return }
                 AudioEngine.shared.play(song: first, from: songs)
             } catch {
-                print("Genre play failed: \(error.localizedDescription)")
+                print("Genre play failed: \(ErrorPresenter.userMessage(for: error))")
             }
         }
     }
@@ -381,7 +381,7 @@ final class CarPlayManager {
             } catch {
                 // Can't push a template for a non-navigation action,
                 // but at least log it for diagnostics
-                print("Random play failed: \(error.localizedDescription)")
+                print("Random play failed: \(ErrorPresenter.userMessage(for: error))")
             }
         }
     }

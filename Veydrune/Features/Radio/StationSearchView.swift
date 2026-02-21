@@ -163,86 +163,97 @@ struct StationSearchView: View {
 
     private func stationResultRow(_ station: RadioBrowserStation) -> some View {
         HStack(spacing: 12) {
-            // Station icon / favicon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "radio")
-                    .font(.system(size: 16))
-                    .foregroundColor(.accentColor)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(station.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                HStack(spacing: 6) {
-                    if let country = station.country, !country.isEmpty {
-                        Text(country)
-                    }
-                    if let codec = station.codec, !codec.isEmpty {
-                        Text("·")
-                        Text(codec.uppercased())
-                    }
-                    if let bitrate = station.bitrate, bitrate > 0 {
-                        Text("·")
-                        Text(verbatim: "\(bitrate)k")
-                    }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-                if !station.displayTags.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(station.displayTags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.system(size: 9, weight: .medium))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.1), in: Capsule())
-                                .foregroundColor(.accentColor)
-                        }
-                    }
-                }
-            }
-
+            stationIcon
+            stationInfo(station)
             Spacer()
-
-            // Preview button
-            Button {
-                togglePreview(station)
-            } label: {
-                Image(systemName: previewingId == station.id ? "stop.circle.fill" : "play.circle")
-                    .font(.title3)
-                    .foregroundColor(.accentColor)
-            }
-            .buttonStyle(.plain)
-
-            // Add button
-            Button {
-                Task { await addStation(station) }
-            } label: {
-                if addingId == station.id {
-                    ProgressView()
-                        .frame(width: 28, height: 28)
-                } else if addedIds.contains(station.id) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.green)
-                } else {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.orange)
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(addedIds.contains(station.id) || addingId == station.id)
+            stationPreviewButton(station)
+            stationAddButton(station)
         }
         .padding(.vertical, 10)
+    }
+
+    private var stationIcon: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.accentColor.opacity(0.15))
+                .frame(width: 44, height: 44)
+            Image(systemName: "radio")
+                .font(.system(size: 16))
+                .foregroundColor(.accentColor)
+        }
+    }
+
+    @ViewBuilder
+    private func stationInfo(_ station: RadioBrowserStation) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(station.name)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                if let country = station.country, !country.isEmpty {
+                    Text(country)
+                }
+                if let codec = station.codec, !codec.isEmpty {
+                    Text("·")
+                    Text(codec.uppercased())
+                }
+                if let bitrate = station.bitrate, bitrate > 0 {
+                    Text("·")
+                    Text(verbatim: "\(bitrate)k")
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+
+            if !station.displayTags.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(station.displayTags, id: \.self) { tag in
+                        Text(tag)
+                            .font(.system(size: 9, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.accentColor.opacity(0.1), in: Capsule())
+                            .foregroundColor(.accentColor)
+                    }
+                }
+            }
+        }
+    }
+
+    private func stationPreviewButton(_ station: RadioBrowserStation) -> some View {
+        Button {
+            togglePreview(station)
+        } label: {
+            Image(systemName: previewingId == station.id ? "stop.circle.fill" : "play.circle")
+                .font(.title3)
+                .foregroundColor(.accentColor)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func stationAddButton(_ station: RadioBrowserStation) -> some View {
+        Button {
+            Task { await addStation(station) }
+        } label: {
+            if addingId == station.id {
+                ProgressView()
+                    .frame(width: 28, height: 28)
+            } else if addedIds.contains(station.id) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.green)
+            } else {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.orange)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(addedIds.contains(station.id) || addingId == station.id)
     }
 
     // MARK: - Actions
@@ -273,7 +284,7 @@ struct StationSearchView: View {
             addedIds.insert(station.id)
             await onStationAdded?()
         } catch {
-            self.error = "Failed to add: \(error.localizedDescription)"
+            self.error = "Failed to add: \(ErrorPresenter.userMessage(for: error))"
         }
     }
 
@@ -297,7 +308,7 @@ struct StationSearchView: View {
             results = stations
         } catch {
             guard !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -320,7 +331,7 @@ struct StationSearchView: View {
             results = stations
         } catch {
             guard !Task.isCancelled else { return }
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }
@@ -333,7 +344,9 @@ private extension InternetRadioStation {
         // Since it's Decodable, we'll use JSON decoding
         var json: [String: Any] = ["id": id, "name": name, "streamUrl": streamUrl]
         if let homePageUrl { json["homePageUrl"] = homePageUrl }
+        // swiftlint:disable:next force_try
         let data = try! JSONSerialization.data(withJSONObject: json)
+        // swiftlint:disable:next force_try
         return try! JSONDecoder().decode(InternetRadioStation.self, from: data)
     }
 }

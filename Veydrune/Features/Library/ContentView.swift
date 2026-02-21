@@ -1,3 +1,4 @@
+import os.log
 import SwiftUI
 
 struct ContentView: View {
@@ -88,8 +89,13 @@ struct ContentView: View {
         let currentId = engine.currentSong?.id
         let position = Int(engine.currentTime * 1000)
         Task {
-            try? await appState.subsonicClient.savePlayQueue(
-                ids: ids, current: currentId, position: position)
+            do {
+                try await appState.subsonicClient.savePlayQueue(
+                    ids: ids, current: currentId, position: position)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to save play queue: \(error)")
+            }
         }
     }
 
@@ -98,8 +104,13 @@ struct ContentView: View {
               engine.currentTime > 30 else { return }
         let position = Int(engine.currentTime * 1000)
         Task {
-            try? await appState.subsonicClient.createBookmark(
-                id: song.id, position: position, comment: "Auto-bookmark")
+            do {
+                try await appState.subsonicClient.createBookmark(
+                    id: song.id, position: position, comment: "Auto-bookmark")
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to create auto-bookmark: \(error)")
+            }
         }
     }
 
@@ -107,18 +118,25 @@ struct ContentView: View {
         // Only restore if nothing is currently playing
         guard engine.currentSong == nil, engine.queue.isEmpty else { return }
         Task {
-            guard let playQueue = try? await appState.subsonicClient.getPlayQueue(),
-                  let songs = playQueue.entry, !songs.isEmpty else { return }
+            let playQueue: PlayQueue?
+            do {
+                playQueue = try await appState.subsonicClient.getPlayQueue()
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to restore play queue: \(error.localizedDescription)")
+                return
+            }
+            guard let songs = playQueue?.entry, !songs.isEmpty else { return }
 
             engine.queue = songs
 
-            if let currentId = playQueue.current,
+            if let currentId = playQueue?.current,
                let index = songs.firstIndex(where: { $0.id == currentId }) {
                 engine.currentIndex = index
                 // Load the song but don't auto-play
                 engine.currentSong = songs[index]
                 // V2: Restore saved position
-                if let position = playQueue.position, position > 0 {
+                if let position = playQueue?.position, position > 0 {
                     engine.currentTime = Double(position) / 1000.0
                 }
                 NowPlayingManager.shared.update(song: songs[index], isPlaying: false)

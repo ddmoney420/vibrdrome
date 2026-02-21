@@ -40,5 +40,21 @@ struct TrackRow: View {
             }
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(trackAccessibilityLabel)
+    }
+
+    private var trackAccessibilityLabel: String {
+        var parts = [song.title]
+        if let artist = song.artist {
+            parts.append("by \(artist)")
+        }
+        if let duration = song.duration {
+            parts.append(formatDuration(duration))
+        }
+        if song.starred != nil {
+            parts.append("Favorited")
+        }
+        return parts.joined(separator: ", ")
     }
 }

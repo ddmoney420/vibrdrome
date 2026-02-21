@@ -1,4 +1,5 @@
 #if os(macOS)
+import os.log
 import SwiftUI
 
 struct MacContentView: View {
@@ -50,8 +51,13 @@ struct MacContentView: View {
         let currentId = engine.currentSong?.id
         let position = Int(engine.currentTime * 1000)
         Task {
-            try? await appState.subsonicClient.savePlayQueue(
-                ids: ids, current: currentId, position: position)
+            do {
+                try await appState.subsonicClient.savePlayQueue(
+                    ids: ids, current: currentId, position: position)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to save play queue: \(error)")
+            }
         }
     }
 
@@ -60,24 +66,36 @@ struct MacContentView: View {
               engine.currentTime > 30 else { return }
         let position = Int(engine.currentTime * 1000)
         Task {
-            try? await appState.subsonicClient.createBookmark(
-                id: song.id, position: position, comment: "Auto-bookmark")
+            do {
+                try await appState.subsonicClient.createBookmark(
+                    id: song.id, position: position, comment: "Auto-bookmark")
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to create auto-bookmark: \(error)")
+            }
         }
     }
 
     private func restorePlayQueue() {
         guard engine.currentSong == nil, engine.queue.isEmpty else { return }
         Task {
-            guard let playQueue = try? await appState.subsonicClient.getPlayQueue(),
-                  let songs = playQueue.entry, !songs.isEmpty else { return }
+            let playQueue: PlayQueue?
+            do {
+                playQueue = try await appState.subsonicClient.getPlayQueue()
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "PlayQueue")
+                    .error("Failed to restore play queue: \(error.localizedDescription)")
+                return
+            }
+            guard let songs = playQueue?.entry, !songs.isEmpty else { return }
 
             engine.queue = songs
 
-            if let currentId = playQueue.current,
+            if let currentId = playQueue?.current,
                let index = songs.firstIndex(where: { $0.id == currentId }) {
                 engine.currentIndex = index
                 engine.currentSong = songs[index]
-                if let position = playQueue.position, position > 0 {
+                if let position = playQueue?.position, position > 0 {
                     engine.currentTime = Double(position) / 1000.0
                 }
                 NowPlayingManager.shared.update(song: songs[index], isPlaying: false)

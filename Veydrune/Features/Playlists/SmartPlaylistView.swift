@@ -341,7 +341,7 @@ struct SmartPlaylistView: View {
                 name: "\(artist.name) Mix", songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -360,7 +360,7 @@ struct SmartPlaylistView: View {
                 name: "\(genre.value) Mix", songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -380,7 +380,7 @@ struct SmartPlaylistView: View {
                 name: String(name.prefix(60)), songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -401,7 +401,7 @@ struct SmartPlaylistView: View {
             try await appState.subsonicClient.createPlaylist(name: name, songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -421,10 +421,8 @@ struct SmartPlaylistView: View {
                 // Skip lead tracks — take track 3+ (the b-sides / deep cuts)
                 let bsides = songs.filter { ($0.track ?? 1) >= 3 }
                 let picks = bsides.isEmpty ? songs.suffix(1) : Array(bsides.shuffled().prefix(2))
-                for song in picks {
-                    if seenIds.insert(song.id).inserted {
-                        deepCuts.append(song)
-                    }
+                for song in picks where seenIds.insert(song.id).inserted {
+                    deepCuts.append(song)
                 }
                 if deepCuts.count >= 30 { break }
             }
@@ -442,7 +440,7 @@ struct SmartPlaylistView: View {
             try await appState.subsonicClient.createPlaylist(name: name, songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
@@ -472,10 +470,9 @@ struct SmartPlaylistView: View {
             // Combine, deduplicate, shuffle
             var allSongs: [Song] = []
             var seenIds = Set<String>()
-            for song in (Array(starred.shuffled().prefix(10)) + random + recentSongs) {
-                if seenIds.insert(song.id).inserted {
-                    allSongs.append(song)
-                }
+            for song in (Array(starred.shuffled().prefix(10)) + random + recentSongs)
+                where seenIds.insert(song.id).inserted {
+                allSongs.append(song)
             }
             allSongs.shuffle()
             let finalSongs = Array(allSongs.prefix(35))
@@ -492,7 +489,7 @@ struct SmartPlaylistView: View {
             try await appState.subsonicClient.createPlaylist(name: name, songIds: ids)
             dismiss()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

@@ -291,6 +291,7 @@ struct NowPlayingView: View {
                 }
             }
             .tint(.white)
+            .accessibilityLabel("Track Progress")
 
             HStack {
                 Text(formatDuration(displayTime))
@@ -312,16 +313,19 @@ struct NowPlayingView: View {
                 Image(systemName: "backward.fill")
                     .font(.title)
             }
+            .accessibilityLabel("Previous Track")
 
             Button { engine.togglePlayPause() } label: {
                 Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 64))
             }
+            .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
             Button { engine.next() } label: {
                 Image(systemName: "forward.fill")
                     .font(.title)
             }
+            .accessibilityLabel("Next Track")
         }
         .foregroundColor(.white)
         .buttonStyle(.plain)
@@ -329,12 +333,22 @@ struct NowPlayingView: View {
 
     // MARK: - Bottom Toolbar
 
+    private var repeatAccessibilityValue: String {
+        switch engine.repeatMode {
+        case .off: return "Off"
+        case .all: return "All"
+        case .one: return "One"
+        }
+    }
+
     private var bottomToolbar: some View {
         HStack {
             Button { engine.toggleShuffle() } label: {
                 Image(systemName: "shuffle")
                     .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.4))
             }
+            .accessibilityLabel("Shuffle")
+            .accessibilityValue(engine.shuffleEnabled ? "On" : "Off")
 
             Spacer()
 
@@ -342,6 +356,7 @@ struct NowPlayingView: View {
                 Image(systemName: "text.quote")
             }
             .disabled(engine.currentSong == nil)
+            .accessibilityLabel("Show Lyrics")
 
             Spacer()
 
@@ -354,6 +369,7 @@ struct NowPlayingView: View {
             } label: {
                 Image(systemName: "waveform.path")
             }
+            .accessibilityLabel("Show Visualizer")
 
             Spacer()
 
@@ -383,6 +399,7 @@ struct NowPlayingView: View {
                 Image(systemName: isStarred ? "heart.fill" : "heart")
                     .foregroundColor(isStarred ? .pink : .white.opacity(0.4))
             }
+            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
 
             Spacer()
 
@@ -396,6 +413,7 @@ struct NowPlayingView: View {
             Button { showQueue = true } label: {
                 Image(systemName: "list.bullet")
             }
+            .accessibilityLabel("Show Queue")
 
             Spacer()
 
@@ -403,6 +421,8 @@ struct NowPlayingView: View {
                 Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
                     .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.4))
             }
+            .accessibilityLabel("Repeat")
+            .accessibilityValue(repeatAccessibilityValue)
 
             #if os(macOS)
             Spacer()
@@ -413,6 +433,7 @@ struct NowPlayingView: View {
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
+            .accessibilityLabel("Toggle Full Screen")
             #endif
         }
         .font(.title3)
@@ -432,29 +453,3 @@ private extension Image {
         #endif
     }
 }
-
-// MARK: - macOS Window Reader
-
-#if os(macOS)
-private struct WindowReader: NSViewRepresentable {
-    var onWindow: (NSWindow) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                onWindow(window)
-            }
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            if let window = nsView.window {
-                onWindow(window)
-            }
-        }
-    }
-}
-#endif

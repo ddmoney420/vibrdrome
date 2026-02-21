@@ -45,7 +45,7 @@ struct SearchView: View {
                     results = searchResults
                 } catch {
                     guard !Task.isCancelled else { return }
-                    searchError = error.localizedDescription
+                    searchError = ErrorPresenter.userMessage(for: error)
                     results = nil
                 }
             }
@@ -69,72 +69,76 @@ struct SearchView: View {
                 ContentUnavailableView.search(text: query)
             }
 
-            // Artists — horizontal carousel with circular art
-            if !artists.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Artists")
-                        .font(.title3).bold()
-                        .padding(.horizontal, 16)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(artists) { artist in
-                                NavigationLink {
-                                    ArtistDetailView(artistId: artist.id)
-                                } label: {
-                                    artistBubble(artist)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                }
-            }
-
-            // Albums — horizontal carousel with square art
-            if !albums.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Albums")
-                        .font(.title3).bold()
-                        .padding(.horizontal, 16)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 14) {
-                            ForEach(albums) { album in
-                                NavigationLink {
-                                    AlbumDetailView(albumId: album.id)
-                                } label: {
-                                    albumTile(album)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                }
-            }
-
-            // Songs — list with album art
-            if !songs.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Songs")
-                        .font(.title3).bold()
-                        .padding(.horizontal, 16)
-
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                            songRow(song: song, songs: songs, index: index)
-                            if index < songs.count - 1 {
-                                Divider().padding(.leading, 72)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-            }
+            if !artists.isEmpty { artistsSection(artists) }
+            if !albums.isEmpty { albumsSection(albums) }
+            if !songs.isEmpty { songsSection(songs) }
         }
         .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func artistsSection(_ artists: [Artist]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Artists")
+                .font(.title3).bold()
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(artists) { artist in
+                        NavigationLink {
+                            ArtistDetailView(artistId: artist.id)
+                        } label: {
+                            artistBubble(artist)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func albumsSection(_ albums: [Album]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Albums")
+                .font(.title3).bold()
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 14) {
+                    ForEach(albums) { album in
+                        NavigationLink {
+                            AlbumDetailView(albumId: album.id)
+                        } label: {
+                            albumTile(album)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func songsSection(_ songs: [Song]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Songs")
+                .font(.title3).bold()
+                .padding(.horizontal, 16)
+
+            LazyVStack(spacing: 0) {
+                ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                    songRow(song: song, songs: songs, index: index)
+                    if index < songs.count - 1 {
+                        Divider().padding(.leading, 72)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 
     // MARK: - Artist Bubble
@@ -206,6 +210,7 @@ struct SearchView: View {
                 Image(systemName: "heart.fill")
                     .font(.caption)
                     .foregroundStyle(.pink)
+                    .accessibilityLabel("Favorited")
             }
 
             if let duration = song.duration {
@@ -252,7 +257,7 @@ struct SearchView: View {
                         results = searchResults
                     } catch {
                         guard !Task.isCancelled else { return }
-                        self.searchError = error.localizedDescription
+                        self.searchError = ErrorPresenter.userMessage(for: error)
                     }
                 }
             }

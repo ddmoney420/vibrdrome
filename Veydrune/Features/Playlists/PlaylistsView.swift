@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct PlaylistsView: View {
     @Environment(AppState.self) private var appState
@@ -140,9 +141,14 @@ struct PlaylistsView: View {
                 .contextMenu {
                     Button {
                         Task {
-                            if let detail = try? await appState.subsonicClient.getPlaylist(id: playlist.id),
-                               let songs = detail.entry, let first = songs.first {
-                                AudioEngine.shared.play(song: first, from: songs, at: 0)
+                            do {
+                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
+                                if let songs = detail.entry, let first = songs.first {
+                                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                                }
+                            } catch {
+                                Logger(subsystem: "com.veydrune.app", category: "Playlists")
+                                    .error("Failed to load playlist for playback: \(error)")
                             }
                         }
                     } label: {
@@ -150,10 +156,15 @@ struct PlaylistsView: View {
                     }
                     Button {
                         Task {
-                            if let detail = try? await appState.subsonicClient.getPlaylist(id: playlist.id),
-                               var songs = detail.entry, !songs.isEmpty {
-                                songs.shuffle()
-                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                            do {
+                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
+                                if var songs = detail.entry, !songs.isEmpty {
+                                    songs.shuffle()
+                                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                                }
+                            } catch {
+                                Logger(subsystem: "com.veydrune.app", category: "Playlists")
+                                    .error("Failed to load playlist for shuffle: \(error)")
                             }
                         }
                     } label: {
@@ -198,14 +209,19 @@ struct PlaylistsView: View {
         do {
             playlists = try await appState.subsonicClient.getPlaylists()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
     private func deletePlaylist(_ playlist: Playlist) {
         playlists.removeAll { $0.id == playlist.id }
         Task {
-            try? await appState.subsonicClient.deletePlaylist(id: playlist.id)
+            do {
+                try await appState.subsonicClient.deletePlaylist(id: playlist.id)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "Playlists")
+                    .error("Failed to delete playlist: \(error)")
+            }
         }
     }
 }

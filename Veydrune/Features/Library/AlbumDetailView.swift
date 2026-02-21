@@ -68,6 +68,15 @@ struct AlbumDetailView: View {
     @ViewBuilder
     private func albumHeader(_ album: Album) -> some View {
         #if os(macOS)
+        albumHeaderMacOS(album)
+        #else
+        albumHeaderIOS(album)
+        #endif
+    }
+
+    #if os(macOS)
+    @ViewBuilder
+    private func albumHeaderMacOS(_ album: Album) -> some View {
         HStack(alignment: .top, spacing: 20) {
             AlbumArtView(coverArtId: album.coverArt, size: 200, cornerRadius: 12)
                 .shadow(radius: 8)
@@ -83,32 +92,17 @@ struct AlbumDetailView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: 8) {
-                    if let year = album.year {
-                        Text(verbatim: "\(year)")
-                    }
-                    if let genre = album.genre {
-                        Text("·")
-                        Text(genre)
-                    }
-                    if let count = album.songCount {
-                        Text("·")
-                        Text(verbatim: "\(count) songs")
-                    }
-                    if let duration = album.duration {
-                        Text("·")
-                        Text(formatDuration(duration))
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                albumMetadataRow(album)
             }
 
             Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
-        #else
+    }
+    #else
+    @ViewBuilder
+    private func albumHeaderIOS(_ album: Album) -> some View {
         VStack(spacing: 12) {
             AlbumArtView(coverArtId: album.coverArt, size: 240, cornerRadius: 12)
                 .shadow(radius: 8)
@@ -125,101 +119,113 @@ struct AlbumDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
-                if let year = album.year {
-                    Text(verbatim: "\(year)")
-                }
-                if let genre = album.genre {
-                    Text("·")
-                    Text(genre)
-                }
-                if let count = album.songCount {
-                    Text("·")
-                    Text(verbatim: "\(count) songs")
-                }
-                if let duration = album.duration {
-                    Text("·")
-                    Text(formatDuration(duration))
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            albumMetadataRow(album)
         }
         .padding(.horizontal, 20)
-        #endif
+    }
+    #endif
+
+    @ViewBuilder
+    private func albumMetadataRow(_ album: Album) -> some View {
+        HStack(spacing: 8) {
+            if let year = album.year {
+                Text(verbatim: "\(year)")
+            }
+            if let genre = album.genre {
+                Text("·")
+                Text(genre)
+            }
+            if let count = album.songCount {
+                Text("·")
+                Text(verbatim: "\(count) songs")
+            }
+            if let duration = album.duration {
+                Text("·")
+                Text(formatDuration(duration))
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.tertiary)
     }
 
     @ViewBuilder
     private func actionButtons(_ album: Album) -> some View {
         VStack(spacing: 12) {
-            // Play / Shuffle row
-            HStack(spacing: 12) {
-                Button {
-                    if let songs = album.song, let first = songs.first {
-                        AudioEngine.shared.play(song: first, from: songs, at: 0)
-                    }
-                } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(album.song?.isEmpty ?? true)
-
-                Button {
-                    if var songs = album.song, !songs.isEmpty {
-                        songs.shuffle()
-                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                    }
-                } label: {
-                    Label("Shuffle", systemImage: "shuffle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(album.song?.isEmpty ?? true)
-            }
-
-            // Secondary actions row
-            HStack(spacing: 24) {
-                Button {
-                    if let songs = album.song {
-                        DownloadManager.shared.downloadAlbum(
-                            songs: songs,
-                            client: appState.subsonicClient
-                        )
-                    }
-                } label: {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.title3)
-                }
-                .disabled(album.song?.isEmpty ?? true)
-
-                Spacer()
-
-                Button {
-                    let wasStarred = isStarred
-                    isStarred = !wasStarred
-                    Task {
-                        do {
-                            if wasStarred {
-                                try await appState.subsonicClient.unstar(albumId: albumId)
-                            } else {
-                                try await appState.subsonicClient.star(albumId: albumId)
-                            }
-                        } catch {
-                            isStarred = wasStarred
-                        }
-                    }
-                } label: {
-                    Image(systemName: isStarred ? "heart.fill" : "heart")
-                        .font(.title3)
-                        .foregroundStyle(isStarred ? .pink : .secondary)
-                }
-            }
+            playShuffleRow(album)
+            secondaryActionsRow(album)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func playShuffleRow(_ album: Album) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if let songs = album.song, let first = songs.first {
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(album.song?.isEmpty ?? true)
+
+            Button {
+                if var songs = album.song, !songs.isEmpty {
+                    songs.shuffle()
+                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                }
+            } label: {
+                Label("Shuffle", systemImage: "shuffle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(album.song?.isEmpty ?? true)
+        }
+    }
+
+    @ViewBuilder
+    private func secondaryActionsRow(_ album: Album) -> some View {
+        HStack(spacing: 24) {
+            Button {
+                if let songs = album.song {
+                    DownloadManager.shared.downloadAlbum(
+                        songs: songs,
+                        client: appState.subsonicClient
+                    )
+                }
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title3)
+            }
+            .disabled(album.song?.isEmpty ?? true)
+
+            Spacer()
+
+            Button {
+                let wasStarred = isStarred
+                isStarred = !wasStarred
+                Task {
+                    do {
+                        if wasStarred {
+                            try await appState.subsonicClient.unstar(albumId: albumId)
+                        } else {
+                            try await appState.subsonicClient.star(albumId: albumId)
+                        }
+                    } catch {
+                        isStarred = wasStarred
+                    }
+                }
+            } label: {
+                Image(systemName: isStarred ? "heart.fill" : "heart")
+                    .font(.title3)
+                    .foregroundStyle(isStarred ? .pink : .secondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -243,7 +249,7 @@ struct AlbumDetailView: View {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
             isStarred = album?.starred != nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

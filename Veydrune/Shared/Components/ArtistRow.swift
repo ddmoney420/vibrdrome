@@ -18,5 +18,6 @@ struct ArtistRow: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
     }
 }

@@ -22,8 +22,10 @@ struct AlbumArtView: View {
             }
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .accessibilityHidden(true)
         } else {
             placeholderView
+                .accessibilityHidden(true)
         }
     }
 

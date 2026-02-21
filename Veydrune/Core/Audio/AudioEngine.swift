@@ -5,6 +5,9 @@ import MediaPlayer
 import Network
 import Observation
 import SwiftData
+import os.log
+
+private let audioLog = Logger(subsystem: "com.veydrune.app", category: "Audio")
 
 enum RepeatMode: Sendable {
     case off, all, one
@@ -116,7 +119,11 @@ final class AudioEngine {
         // Scrobble "now playing"
         if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
             Task {
-                try? await AppState.shared.subsonicClient.scrobble(id: song.id, submission: false)
+                do {
+                    try await AppState.shared.subsonicClient.scrobble(id: song.id, submission: false)
+                } catch {
+                    audioLog.error("Failed to scrobble now-playing: \(error)")
+                }
             }
         }
     }
@@ -170,7 +177,7 @@ final class AudioEngine {
     }
 
     func togglePlayPause() {
-        isPlaying ? pause() : resume()
+        if isPlaying { pause() } else { resume() }
     }
 
     func next() {
@@ -361,7 +368,11 @@ final class AudioEngine {
             }
             // File gone from disk — clean up stale record
             modelContext.delete(download)
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                audioLog.error("Failed to save after cleaning stale download: \(error)")
+            }
         }
         return AppState.shared.subsonicClient.streamURL(id: song.id, maxBitRate: currentMaxBitRate)
     }
@@ -406,7 +417,12 @@ final class AudioEngine {
     private func setupObservers(for item: AVPlayerItem) {
         let observerGeneration = generation
 
-        // Periodic time observer
+        setupTimeObserver(generation: observerGeneration)
+        setupPropertyObservers(for: item, generation: observerGeneration)
+        setupTrackEndObserver(for: item, generation: observerGeneration)
+    }
+
+    private func setupTimeObserver(generation observerGeneration: Int) {
         timeObserver = player?.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
@@ -419,24 +435,31 @@ final class AudioEngine {
                 if self.currentSong != nil {
                     NowPlayingManager.shared.updateElapsedTime(time.seconds)
                 }
-                // Auto-scrobble at 50%
-                if !self.scrobbleSubmitted,
-                   self.duration > 0,
-                   self.currentTime > self.duration * 0.5,
-                   let song = self.currentSong {
-                    self.scrobbleSubmitted = true
-                    self.lastScrobbleTime = Date()
-                    PersistenceController.shared.recordPlay(song: song)
-                    if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
-                        Task {
-                            try? await AppState.shared.subsonicClient.scrobble(id: song.id, submission: true)
-                        }
-                    }
+                self.autoScrobbleIfNeeded()
+            }
+        }
+    }
+
+    private func autoScrobbleIfNeeded() {
+        guard !scrobbleSubmitted,
+              duration > 0,
+              currentTime > duration * 0.5,
+              let song = currentSong else { return }
+        scrobbleSubmitted = true
+        lastScrobbleTime = Date()
+        PersistenceController.shared.recordPlay(song: song)
+        if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
+            Task {
+                do {
+                    try await AppState.shared.subsonicClient.scrobble(id: song.id, submission: true)
+                } catch {
+                    audioLog.error("Failed to scrobble submission: \(error)")
                 }
             }
         }
+    }
 
-        // Duration
+    private func setupPropertyObservers(for item: AVPlayerItem, generation observerGeneration: Int) {
         durationObserver = item.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] dur in
@@ -447,7 +470,6 @@ final class AudioEngine {
                 }
             }
 
-        // Buffering
         bufferingObserver = item.publisher(for: \.isPlaybackBufferEmpty)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] empty in
@@ -455,7 +477,6 @@ final class AudioEngine {
                 self.isBuffering = empty
             }
 
-        // Status — detect failed streams (especially radio)
         statusObserver = item.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
@@ -465,8 +486,9 @@ final class AudioEngine {
                     self.isBuffering = false
                 }
             }
+    }
 
-        // Track ended — capture the item to verify it's still current
+    private func setupTrackEndObserver(for item: AVPlayerItem, generation observerGeneration: Int) {
         let endItem = item
         itemEndObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
@@ -529,7 +551,11 @@ final class AudioEngine {
             PersistenceController.shared.recordPlay(song: song)
             if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
                 Task {
-                    try? await AppState.shared.subsonicClient.scrobble(id: song.id, submission: true)
+                    do {
+                        try await AppState.shared.subsonicClient.scrobble(id: song.id, submission: true)
+                    } catch {
+                        audioLog.error("Failed to scrobble on track end: \(error)")
+                    }
                 }
             }
         }

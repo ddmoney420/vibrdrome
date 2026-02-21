@@ -56,7 +56,7 @@ struct ArtistsView: View {
         do {
             indexes = try await appState.subsonicClient.getArtists()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

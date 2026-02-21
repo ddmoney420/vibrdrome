@@ -175,7 +175,7 @@ enum SubsonicEndpoint: Sendable {
             return items
 
         case .updatePlaylist(let id, let name, let comment, let isPublic,
-                            let songIdsToAdd, let songIndexesToRemove):
+                             let songIdsToAdd, let songIndexesToRemove):
             var items = [URLQueryItem(name: "playlistId", value: id)]
             if let name { items.append(URLQueryItem(name: "name", value: name)) }
             if let comment { items.append(URLQueryItem(name: "comment", value: comment)) }

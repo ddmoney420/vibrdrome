@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct BookmarksView: View {
     @Environment(AppState.self) private var appState
@@ -90,26 +91,25 @@ struct BookmarksView: View {
         do {
             bookmarks = try await appState.subsonicClient.getBookmarks()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
     private func resumeFromBookmark(_ bookmark: Bookmark, song: Song) {
-        // Pass as single-item queue so currentIndex is properly set
         engine.play(song: song, from: [song], at: 0)
         let position = Double(bookmark.position) / 1000.0
         let songId = song.id
         Task {
-            // Poll for player readiness before seeking (up to 5 seconds)
-            for _ in 0..<10 {
-                try? await Task.sleep(for: .milliseconds(500))
+            // Wait for player readiness with deadline (up to 5 seconds)
+            let deadline = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < deadline {
                 guard engine.currentSong?.id == songId else { return }
                 if engine.duration > 0 { break }
+                try? await Task.sleep(for: .milliseconds(200)) // try? OK: sleep cancellation
             }
             guard engine.currentSong?.id == songId else { return }
             engine.seek(to: position)
-            // Delete the bookmark only after successful seek
-            try? await appState.subsonicClient.deleteBookmark(id: songId)
+            try? await appState.subsonicClient.deleteBookmark(id: songId) // try? OK: best-effort cleanup
             await loadBookmarks()
         }
     }
@@ -117,7 +117,12 @@ struct BookmarksView: View {
     private func deleteBookmark(id: String) {
         bookmarks.removeAll { $0.entry?.id == id }
         Task {
-            try? await appState.subsonicClient.deleteBookmark(id: id)
+            do {
+                try await appState.subsonicClient.deleteBookmark(id: id)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "Bookmarks")
+                    .error("Failed to delete bookmark: \(error)")
+            }
         }
     }
 }

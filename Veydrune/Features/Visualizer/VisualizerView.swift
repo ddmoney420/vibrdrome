@@ -71,7 +71,7 @@ struct VisualizerView: View {
         GeometryReader { geo in
             ZStack {
                 // Shader canvas
-                TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { timeline in
+                TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
                     Rectangle()
                         .colorEffect(preset.shader(size: geo.size, time: time, energy: energy))
                 }
@@ -295,29 +295,3 @@ struct VisualizerView: View {
         }
     }
 }
-
-// MARK: - macOS Window Reader
-
-#if os(macOS)
-private struct WindowReader: NSViewRepresentable {
-    var onWindow: (NSWindow) -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                onWindow(window)
-            }
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            if let window = nsView.window {
-                onWindow(window)
-            }
-        }
-    }
-}
-#endif

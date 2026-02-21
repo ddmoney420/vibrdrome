@@ -66,7 +66,7 @@ struct GenresView: View {
             genres = try await appState.subsonicClient.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

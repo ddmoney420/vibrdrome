@@ -32,6 +32,7 @@ struct QueueView: View {
                                 Image(systemName: "waveform")
                                     .foregroundStyle(Color.accentColor)
                                     .symbolEffect(.variableColor)
+                                    .accessibilityLabel("Playing")
                             }
                         }
                     }
@@ -120,6 +121,7 @@ struct QueueView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("Queue Options")
                 }
             }
         }

@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+import os.log
+
+private let persistLog = Logger(subsystem: "com.veydrune.app", category: "Persistence")
 
 @MainActor
 final class PersistenceController {
@@ -54,7 +57,11 @@ final class PersistenceController {
         let context = container.mainContext
         let entry = PlayHistory(from: song)
         context.insert(entry)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            persistLog.error("Failed to save play history: \(error)")
+        }
     }
 
     /// Fetch recent play history
@@ -78,7 +85,11 @@ final class PersistenceController {
         for orphan in orphans {
             context.delete(orphan)
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            persistLog.error("Failed to save after cleanup of incomplete downloads: \(error)")
+        }
     }
 
     /// D6: Prune play history older than 90 days, cap at 10000 entries
@@ -92,7 +103,11 @@ final class PersistenceController {
             for entry in oldEntries {
                 context.delete(entry)
             }
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                persistLog.error("Failed to save after pruning old play history: \(error)")
+            }
         }
 
         // Also cap total count
@@ -104,7 +119,11 @@ final class PersistenceController {
             for entry in excess {
                 context.delete(entry)
             }
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                persistLog.error("Failed to save after capping play history: \(error)")
+            }
         }
     }
 }

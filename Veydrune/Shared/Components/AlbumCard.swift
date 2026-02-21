@@ -37,5 +37,24 @@ struct AlbumCard: View {
                     .foregroundStyle(.pink)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(albumAccessibilityLabel)
+    }
+
+    private var albumAccessibilityLabel: String {
+        var parts = [album.name]
+        if let artist = album.artist {
+            parts.append("by \(artist)")
+        }
+        if let year = album.year {
+            parts.append(String(year))
+        }
+        if let count = album.songCount {
+            parts.append("\(count) song\(count == 1 ? "" : "s")")
+        }
+        if album.starred != nil {
+            parts.append("Favorited")
+        }
+        return parts.joined(separator: ", ")
     }
 }

@@ -58,9 +58,7 @@ struct SettingsView: View {
     @AppStorage("appColorScheme") private var appColorScheme: String = "system"
     @AppStorage("accentColorTheme") private var accentColorTheme: String = "blue"
     @AppStorage("gaplessPlayback") private var gaplessPlayback: Bool = true
-    @AppStorage("crossfadeEnabled") private var crossfadeEnabled: Bool = false
-    @AppStorage("crossfadeDuration") private var crossfadeDuration: Double = 3.0
-    @AppStorage("autoDownloadFavorites") private var autoDownloadFavorites: Bool = false
+@AppStorage("autoDownloadFavorites") private var autoDownloadFavorites: Bool = false
     @AppStorage("downloadOverCellular") private var downloadOverCellular: Bool = false
     @AppStorage("largerText") private var largerText: Bool = false
     @AppStorage("reduceMotion") private var reduceMotion: Bool = false
@@ -145,6 +143,7 @@ struct SettingsView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.caption2)
                                     .foregroundColor(.green)
+                                    .accessibilityLabel("Connected")
                             }
                         }
                     }
@@ -160,7 +159,13 @@ struct SettingsView: View {
                 .padding(.vertical, 2)
 
                 Button {
-                    Task { _ = try? await appState.subsonicClient.ping() }
+                    Task {
+                        do {
+                            _ = try await appState.subsonicClient.ping()
+                        } catch {
+                            // ping() already sets isConnected = false on failure
+                        }
+                    }
                 } label: {
                     Label("Test Connection", systemImage: "antenna.radiowaves.left.and.right")
                         .foregroundColor(.accentColor)
@@ -222,9 +227,16 @@ struct SettingsView: View {
             }
 
             Toggle(isOn: $gaplessPlayback) {
-                Label("Gapless Playback", systemImage: "waveform.path")
-                    .foregroundColor(.primary)
+                HStack {
+                    Label("Gapless Playback", systemImage: "waveform.path")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("Coming Soon")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .disabled(true)
         } header: {
             settingSectionHeader("Playback", icon: "play.circle.fill", color: .purple)
         }
@@ -312,6 +324,8 @@ struct SettingsView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(theme.rawValue)
+                        .accessibilityValue(accentColorTheme == theme.rawValue ? "Selected" : "")
                     }
                 }
                 .padding(.vertical, 4)
@@ -382,9 +396,23 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
-            infoRow("Version", value: "1.0.0", icon: "info.circle.fill", color: .gray)
+            infoRow(
+                "Version",
+                value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
+                icon: "info.circle.fill",
+                color: .gray
+            )
             infoRow("Client", value: "Veydrune", icon: "app.fill", color: .gray)
             infoRow("API Version", value: "1.16.1", icon: "number.circle.fill", color: .gray)
+            #if DEBUG
+            NavigationLink {
+                DebugView()
+                    .environment(appState)
+            } label: {
+                Label("Debug Tools", systemImage: "ladybug.fill")
+                    .foregroundColor(.red)
+            }
+            #endif
         } header: {
             settingSectionHeader("About", icon: "info.circle.fill", color: .gray)
         }

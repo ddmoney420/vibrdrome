@@ -1,3 +1,4 @@
+import os.log
 import SwiftUI
 
 struct AddToPlaylistView: View {
@@ -65,15 +66,26 @@ struct AddToPlaylistView: View {
     private func loadPlaylists() async {
         isLoading = true
         defer { isLoading = false }
-        playlists = (try? await appState.subsonicClient.getPlaylists()) ?? []
+        do {
+            playlists = try await appState.subsonicClient.getPlaylists()
+        } catch {
+            Logger(subsystem: "com.veydrune.app", category: "Playlists")
+                .error("Failed to load playlists: \(error)")
+            playlists = []
+        }
     }
 
     private func addToPlaylist(_ playlist: Playlist) {
         Task {
-            try? await appState.subsonicClient.updatePlaylist(
-                id: playlist.id,
-                songIdsToAdd: songIds
-            )
+            do {
+                try await appState.subsonicClient.updatePlaylist(
+                    id: playlist.id,
+                    songIdsToAdd: songIds
+                )
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "Playlists")
+                    .error("Failed to add to playlist: \(error.localizedDescription)")
+            }
             addedTo = playlist.id
             try? await Task.sleep(for: .milliseconds(600))
             dismiss()

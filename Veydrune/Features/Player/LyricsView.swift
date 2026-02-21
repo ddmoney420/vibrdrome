@@ -61,7 +61,7 @@ struct LyricsView: View {
         do {
             lyricsList = try await appState.subsonicClient.getLyrics(songId: songId)
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

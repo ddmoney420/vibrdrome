@@ -1,12 +1,18 @@
 import Foundation
 import Observation
+import os.log
+
+private let networkLog = Logger(subsystem: "com.veydrune.app", category: "Network")
 
 @Observable
 @MainActor
-final class SubsonicClient: Sendable {
+final class SubsonicClient {
     private let session: URLSession
     private var auth: SubsonicAuth
     private var baseURL: URL
+
+    private static let maxRetries = 3
+    private static let retryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000] // 1s, 2s, 4s
 
     var isConnected: Bool = false
 
@@ -19,9 +25,56 @@ final class SubsonicClient: Sendable {
         self.session = URLSession(configuration: config)
     }
 
+    // MARK: - Retry Logic
+
+    private func isRetryable(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet,
+                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        if let subsonicError = error as? SubsonicError {
+            switch subsonicError {
+            case .httpError(let code):
+                return code >= 500 // Only retry server errors, not 4xx
+            default:
+                return false
+            }
+        }
+        return false
+    }
+
     // MARK: - Core Request
 
     private func request(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
+        var lastError: Error?
+
+        for attempt in 0...Self.maxRetries {
+            if attempt > 0 {
+                let delay = Self.retryDelays[min(attempt - 1, Self.retryDelays.count - 1)]
+                networkLog.info("Retry \(attempt)/\(Self.maxRetries) for \(endpoint.path) after \(delay / 1_000_000_000)s")
+                try await Task.sleep(nanoseconds: delay)
+            }
+
+            do {
+                return try await performRequest(endpoint)
+            } catch {
+                lastError = error
+                if !isRetryable(error) {
+                    throw error
+                }
+                networkLog.warning("Transient error on \(endpoint.path): \(error.localizedDescription)")
+            }
+        }
+
+        throw lastError!
+    }
+
+    private func performRequest(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(endpoint.path),
             resolvingAgainstBaseURL: false

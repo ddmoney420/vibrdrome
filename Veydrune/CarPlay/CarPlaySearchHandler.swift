@@ -10,9 +10,11 @@ final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
         currentSearchTask = nil
     }
 
-    func searchTemplate(_ searchTemplate: CPSearchTemplate,
-                         updatedSearchText searchText: String,
-                         completionHandler: @escaping ([CPListItem]) -> Void) {
+    func searchTemplate(
+        _ searchTemplate: CPSearchTemplate,
+        updatedSearchText searchText: String,
+        completionHandler: @escaping ([CPListItem]) -> Void
+    ) {
         currentSearchTask?.cancel()
 
         guard searchText.count >= 2 else {
@@ -47,9 +49,11 @@ final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
         }
     }
 
-    func searchTemplate(_ searchTemplate: CPSearchTemplate,
-                         selectedResult item: CPListItem,
-                         completionHandler: @escaping () -> Void) {
+    func searchTemplate(
+        _ searchTemplate: CPSearchTemplate,
+        selectedResult item: CPListItem,
+        completionHandler: @escaping () -> Void
+    ) {
         completionHandler()
     }
 }

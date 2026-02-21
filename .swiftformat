@@ -1,0 +1,41 @@
+# Veydrune SwiftFormat Configuration
+# Matches existing code style
+
+--swiftversion 6.0
+--indent 4
+--indentcase false
+--trimwhitespace always
+--voidtype void
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--commas always
+--decimalgrouping 3,4
+--exponentcase lowercase
+--header ignore
+--ifdef no-indent
+--importgrouping alpha
+--maxwidth 200
+--operatorfunc spaced
+--patternlet hoist
+--ranges spaced
+--self remove
+--semicolons never
+--stripunusedargs closure-only
+--typeattributes prev-line
+--funcattributes prev-line
+--varattributes prev-line
+
+# Disable rules that conflict with SwiftUI patterns or project style
+--disable blankLinesAtStartOfScope
+--disable blankLinesAtEndOfScope
+--disable redundantReturn
+--disable wrapMultilineStatementBraces
+--disable sortImports
+--disable organizeDeclarations
+--disable markTypes
+--disable extensionAccessControl
+
+# Exclude generated/external
+--exclude DerivedData,.build,Veydrune.xcodeproj

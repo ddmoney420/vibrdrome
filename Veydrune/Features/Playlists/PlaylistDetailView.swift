@@ -144,17 +144,21 @@ struct PlaylistDetailView: View {
         do {
             playlist = try await appState.subsonicClient.getPlaylist(id: playlistId)
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
     private func removeFromPlaylist(at offsets: IndexSet, songs: [Song]) {
         let indexes = offsets.sorted()
         Task {
-            try? await appState.subsonicClient.updatePlaylist(
-                id: playlistId,
-                songIndexesToRemove: indexes
-            )
+            do {
+                try await appState.subsonicClient.updatePlaylist(
+                    id: playlistId,
+                    songIndexesToRemove: indexes
+                )
+            } catch {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
             await loadPlaylist()
         }
     }

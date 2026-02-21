@@ -58,6 +58,7 @@ struct MiniPlayerView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                 // Next
                 Button { engine.next() } label: {
@@ -68,6 +69,7 @@ struct MiniPlayerView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(engine.queue.isEmpty)
+                .accessibilityLabel("Next Track")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -81,6 +83,7 @@ struct MiniPlayerView: View {
         .onTapGesture {
             showNowPlaying = true
         }
+        .accessibilityHint("Tap to open full player")
         #if os(iOS)
         .fullScreenCover(isPresented: $showNowPlaying) {
             NowPlayingView()
@@ -175,12 +178,14 @@ struct MacMiniPlayerView: View {
                             .font(.body)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Previous Track")
 
                     Button { engine.togglePlayPause() } label: {
                         Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                             .font(.title3)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                     Button { engine.next() } label: {
                         Image(systemName: "forward.fill")
@@ -188,6 +193,7 @@ struct MacMiniPlayerView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(engine.queue.isEmpty)
+                    .accessibilityLabel("Next Track")
                 }
 
                 Spacer()
@@ -197,16 +203,19 @@ struct MacMiniPlayerView: View {
                     Image(systemName: "speaker.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
 
                     Slider(value: Binding(
                         get: { engine.volume },
                         set: { engine.volume = $0 }
                     ).animation(nil), in: 0...1)
                     .frame(width: 100)
+                    .accessibilityLabel("Volume")
 
                     Image(systemName: "speaker.wave.3.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
 
                 // Pop-out mini player
@@ -219,6 +228,7 @@ struct MacMiniPlayerView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Pop out mini player")
+                .accessibilityLabel("Pop Out Mini Player")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -310,12 +320,14 @@ struct PopOutPlayerView: View {
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Previous Track")
 
                     Button { engine.togglePlayPause() } label: {
                         Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
                             .font(.body)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                     Button { engine.next() } label: {
                         Image(systemName: "forward.fill")
@@ -323,6 +335,7 @@ struct PopOutPlayerView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(engine.queue.isEmpty)
+                    .accessibilityLabel("Next Track")
                 }
             }
             .padding(.horizontal, 12)
@@ -333,4 +346,3 @@ struct PopOutPlayerView: View {
     }
 }
 #endif
-

@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import os.log
 
 @MainActor
 final class RemoteCommandManager {
@@ -11,42 +12,48 @@ final class RemoteCommandManager {
         guard !isSetup else { return }
         isSetup = true
 
-        // Play
+        setupPlaybackCommands()
+        setupNavigationCommands()
+        setupSeekCommands()
+        setupSkipCommands()
+        setupRatingCommands()
+    }
+
+    private func setupPlaybackCommands() {
         commandCenter.playCommand.isEnabled = true
         commandCenter.playCommand.addTarget { _ in
             AudioEngine.shared.resume()
             return .success
         }
 
-        // Pause
         commandCenter.pauseCommand.isEnabled = true
         commandCenter.pauseCommand.addTarget { _ in
             AudioEngine.shared.pause()
             return .success
         }
 
-        // Toggle play/pause
         commandCenter.togglePlayPauseCommand.isEnabled = true
         commandCenter.togglePlayPauseCommand.addTarget { _ in
             AudioEngine.shared.togglePlayPause()
             return .success
         }
+    }
 
-        // Next track
+    private func setupNavigationCommands() {
         commandCenter.nextTrackCommand.isEnabled = true
         commandCenter.nextTrackCommand.addTarget { _ in
             AudioEngine.shared.next()
             return .success
         }
 
-        // Previous track
         commandCenter.previousTrackCommand.isEnabled = true
         commandCenter.previousTrackCommand.addTarget { _ in
             AudioEngine.shared.previous()
             return .success
         }
+    }
 
-        // Seek (scrubbing)
+    private func setupSeekCommands() {
         commandCenter.changePlaybackPositionCommand.isEnabled = true
         commandCenter.changePlaybackPositionCommand.addTarget { event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
@@ -55,8 +62,9 @@ final class RemoteCommandManager {
             AudioEngine.shared.seek(to: event.positionTime)
             return .success
         }
+    }
 
-        // Skip forward (15 seconds)
+    private func setupSkipCommands() {
         commandCenter.skipForwardCommand.isEnabled = true
         commandCenter.skipForwardCommand.preferredIntervals = [15]
         commandCenter.skipForwardCommand.addTarget { _ in
@@ -67,7 +75,6 @@ final class RemoteCommandManager {
             return .success
         }
 
-        // Skip backward (15 seconds)
         commandCenter.skipBackwardCommand.isEnabled = true
         commandCenter.skipBackwardCommand.preferredIntervals = [15]
         commandCenter.skipBackwardCommand.addTarget { _ in
@@ -76,13 +83,19 @@ final class RemoteCommandManager {
             engine.seek(to: max(0, engine.currentTime - 15))
             return .success
         }
+    }
 
-        // Like (star) — shows thumbs-up in CarPlay
+    private func setupRatingCommands() {
         commandCenter.likeCommand.isEnabled = true
         commandCenter.likeCommand.addTarget { _ in
             if let song = AudioEngine.shared.currentSong {
                 Task { @MainActor in
-                    try? await AppState.shared.subsonicClient.star(id: song.id)
+                    do {
+                        try await AppState.shared.subsonicClient.star(id: song.id)
+                    } catch {
+                        Logger(subsystem: "com.veydrune.app", category: "RemoteCommand")
+                            .error("Failed to star track: \(error)")
+                    }
                     if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
                         DownloadManager.shared.download(song: song, client: AppState.shared.subsonicClient)
                     }
@@ -91,12 +104,16 @@ final class RemoteCommandManager {
             return .success
         }
 
-        // Dislike (unstar) — shows thumbs-down in CarPlay
         commandCenter.dislikeCommand.isEnabled = true
         commandCenter.dislikeCommand.addTarget { _ in
             if let song = AudioEngine.shared.currentSong {
                 Task {
-                    try? await AppState.shared.subsonicClient.unstar(id: song.id)
+                    do {
+                        try await AppState.shared.subsonicClient.unstar(id: song.id)
+                    } catch {
+                        Logger(subsystem: "com.veydrune.app", category: "RemoteCommand")
+                            .error("Failed to unstar track: \(error)")
+                    }
                 }
             }
             return .success

@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct RadioView: View {
     @Environment(AppState.self) private var appState
@@ -183,6 +184,7 @@ struct RadioView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Now playing: \(station.name)")
     }
 
     // MARK: - Station Grid
@@ -237,10 +239,12 @@ struct RadioView: View {
                     Image(systemName: "waveform")
                         .foregroundColor(color)
                         .symbolEffect(.variableColor)
+                        .accessibilityLabel("Playing")
                 } else {
                     Image(systemName: "play.circle.fill")
                         .font(.title3)
                         .foregroundColor(color.opacity(0.6))
+                        .accessibilityLabel("Play")
                 }
             }
             .padding(.vertical, 10)
@@ -269,14 +273,19 @@ struct RadioView: View {
         do {
             stations = try await appState.subsonicClient.getRadioStations()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 
     private func deleteStation(_ station: InternetRadioStation) {
         stations.removeAll { $0.id == station.id }
         Task {
-            try? await appState.subsonicClient.deleteRadioStation(id: station.id)
+            do {
+                try await appState.subsonicClient.deleteRadioStation(id: station.id)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "Radio")
+                    .error("Failed to delete radio station: \(error)")
+            }
         }
     }
 }
@@ -361,7 +370,7 @@ struct AddStationView: View {
                 await onSave?()
                 dismiss()
             } catch {
-                self.error = error.localizedDescription
+                self.error = ErrorPresenter.userMessage(for: error)
             }
         }
     }

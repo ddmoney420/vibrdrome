@@ -98,7 +98,7 @@ struct FavoritesView: View {
         do {
             starred = try await appState.subsonicClient.getStarred()
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

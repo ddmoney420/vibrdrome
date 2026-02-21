@@ -22,6 +22,16 @@ packages:
     url: https://github.com/kishikawakatsumi/KeychainAccess
     from: "4.2.2"
 
+schemes:
+  Veydrune:
+    build:
+      targets:
+        Veydrune: all
+        VeydruneTests: [test]
+    test:
+      targets:
+        - VeydruneTests
+
 targets:
   Veydrune:
     type: application
@@ -35,7 +45,7 @@ targets:
         INFOPLIST_FILE: Veydrune/Info.plist
         CODE_SIGN_ENTITLEMENTS: Veydrune/Veydrune.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.veydrune.app
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
@@ -49,3 +59,14 @@ targets:
       - package: KeychainAccess
     entitlements:
       path: Veydrune/Veydrune.entitlements
+
+  VeydruneTests:
+    type: bundle.unit-test
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: VeydruneTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - target: Veydrune

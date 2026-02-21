@@ -74,7 +74,7 @@ struct ArtistDetailView: View {
         do {
             artist = try await appState.subsonicClient.getArtist(id: artistId)
         } catch {
-            self.error = error.localizedDescription
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 }

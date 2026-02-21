@@ -1,6 +1,7 @@
 import Foundation
-import Observation
 import KeychainAccess
+import Observation
+import os.log
 
 // MARK: - Saved Server Model
 
@@ -190,16 +191,24 @@ final class AppState {
     }
 
     private func loadServers() {
-        if let data = UserDefaults.standard.data(forKey: Self.serversKey),
-           let decoded = try? JSONDecoder().decode([SavedServer].self, from: data) {
-            servers = decoded
+        if let data = UserDefaults.standard.data(forKey: Self.serversKey) {
+            do {
+                servers = try JSONDecoder().decode([SavedServer].self, from: data)
+            } catch {
+                Logger(subsystem: "com.veydrune.app", category: "AppState")
+                    .error("Failed to decode server list: \(error.localizedDescription)")
+            }
         }
         activeServerId = UserDefaults.standard.string(forKey: Self.activeServerKey)
     }
 
     private func saveServers() {
-        if let data = try? JSONEncoder().encode(servers) {
+        do {
+            let data = try JSONEncoder().encode(servers)
             UserDefaults.standard.set(data, forKey: Self.serversKey)
+        } catch {
+            Logger(subsystem: "com.veydrune.app", category: "AppState")
+                .error("Failed to encode server list: \(error.localizedDescription)")
         }
         if let activeId = activeServerId {
             UserDefaults.standard.set(activeId, forKey: Self.activeServerKey)

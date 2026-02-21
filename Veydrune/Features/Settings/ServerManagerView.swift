@@ -79,84 +79,99 @@ struct ServerManagerView: View {
                 appState.switchToServer(id: server.id)
             }
         } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill((isActive ? Color.green : Color.gray).gradient.opacity(0.8))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "server.rack")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(server.name)
-                            .font(.body)
-                            .fontWeight(isActive ? .semibold : .regular)
-                            .foregroundColor(.primary)
-                        if isActive {
-                            Text("Active")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.green)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.green.opacity(0.15), in: Capsule())
-                        }
-                    }
-                    Text(server.url)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text(server.username)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-
-                if isActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                }
-            }
-            .padding(.vertical, 2)
+            serverRowLabel(server, isActive: isActive)
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                deleteConfirmServer = server
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-
-            Button {
-                editingServer = server
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            .tint(.orange)
+            serverSwipeActions(server)
         }
         .contextMenu {
-            if !isActive {
-                Button {
-                    AudioEngine.shared.stop()
-                    appState.switchToServer(id: server.id)
-                } label: {
-                    Label("Switch To", systemImage: "arrow.right.circle")
+            serverContextMenuItems(server, isActive: isActive)
+        }
+    }
+
+    @ViewBuilder
+    private func serverRowLabel(_ server: SavedServer, isActive: Bool) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill((isActive ? Color.green : Color.gray).gradient.opacity(0.8))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "server.rack")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(server.name)
+                        .font(.body)
+                        .fontWeight(isActive ? .semibold : .regular)
+                        .foregroundColor(.primary)
+                    if isActive {
+                        Text("Active")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.green.opacity(0.15), in: Capsule())
+                    }
                 }
+                Text(server.url)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(server.username)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
+
+            Spacer()
+
+            if isActive {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func serverSwipeActions(_ server: SavedServer) -> some View {
+        Button(role: .destructive) {
+            deleteConfirmServer = server
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+
+        Button {
+            editingServer = server
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+        .tint(.orange)
+    }
+
+    @ViewBuilder
+    private func serverContextMenuItems(_ server: SavedServer, isActive: Bool) -> some View {
+        if !isActive {
             Button {
-                editingServer = server
+                AudioEngine.shared.stop()
+                appState.switchToServer(id: server.id)
             } label: {
-                Label("Edit", systemImage: "pencil")
+                Label("Switch To", systemImage: "arrow.right.circle")
             }
-            Button(role: .destructive) {
-                deleteConfirmServer = server
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
+        }
+        Button {
+            editingServer = server
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+        Button(role: .destructive) {
+            deleteConfirmServer = server
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }
@@ -293,7 +308,7 @@ struct ServerEditView: View {
                 let ok = try await client.ping()
                 testResult = ok ? "Success! Connected to server." : "Server responded but ping failed."
             } catch {
-                testResult = "Failed: \(error.localizedDescription)"
+                testResult = "Failed: \(ErrorPresenter.userMessage(for: error))"
             }
         }
     }

@@ -212,7 +212,7 @@ struct ServerConfigView: View {
                 let ok = try await client.ping()
                 testResult = ok ? "Success! Connected to server." : "Server responded but ping failed."
             } catch {
-                testResult = "Failed: \(error.localizedDescription)"
+                testResult = "Failed: \(ErrorPresenter.userMessage(for: error))"
             }
         }
     }
