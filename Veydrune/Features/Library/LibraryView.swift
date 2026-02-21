@@ -8,6 +8,7 @@ struct LibraryView: View {
     @State private var randomAlbums: [Album] = []
     @State private var starredSongs: [Song] = []
     @State private var isLoaded = false
+    @State private var isLoadingRandomMix = false
 
     var body: some View {
         NavigationStack {
@@ -225,9 +226,7 @@ struct LibraryView: View {
                     AlbumsView(listType: .recent, title: "Recently Played")
                 }
                 Divider().padding(.leading, 52)
-                moreRow("Random Mix", icon: "dice.fill", color: .indigo) {
-                    AlbumsView(listType: .random, title: "Random")
-                }
+                randomMixRow
             }
             .padding(.horizontal, 16)
         }
@@ -259,6 +258,50 @@ struct LibraryView: View {
             .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Random Mix
+
+    private var randomMixRow: some View {
+        Button {
+            guard !isLoadingRandomMix else { return }
+            Task { await playRandomMix() }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "dice.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.indigo)
+                    .frame(width: 28)
+
+                Text("Random Mix")
+                    .font(.body)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                if isLoadingRandomMix {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoadingRandomMix)
+    }
+
+    private func playRandomMix() async {
+        isLoadingRandomMix = true
+        defer { isLoadingRandomMix = false }
+        do {
+            let songs = try await appState.subsonicClient.getRandomSongs(size: 50)
+            guard let first = songs.first else { return }
+            AudioEngine.shared.play(song: first, from: songs)
+        } catch {}
     }
 
     // MARK: - Data Loading
