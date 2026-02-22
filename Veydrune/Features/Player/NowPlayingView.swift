@@ -439,6 +439,26 @@ struct NowPlayingView: View {
 
             Spacer()
 
+            // Lyrics
+            Button { showLyrics = true } label: {
+                Image(systemName: "quote.bubble")
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .accessibilityLabel("Lyrics")
+
+            Spacer()
+
+            #if os(iOS)
+            // Visualizer
+            Button { showVisualizer = true } label: {
+                Image(systemName: "waveform.path")
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .accessibilityLabel("Visualizer")
+
+            Spacer()
+            #endif
+
             Button {
                 guard let song = engine.currentSong else { return }
                 let songId = song.id
