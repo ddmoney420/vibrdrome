@@ -10,6 +10,7 @@ struct NowPlayingView: View {
     @State private var showQueue = false
     @State private var showLyrics = false
     @State private var showVisualizer = false
+    @State private var showEQ = false
     @State private var isStarred = false
     @State private var sliderValue: Double = 0
     @State private var isDragging = false
@@ -45,6 +46,9 @@ struct NowPlayingView: View {
                     LyricsView(songId: song.id)
                         .environment(appState)
                 }
+            }
+            .sheet(isPresented: $showEQ) {
+                EQView()
             }
             #if os(iOS)
             .fullScreenCover(isPresented: $showVisualizer) {
@@ -221,6 +225,20 @@ struct NowPlayingView: View {
 
     private var songInfo: some View {
         VStack(spacing: 4) {
+            if engine.isRadioMode {
+                HStack(spacing: 4) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.caption2)
+                    Text(engine.radioSeedArtistName ?? "Radio")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.white.opacity(0.15), in: Capsule())
+                .foregroundColor(.white.opacity(0.8))
+            }
+
             Text(engine.currentSong?.title ?? "Not Playing")
                 .font(.title3)
                 .bold()
@@ -352,24 +370,72 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            Button { showLyrics = true } label: {
-                Image(systemName: "text.quote")
+            // Sleep Timer
+            Menu {
+                if SleepTimer.shared.isActive {
+                    Button {
+                        SleepTimer.shared.stop()
+                    } label: {
+                        Label("Cancel Timer", systemImage: "xmark")
+                    }
+                } else {
+                    ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
+                        Button {
+                            SleepTimer.shared.start(mode: .minutes(minutes))
+                        } label: {
+                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
+                        }
+                    }
+                    Button {
+                        SleepTimer.shared.start(mode: .endOfTrack)
+                    } label: {
+                        Text("End of Track")
+                    }
+                }
+            } label: {
+                Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
+                    .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.4))
             }
-            .disabled(engine.currentSong == nil)
-            .accessibilityLabel("Show Lyrics")
+            .accessibilityLabel("Sleep Timer")
 
             Spacer()
 
-            Button {
-                #if os(macOS)
-                openWindow(id: "visualizer")
-                #else
-                showVisualizer = true
-                #endif
+            // Speed
+            Menu {
+                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+                    Button {
+                        engine.playbackRate = Float(rate)
+                    } label: {
+                        HStack {
+                            Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
+                            if engine.playbackRate == Float(rate) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
             } label: {
-                Image(systemName: "waveform.path")
+                Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.4))
             }
-            .accessibilityLabel("Show Visualizer")
+            .accessibilityLabel("Playback Speed")
+
+            Spacer()
+
+            // EQ
+            Button { showEQ = true } label: {
+                Image(systemName: "slider.vertical.3")
+                    .foregroundColor(
+                        engine.activeMode == .eq
+                            ? .white
+                            : EQEngine.shared.currentPresetId != "flat"
+                                ? .white.opacity(0.7) : .white.opacity(0.4)
+                    )
+            }
+            .accessibilityLabel("Equalizer")
+            .accessibilityValue(engine.activeMode == .eq ? "Active" : "Inactive")
 
             Spacer()
 
@@ -381,9 +447,9 @@ struct NowPlayingView: View {
                 Task {
                     do {
                         if wasStarred {
-                            try await appState.subsonicClient.unstar(id: songId)
+                            try await OfflineActionQueue.shared.unstar(id: songId)
                         } else {
-                            try await appState.subsonicClient.star(id: songId)
+                            try await OfflineActionQueue.shared.star(id: songId)
                             if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
                                 DownloadManager.shared.download(song: song, client: appState.subsonicClient)
                             }

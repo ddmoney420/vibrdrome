@@ -36,6 +36,8 @@ struct SubsonicResponseBody: Decodable {
     let bookmarks: BookmarksWrapper?
     let similarSongs2: SimilarSongs2Response?
     let topSongs: TopSongsResponse?
+    let musicFolders: MusicFoldersWrapper?
+    let directory: MusicDirectory?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
@@ -43,6 +45,7 @@ struct SubsonicResponseBody: Decodable {
         case playlists, playlist, genres, starred2, albumList2, randomSongs
         case internetRadioStations, lyricsList, playQueue, bookmarks
         case similarSongs2, topSongs
+        case musicFolders, directory
     }
 
     init(from decoder: Decoder) throws {
@@ -70,6 +73,8 @@ struct SubsonicResponseBody: Decodable {
         bookmarks = try container.decodeIfPresent(BookmarksWrapper.self, forKey: .bookmarks)
         similarSongs2 = try container.decodeIfPresent(SimilarSongs2Response.self, forKey: .similarSongs2)
         topSongs = try container.decodeIfPresent(TopSongsResponse.self, forKey: .topSongs)
+        musicFolders = try container.decodeIfPresent(MusicFoldersWrapper.self, forKey: .musicFolders)
+        directory = try container.decodeIfPresent(MusicDirectory.self, forKey: .directory)
     }
 }
 
@@ -273,6 +278,60 @@ struct Genre: Decodable, Identifiable, Sendable {
     let albumCount: Int?
     let value: String
     var id: String { value }
+}
+
+// MARK: - Music Folders / Directory Browsing
+
+struct MusicFoldersWrapper: Decodable, Sendable {
+    let musicFolder: [MusicFolder]?
+}
+
+struct MusicFolder: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // id can be Int or String in Subsonic API
+        if let intId = try? container.decode(Int.self, forKey: .id) {
+            id = String(intId)
+        } else {
+            id = try container.decode(String.self, forKey: .id)
+        }
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+    }
+}
+
+struct MusicDirectory: Decodable, Sendable {
+    let id: String
+    let name: String?
+    let parent: String?
+    let child: [DirectoryChild]?
+}
+
+struct DirectoryChild: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String?
+    let isDir: Bool
+    let artist: String?
+    let album: String?
+    let coverArt: String?
+    let duration: Int?
+    let track: Int?
+    let year: Int?
+    let genre: String?
+    let size: Int?
+    let suffix: String?
+    let bitRate: Int?
+    let contentType: String?
+    let path: String?
+    let parent: String?
+    let starred: String?
+    let created: String?
 }
 
 // MARK: - Bookmarks

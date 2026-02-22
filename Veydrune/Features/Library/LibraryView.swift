@@ -78,6 +78,7 @@ struct LibraryView: View {
             quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
             quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
             quickAccessPill("Bookmarks", icon: "bookmark.fill", color: .brown) { BookmarksView() }
+            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
         }
         .padding(.horizontal, 16)
     }

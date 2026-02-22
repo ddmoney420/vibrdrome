@@ -19,6 +19,8 @@ final class PersistenceController {
             DownloadedSong.self,
             PlayHistory.self,
             ServerConfig.self,
+            OfflinePlaylist.self,
+            PendingAction.self,
         ])
 
         let config = ModelConfiguration(

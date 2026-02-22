@@ -32,22 +32,22 @@ struct StarButton: View {
                     switch type {
                     case .song:
                         if starred {
-                            try await appState.subsonicClient.star(id: id)
+                            try await OfflineActionQueue.shared.star(id: id)
                             autoDownloadIfEnabled()
                         } else {
-                            try await appState.subsonicClient.unstar(id: id)
+                            try await OfflineActionQueue.shared.unstar(id: id)
                         }
                     case .album:
                         if starred {
-                            try await appState.subsonicClient.star(albumId: id)
+                            try await OfflineActionQueue.shared.star(albumId: id)
                         } else {
-                            try await appState.subsonicClient.unstar(albumId: id)
+                            try await OfflineActionQueue.shared.unstar(albumId: id)
                         }
                     case .artist:
                         if starred {
-                            try await appState.subsonicClient.star(artistId: id)
+                            try await OfflineActionQueue.shared.star(artistId: id)
                         } else {
-                            try await appState.subsonicClient.unstar(artistId: id)
+                            try await OfflineActionQueue.shared.unstar(artistId: id)
                         }
                     }
                 } catch {
@@ -56,8 +56,9 @@ struct StarButton: View {
                 }
             }
         } label: {
-            Image(systemName: starred ? "heart.fill" : "heart")
-                .foregroundStyle(starred ? .pink : .secondary)
+            let pending = OfflineActionQueue.shared.hasPendingStar(targetId: id)
+            Image(systemName: starred ? "heart.fill" : pending ? "heart.circle" : "heart")
+                .foregroundStyle(starred ? .pink : pending ? .orange : .secondary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(starred ? "Remove from Favorites" : "Add to Favorites")

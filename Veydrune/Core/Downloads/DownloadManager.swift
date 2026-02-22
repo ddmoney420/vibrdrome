@@ -76,6 +76,99 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         }
     }
 
+    /// Download an entire playlist for offline use with max 3 concurrent downloads
+    @MainActor
+    func downloadPlaylist(playlist: Playlist, songs: [Song], client: SubsonicClient) {
+        guard let serverId = AppState.shared.activeServerId else { return }
+
+        // Save OfflinePlaylist metadata
+        let modelContext = PersistenceController.shared.container.mainContext
+        let playlistId = playlist.id
+        let key = "\(serverId)_\(playlistId)"
+        let descriptor = FetchDescriptor<OfflinePlaylist>(
+            predicate: #Predicate { $0.compositeKey == key }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            // Update existing
+            existing.songIds = songs.map(\.id)
+            existing.playlistName = playlist.name
+            existing.coverArtId = playlist.coverArt
+            existing.totalSongs = songs.count
+            existing.cachedAt = Date()
+        } else {
+            let offline = OfflinePlaylist(
+                serverId: serverId,
+                playlistId: playlist.id,
+                playlistName: playlist.name,
+                coverArtId: playlist.coverArt,
+                songIds: songs.map(\.id)
+            )
+            modelContext.insert(offline)
+        }
+
+        // Ensure all songs have CachedSong metadata
+        for song in songs {
+            let songId = song.id
+            let cachedDescriptor = FetchDescriptor<CachedSong>(
+                predicate: #Predicate { $0.id == songId }
+            )
+            if (try? modelContext.fetch(cachedDescriptor).first) == nil {
+                modelContext.insert(CachedSong(from: song))
+            }
+        }
+
+        try? modelContext.save()
+
+        // Download all songs concurrently (DownloadManager handles dedup)
+        for song in songs {
+            download(song: song, client: client)
+        }
+
+        // Track playlist-level progress
+        DownloadProgress.shared.trackPlaylist(
+            playlistId: playlist.id,
+            songIds: songs.map(\.id)
+        )
+    }
+
+    /// Check if a playlist is fully downloaded
+    @MainActor
+    func isPlaylistDownloaded(playlistId: String) -> Bool {
+        guard let serverId = AppState.shared.activeServerId else { return false }
+        let modelContext = PersistenceController.shared.container.mainContext
+        let key = "\(serverId)_\(playlistId)"
+        let descriptor = FetchDescriptor<OfflinePlaylist>(
+            predicate: #Predicate { $0.compositeKey == key }
+        )
+        guard let offline = try? modelContext.fetch(descriptor).first else { return false }
+
+        // Check each song is downloaded
+        for songId in offline.songIds {
+            let downloadDescriptor = FetchDescriptor<DownloadedSong>(
+                predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+            )
+            if (try? modelContext.fetch(downloadDescriptor).first) == nil {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Remove offline playlist metadata (does not delete song files — they may be in other playlists)
+    @MainActor
+    func removeOfflinePlaylist(playlistId: String) {
+        guard let serverId = AppState.shared.activeServerId else { return }
+        let modelContext = PersistenceController.shared.container.mainContext
+        let key = "\(serverId)_\(playlistId)"
+        let descriptor = FetchDescriptor<OfflinePlaylist>(
+            predicate: #Predicate { $0.compositeKey == key }
+        )
+        if let offline = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(offline)
+            try? modelContext.save()
+        }
+    }
+
     func cancelDownload(songId: String) {
         lock.withLock {
             activeDownloads[songId]?.cancel()
@@ -241,6 +334,9 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
             try? modelContext.save()
             DownloadProgress.shared.remove(songId: songId)
+
+            // Evict old cache if over limit
+            CacheManager.shared.evictIfNeeded()
         }
     }
 

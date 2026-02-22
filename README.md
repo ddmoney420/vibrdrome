@@ -1,23 +1,53 @@
-# Veydrune
+```
+ _   _  _____ __   ________ ______  _   _  _   _  _____
+| | | ||  ___|\ \ / /|  _  \| ___ \| | | || \ | ||  ___|
+| | | || |__   \ V / | | | || |_/ /| | | ||  \| || |__
+| | | ||  __|   \ /  | | | ||    / | | | || . ` ||  __|
+\ \_/ /| |___   | |  | |/ / | |\ \ | |_| || |\  || |___
+ \___/ \____/   \_/  |___/  \_| \_| \___/ \_| \_/\____/
+```
 
-A native iOS/macOS music player for Navidrome servers (Subsonic API compatible).
+> *A native iOS/macOS music player for Navidrome servers* ♪♫(◕‿◕)♫♪
+
+---
 
 ## Features
 
-- **Library browsing** -- artists, albums, songs, genres, and playlists
-- **Full playback controls** -- queue management, shuffle, repeat modes, gapless playback (coming soon)
-- **CarPlay support** -- browse, search, and control playback from your car
-- **Offline mode** -- download songs and albums for offline listening
-- **Internet radio** -- add and play streaming radio stations
-- **Synced lyrics display**
-- **Audio visualizer** with Metal shaders
-- **Bookmarks** -- save and resume positions in long tracks
-- **Smart playlists** -- auto-generated playlists based on criteria
-- **Scrobbling support**
-- **Multi-server support** with per-server Keychain credentials
+### Playback (ﾉ◕ヮ◕)ﾉ*:・゚✧
+- **Gapless playback** -- AVQueuePlayer with lookahead for seamless transitions
+- **Crossfade** -- configurable 0-12s overlap between tracks using dual-player architecture
+- **10-band equalizer** -- parametric EQ with presets for downloaded tracks (AVAudioEngine)
+- **ReplayGain** -- track/album volume normalization from server metadata
+- **Playback speed** -- 0.5x to 2.0x with pitch preservation
+- **Sleep timer** -- 15m to 2h or end-of-track with volume fade
+
+### Library
+- **Library browsing** -- artists, albums, songs, genres, playlists, and folder hierarchy
+- **Artist radio** -- continuous auto-play seeded from any artist or track
+- **Smart playlists** -- 6 auto-generated playlist types
+- **Search** -- full-text search across artists, albums, and songs
+- **Synced lyrics** -- scrolling lyrics with seek-to-line
+
+### Offline & Downloads
+- **Offline mode** -- download songs, albums, and entire playlists
+- **Offline playlists** -- batch download with full metadata preservation
+- **Cache management** -- configurable size limits with LRU eviction (pinned playlists protected)
+- **Offline star/scrobble queue** -- actions sync automatically on reconnect
+
+### Platform
+- **CarPlay support** -- browse, search, artist radio, and playback controls
 - **macOS native app** -- NavigationSplitView sidebar, keyboard shortcuts, pop-out player
-- **Theming** -- dark/light mode, custom accent colors, Dynamic Type support
-- **Accessibility** -- VoiceOver support throughout
+- **Internet radio** -- streaming radio stations with HTTP media support
+- **Multi-server support** -- per-server Keychain credentials with server switching
+- **Audio visualizer** -- Metal shader-based with 6 presets
+- **Bookmarks** -- save and resume positions in long tracks
+
+### Customization
+- **Theming** -- dark/light/system mode with 10 accent color themes
+- **Accessibility** -- VoiceOver support throughout, bold text, reduce motion
+- **Scrobbling** -- automatic scrobble submission with offline queuing
+
+---
 
 ## Requirements
 
@@ -29,13 +59,13 @@ A native iOS/macOS music player for Navidrome servers (Subsonic API compatible).
 
 | Layer | Technology |
 |---|---|
-| Language | Swift 6 |
+| Language | Swift 6 (strict concurrency) |
 | UI | SwiftUI |
 | Persistence | SwiftData |
-| Audio | AVPlayer |
+| Audio | AVQueuePlayer (gapless), AVPlayer (crossfade), AVAudioEngine (EQ) |
 | CarPlay | CPTemplate |
 | Build System | XcodeGen |
-| Image Loading | NukeUI |
+| Image Loading | NukeUI (with disk caching) |
 | Credentials | KeychainAccess |
 
 ## Build Instructions
@@ -63,21 +93,35 @@ make lint
 App/                 App entry, AppState singleton, Theme
 CarPlay/             CarPlay scene delegate and template manager
 Core/
-  Audio/             AudioEngine (AVPlayer), NowPlayingManager, RemoteCommandManager
-  Downloads/         Background URLSession download manager
-  Networking/        SubsonicClient, auth, models, endpoints
-  Persistence/       SwiftData models and controller
+  Audio/             AudioEngine (3 backends), EQEngine, CrossfadeController,
+                     SleepTimer, NowPlayingManager, RemoteCommandManager
+  Downloads/         Background URLSession download manager, CacheManager
+  Networking/        SubsonicClient, auth, models, endpoints, OfflineActionQueue
+  Persistence/       SwiftData models (DownloadedSong, OfflinePlaylist, PendingAction, etc.)
 Features/            SwiftUI views organized by feature
-  Library/           Artist, album, song, and genre browsing
+  Library/           Artist, album, song, genre, and folder browsing
   Player/            Now playing, mini player, lyrics, visualizer
   Playlists/         Playlist management and smart playlists
   Radio/             Internet radio stations
   Search/            Global search
-  Settings/          Server config, appearance, playback settings
+  Settings/          Server config, appearance, playback, EQ settings
   Visualizer/        Metal shader-based audio visualizer
   Downloads/         Download management UI
 Shared/              Reusable components (TrackRow, AlbumCard, StarButton) and extensions
 ```
+
+### Playback Architecture (⌐■_■)
+
+Three mutually exclusive playback topologies, selected by mode priority:
+
+```
+Mode Priority (highest wins):
+1. EQ Mode    -- eqEnabled + downloaded  -->  AVAudioEngine + EQ + TimePitch
+2. Crossfade  -- crossfadeDuration > 0   -->  Dual AVPlayer with volume ramps
+3. Gapless    -- crossfadeDuration == 0  -->  AVQueuePlayer with lookahead
+```
+
+`AudioEngine.shared` is the single facade. All UI, CarPlay, and remote commands talk only to AudioEngine -- never to backends directly.
 
 ## Contributing
 
@@ -86,3 +130,5 @@ Contributions are welcome. Please run `make lint` before submitting pull request
 ## License
 
 Not yet specified.
+
+✧･ﾟ:*✧･ﾟ:*

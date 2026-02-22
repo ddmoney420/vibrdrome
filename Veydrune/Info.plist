@@ -48,6 +48,11 @@
         <string>fetch</string>
         <string>processing</string>
     </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoadsInMedia</key>
+        <true/>
+    </dict>
     <key>NSPrivacyAccessedAPITypes</key>
     <array>
         <dict>

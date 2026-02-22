@@ -38,6 +38,25 @@ struct QueueView: View {
                     }
                 }
 
+                // Radio mode badge
+                if engine.isRadioMode {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "dot.radiowaves.left.and.right")
+                                .foregroundColor(.accentColor)
+                            Text(engine.radioSeedArtistName ?? "Artist Radio")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Button("Stop Radio") {
+                                engine.stopRadioMode()
+                            }
+                            .font(.caption)
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+
                 // Up next
                 let upNext = engine.upNext
                 if !upNext.isEmpty {

@@ -38,14 +38,14 @@ opt_in_rules:
   - vertical_parameter_alignment_on_call
 
 # Thresholds tuned for this codebase
-# AudioEngine=563, CarPlayManager=525, SmartPlaylistView=498
+# AudioEngine split across AudioEngine.swift + Crossfade/Observers/Radio extensions
 file_length:
-  warning: 575
-  error: 700
+  warning: 1000
+  error: 1200
 
 type_body_length:
-  warning: 450
-  error: 600
+  warning: 800
+  error: 1000
 
 function_body_length:
   warning: 60

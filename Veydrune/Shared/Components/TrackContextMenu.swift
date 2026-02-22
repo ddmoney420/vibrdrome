@@ -63,6 +63,12 @@ struct TrackContextMenuModifier: ViewModifier {
         }
 
         Button {
+            AudioEngine.shared.startRadioFromSong(song)
+        } label: {
+            Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+        }
+
+        Button {
             DownloadManager.shared.download(
                 song: song,
                 client: appState.subsonicClient
@@ -84,9 +90,9 @@ struct TrackContextMenuModifier: ViewModifier {
             Task {
                 do {
                     if song.starred != nil {
-                        try await appState.subsonicClient.unstar(id: song.id)
+                        try await OfflineActionQueue.shared.unstar(id: song.id)
                     } else {
-                        try await appState.subsonicClient.star(id: song.id)
+                        try await OfflineActionQueue.shared.star(id: song.id)
                         if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
                             DownloadManager.shared.download(song: song, client: appState.subsonicClient)
                         }

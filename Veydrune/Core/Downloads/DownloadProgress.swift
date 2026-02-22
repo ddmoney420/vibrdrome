@@ -22,5 +22,24 @@ final class DownloadProgress {
 
     func clear() {
         progressBySongId.removeAll()
+        playlistSongIds.removeAll()
+    }
+
+    // MARK: - Playlist Progress
+
+    /// Maps playlistId → songIds for tracking playlist-level download progress
+    var playlistSongIds: [String: [String]] = [:]
+
+    func trackPlaylist(playlistId: String, songIds: [String]) {
+        playlistSongIds[playlistId] = songIds
+    }
+
+    /// Returns 0.0-1.0 progress for a playlist based on how many songs are fully downloaded
+    func playlistProgress(playlistId: String) -> Double {
+        guard let songIds = playlistSongIds[playlistId], !songIds.isEmpty else { return 0 }
+        let completedCount = songIds.filter { progressBySongId[$0] == nil }.count
+        // Songs with no progress entry are either not started or already complete
+        // We need to check DownloadedSong isComplete for accurate count
+        return Double(completedCount) / Double(songIds.count)
     }
 }

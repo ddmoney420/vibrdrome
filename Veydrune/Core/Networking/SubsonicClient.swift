@@ -312,6 +312,19 @@ final class SubsonicClient {
         return body.topSongs?.song ?? []
     }
 
+    func getMusicFolders() async throws -> [MusicFolder] {
+        let body = try await request(.getMusicFolders)
+        return body.musicFolders?.musicFolder ?? []
+    }
+
+    func getMusicDirectory(id: String) async throws -> MusicDirectory {
+        let body = try await request(.getMusicDirectory(id: id))
+        guard let directory = body.directory else {
+            throw SubsonicError.apiError(code: 70, message: "Directory not found")
+        }
+        return directory
+    }
+
     // MARK: - Reconfigure
 
     func updateCredentials(baseURL: URL, username: String, password: String) {

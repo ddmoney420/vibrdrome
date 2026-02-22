@@ -226,7 +226,17 @@ final class CarPlayManager {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
             let artist = try await client.getArtist(id: id)
-            let items = (artist.album ?? []).map { album in
+
+            // Artist Radio button
+            let radioItem = CPListItem(text: "Start Radio",
+                                       detailText: "Mix based on \(artist.name)",
+                                       image: UIImage(systemName: "dot.radiowaves.left.and.right"))
+            radioItem.handler = { _, completion in
+                AudioEngine.shared.startRadio(artistName: artist.name)
+                completion()
+            }
+
+            let albumItems = (artist.album ?? []).map { album in
                 let item = CPListItem(text: album.name,
                                       detailText: album.year.map { "\($0)" })
                 if let coverArtId = album.coverArt {
@@ -238,8 +248,13 @@ final class CarPlayManager {
                 }
                 return item
             }
-            return CPListTemplate(title: artist.name,
-                                  sections: [CPListSection(items: items)])
+
+            let sections = [
+                CPListSection(items: [radioItem]),
+                CPListSection(items: albumItems, header: "Albums",
+                              sectionIndexTitle: nil),
+            ]
+            return CPListTemplate(title: artist.name, sections: sections)
         }
     }
 

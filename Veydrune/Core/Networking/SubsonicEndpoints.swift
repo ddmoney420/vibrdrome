@@ -46,6 +46,8 @@ enum SubsonicEndpoint: Sendable {
     case deleteBookmark(id: String)
     case getSimilarSongs2(id: String, count: Int = 50)
     case getTopSongs(artist: String, count: Int = 50)
+    case getMusicFolders
+    case getMusicDirectory(id: String)
 
     var path: String {
         switch self {
@@ -82,13 +84,16 @@ enum SubsonicEndpoint: Sendable {
         case .deleteBookmark: "/rest/deleteBookmark"
         case .getSimilarSongs2: "/rest/getSimilarSongs2"
         case .getTopSongs: "/rest/getTopSongs"
+        case .getMusicFolders: "/rest/getMusicFolders"
+        case .getMusicDirectory: "/rest/getMusicDirectory"
         }
     }
 
     var queryItems: [URLQueryItem] {
         switch self {
         case .ping, .getStarred2, .getGenres, .getPlaylists,
-             .getInternetRadioStations, .getPlayQueue, .getBookmarks:
+             .getInternetRadioStations, .getPlayQueue, .getBookmarks,
+             .getMusicFolders:
             return []
 
         case .getArtists(let musicFolderId):
@@ -250,6 +255,9 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "artist", value: artist),
                 URLQueryItem(name: "count", value: "\(count)")
             ]
+
+        case .getMusicDirectory(let id):
+            return [URLQueryItem(name: "id", value: id)]
         }
     }
 }

@@ -16,7 +16,7 @@ struct SidebarContentView: View {
 
     enum SidebarItem: String, CaseIterable, Hashable {
         case artists, albums, genres, favorites, recentlyAdded, mostPlayed, recentlyPlayed, random
-        case bookmarks
+        case bookmarks, folders
         case search
         case playlists
         case radio
@@ -46,6 +46,8 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.random)
                     Label("Bookmarks", systemImage: "bookmark")
                         .tag(SidebarItem.bookmarks)
+                    Label("Folders", systemImage: "folder")
+                        .tag(SidebarItem.folders)
                     Label("Downloads", systemImage: "arrow.down.circle")
                         .tag(SidebarItem.downloads)
                 }
@@ -116,6 +118,8 @@ struct SidebarContentView: View {
             AlbumsView(listType: .random, title: "Random")
         case .bookmarks:
             BookmarksView()
+        case .folders:
+            FolderBrowserView()
         case .downloads:
             DownloadsView()
         case .search:

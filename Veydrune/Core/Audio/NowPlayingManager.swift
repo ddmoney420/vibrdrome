@@ -80,6 +80,12 @@ final class NowPlayingManager {
         infoCenter.nowPlayingInfo = currentInfo
     }
 
+    func updatePlaybackRate(_ rate: Float) {
+        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = rate
+        currentInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = rate
+        infoCenter.nowPlayingInfo = currentInfo
+    }
+
     func clear() {
         currentInfo.removeAll()
         infoCenter.nowPlayingInfo = nil

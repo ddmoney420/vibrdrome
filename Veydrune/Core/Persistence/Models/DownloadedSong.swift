@@ -12,6 +12,7 @@ final class DownloadedSong {
     var localFilePath: String = ""
     var fileSize: Int64 = 0
     var downloadedAt: Date = Date()
+    var lastAccessedAt: Date?
     var isComplete: Bool = false
 
     var song: CachedSong?

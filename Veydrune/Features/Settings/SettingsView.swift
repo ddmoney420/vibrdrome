@@ -58,7 +58,10 @@ struct SettingsView: View {
     @AppStorage("appColorScheme") private var appColorScheme: String = "system"
     @AppStorage("accentColorTheme") private var accentColorTheme: String = "blue"
     @AppStorage("gaplessPlayback") private var gaplessPlayback: Bool = true
-@AppStorage("autoDownloadFavorites") private var autoDownloadFavorites: Bool = false
+    @AppStorage("replayGainMode") private var replayGainMode: String = "off"
+    @AppStorage("crossfadeDuration") private var crossfadeDuration: Int = 0
+    @AppStorage("eqEnabled") private var eqEnabled: Bool = false
+    @AppStorage("autoDownloadFavorites") private var autoDownloadFavorites: Bool = false
     @AppStorage("downloadOverCellular") private var downloadOverCellular: Bool = false
     @AppStorage("largerText") private var largerText: Bool = false
     @AppStorage("reduceMotion") private var reduceMotion: Bool = false
@@ -67,6 +70,7 @@ struct SettingsView: View {
     @AppStorage("carPlayRecentCount") private var carPlayRecentCount: Int = 25
     @AppStorage("carPlayShowGenres") private var carPlayShowGenres: Bool = true
     @AppStorage("carPlayShowRadio") private var carPlayShowRadio: Bool = true
+    @AppStorage("cacheLimitBytes") private var cacheLimitBytes: Int = 0
 
     @Query private var downloadedSongs: [DownloadedSong]
 
@@ -227,16 +231,41 @@ struct SettingsView: View {
             }
 
             Toggle(isOn: $gaplessPlayback) {
-                HStack {
-                    Label("Gapless Playback", systemImage: "waveform.path")
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Text("Coming Soon")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Label("Gapless Playback", systemImage: "waveform.path")
+                    .foregroundColor(.primary)
             }
-            .disabled(true)
+
+            Picker(selection: $crossfadeDuration) {
+                Text("Off").tag(0)
+                Text("2s").tag(2)
+                Text("5s").tag(5)
+                Text("8s").tag(8)
+                Text("12s").tag(12)
+            } label: {
+                Label("Crossfade", systemImage: "waveform.path.ecg")
+                    .foregroundColor(.primary)
+            }
+
+            Picker(selection: $replayGainMode) {
+                Text("Off").tag("off")
+                Text("Track").tag("track")
+                Text("Album").tag("album")
+            } label: {
+                Label("ReplayGain", systemImage: "speaker.wave.2")
+                    .foregroundColor(.primary)
+            }
+
+            Toggle(isOn: $eqEnabled) {
+                Label("Equalizer", systemImage: "slider.vertical.3")
+                    .foregroundColor(.primary)
+            }
+
+            NavigationLink {
+                EQView()
+            } label: {
+                Label("EQ Settings", systemImage: "slider.horizontal.3")
+                    .foregroundColor(.primary)
+            }
         } header: {
             settingSectionHeader("Playback", icon: "play.circle.fill", color: .purple)
         }
@@ -256,12 +285,15 @@ struct SettingsView: View {
                     .fontWeight(.medium)
             }
 
-            HStack {
-                Label("Storage Used", systemImage: "externaldrive.fill")
-                Spacer()
-                Text(formatBytes(completed.reduce(0) { $0 + $1.fileSize }))
-                    .foregroundStyle(.secondary)
-                    .fontWeight(.medium)
+            cacheStorageRow(completed: completed)
+
+            Picker(selection: $cacheLimitBytes) {
+                ForEach(CacheManager.limitOptions, id: \.1) { name, value in
+                    Text(name).tag(Int(value))
+                }
+            } label: {
+                Label("Cache Limit", systemImage: "internaldrive")
+                    .foregroundColor(.primary)
             }
 
             Toggle(isOn: $autoDownloadFavorites) {
@@ -404,6 +436,8 @@ struct SettingsView: View {
             )
             infoRow("Client", value: "Veydrune", icon: "app.fill", color: .gray)
             infoRow("API Version", value: "1.16.1", icon: "number.circle.fill", color: .gray)
+            offlineQueueStatus
+
             #if DEBUG
             NavigationLink {
                 DebugView()
@@ -415,6 +449,82 @@ struct SettingsView: View {
             #endif
         } header: {
             settingSectionHeader("About", icon: "info.circle.fill", color: .gray)
+        }
+    }
+
+    // MARK: - Cache Storage Row
+
+    private func cacheStorageRow(completed: [DownloadedSong]) -> some View {
+        let used = completed.reduce(Int64(0)) { $0 + $1.fileSize }
+        let limit = Int64(cacheLimitBytes)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Storage Used", systemImage: "externaldrive.fill")
+                Spacer()
+                if limit > 0 {
+                    Text("\(formatBytes(used)) / \(formatBytes(limit))")
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                } else {
+                    Text(formatBytes(used))
+                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                }
+            }
+            if limit > 0 {
+                ProgressView(value: Double(used), total: Double(limit))
+                    .tint(used > limit ? .red : .accentColor)
+            }
+        }
+    }
+
+    // MARK: - Offline Queue Status
+
+    @ViewBuilder
+    private var offlineQueueStatus: some View {
+        let queue = OfflineActionQueue.shared
+        let pending = queue.pendingCount
+        let failed = queue.failedCount
+
+        if pending > 0 || failed > 0 {
+            HStack {
+                Label("Pending Actions", systemImage: "arrow.triangle.2.circlepath")
+                Spacer()
+                if pending > 0 {
+                    Text(verbatim: "\(pending) pending")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if failed > 0 {
+                    Text(verbatim: "\(failed) failed")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if pending > 0 {
+                Button {
+                    Task { await queue.flushPending() }
+                } label: {
+                    Label("Sync Now", systemImage: "arrow.clockwise")
+                        .foregroundColor(.accentColor)
+                }
+            }
+
+            if failed > 0 {
+                Button {
+                    Task { await queue.retryFailed() }
+                } label: {
+                    Label("Retry Failed", systemImage: "arrow.counterclockwise")
+                        .foregroundColor(.accentColor)
+                }
+
+                Button(role: .destructive) {
+                    queue.clearFailed()
+                } label: {
+                    Label("Clear Failed", systemImage: "trash")
+                }
+            }
         }
     }
 

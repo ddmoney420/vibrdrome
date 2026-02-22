@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct PlaylistDetailView: View {
@@ -8,6 +9,8 @@ struct PlaylistDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showEditSheet = false
+    @State private var isDownloading = false
+    @Query private var downloadedSongs: [DownloadedSong]
 
     var body: some View {
         List {
@@ -102,6 +105,30 @@ struct PlaylistDetailView: View {
                             }
                         } label: {
                             Label("Add All to Queue", systemImage: "text.append")
+                        }
+
+                        Divider()
+
+                        if let playlist, let songs = playlist.entry, !songs.isEmpty {
+                            let isFullyDownloaded = DownloadManager.shared.isPlaylistDownloaded(playlistId: playlistId)
+                            if isFullyDownloaded {
+                                Button(role: .destructive) {
+                                    DownloadManager.shared.removeOfflinePlaylist(playlistId: playlistId)
+                                } label: {
+                                    Label("Remove Offline", systemImage: "icloud.slash")
+                                }
+                            } else {
+                                Button {
+                                    isDownloading = true
+                                    DownloadManager.shared.downloadPlaylist(
+                                        playlist: playlist,
+                                        songs: songs,
+                                        client: appState.subsonicClient
+                                    )
+                                } label: {
+                                    Label("Download Playlist", systemImage: "arrow.down.circle")
+                                }
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")

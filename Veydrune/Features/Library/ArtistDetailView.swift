@@ -63,6 +63,17 @@ struct ArtistDetailView: View {
                 }
             }
         }
+        .toolbar {
+            if let artist {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        AudioEngine.shared.startRadio(artistName: artist.name)
+                    } label: {
+                        Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                    }
+                }
+            }
+        }
         .task { await loadArtist() }
         .refreshable { await loadArtist() }
     }
