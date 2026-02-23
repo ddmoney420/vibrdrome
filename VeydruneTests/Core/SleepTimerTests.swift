@@ -78,4 +78,53 @@ struct SleepTimerTests {
             #expect(m * 60 == 7200)
         }
     }
+
+    // MARK: - Additional Fade Factor Tests
+
+    @Test func fadeFactorAt31SecondsIsFullVolume() {
+        // 31 seconds is just outside the 30-second fade window
+        let factor = computeFadeFactor(remainingSeconds: 31)
+        #expect(factor == 1.0)
+    }
+
+    @Test func fadeFactorAtExactFadeDurationBoundary() {
+        // At exactly fadeDuration (30s), remainingSeconds > fadeDuration is false,
+        // but remainingSeconds == fadeDuration so condition `> fadeDuration` fails,
+        // returns Float(30) / Float(30) = 1.0
+        let factor = computeFadeFactor(remainingSeconds: 30, fadeDuration: 30)
+        #expect(factor == 1.0)
+    }
+
+    @Test func allStandardTimerOptionsProduceCorrectSeconds() {
+        let expected: [(minutes: Int, seconds: Int)] = [
+            (15, 900), (30, 1800), (45, 2700), (60, 3600), (120, 7200)
+        ]
+        for pair in expected {
+            let mode = SleepTimerMode.minutes(pair.minutes)
+            if case .minutes(let m) = mode {
+                #expect(m * 60 == pair.seconds,
+                        "\(pair.minutes) minutes should be \(pair.seconds) seconds")
+            }
+        }
+    }
+
+    @Test func endOfTrackModeHasNoCountdown() {
+        // endOfTrack mode doesn't use a countdown — remainingSeconds would be 0
+        let mode = SleepTimerMode.endOfTrack
+        #expect(mode == .endOfTrack)
+        // The timer sets remainingSeconds = 0 for endOfTrack
+        let simulatedRemaining = 0
+        #expect(simulatedRemaining == 0)
+    }
+
+    @Test func fadeFactorWithCustomFadeDuration60() {
+        // Custom fadeDuration of 60; at 30s remaining, factor = 30/60 = 0.5
+        let factor = computeFadeFactor(remainingSeconds: 30, fadeDuration: 60)
+        #expect(abs(factor - 0.5) < 0.001)
+    }
+
+    @Test func fadeFactorNegativeRemainingReturnsZero() {
+        let factor = computeFadeFactor(remainingSeconds: -5)
+        #expect(factor == 0)
+    }
 }

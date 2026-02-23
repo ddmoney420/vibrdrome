@@ -157,4 +157,53 @@ struct QueueManagementTests {
         let next = upNext(queue: [], currentIndex: 0)
         #expect(next.isEmpty)
     }
+
+    // MARK: - Additional Queue Management Tests
+
+    @Test func advanceSingleItemQueueRepeatOffFails() {
+        var idx = 0
+        let ok = advanceIndex(currentIndex: &idx, queueCount: 1, repeatMode: .off, isRadio: false)
+        #expect(!ok)
+        #expect(idx == 0) // clamped to queueCount - 1
+    }
+
+    @Test func advanceSingleItemQueueRepeatAllWrapsToZero() {
+        var idx = 0
+        let ok = advanceIndex(currentIndex: &idx, queueCount: 1, repeatMode: .all, isRadio: false)
+        #expect(ok)
+        #expect(idx == 0) // wraps back to 0
+    }
+
+    @Test func upNextSingleItemAtIndexZeroIsEmpty() {
+        let next = upNext(queue: ["only"], currentIndex: 0)
+        #expect(next.isEmpty)
+    }
+
+    @Test func nextSongIndexAtSecondToLastReturnsLastIndex() {
+        // queue of 5, at index 3 (second-to-last) → next is 4 (last)
+        let idx = nextSongIndex(currentIndex: 3, queueCount: 5, repeatMode: .off, shuffleEnabled: false)
+        #expect(idx == 4)
+    }
+
+    @Test func advanceThroughFullQueue() {
+        // Walk through a 5-item queue: 0→1→2→3→4, then fail at 5
+        var idx = 0
+        let queueCount = 5
+        for expectedIdx in 1..<queueCount {
+            let ok = advanceIndex(currentIndex: &idx, queueCount: queueCount, repeatMode: .off, isRadio: false)
+            #expect(ok, "Should succeed advancing to index \(expectedIdx)")
+            #expect(idx == expectedIdx)
+        }
+        // Now at index 4 (last), advance should fail
+        let ok = advanceIndex(currentIndex: &idx, queueCount: queueCount, repeatMode: .off, isRadio: false)
+        #expect(!ok, "Should fail advancing past end of queue")
+        #expect(idx == queueCount - 1)
+    }
+
+    @Test func upNextReturnsCorrectCount() {
+        // Queue of 10 items, at index 3 → 6 items remaining (indices 4..9)
+        let queue = (0..<10).map { "track\($0)" }
+        let next = upNext(queue: queue, currentIndex: 3)
+        #expect(next.count == 6)
+    }
 }

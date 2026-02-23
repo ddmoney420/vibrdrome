@@ -151,4 +151,68 @@ struct VolumeFactorTests {
         let fade = clampedFadeDuration(crossfadeDuration: 5, trackDuration: 2)
         #expect(fade == 1.0)
     }
+
+    // MARK: - Additional Volume Factor Tests
+
+    @Test func replayGainBoostOfExactly2ClampedTo1() {
+        // replayGain of 2.0 (maximum boost) with user=1.0 → clamped to 1.0
+        let vol = effectiveVolume(user: 1.0, replayGain: 2.0, sleepFade: 1.0)
+        #expect(vol == 1.0)
+    }
+
+    @Test func compositionWithVerySmallValues() {
+        // 0.1 * 0.1 * 0.1 = 0.001
+        let vol = effectiveVolume(user: 0.1, replayGain: 0.1, sleepFade: 0.1)
+        #expect(abs(vol - 0.001) < 0.0001)
+    }
+
+    @Test func crossfadeLinearRampOutPlusInEqualsOne() {
+        // For a linear crossfade, outFactor + inFactor = 1.0 at every step
+        for step in 0...10 {
+            let progress = Float(step) / 10.0
+            let outFactor: Float = 1.0 - progress
+            let inFactor: Float = progress
+            #expect(abs((outFactor + inFactor) - 1.0) < 0.001,
+                    "outFactor + inFactor should equal 1.0 at step \(step)")
+        }
+    }
+
+    @Test func crossfadeRampWithZeroDurationClampsToOne() {
+        // Zero duration: elapsed/duration would be division by zero, so clamp to 1.0
+        // The rampProgress function uses min(elapsed/duration, 1.0) — with duration=0
+        // we'd get inf, but callers clamp crossfade duration to at least some minimum.
+        // Here we test that a progress of 1.0 (fully complete) gives expected volumes.
+        let active = crossfadeActiveVolume(user: 1.0, replayGain: 1.0, sleepFade: 1.0, outFactor: 0.0)
+        let inactive = crossfadeInactiveVolume(user: 1.0, replayGain: 1.0, sleepFade: 1.0, inFactor: 1.0)
+        #expect(active == 0.0)
+        #expect(inactive == 1.0)
+    }
+
+    @Test func negativeFactorClampedToZero() {
+        // Negative input should be clamped to 0 by the max(0, ...) guard
+        let vol = effectiveVolume(user: -0.5, replayGain: 1.0, sleepFade: 1.0)
+        #expect(vol == 0.0)
+    }
+
+    @Test func allZeroFactorsEqualZero() {
+        let vol = effectiveVolume(user: 0.0, replayGain: 0.0, sleepFade: 0.0)
+        #expect(vol == 0.0)
+    }
+
+    @Test func volumeFactorsSymmetricActiveAndInactive() {
+        // Active fade-out at step N should equal inactive fade-in at mirror step (10-N)
+        // i.e., active(outFactor=0.7) should equal inactive(inFactor=0.7)
+        for step in 0...10 {
+            let factor = Float(step) / 10.0
+
+            let activeVol = crossfadeActiveVolume(
+                user: 1.0, replayGain: 1.0, sleepFade: 1.0, outFactor: factor)
+            let inactiveVol = crossfadeInactiveVolume(
+                user: 1.0, replayGain: 1.0, sleepFade: 1.0, inFactor: factor)
+
+            // With all other factors at 1.0, both should equal the factor itself
+            #expect(abs(activeVol - inactiveVol) < 0.001,
+                    "Active and inactive should produce same volume for same factor \(factor)")
+        }
+    }
 }

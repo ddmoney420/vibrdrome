@@ -53,6 +53,25 @@ struct FormatDurationTests {
         // (callers clamp to 0 before calling)
         #expect(formatDuration(TimeInterval(-5)) == "0:-5")
     }
+
+    // MARK: - Additional Duration Format Tests
+
+    @Test func ninetySeconds() {
+        #expect(formatDuration(90) == "1:30")
+    }
+
+    @Test func nineMinutesFiftyNineSeconds() {
+        #expect(formatDuration(599) == "9:59")
+    }
+
+    @Test func twoHoursOneMinuteOneSecond() {
+        #expect(formatDuration(7261) == "2:01:01")
+    }
+
+    @Test func timeIntervalJustUnderHour() {
+        // 3599.9 truncated to Int = 3599 → "59:59"
+        #expect(formatDuration(TimeInterval(3599.9)) == "59:59")
+    }
 }
 
 struct StringSanitizedTests {
@@ -91,6 +110,26 @@ struct StringSanitizedTests {
 
     @Test func mixedContent() {
         #expect("Artist: The Best of <Greatest Hits>".sanitizedFileName == "Artist_ The Best of _Greatest Hits_")
+    }
+
+    // MARK: - Additional String Sanitization Tests
+
+    @Test func dotFilePreserved() {
+        #expect(".hidden".sanitizedFileName == ".hidden")
+    }
+
+    @Test func veryLongFilenamePreserved() {
+        let longName = String(repeating: "a", count: 120)
+        #expect(longName.sanitizedFileName == longName)
+    }
+
+    @Test func japaneseCJKCharactersPreserved() {
+        #expect("日本語テスト".sanitizedFileName == "日本語テスト")
+    }
+
+    @Test func consecutiveIllegalCharsReplaced() {
+        // Each illegal char is replaced individually
+        #expect("a//b".sanitizedFileName == "a__b")
     }
 }
 
@@ -160,5 +199,29 @@ struct ErrorPresenterTests {
         struct CustomError: Error {}
         let msg = ErrorPresenter.userMessage(for: CustomError())
         #expect(msg.contains("try again"))
+    }
+
+    // MARK: - Additional HTTP Error Tests
+
+    @Test func httpForbiddenMentionsPermission() {
+        let error = SubsonicError.httpError(403)
+        let msg = ErrorPresenter.userMessage(for: error)
+        #expect(msg.lowercased().contains("permission") || msg.lowercased().contains("denied"),
+                "403 message should mention permission or denied, got: \(msg)")
+    }
+
+    @Test func httpNotFoundMentionsNotFound() {
+        let error = SubsonicError.httpError(404)
+        let msg = ErrorPresenter.userMessage(for: error)
+        #expect(msg.lowercased().contains("not found"),
+                "404 message should mention not found, got: \(msg)")
+    }
+
+    @Test func apiErrorCode60TrialExpiredHasMessage() {
+        let error = SubsonicError.apiError(code: 60, message: "")
+        let msg = ErrorPresenter.userMessage(for: error)
+        #expect(!msg.isEmpty, "Trial expired error should have a non-empty message")
+        #expect(msg.lowercased().contains("trial") || msg.lowercased().contains("expired"),
+                "Code 60 message should mention trial or expired, got: \(msg)")
     }
 }

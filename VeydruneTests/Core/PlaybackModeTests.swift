@@ -73,4 +73,56 @@ struct PlaybackModeTests {
         let mode: Sendable = RepeatMode.off
         _ = mode
     }
+
+    // MARK: - Additional PlaybackMode Tests
+
+    @Test func allPlaybackModesAreDistinct() {
+        #expect(PlaybackMode.gapless != PlaybackMode.crossfade)
+        #expect(PlaybackMode.crossfade != PlaybackMode.eq)
+        #expect(PlaybackMode.gapless != PlaybackMode.eq)
+    }
+
+    @Test func crossfadeSelectedAtMinimumDuration() {
+        // crossfadeDuration of 1 (minimum valid) selects crossfade
+        let mode = selectMode(eqEnabled: false, isLocal: false, crossfadeDuration: 1)
+        #expect(mode == .crossfade)
+    }
+
+    @Test func crossfadeSelectedAtMaximumDuration() {
+        // crossfadeDuration of 12 (maximum) selects crossfade
+        let mode = selectMode(eqEnabled: false, isLocal: false, crossfadeDuration: 12)
+        #expect(mode == .crossfade)
+    }
+
+    @Test func eqEnabledButNotLocalWithNoCrossfadeFallsToGapless() {
+        // eqEnabled=true, isLocal=false, crossfade=0 → falls through to gapless
+        let mode = selectMode(eqEnabled: true, isLocal: false, crossfadeDuration: 0)
+        #expect(mode == .gapless)
+    }
+
+    @Test func allRepeatModesAreDistinct() {
+        #expect(RepeatMode.off != RepeatMode.all)
+        #expect(RepeatMode.all != RepeatMode.one)
+        #expect(RepeatMode.off != RepeatMode.one)
+    }
+
+    @Test func modeSelectionTableAll8Combinations() {
+        // All 8 combinations of (eqEnabled, isLocal, crossfade>0)
+        // Priority: (eqEnabled && isLocal) → .eq; crossfade>0 → .crossfade; else → .gapless
+        let cases: [(eq: Bool, local: Bool, xfade: Int, expected: PlaybackMode)] = [
+            (false, false, 0, .gapless),
+            (false, false, 5, .crossfade),
+            (false, true,  0, .gapless),
+            (false, true,  5, .crossfade),
+            (true,  false, 0, .gapless),
+            (true,  false, 5, .crossfade),
+            (true,  true,  0, .eq),
+            (true,  true,  5, .eq),
+        ]
+        for c in cases {
+            let mode = selectMode(eqEnabled: c.eq, isLocal: c.local, crossfadeDuration: c.xfade)
+            #expect(mode == c.expected,
+                    "eq=\(c.eq), local=\(c.local), xfade=\(c.xfade) → expected \(c.expected), got \(mode)")
+        }
+    }
 }
