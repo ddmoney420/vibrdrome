@@ -253,10 +253,10 @@ final class PlaybackTests: XCTestCase {
     private func openNowPlaying() throws {
         sleep(1)
 
-        // Try to find the mini player by accessibility identifier
-        let miniPlayer = app.otherElements["MiniPlayer"]
-        if miniPlayer.waitForExistence(timeout: 5) {
-            miniPlayer.tap()
+        // The mini player has a "Now Playing" button that opens the full screen view
+        let nowPlayingButton = app.buttons["Now Playing"]
+        if nowPlayingButton.waitForExistence(timeout: 5) {
+            nowPlayingButton.tap()
         } else {
             // Fallback: tap near the bottom where mini player lives
             let coordinate = app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.92))

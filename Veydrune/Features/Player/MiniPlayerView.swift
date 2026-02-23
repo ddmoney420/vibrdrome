@@ -27,28 +27,39 @@ struct MiniPlayerView: View {
             .frame(height: 2)
 
             HStack(spacing: 12) {
-                // Album art — rounded
-                AlbumArtView(
-                    coverArtId: engine.currentSong?.coverArt,
-                    size: 44,
-                    cornerRadius: 10
-                )
-                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                // Tappable area: album art + song info opens Now Playing
+                Button {
+                    showNowPlaying = true
+                } label: {
+                    HStack(spacing: 12) {
+                        // Album art — rounded
+                        AlbumArtView(
+                            coverArtId: engine.currentSong?.coverArt,
+                            size: 44,
+                            cornerRadius: 10
+                        )
+                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
-                // Song info
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayTitle)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
+                        // Song info
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(displayTitle)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
 
-                    Text(displaySubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                            Text(displaySubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
                 }
-
-                Spacer()
+                .buttonStyle(.plain)
+                .accessibilityLabel("Now Playing")
+                .accessibilityHint("Open full player")
 
                 // Play/Pause — larger hit target
                 Button { engine.togglePlayPause() } label: {
@@ -79,12 +90,7 @@ struct MiniPlayerView: View {
         .padding(.horizontal, 8)
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            showNowPlaying = true
-        }
         .accessibilityIdentifier("MiniPlayer")
-        .accessibilityHint("Tap to open full player")
         #if os(iOS)
         .fullScreenCover(isPresented: $showNowPlaying) {
             NowPlayingView()
