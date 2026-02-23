@@ -83,6 +83,7 @@ struct MiniPlayerView: View {
         .onTapGesture {
             showNowPlaying = true
         }
+        .accessibilityIdentifier("MiniPlayer")
         .accessibilityHint("Tap to open full player")
         #if os(iOS)
         .fullScreenCover(isPresented: $showNowPlaying) {
