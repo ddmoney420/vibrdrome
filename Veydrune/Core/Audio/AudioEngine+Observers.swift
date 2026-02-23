@@ -25,8 +25,7 @@ extension AudioEngine {
         ) { [weak self] time in
             Task { @MainActor in
                 guard let self,
-                      self.generationValue == observerGeneration,
-                      !self.isSeeking else { return }
+                      self.generationValue == observerGeneration else { return }
                 self.currentTime = time.seconds
                 if self.currentSong != nil {
                     NowPlayingManager.shared.updateElapsedTime(time.seconds)

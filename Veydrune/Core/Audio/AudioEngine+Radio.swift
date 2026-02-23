@@ -7,7 +7,8 @@ private let radioLog = Logger(subsystem: "com.veydrune.app", category: "Radio")
 
 extension AudioEngine {
 
-    /// Start radio seeded from an artist name
+    /// Start radio seeded from an artist name.
+    /// Blends the selected artist's tracks with similar artists for variety.
     func startRadio(artistName: String) {
         stopRadioMode()
         isRadioMode = true
@@ -18,26 +19,63 @@ extension AudioEngine {
             guard let self else { return }
             let client = AppState.shared.subsonicClient
 
-            var songs = (try? await client.getTopSongs(artist: artistName, count: 40)) ?? []
+            // Fetch the selected artist's top songs
+            var artistSongs = (try? await client.getTopSongs(artist: artistName, count: 25)) ?? []
 
-            if songs.isEmpty {
-                songs = await self.sampleArtistAlbums(
+            if artistSongs.isEmpty {
+                artistSongs = await self.sampleArtistAlbums(
                     artistName: artistName, client: client
                 )
             }
 
-            if songs.isEmpty {
-                songs = (try? await client.getRandomSongs(size: 30)) ?? []
+            guard !Task.isCancelled else { return }
+
+            // Fetch similar artist tracks using the first song as a seed
+            var similarSongs: [Song] = []
+            if let seedSong = artistSongs.first {
+                similarSongs = (try? await client.getSimilarSongs(
+                    id: seedSong.id, count: 20
+                )) ?? []
+            }
+
+            // If getSimilarSongs2 returned empty, try genre-based random songs
+            if similarSongs.isEmpty, let genre = artistSongs.first?.genre {
+                similarSongs = (try? await client.getRandomSongs(
+                    size: 20, genre: genre
+                )) ?? []
+            }
+
+            // Last resort: server-wide random songs
+            if similarSongs.isEmpty {
+                similarSongs = (try? await client.getRandomSongs(size: 20)) ?? []
             }
 
             guard !Task.isCancelled else { return }
-            let unique = self.deduplicateRadioSongs(songs, against: [])
+
+            // Blend: interleave artist songs with similar/genre songs
+            let blended: [Song]
+            if !artistSongs.isEmpty && !similarSongs.isEmpty {
+                blended = self.interleaveRadioSongs(
+                    primary: artistSongs.shuffled(),
+                    secondary: similarSongs.shuffled()
+                )
+            } else if !artistSongs.isEmpty {
+                blended = artistSongs.shuffled()
+            } else if !similarSongs.isEmpty {
+                blended = similarSongs.shuffled()
+            } else {
+                blended = []
+            }
+
+            guard !Task.isCancelled else { return }
+            let unique = self.deduplicateRadioSongs(blended, against: [])
             guard let first = unique.first else {
                 self.isRadioMode = false
                 self.radioSeedArtistName = nil
                 return
             }
             self.play(song: first, from: unique)
+            radioLog.info("Radio started for \(artistName): \(unique.count) tracks (\(artistSongs.count) artist + \(similarSongs.count) similar)")
         })
     }
 
@@ -127,6 +165,27 @@ extension AudioEngine {
             seen.insert(song.id)
             return true
         }
+    }
+
+    /// Interleave primary (selected artist) and secondary (similar artists) songs.
+    /// Roughly 2 primary songs per 1 secondary song to keep the selected artist dominant.
+    func interleaveRadioSongs(primary: [Song], secondary: [Song]) -> [Song] {
+        var result: [Song] = []
+        var pIdx = 0
+        var sIdx = 0
+        while pIdx < primary.count || sIdx < secondary.count {
+            // Add up to 2 primary songs
+            for _ in 0..<2 where pIdx < primary.count {
+                result.append(primary[pIdx])
+                pIdx += 1
+            }
+            // Add 1 secondary song
+            if sIdx < secondary.count {
+                result.append(secondary[sIdx])
+                sIdx += 1
+            }
+        }
+        return result
     }
 
     func sampleArtistAlbums(

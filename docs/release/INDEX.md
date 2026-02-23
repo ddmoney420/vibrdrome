@@ -32,6 +32,7 @@ ______  _____  _      _____   ___   _____  _____
 | 10 | [Offline Playlists Acceptance](10-offline-playlists-acceptance.md) | Offline playlist download, metadata, acceptance criteria |
 | 11 | [Artist Radio Spec](11-artist-radio-spec.md) | Continuous auto-play from artist/track seed |
 | 12 | [Gapless Playback Spec](12-gapless-playback-spec.md) | AVQueuePlayer lookahead, auto-advance, edge cases |
+| 13 | [User Testing Guide](13-user-testing-guide.md) | Feature walkthrough, step-by-step testing for every feature |
 
 ---
 

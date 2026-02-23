@@ -342,6 +342,7 @@ final class AudioEngine {
         trackStartTime = Date()
         currentTime = 0
         duration = 0
+        isSeeking = false
 
         let newMode = selectMode(for: song)
         if newMode != activeMode {
@@ -546,8 +547,10 @@ final class AudioEngine {
     }
 
     func seek(to time: TimeInterval) {
-        guard duration > 0 || time == 0 else { return }
-        let clampedTime = max(0, min(time, duration > 0 ? duration : 0))
+        // Use song metadata duration as fallback when AVPlayer hasn't reported yet
+        let effectiveDuration = duration > 0 ? duration : Double(currentSong?.duration ?? 0)
+        guard effectiveDuration > 0 || time == 0 else { return }
+        let clampedTime = max(0, min(time, effectiveDuration))
 
         // Cancel any in-progress crossfade ramp on seek
         if isCrossfading {
@@ -564,17 +567,21 @@ final class AudioEngine {
 
         switch activeMode {
         case .gapless, .crossfade:
-            guard activePlayer != nil else { return }
-            isSeeking = true
+            guard let player = activePlayer else { return }
+            let wasPlaying = isPlaying
+            let rate = playbackRate
             let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 1000)
-            activePlayer?.seek(
+            player.seek(
                 to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-            ) { [weak self] _ in
+            ) { [weak self] finished in
                 Task { @MainActor in
                     guard let self else { return }
                     self.currentTime = clampedTime
                     NowPlayingManager.shared.updateElapsedTime(clampedTime)
-                    self.isSeeking = false
+                    // Restore playback rate — AVPlayer can reset rate after seek
+                    if wasPlaying && player.rate == 0 {
+                        player.rate = rate
+                    }
                 }
             }
         case .eq:
@@ -582,6 +589,8 @@ final class AudioEngine {
             currentTime = clampedTime
             NowPlayingManager.shared.updateElapsedTime(clampedTime)
         }
+        // Update time immediately so UI doesn't show stale value
+        currentTime = clampedTime
     }
 
     func stop() {
@@ -704,8 +713,7 @@ final class AudioEngine {
             Task { @MainActor in
                 guard let self,
                       self.generation == observerGeneration,
-                      self.activeMode == .eq,
-                      !self.isSeeking else { return }
+                      self.activeMode == .eq else { return }
                 self.currentTime = EQEngine.shared.currentTime
                 self.duration = EQEngine.shared.fileDuration
                 if self.currentSong != nil {
@@ -797,6 +805,7 @@ final class AudioEngine {
         trackStartTime = Date()
         currentTime = 0
         duration = 0
+        isSeeking = false
 
         removeLookaheadEndObserver()
         lookaheadItem = nil
@@ -864,18 +873,22 @@ final class AudioEngine {
     ) {
         switch activeMode {
         case .gapless, .crossfade:
-            guard activePlayer != nil else { completion?(); return }
-            isSeeking = true
+            guard let player = activePlayer else { completion?(); return }
+            let rate = playbackRate
+            let wasPlaying = isPlaying
             let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
             nonisolated(unsafe) let safeCompletion = completion
-            activePlayer?.seek(
+            currentTime = time
+            player.seek(
                 to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
             ) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
                     self.currentTime = time
                     NowPlayingManager.shared.updateElapsedTime(time)
-                    self.isSeeking = false
+                    if wasPlaying && player.rate == 0 {
+                        player.rate = rate
+                    }
                     safeCompletion?()
                 }
             }

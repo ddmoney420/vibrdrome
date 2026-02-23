@@ -102,6 +102,70 @@ struct RadioDeduplicationTests {
         #expect(shouldRefill(currentIndex: 0, queueCount: 3))
     }
 
+    // MARK: - Interleave Logic
+
+    /// Mirrors AudioEngine.interleaveRadioSongs() — 2 primary per 1 secondary
+    private func interleaveRadioSongs(primary: [Song], secondary: [Song]) -> [Song] {
+        var result: [Song] = []
+        var pIdx = 0
+        var sIdx = 0
+        while pIdx < primary.count || sIdx < secondary.count {
+            for _ in 0..<2 where pIdx < primary.count {
+                result.append(primary[pIdx])
+                pIdx += 1
+            }
+            if sIdx < secondary.count {
+                result.append(secondary[sIdx])
+                sIdx += 1
+            }
+        }
+        return result
+    }
+
+    @Test func interleaveEqualLists() {
+        let primary = (1...6).map { makeSong(id: "p\($0)") }
+        let secondary = (1...3).map { makeSong(id: "s\($0)") }
+        let result = interleaveRadioSongs(primary: primary, secondary: secondary)
+        // Pattern: p1 p2 s1 p3 p4 s2 p5 p6 s3
+        #expect(result.map(\.id) == ["p1", "p2", "s1", "p3", "p4", "s2", "p5", "p6", "s3"])
+    }
+
+    @Test func interleaveMoreSecondaryThanPrimary() {
+        let primary = (1...2).map { makeSong(id: "p\($0)") }
+        let secondary = (1...5).map { makeSong(id: "s\($0)") }
+        let result = interleaveRadioSongs(primary: primary, secondary: secondary)
+        // p1 p2 s1 — then only secondary left: s2 s3 s4 s5
+        #expect(result.map(\.id) == ["p1", "p2", "s1", "s2", "s3", "s4", "s5"])
+    }
+
+    @Test func interleaveEmptySecondary() {
+        let primary = (1...4).map { makeSong(id: "p\($0)") }
+        let result = interleaveRadioSongs(primary: primary, secondary: [])
+        #expect(result.map(\.id) == ["p1", "p2", "p3", "p4"])
+    }
+
+    @Test func interleaveEmptyPrimary() {
+        let secondary = (1...3).map { makeSong(id: "s\($0)") }
+        let result = interleaveRadioSongs(primary: [], secondary: secondary)
+        #expect(result.map(\.id) == ["s1", "s2", "s3"])
+    }
+
+    @Test func interleaveBothEmpty() {
+        let result = interleaveRadioSongs(primary: [], secondary: [])
+        #expect(result.isEmpty)
+    }
+
+    @Test func interleaveRatioApproximately2to1() {
+        let primary = (1...20).map { makeSong(id: "p\($0)") }
+        let secondary = (1...10).map { makeSong(id: "s\($0)") }
+        let result = interleaveRadioSongs(primary: primary, secondary: secondary)
+        #expect(result.count == 30)
+        // Every 3rd item (index 2, 5, 8...) should be a secondary
+        for i in stride(from: 2, to: 30, by: 3) {
+            #expect(result[i].id.hasPrefix("s"), "Index \(i) should be a similar-artist track")
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeSong(id: String) -> Song {

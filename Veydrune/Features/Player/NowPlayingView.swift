@@ -25,11 +25,7 @@ struct NowPlayingView: View {
     private var engine: AudioEngine { AudioEngine.shared }
 
     private var artWidth: CGFloat {
-        #if os(iOS)
-        min(UIScreen.main.bounds.width - 150, 400)
-        #else
-        340
-        #endif
+        340 // Used by macOS path; iOS uses GeometryReader
     }
 
     var body: some View {
@@ -117,34 +113,57 @@ struct NowPlayingView: View {
             .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
         }
         #else
-        artworkBackground
-            .overlay {
-                VStack(spacing: 0) {
-                    dismissHandle
+        GeometryReader { geo in
+            let controlsNeeded: CGFloat = 310
+            let maxArtFromWidth = geo.size.width - 80
+            let maxArtFromHeight = geo.size.height - controlsNeeded
+            let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
 
-                    albumArt(size: artWidth)
-                        .padding(.top, 4)
-                        .padding(.bottom, 8)
+            VStack(spacing: 0) {
+                dismissHandle
 
-                    songInfo
-                        .padding(.bottom, 4)
+                albumArt(size: artSize)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
 
-                    metadataBadges
-                        .padding(.bottom, 2)
+                songInfo
+                    .padding(.bottom, 2)
 
-                    Spacer(minLength: 0)
+                metadataBadges
+                    .padding(.bottom, 2)
 
-                    progressSlider
-                        .padding(.bottom, 10)
+                Spacer(minLength: 0)
 
-                    playbackControls
-                        .padding(.bottom, 10)
+                progressSlider
+                    .padding(.bottom, 6)
 
-                    bottomToolbar
-                        .padding(.bottom, 6)
-                }
-                .padding(.horizontal, 40)
+                playbackControls
+                    .padding(.bottom, 6)
+
+                bottomToolbar
+                    .padding(.bottom, 8)
             }
+            .padding(.horizontal, 30)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .background {
+                ZStack {
+                    Color.black
+                    if let albumImage {
+                        Image(platformImage: albumImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .blur(radius: 30)
+                            .scaleEffect(1.5)
+                            .saturation(1.3)
+                            .clipped()
+                            .overlay(Color.black.opacity(0.2))
+                    }
+                }
+                .ignoresSafeArea()
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: loadedCoverArtId)
+            }
+        }
+        .ignoresSafeArea(edges: .top)
         #endif
     }
 
@@ -294,13 +313,9 @@ struct NowPlayingView: View {
 
     private var progressSlider: some View {
         let songDuration = engine.duration > 0 ? engine.duration : Double(engine.currentSong?.duration ?? 1)
-        let displayTime = isDragging ? sliderValue : engine.currentTime
         return VStack(spacing: 4) {
             Slider(
-                value: Binding(
-                    get: { displayTime },
-                    set: { sliderValue = $0 }
-                ),
+                value: $sliderValue,
                 in: 0...max(songDuration, 1)
             ) { editing in
                 isDragging = editing
@@ -310,11 +325,16 @@ struct NowPlayingView: View {
             }
             .tint(.white)
             .accessibilityLabel("Track Progress")
+            .onChange(of: engine.currentTime) { _, newTime in
+                if !isDragging {
+                    sliderValue = newTime
+                }
+            }
 
             HStack {
-                Text(formatDuration(displayTime))
+                Text(formatDuration(sliderValue))
                 Spacer()
-                let remaining = songDuration - displayTime
+                let remaining = songDuration - sliderValue
                 Text("-\(formatDuration(max(0, remaining)))")
             }
             .font(.caption2)
@@ -326,22 +346,22 @@ struct NowPlayingView: View {
     // MARK: - Controls
 
     private var playbackControls: some View {
-        HStack(spacing: 44) {
+        HStack(spacing: 40) {
             Button { engine.previous() } label: {
                 Image(systemName: "backward.fill")
-                    .font(.title)
+                    .font(.title2)
             }
             .accessibilityLabel("Previous Track")
 
             Button { engine.togglePlayPause() } label: {
                 Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 64))
+                    .font(.system(size: 52))
             }
             .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
             Button { engine.next() } label: {
                 Image(systemName: "forward.fill")
-                    .font(.title)
+                    .font(.title2)
             }
             .accessibilityLabel("Next Track")
         }
@@ -360,169 +380,166 @@ struct NowPlayingView: View {
     }
 
     private var bottomToolbar: some View {
-        HStack {
-            Button { engine.toggleShuffle() } label: {
-                Image(systemName: "shuffle")
-                    .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.4))
-            }
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(engine.shuffleEnabled ? "On" : "Off")
+        VStack(spacing: 8) {
+            // Row 1: Shuffle, Sleep, Speed, EQ, Lyrics, Repeat
+            HStack {
+                Button { engine.toggleShuffle() } label: {
+                    Image(systemName: "shuffle")
+                        .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.4))
+                }
+                .accessibilityLabel("Shuffle")
+                .accessibilityValue(engine.shuffleEnabled ? "On" : "Off")
 
-            Spacer()
+                Spacer()
 
-            // Sleep Timer
-            Menu {
-                if SleepTimer.shared.isActive {
-                    Button {
-                        SleepTimer.shared.stop()
-                    } label: {
-                        Label("Cancel Timer", systemImage: "xmark")
-                    }
-                } else {
-                    ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
+                Menu {
+                    if SleepTimer.shared.isActive {
                         Button {
-                            SleepTimer.shared.start(mode: .minutes(minutes))
+                            SleepTimer.shared.stop()
                         } label: {
-                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
+                            Label("Cancel Timer", systemImage: "xmark")
+                        }
+                    } else {
+                        ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
+                            Button {
+                                SleepTimer.shared.start(mode: .minutes(minutes))
+                            } label: {
+                                Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
+                            }
+                        }
+                        Button {
+                            SleepTimer.shared.start(mode: .endOfTrack)
+                        } label: {
+                            Text("End of Track")
                         }
                     }
-                    Button {
-                        SleepTimer.shared.start(mode: .endOfTrack)
-                    } label: {
-                        Text("End of Track")
-                    }
+                } label: {
+                    Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
+                        .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.4))
                 }
-            } label: {
-                Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
-                    .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.4))
-            }
-            .accessibilityLabel("Sleep Timer")
+                .accessibilityLabel("Sleep Timer")
 
-            Spacer()
+                Spacer()
 
-            // Speed
-            Menu {
-                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-                    Button {
-                        engine.playbackRate = Float(rate)
-                    } label: {
-                        HStack {
-                            Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
-                            if engine.playbackRate == Float(rate) {
-                                Image(systemName: "checkmark")
+                Menu {
+                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+                        Button {
+                            engine.playbackRate = Float(rate)
+                        } label: {
+                            HStack {
+                                Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
+                                if engine.playbackRate == Float(rate) {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
+                } label: {
+                    Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.4))
                 }
-            } label: {
-                Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.4))
+                .accessibilityLabel("Playback Speed")
+
+                Spacer()
+
+                Button { showEQ = true } label: {
+                    Image(systemName: "slider.vertical.3")
+                        .foregroundColor(
+                            engine.activeMode == .eq
+                                ? .white
+                                : EQEngine.shared.currentPresetId != "flat"
+                                    ? .white.opacity(0.7) : .white.opacity(0.4)
+                        )
+                }
+                .accessibilityLabel("Equalizer")
+                .accessibilityValue(engine.activeMode == .eq ? "Active" : "Inactive")
+
+                Spacer()
+
+                Button { showLyrics = true } label: {
+                    Image(systemName: "quote.bubble")
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .accessibilityLabel("Lyrics")
+
+                Spacer()
+
+                Button { engine.cycleRepeatMode() } label: {
+                    Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
+                        .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.4))
+                }
+                .accessibilityLabel("Repeat")
+                .accessibilityValue(repeatAccessibilityValue)
             }
-            .accessibilityLabel("Playback Speed")
 
-            Spacer()
-
-            // EQ
-            Button { showEQ = true } label: {
-                Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.activeMode == .eq
-                            ? .white
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.4)
-                    )
-            }
-            .accessibilityLabel("Equalizer")
-            .accessibilityValue(engine.activeMode == .eq ? "Active" : "Inactive")
-
-            Spacer()
-
-            // Lyrics
-            Button { showLyrics = true } label: {
-                Image(systemName: "quote.bubble")
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            .accessibilityLabel("Lyrics")
-
-            Spacer()
-
-            #if os(iOS)
-            // Visualizer
-            Button { showVisualizer = true } label: {
-                Image(systemName: "waveform.path")
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            .accessibilityLabel("Visualizer")
-
-            Spacer()
-            #endif
-
-            Button {
-                guard let song = engine.currentSong else { return }
-                let songId = song.id
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Task {
-                    do {
-                        if wasStarred {
-                            try await OfflineActionQueue.shared.unstar(id: songId)
-                        } else {
-                            try await OfflineActionQueue.shared.star(id: songId)
-                            if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
-                                DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+            // Row 2: Heart, Visualizer, AirPlay, Queue, Fullscreen
+            HStack {
+                Button {
+                    guard let song = engine.currentSong else { return }
+                    let songId = song.id
+                    let wasStarred = isStarred
+                    isStarred = !wasStarred
+                    Task {
+                        do {
+                            if wasStarred {
+                                try await OfflineActionQueue.shared.unstar(id: songId)
+                            } else {
+                                try await OfflineActionQueue.shared.star(id: songId)
+                                if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                                }
+                            }
+                            guard engine.currentSong?.id == songId else { return }
+                        } catch {
+                            if engine.currentSong?.id == songId {
+                                isStarred = wasStarred
                             }
                         }
-                        guard engine.currentSong?.id == songId else { return }
-                    } catch {
-                        if engine.currentSong?.id == songId {
-                            isStarred = wasStarred
-                        }
                     }
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .foregroundColor(isStarred ? .pink : .white.opacity(0.4))
                 }
-            } label: {
-                Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .foregroundColor(isStarred ? .pink : .white.opacity(0.4))
+                .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
+
+                Spacer()
+
+                #if os(iOS)
+                Button { showVisualizer = true } label: {
+                    Image(systemName: "waveform.path")
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .accessibilityLabel("Visualizer")
+
+                Spacer()
+
+                AirPlayButton()
+                    .frame(width: 24, height: 24)
+
+                Spacer()
+                #endif
+
+                Button { showQueue = true } label: {
+                    Image(systemName: "list.bullet")
+                }
+                .accessibilityLabel("Show Queue")
+
+                #if os(macOS)
+                Spacer()
+
+                Button {
+                    nsWindow?.collectionBehavior.insert(.fullScreenPrimary)
+                    nsWindow?.toggleFullScreen(nil)
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                }
+                .accessibilityLabel("Toggle Full Screen")
+                #endif
             }
-            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
-
-            Spacer()
-
-            #if os(iOS)
-            AirPlayButton()
-                .frame(width: 24, height: 24)
-
-            Spacer()
-            #endif
-
-            Button { showQueue = true } label: {
-                Image(systemName: "list.bullet")
-            }
-            .accessibilityLabel("Show Queue")
-
-            Spacer()
-
-            Button { engine.cycleRepeatMode() } label: {
-                Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
-                    .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.4))
-            }
-            .accessibilityLabel("Repeat")
-            .accessibilityValue(repeatAccessibilityValue)
-
-            #if os(macOS)
-            Spacer()
-
-            Button {
-                nsWindow?.collectionBehavior.insert(.fullScreenPrimary)
-                nsWindow?.toggleFullScreen(nil)
-            } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-            }
-            .accessibilityLabel("Toggle Full Screen")
-            #endif
         }
-        .font(.title3)
+        .font(.body)
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.4))
     }
