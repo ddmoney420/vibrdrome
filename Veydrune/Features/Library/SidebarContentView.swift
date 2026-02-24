@@ -51,24 +51,18 @@ struct SidebarContentView: View {
                     Label("Downloads", systemImage: "arrow.down.circle")
                         .tag(SidebarItem.downloads)
                 }
-                Section("Search") {
+                Section {
                     Label("Search", systemImage: "magnifyingglass")
                         .tag(SidebarItem.search)
-                }
-                Section("Playlists") {
                     Label("Playlists", systemImage: "music.note.list")
                         .tag(SidebarItem.playlists)
-                }
-                Section("Radio") {
                     Label("Stations", systemImage: "antenna.radiowaves.left.and.right")
                         .tag(SidebarItem.radio)
-                }
-                #if os(iOS)
-                Section {
+                    #if os(iOS)
                     Label("Settings", systemImage: "gear")
                         .tag(SidebarItem.settings)
+                    #endif
                 }
-                #endif
             }
             .navigationTitle("Veydrune")
         } detail: {

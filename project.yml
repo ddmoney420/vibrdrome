@@ -29,10 +29,20 @@ schemes:
         Veydrune: all
         VeydruneTests: [test]
         VeydruneUITests: [test]
+        VeydruneUITestsMac: [test]
     test:
       targets:
         - VeydruneTests
         - VeydruneUITests
+        - VeydruneUITestsMac
+  VeydruneMac:
+    build:
+      targets:
+        Veydrune: all
+        VeydruneUITestsMac: [test]
+    test:
+      targets:
+        - VeydruneUITestsMac
 
 targets:
   Veydrune:
@@ -78,6 +88,17 @@ targets:
     supportedDestinations: [iOS]
     sources:
       - path: VeydruneUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+    dependencies:
+      - target: Veydrune
+
+  VeydruneUITestsMac:
+    type: bundle.ui-testing
+    supportedDestinations: [macOS]
+    sources:
+      - path: VeydruneUITestsMac
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true

@@ -482,8 +482,7 @@ final class NowPlayingFeatureTests: XCTestCase {
     private func ensureLoggedIn() {
         if app.isOnLoginScreen {
             app.signIn()
-            let libraryTab = app.tabBars.buttons["Library"]
-            XCTAssertTrue(libraryTab.waitForExistence(timeout: 15))
+            XCTAssertTrue(app.waitForMainScreen())
         }
     }
 

@@ -27,7 +27,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         for _ in 0..<5 {
             if downloadedSongs.exists || downloadsHeader.exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -45,7 +45,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         // Scroll to find Cache Limit
         for _ in 0..<3 {
             if app.staticTexts["Cache Limit"].exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -61,7 +61,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         // Scroll to find the toggle
         for _ in 0..<3 {
             if app.staticTexts["Auto-Download Favorites"].exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -80,7 +80,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         for _ in 0..<5 {
             if downloadedSongs.exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -108,7 +108,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         for _ in 0..<3 {
             if scrobblingText.exists || scrobblingSwitch.exists
                 || gaplessText.exists || gaplessSwitch.exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -130,7 +130,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         // May need to scroll
         if !replayGain.exists {
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -147,7 +147,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         // Scroll to appearance section
         for _ in 0..<4 {
             if app.staticTexts["Theme"].exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -164,7 +164,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         for _ in 0..<4 {
             if app.staticTexts.matching(
                 NSPredicate(format: "label CONTAINS[c] 'Accent'")).firstMatch.exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -188,7 +188,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         for _ in 0..<3 {
             if wifiText.exists || wifiButton.exists { break }
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -207,7 +207,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         // Scroll to bottom
         for _ in 0..<5 {
-            app.swipeUp()
+            app.swipeUpInDetail()
             sleep(1)
         }
 
@@ -266,8 +266,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
     private func ensureLoggedIn() {
         if app.isOnLoginScreen {
             app.signIn()
-            let libraryTab = app.tabBars.buttons["Library"]
-            XCTAssertTrue(libraryTab.waitForExistence(timeout: 15))
+            XCTAssertTrue(app.waitForMainScreen())
         }
     }
 }

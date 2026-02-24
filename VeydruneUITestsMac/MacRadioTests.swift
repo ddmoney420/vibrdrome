@@ -1,7 +1,7 @@
 import XCTest
 
-/// Tests internet radio features: station list, search, adding stations.
-final class RadioTests: XCTestCase {
+/// Tests internet radio features on macOS.
+final class MacRadioTests: XCTestCase {
 
     var app: XCUIApplication!
 
@@ -15,7 +15,7 @@ final class RadioTests: XCTestCase {
 
     // MARK: - Radio Tab
 
-    func testRadioTabShowsContent() throws {
+    func testRadioSidebarShowsContent() throws {
         app.goToRadio()
         sleep(3)
 
@@ -24,25 +24,25 @@ final class RadioTests: XCTestCase {
         let hasContent = app.staticTexts.count > 1
 
         XCTAssertTrue(hasFindStations || hasAddURL || hasContent,
-                      "Radio tab should show content or action buttons")
+                      "Stations view should show content or action buttons")
     }
 
     func testFindStationsButtonExists() throws {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         XCTAssertTrue(findStations.waitForExistence(timeout: 5),
-                      "Radio tab should have 'Find Stations' button")
+                      "Stations view should have 'Find Stations' button")
     }
 
     func testAddURLButtonExists() throws {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
+        let addURL = app.buttons["Add URL"].firstMatch
         XCTAssertTrue(addURL.waitForExistence(timeout: 5),
-                      "Radio tab should have 'Add URL' button")
+                      "Stations view should have 'Add URL' button")
     }
 
     // MARK: - Station Search
@@ -51,15 +51,14 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
 
-        findStations.tap()
+        findStations.click()
         sleep(2)
 
-        // Station search should show a search field and genre tags
         let searchField = app.searchFields.firstMatch
         let hasSearch = searchField.waitForExistence(timeout: 5)
 
@@ -71,15 +70,14 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
 
-        findStations.tap()
+        findStations.click()
         sleep(2)
 
-        // Should show popular genre tags
         let genres = ["jazz", "rock", "electronic", "classical", "pop", "ambient"]
         var foundGenres = 0
         for genre in genres {
@@ -100,38 +98,36 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
 
-        findStations.tap()
+        findStations.click()
         sleep(2)
 
+        // The search field might be a TextField or SearchField.
+        // Try both and use whichever exists.
         let searchField = app.searchFields.firstMatch
-        guard searchField.waitForExistence(timeout: 5) else {
+        let textField = app.textFields.firstMatch
+
+        let target: XCUIElement? = searchField.waitForExistence(timeout: 5)
+            ? searchField : (textField.exists ? textField : nil)
+
+        guard let field = target else {
             throw XCTSkip("Search field not found in station search")
         }
 
-        searchField.tap()
+        // Click the center coordinate of the field to ensure keyboard focus
+        let coord = field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        coord.click()
         sleep(1)
 
-        // Ensure keyboard is visible before typing
-        let keyboard = app.keyboards.firstMatch
-        if !keyboard.waitForExistence(timeout: 5) {
-            // Try tapping the field again
-            searchField.tap()
-            sleep(1)
-            guard keyboard.waitForExistence(timeout: 3) else {
-                throw XCTSkip("Could not get keyboard focus on search field")
-            }
-        }
-
-        searchField.typeText("jazz")
+        // Type using app level to bypass focus issues
+        app.typeText("jazz")
         sleep(8) // Wait for search results from radio-browser.info API
 
-        // External API (radio-browser.info) may be slow or unreliable
-        // Just verify no crash — results depend on external service
+        // External API may be slow — just verify no crash
         XCTAssertTrue(app.state == .runningForeground,
                       "Searching 'jazz' should not crash the app")
     }
@@ -142,15 +138,9 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
-        guard addURL.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Add URL button not found")
-        }
-
-        addURL.tap()
+        app.clickToolbarButton("Add URL")
         sleep(2)
 
-        // Should show form with station name and stream URL fields
         let nameField = app.textFields.matching(
             NSPredicate(format: "placeholderValue CONTAINS[c] 'station' OR placeholderValue CONTAINS[c] 'name'")).firstMatch
         let urlField = app.textFields.matching(
@@ -163,9 +153,8 @@ final class RadioTests: XCTestCase {
         XCTAssertTrue(formOpened,
                       "Add Station form should show name and URL fields")
 
-        // Dismiss
         let cancelButton = app.buttons["Cancel"]
-        if cancelButton.exists { cancelButton.tap() }
+        if cancelButton.exists { cancelButton.click() }
         sleep(1)
     }
 
@@ -173,25 +162,18 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
-        guard addURL.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Add URL button not found")
-        }
-
-        addURL.tap()
+        app.clickToolbarButton("Add URL")
         sleep(2)
 
         let addButton = app.buttons["Add"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 5),
                       "Add Station form should have 'Add' button")
 
-        // Add should be disabled with empty fields
         XCTAssertFalse(addButton.isEnabled,
                        "Add button should be disabled with empty fields")
 
-        // Dismiss
         let cancelButton = app.buttons["Cancel"]
-        if cancelButton.exists { cancelButton.tap() }
+        if cancelButton.exists { cancelButton.click() }
         sleep(1)
     }
 
@@ -201,7 +183,6 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(3)
 
-        // Find a station in the list (look for Play icons)
         let playIcon = app.images.matching(
             NSPredicate(format: "label == 'Play'")).firstMatch
 
@@ -209,10 +190,9 @@ final class RadioTests: XCTestCase {
             throw XCTSkip("No radio stations available to play")
         }
 
-        playIcon.tap()
+        playIcon.click()
         sleep(5) // Radio streams take time to buffer
 
-        // Should see a playing indicator or mini player
         let pauseButton = app.buttons.matching(
             NSPredicate(format: "label == 'Pause'")).firstMatch
         let playingIndicator = app.images.matching(
