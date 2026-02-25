@@ -1,6 +1,6 @@
 # 09 — Real-Device User Testing Plan
 
-This document defines the procedures, checklists, and tools for testing Veydrune on physical devices prior to release. It covers installation methods, CarPlay validation, structured functional tests, bug reporting, and debug tooling.
+This document defines the procedures, checklists, and tools for testing Vibrdrome on physical devices prior to release. It covers installation methods, CarPlay validation, structured functional tests, bug reporting, and debug tooling.
 
 ---
 
@@ -12,7 +12,7 @@ This document defines the procedures, checklists, and tools for testing Veydrune
 
 **Steps:**
 1. Connect device via cable. Trust the computer on the device.
-2. Open `Veydrune.xcodeproj` in Xcode.
+2. Open `Vibrdrome.xcodeproj` in Xcode.
 3. Select the connected device from the destination picker.
 4. Set the signing team under Signing & Capabilities (automatic signing recommended for development).
 5. Press Cmd+R to build and run.
@@ -67,7 +67,7 @@ This document defines the procedures, checklists, and tools for testing Veydrune
 **USB (Wired) CarPlay:**
 1. Connect iPhone to the car's USB port with a certified cable.
 2. Accept the CarPlay prompt on the car's head unit.
-3. Veydrune should appear in the CarPlay app grid (audio category).
+3. Vibrdrome should appear in the CarPlay app grid (audio category).
 
 **Wireless CarPlay:**
 1. Ensure Bluetooth is enabled on both the phone and the head unit.
@@ -77,7 +77,7 @@ This document defines the procedures, checklists, and tools for testing Veydrune
 **Key considerations:**
 - Test with the phone locked (screen off) to verify background audio works.
 - Test plugging in mid-playback and unplugging mid-playback.
-- Verify Siri voice commands trigger the correct Veydrune responses (if applicable).
+- Verify Siri voice commands trigger the correct Vibrdrome responses (if applicable).
 - Test with both the car's built-in speakers and Bluetooth audio simultaneously connected.
 
 ### Xcode CarPlay Simulator
@@ -98,7 +98,7 @@ For development without access to a physical car:
 
 | # | Scenario | Verify |
 |---|----------|--------|
-| 1 | Open Veydrune from CarPlay app grid | Tab bar loads (Browse, Search, Favorites, Now Playing) |
+| 1 | Open Vibrdrome from CarPlay app grid | Tab bar loads (Browse, Search, Favorites, Now Playing) |
 | 2 | Browse artists > select album > play song | Playback starts, Now Playing template updates |
 | 3 | Use CarPlay search | Results appear, selecting a result starts playback |
 | 4 | Skip forward/back from Now Playing controls | Correct track advances, artwork updates |
@@ -147,7 +147,7 @@ For development without access to a physical car:
 
 ### C.5 CarPlay (5 tests)
 
-- [ ] **CP-01: Browse library** — Open Veydrune on CarPlay. Navigate through Artists > Albums > Songs. Verify lists load, artwork appears, and navigation depth works correctly.
+- [ ] **CP-01: Browse library** — Open Vibrdrome on CarPlay. Navigate through Artists > Albums > Songs. Verify lists load, artwork appears, and navigation depth works correctly.
 - [ ] **CP-02: Now Playing** — Start playback from CarPlay. Verify the Now Playing template shows correct song title, artist, album artwork, and playback controls respond (play/pause, skip, scrub).
 - [ ] **CP-03: Search** — Use CarPlay search to find a song by title. Verify results appear and selecting one starts playback.
 - [ ] **CP-04: Favorites** — Open the Favorites tab on CarPlay. Verify starred songs appear. Star/unstar from the phone app and confirm CarPlay reflects the change on next visit.
@@ -232,7 +232,7 @@ Use the following template when filing bugs. Copy this block and fill in each fi
 
 ## E) Debug Tools
 
-Veydrune includes a debug screen accessible only in development builds (`#if DEBUG`). It is designed to help testers and developers diagnose issues without requiring Xcode attachment.
+Vibrdrome includes a debug screen accessible only in development builds (`#if DEBUG`). It is designed to help testers and developers diagnose issues without requiring Xcode attachment.
 
 ### Accessing the Debug Screen
 
@@ -277,7 +277,7 @@ Navigate to Settings > scroll to the bottom > tap "Debug Info" (visible only in 
   - Audio session state
   - Full network error log (last 50 entries)
   - Current playback queue (song IDs and titles)
-- The exported file is named `veydrune-debug-YYYY-MM-DD-HHmmss.txt`.
+- The exported file is named `vibrdrome-debug-YYYY-MM-DD-HHmmss.txt`.
 - Testers can share this file via AirDrop, email, or any share extension.
 
 ### Using Debug Tools During Testing

@@ -1,4 +1,4 @@
-# Veydrune - Native Music Player for iOS/CarPlay/Mac
+# Vibrdrome - Native Music Player for iOS/CarPlay/Mac
 
 ## Handoff Instructions for Claude Opus on Mac
 
@@ -7,7 +7,7 @@ This is a complete handoff document. Two files are provided:
 1. **This file** (`HANDOFF.md`) - Architecture overview, key decisions, sprint plan
 2. **`IMPLEMENTATION-GUIDE.md`** - Full 2,868-line guide with complete Swift code for every component (SubsonicAuth, SubsonicModels, AudioEngine, CarPlay templates, SwiftUI views, etc.)
 
-**To start**: Create a new Xcode project called "Veydrune", then follow Sprint 1 in the Implementation Order section. The IMPLEMENTATION-GUIDE.md has copy-ready Swift code for each file.
+**To start**: Create a new Xcode project called "Vibrdrome", then follow Sprint 1 in the Implementation Order section. The IMPLEMENTATION-GUIDE.md has copy-ready Swift code for each file.
 
 **Server to test against**: `https://***REMOVED***` | Username: `dmoney`
 
@@ -15,7 +15,7 @@ This is a complete handoff document. Two files are provided:
 
 ## Context
 
-Build **Veydrune**, a Swift-native music player that connects to Navidrome via the Subsonic/OpenSubsonic API. Replaces Aonsoku and existing Subsonic clients with a purpose-built app featuring CarPlay support, offline downloads, synced lyrics, internet radio, and full library management.
+Build **Vibrdrome**, a Swift-native music player that connects to Navidrome via the Subsonic/OpenSubsonic API. Replaces Aonsoku and existing Subsonic clients with a purpose-built app featuring CarPlay support, offline downloads, synced lyrics, internet radio, and full library management.
 
 **Target server**: `https://***REMOVED***` (Navidrome, Subsonic API v1.16.1 + OpenSubsonic)
 **Username**: `dmoney` | **Library**: ~1,129 tracks, 87 albums, 53 radio stations
@@ -49,7 +49,7 @@ Phone and CarPlay are **two separate scenes** sharing the same audio engine and 
 ## 1. Project Setup
 
 ### Xcode Project
-- **Product**: Veydrune | **Interface**: SwiftUI | **Storage**: SwiftData
+- **Product**: Vibrdrome | **Interface**: SwiftUI | **Storage**: SwiftData
 - **Deployment**: iOS 17.0+, macOS 14.0+
 - **Swift 6** with strict concurrency
 
@@ -92,10 +92,10 @@ No Alamofire (URLSession async/await suffices), no third-party audio libs (AVPla
 
 ### Project Structure
 ```
-Veydrune/
-├── Veydrune.swift                     # @main App
+Vibrdrome/
+├── Vibrdrome.swift                     # @main App
 ├── Info.plist                         # Scene manifest (CarPlay + iPhone)
-├── Veydrune.entitlements
+├── Vibrdrome.entitlements
 ├── Assets.xcassets/
 ├── App/
 │   ├── AppState.swift                 # @Observable global state / DI
@@ -147,7 +147,7 @@ Per-request MD5 token auth using `CryptoKit.Insecure.MD5` (iOS 13+):
 struct SubsonicAuth {
     let username: String
     let password: String
-    let clientName = "veydrune"
+    let clientName = "vibrdrome"
     let apiVersion = "1.16.1"
 
     func authParameters() -> [URLQueryItem] {
@@ -243,7 +243,7 @@ Single set of `MPRemoteCommandCenter` handlers serves phone Lock Screen, Control
 **MUST use delegate-based URLSession** (not async/await) for background downloads:
 
 ```swift
-let config = URLSessionConfiguration.background(withIdentifier: "com.veydrune.downloads")
+let config = URLSessionConfiguration.background(withIdentifier: "com.vibrdrome.downloads")
 config.isDiscretionary = false  // Start immediately
 config.sessionSendsLaunchEvents = true  // Wake app on completion
 ```
@@ -354,7 +354,7 @@ macOS destination -> NavigationSplitView -> keyboard shortcuts -> Theme -> error
 
 ## Appendix: Subsonic API Endpoints
 
-All require auth: `u`, `t`, `s`, `v=1.16.1`, `c=veydrune`, `f=json`
+All require auth: `u`, `t`, `s`, `v=1.16.1`, `c=vibrdrome`, `f=json`
 
 | Endpoint | Parameters | Feature |
 |----------|-----------|---------|
@@ -403,10 +403,10 @@ All require auth: `u`, `t`, `s`, `v=1.16.1`, `c=veydrune`, `f=json`
 
 ### Detailed Code Examples
 Full 2,868-line implementation guide with Swift code for every component:
-**`docs/veydrune/IMPLEMENTATION-GUIDE.md`** (in the Docker workspace)
+**`docs/vibrdrome/IMPLEMENTATION-GUIDE.md`** (in the Docker workspace)
 
 Copy both files to the Mac project:
 ```
-docs/veydrune/HANDOFF.md               <- This file (overview + sprint plan)
-docs/veydrune/IMPLEMENTATION-GUIDE.md  <- Complete Swift code for all components
+docs/vibrdrome/HANDOFF.md               <- This file (overview + sprint plan)
+docs/vibrdrome/IMPLEMENTATION-GUIDE.md  <- Complete Swift code for all components
 ```

@@ -1,10 +1,10 @@
-# Veydrune User Guide
+# Vibrdrome User Guide
 
-Veydrune is a native iOS and macOS music player for Navidrome and other Subsonic-compatible servers. Connect to your self-hosted music server and enjoy your library on the go, including in the car via CarPlay.
+Vibrdrome is a native iOS and macOS music player for Navidrome and other Subsonic-compatible servers. Connect to your self-hosted music server and enjoy your library on the go, including in the car via CarPlay.
 
 ## Initial Setup
 
-1. Launch Veydrune.
+1. Launch Vibrdrome.
 2. Open the **Settings** tab.
 3. Tap **Add Server**.
 4. Enter your server details:
@@ -83,7 +83,7 @@ Access settings from the **Settings** tab:
 
 ## Multi-Server Support
 
-Veydrune supports multiple Navidrome servers:
+Vibrdrome supports multiple Navidrome servers:
 
 1. Go to **Settings** and tap **Add Server** to add additional servers.
 2. Switch between servers from the server list in Settings.

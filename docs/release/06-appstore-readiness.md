@@ -71,7 +71,7 @@ Justification:
 
 | Field | Value |
 |-------|-------|
-| App Name | Veydrune |
+| App Name | Vibrdrome |
 | Subtitle | Music Player for Navidrome |
 | Category | Music |
 | Secondary Category | Entertainment |
@@ -80,7 +80,7 @@ Justification:
 | Availability | All territories |
 
 **Description (draft):**
-> Veydrune is a beautiful, native music player for your Navidrome server. Stream your entire music library from anywhere with full CarPlay support, offline downloads, and a polished SwiftUI interface.
+> Vibrdrome is a beautiful, native music player for your Navidrome server. Stream your entire music library from anywhere with full CarPlay support, offline downloads, and a polished SwiftUI interface.
 >
 > Features:
 > - Browse by artists, albums, genres, playlists, and favorites

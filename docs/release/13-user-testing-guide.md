@@ -9,7 +9,7 @@
 
 # User Testing Guide & Feature Walkthrough ♪♫(◕‿◕)♫♪
 
-**App:** Veydrune — iOS/macOS Music Player for Navidrome
+**App:** Vibrdrome — iOS/macOS Music Player for Navidrome
 **Version:** 1.0.0
 **Date:** 2026-02-21
 
@@ -29,7 +29,7 @@ This guide walks through every user-facing feature with step-by-step instruction
 ## 1. First Launch & Authentication
 
 ### Sign In
-1. Launch Veydrune — the **Server Configuration** screen appears.
+1. Launch Vibrdrome — the **Server Configuration** screen appears.
 2. Enter your Navidrome server URL (e.g., `https://music.example.com`).
 3. Enter username and password.
 4. Tap **"Test Connection"** — should show a success indicator.

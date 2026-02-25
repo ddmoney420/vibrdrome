@@ -1,4 +1,4 @@
-# Veydrune SwiftFormat Configuration
+# Vibrdrome SwiftFormat Configuration
 # Matches existing code style
 
 --swiftversion 6.0
@@ -38,4 +38,4 @@
 --disable extensionAccessControl
 
 # Exclude generated/external
---exclude DerivedData,.build,Veydrune.xcodeproj
+--exclude DerivedData,.build,Vibrdrome.xcodeproj

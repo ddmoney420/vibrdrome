@@ -1,6 +1,6 @@
 # Build Reproducibility Guide
 
-**Project:** Veydrune — iOS/macOS music player for Navidrome (Subsonic API)
+**Project:** Vibrdrome — iOS/macOS music player for Navidrome (Subsonic API)
 **Last verified:** 2026-02-21
 
 ---
@@ -32,7 +32,7 @@
 
 ## XcodeGen Workflow
 
-The Xcode project file (`Veydrune.xcodeproj`) is generated from `project.yml` and is listed in `.gitignore`. You must run XcodeGen before building from a fresh clone.
+The Xcode project file (`Vibrdrome.xcodeproj`) is generated from `project.yml` and is listed in `.gitignore`. You must run XcodeGen before building from a fresh clone.
 
 **CRITICAL:** XcodeGen clears the entitlements file on every run. The entitlements must be restored after generation.
 
@@ -44,7 +44,7 @@ The Xcode project file (`Veydrune.xcodeproj`) is generated from `project.yml` an
    xcodegen generate
    ```
 
-2. Restore the entitlements file at `Veydrune/Veydrune.entitlements` with the following content:
+2. Restore the entitlements file at `Vibrdrome/Vibrdrome.entitlements` with the following content:
 
    ```xml
    <?xml version="1.0" encoding="UTF-8"?>
@@ -73,8 +73,8 @@ make generate
 
 ```bash
 xcodebuild build \
-  -project Veydrune.xcodeproj \
-  -scheme Veydrune \
+  -project Vibrdrome.xcodeproj \
+  -scheme Vibrdrome \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
@@ -84,8 +84,8 @@ xcodebuild build \
 
 ```bash
 xcodebuild build \
-  -project Veydrune.xcodeproj \
-  -scheme Veydrune \
+  -project Vibrdrome.xcodeproj \
+  -scheme Vibrdrome \
   -destination 'platform=macOS' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
@@ -96,8 +96,8 @@ xcodebuild build \
 ```bash
 make generate
 xcodebuild clean build \
-  -project Veydrune.xcodeproj \
-  -scheme Veydrune \
+  -project Vibrdrome.xcodeproj \
+  -scheme Vibrdrome \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO
@@ -109,7 +109,7 @@ xcodebuild clean build \
 
 | Setting                  | Value                  |
 |--------------------------|------------------------|
-| Bundle ID                | `com.veydrune.app`     |
+| Bundle ID                | `com.vibrdrome.app`     |
 | Marketing version        | 0.1.0                  |
 | Build number             | 1                      |
 | iOS deployment target    | 17.0                   |
@@ -130,8 +130,8 @@ Dependencies are declared in `project.yml` and resolved automatically by Xcode o
 
 ```bash
 xcodebuild -resolvePackageDependencies \
-  -project Veydrune.xcodeproj \
-  -scheme Veydrune
+  -project Vibrdrome.xcodeproj \
+  -scheme Vibrdrome
 ```
 
 ---
@@ -140,7 +140,7 @@ xcodebuild -resolvePackageDependencies \
 
 ### CarPlay Audio Entitlement
 
-The app requires the `com.apple.developer.carplay-audio` entitlement for CarPlay integration. This entitlement is defined in `Veydrune/Veydrune.entitlements`.
+The app requires the `com.apple.developer.carplay-audio` entitlement for CarPlay integration. This entitlement is defined in `Vibrdrome/Vibrdrome.entitlements`.
 
 ### CI / Local builds without signing
 
@@ -177,7 +177,7 @@ The primary development simulator is **iPhone 17 Pro**.
 
 1. **`.xcodeproj` is gitignored.** You must run `xcodegen generate` (or `make generate`) before building from a fresh clone. The project file is not committed to version control.
 
-2. **XcodeGen clears entitlements.** Every invocation of `xcodegen generate` overwrites `Veydrune/Veydrune.entitlements`. Always restore the file afterward. The `make generate` target handles this automatically.
+2. **XcodeGen clears entitlements.** Every invocation of `xcodegen generate` overwrites `Vibrdrome/Vibrdrome.entitlements`. Always restore the file afterward. The `make generate` target handles this automatically.
 
 3. **No test target.** Unit and UI test targets have not been created yet. There is no `xcodebuild test` workflow available.
 

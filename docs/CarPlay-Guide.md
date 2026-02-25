@@ -1,14 +1,14 @@
-# Veydrune CarPlay Guide
+# Vibrdrome CarPlay Guide
 
-Veydrune supports Apple CarPlay, giving you access to your Navidrome music library on your car's display.
+Vibrdrome supports Apple CarPlay, giving you access to your Navidrome music library on your car's display.
 
 ## Setup
 
 1. Connect your iPhone to your car via **USB cable** or **wireless CarPlay** (if your car supports it).
-2. Veydrune should appear on the CarPlay home screen automatically.
-3. Tap the Veydrune icon to launch.
+2. Vibrdrome should appear on the CarPlay home screen automatically.
+3. Tap the Vibrdrome icon to launch.
 
-No additional configuration is needed. Veydrune uses the same server you configured in the app.
+No additional configuration is needed. Vibrdrome uses the same server you configured in the app.
 
 ## What You Can Do in CarPlay
 
@@ -37,17 +37,17 @@ No additional configuration is needed. Veydrune uses the same server you configu
 
 ## Troubleshooting
 
-**Veydrune does not appear on CarPlay:**
+**Vibrdrome does not appear on CarPlay:**
 - Make sure you have an active CarPlay connection (USB or wireless).
 - Restart your iPhone and reconnect to CarPlay.
-- Check that Veydrune is not restricted under **Settings > General > CarPlay** on your iPhone.
+- Check that Vibrdrome is not restricted under **Settings > General > CarPlay** on your iPhone.
 - The app requires a valid CarPlay Audio entitlement in its provisioning profile.
 
 **Playback stutters in the car:**
 - Check your cellular signal. CarPlay streams music from your server in real time (unless tracks are downloaded).
-- Lower the cellular bitrate limit in the Veydrune app settings.
+- Lower the cellular bitrate limit in the Vibrdrome app settings.
 - Download albums you frequently listen to in the car for offline playback.
 
 **Controls unresponsive:**
 - Try disconnecting and reconnecting CarPlay.
-- Force-quit Veydrune on the iPhone and relaunch via the CarPlay screen.
+- Force-quit Vibrdrome on the iPhone and relaunch via the CarPlay screen.

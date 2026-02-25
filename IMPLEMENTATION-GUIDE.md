@@ -2,7 +2,7 @@ I notice that `dmoney-player` is already registered as a DuckDNS subdomain. The 
 
 ---
 
-# Veydrune -- Comprehensive Implementation Plan
+# Vibrdrome -- Comprehensive Implementation Plan
 
 ## Handoff Document for Claude Opus (Mac Development Environment)
 
@@ -50,9 +50,9 @@ The target Navidrome server is already running and accessible:
 
 Create a new Xcode project:
 
-- **Product Name**: Veydrune
+- **Product Name**: Vibrdrome
 - **Team**: Your Apple Developer account
-- **Organization Identifier**: `com.veydrune` (or a personal domain)
+- **Organization Identifier**: `com.vibrdrome` (or a personal domain)
 - **Interface**: SwiftUI
 - **Language**: Swift
 - **Storage**: SwiftData
@@ -72,7 +72,7 @@ In Xcode Target > Signing & Capabilities, add:
 2. **App Groups** (for sharing data between app and potential extensions)
 3. **CarPlay** (requires entitlement application -- see 1.4)
 
-In `Veydrune.entitlements`:
+In `Vibrdrome.entitlements`:
 ```xml
 <key>com.apple.developer.carplay-audio</key>
 <true/>
@@ -147,16 +147,16 @@ Avoid heavy dependencies. Use native frameworks wherever possible:
 ### 1.6 Project Directory Structure
 
 ```
-Veydrune/
-|-- Veydrune.swift                      # @main App entry point
+Vibrdrome/
+|-- Vibrdrome.swift                      # @main App entry point
 |-- Info.plist                          # Scene manifest (CarPlay + iPhone)
-|-- Veydrune.entitlements               # CarPlay audio entitlement
+|-- Vibrdrome.entitlements               # CarPlay audio entitlement
 |-- Assets.xcassets/                    # App icon, accent colors, images
 |-- Preview Content/
 |-- App/
 |   |-- AppState.swift                  # @Observable global state / DI
 |   |-- Theme.swift                     # Colors, fonts, spacing constants
-|   |-- VeydruneApp+Scene.swift         # Scene configuration helper
+|   |-- VibrdromeApp+Scene.swift         # Scene configuration helper
 |-- CarPlay/
 |   |-- CarPlaySceneDelegate.swift      # CPTemplateApplicationSceneDelegate
 |   |-- CarPlayManager.swift            # Build/manage template hierarchy
@@ -251,7 +251,7 @@ import CryptoKit
 struct SubsonicAuth {
     let username: String
     let password: String
-    let clientName = "veydrune"
+    let clientName = "vibrdrome"
     let apiVersion = "1.16.1"
 
     /// Generate a random salt string
@@ -1347,7 +1347,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(
-            withIdentifier: "com.veydrune.downloads"
+            withIdentifier: "com.vibrdrome.downloads"
         )
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
@@ -1811,7 +1811,7 @@ The phone app uses a standard TabView:
 
 ```swift
 @main
-struct VeydruneApp: App {
+struct VibrdromeApp: App {
     @State private var appState = AppState.shared
 
     var body: some Scene {
@@ -2593,7 +2593,7 @@ struct ServerConfigView: View {
         config.name = name.isEmpty ? "My Server" : name
 
         // Store password securely
-        let keychain = Keychain(service: "com.veydrune")
+        let keychain = Keychain(service: "com.vibrdrome")
         keychain[config.id.uuidString] = password
 
         let context = PersistenceController.shared.container.mainContext
@@ -2819,7 +2819,7 @@ struct MacContentView: View {
 
 ## Appendix: Complete Subsonic API Endpoint Reference
 
-For the developer's reference, here is every endpoint Veydrune will use, with parameters:
+For the developer's reference, here is every endpoint Vibrdrome will use, with parameters:
 
 | Endpoint | Parameters | Used For |
 |----------|-----------|----------|
@@ -2853,7 +2853,7 @@ For the developer's reference, here is every endpoint Veydrune will use, with pa
 | `createBookmark` | `id`, `position`, `comment?` | Save resume position |
 | `deleteBookmark` | `id` | Remove bookmark |
 
-All endpoints require auth params: `u`, `t`, `s`, `v=1.16.1`, `c=veydrune`, `f=json`.
+All endpoints require auth params: `u`, `t`, `s`, `v=1.16.1`, `c=vibrdrome`, `f=json`.
 
 ---
 

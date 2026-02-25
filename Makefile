@@ -1,7 +1,7 @@
 .PHONY: generate build-ios build-macos test lint format clean help
 
-SCHEME = Veydrune
-PROJECT = Veydrune.xcodeproj
+SCHEME = Vibrdrome
+PROJECT = Vibrdrome.xcodeproj
 IOS_DEST = platform=iOS Simulator,name=iPhone 17 Pro
 MACOS_DEST = platform=macOS
 
@@ -23,7 +23,7 @@ help: ## Show this help
 
 generate: ## Run xcodegen and restore entitlements
 	xcodegen generate
-	@echo "$$ENTITLEMENTS_CONTENT" > Veydrune/Veydrune.entitlements
+	@echo "$$ENTITLEMENTS_CONTENT" > Vibrdrome/Vibrdrome.entitlements
 	@echo "✓ Entitlements restored"
 
 build-ios: ## Build for iOS Simulator (iPhone 17 Pro)

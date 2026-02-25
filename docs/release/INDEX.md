@@ -9,7 +9,7 @@ ______  _____  _      _____   ___   _____  _____
 
 # Release Documentation Index
 
-**App:** Veydrune -- iOS/macOS Music Player for Navidrome ♪♫(◕‿◕)♫♪
+**App:** Vibrdrome -- iOS/macOS Music Player for Navidrome ♪♫(◕‿◕)♫♪
 **Version:** 1.0.0
 **Date:** February 2026
 

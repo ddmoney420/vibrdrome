@@ -4,7 +4,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Test target | VeydruneTests (added Sprint 3) |
+| Test target | VibrdromeTests (added Sprint 3) |
 | Test framework | Swift Testing (`@Test`, `#expect`) |
 | Total tests | 96 |
 | Passing | 96 |
@@ -92,15 +92,15 @@ Tests `ErrorPresenter.userMessage(for:)` mapping.
 make test                # Run via Makefile
 # Or directly:
 xcodebuild test \
-  -project Veydrune.xcodeproj \
-  -scheme Veydrune \
+  -project Vibrdrome.xcodeproj \
+  -scheme Vibrdrome \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   CODE_SIGNING_ALLOWED=NO
 ```
 
 ## Test Configuration
 
-- **project.yml**: `VeydruneTests` target with `bundle.unit-test` type
-- **Scheme**: Veydrune scheme includes VeydruneTests in test action
-- **Dependencies**: Tests link against main Veydrune target via `@testable import`
+- **project.yml**: `VibrdromeTests` target with `bundle.unit-test` type
+- **Scheme**: Vibrdrome scheme includes VibrdromeTests in test action
+- **Dependencies**: Tests link against main Vibrdrome target via `@testable import`
 - **Framework**: Swift Testing (modern `@Test` + `#expect`, not XCTest)

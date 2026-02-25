@@ -1,7 +1,7 @@
-# Veydrune Market Survey: iOS/macOS Subsonic Music Players
+# Vibrdrome Market Survey: iOS/macOS Subsonic Music Players
 
 **Date:** 2026-02-21
-**Purpose:** Competitive analysis of Subsonic/Navidrome client apps to inform Veydrune's v1.0 positioning and post-launch roadmap.
+**Purpose:** Competitive analysis of Subsonic/Navidrome client apps to inform Vibrdrome's v1.0 positioning and post-launch roadmap.
 
 ---
 
@@ -51,7 +51,7 @@
 
 ## 2. Feature Comparison Matrix
 
-| Feature | **Veydrune** | **play:Sub** | **Amperfy** | **SubStreamer** | **iSub** | **Symfonium** |
+| Feature | **Vibrdrome** | **play:Sub** | **Amperfy** | **SubStreamer** | **iSub** | **Symfonium** |
 |---|---|---|---|---|---|---|
 | **Platform** | iOS + macOS | iOS | iOS + macOS | iOS + Android | iOS | Android |
 | **CarPlay / Auto** | Full (browse, search, now playing, favorites) | Yes (rewritten from scratch) | Yes | No confirmed support | No | Android Auto (full) |
@@ -95,36 +95,36 @@ The iOS Subsonic client space is small but increasingly competitive:
 
 ### Market Gaps
 
-1. **No SwiftUI-native Subsonic client exists.** Every iOS competitor uses UIKit or Catalyst. Veydrune is the first to offer a ground-up SwiftUI experience.
+1. **No SwiftUI-native Subsonic client exists.** Every iOS competitor uses UIKit or Catalyst. Vibrdrome is the first to offer a ground-up SwiftUI experience.
 2. **CarPlay quality varies widely.** play:Sub rewrote theirs; Amperfy supports it; others do not. Deep CarPlay integration is still a differentiator.
 3. **macOS is underserved.** Only Amperfy (via Catalyst) offers macOS, and Catalyst apps feel compromised. A native SwiftUI macOS experience is wide open.
-4. **Audio visualizers are rare.** Only Amperfy (as of v2.0.0) and Veydrune offer them on iOS. Veydrune's Metal shader approach is technically superior.
+4. **Audio visualizers are rare.** Only Amperfy (as of v2.0.0) and Vibrdrome offer them on iOS. Vibrdrome's Metal shader approach is technically superior.
 
 ---
 
-## 4. Veydrune's Positioning
+## 4. Vibrdrome's Positioning
 
-### 4.1 Three Key Differentiators Veydrune Can Own
+### 4.1 Three Key Differentiators Vibrdrome Can Own
 
 **1. The only SwiftUI-native Subsonic client (iOS + macOS)**
-Every competitor uses UIKit, Catalyst, or cross-platform frameworks. Veydrune's SwiftUI foundation means it looks, feels, and behaves like a first-party Apple app. On macOS, this is especially stark -- Amperfy's Catalyst port is the only alternative, and Catalyst apps carry inherent UX compromises (menu bar integration, window management, keyboard shortcuts). Veydrune's native NavigationSplitView sidebar and platform-conditional UI (`.sheet` vs `.fullScreenCover`, keyboard shortcuts like Cmd+P) deliver a Mac experience no competitor matches.
+Every competitor uses UIKit, Catalyst, or cross-platform frameworks. Vibrdrome's SwiftUI foundation means it looks, feels, and behaves like a first-party Apple app. On macOS, this is especially stark -- Amperfy's Catalyst port is the only alternative, and Catalyst apps carry inherent UX compromises (menu bar integration, window management, keyboard shortcuts). Vibrdrome's native NavigationSplitView sidebar and platform-conditional UI (`.sheet` vs `.fullScreenCover`, keyboard shortcuts like Cmd+P) deliver a Mac experience no competitor matches.
 
 **2. Full CarPlay with search, browse, favorites, and now playing**
-While play:Sub and Amperfy support CarPlay, Veydrune's implementation covers the complete surface area: hierarchical browsing, search, favorites access, and a full now-playing experience. Combined with the SwiftUI-native phone UI and offline downloads, this makes Veydrune the best option for users who split time between phone, car, and desktop.
+While play:Sub and Amperfy support CarPlay, Vibrdrome's implementation covers the complete surface area: hierarchical browsing, search, favorites access, and a full now-playing experience. Combined with the SwiftUI-native phone UI and offline downloads, this makes Vibrdrome the best option for users who split time between phone, car, and desktop.
 
 **3. Metal shader audio visualizer**
-Only Amperfy (v2.0.0) offers a visualizer on iOS, and theirs is a spectrum analyzer. Veydrune's Metal shader visualizer is GPU-accelerated and visually distinctive -- a feature that screenshots well, demos well, and creates an emotional connection with the app that pure utility features cannot.
+Only Amperfy (v2.0.0) offers a visualizer on iOS, and theirs is a spectrum analyzer. Vibrdrome's Metal shader visualizer is GPU-accelerated and visually distinctive -- a feature that screenshots well, demos well, and creates an emotional connection with the app that pure utility features cannot.
 
 ### 4.2 Three Gaps to Address
 
 **1. Gapless playback (CRITICAL for v1.0)**
-Every serious competitor (play:Sub, Amperfy, iSub, Symfonium) supports gapless playback. For users with live albums, classical music, DJ mixes, or concept albums, gaps between tracks are a dealbreaker. This is the single most-requested feature in self-hosted music communities and the most conspicuous omission in Veydrune's current feature set.
+Every serious competitor (play:Sub, Amperfy, iSub, Symfonium) supports gapless playback. For users with live albums, classical music, DJ mixes, or concept albums, gaps between tracks are a dealbreaker. This is the single most-requested feature in self-hosted music communities and the most conspicuous omission in Vibrdrome's current feature set.
 
 **2. Equalizer**
-play:Sub has a 10-band EQ. Amperfy has one. iSub has a parametric EQ. Symfonium has up to 256 bands. Veydrune has none. While not every user touches EQ settings, audiophile-oriented self-hosters (a large portion of the Navidrome user base) consider it essential. At minimum, a basic 5-10 band EQ with presets is needed.
+play:Sub has a 10-band EQ. Amperfy has one. iSub has a parametric EQ. Symfonium has up to 256 bands. Vibrdrome has none. While not every user touches EQ settings, audiophile-oriented self-hosters (a large portion of the Navidrome user base) consider it essential. At minimum, a basic 5-10 band EQ with presets is needed.
 
 **3. Scrobbling (Last.fm / ListenBrainz)**
-Self-hosted music users overwhelmingly track their listening habits. Last.fm and ListenBrainz scrobbling is table-stakes for this audience. SubStreamer has Last.fm integration. Amperfy has scrobbling built in. Without it, Veydrune loses a significant cohort of potential users who refuse to use a player that does not scrobble.
+Self-hosted music users overwhelmingly track their listening habits. Last.fm and ListenBrainz scrobbling is table-stakes for this audience. SubStreamer has Last.fm integration. Amperfy has scrobbling built in. Without it, Vibrdrome loses a significant cohort of potential users who refuse to use a player that does not scrobble.
 
 ---
 
@@ -153,11 +153,11 @@ Self-hosted music users overwhelmingly track their listening habits. Last.fm and
 
 | Feature | Rationale |
 |---|---|
-| **Chromecast / AirPlay 2 output** | play:Sub supports Chromecast + Jukebox; Symfonium supports Chromecast + UPnP/DLNA + Sonos. Expands Veydrune beyond headphone/speaker playback. |
+| **Chromecast / AirPlay 2 output** | play:Sub supports Chromecast + Jukebox; Symfonium supports Chromecast + UPnP/DLNA + Sonos. Expands Vibrdrome beyond headphone/speaker playback. |
 | **Smart playlists / auto-mixes** | Symfonium's dynamic playlist engine is a major differentiator. Building something similar on iOS would be unique. |
 | **Wear OS / Apple Watch companion** | No iOS Subsonic client has an Apple Watch app. First-mover opportunity. |
 | **Widget support** | Lock screen and home screen widgets for now playing, quick actions. Modern iOS expectation. |
-| **Additional server support (Jellyfin, Plex)** | Symfonium's universal server support is its biggest draw. Expanding beyond Subsonic opens Veydrune to a much larger audience. |
+| **Additional server support (Jellyfin, Plex)** | Symfonium's universal server support is its biggest draw. Expanding beyond Subsonic opens Vibrdrome to a much larger audience. |
 | **Open source consideration** | Amperfy and iSub are both GPLv3. Open sourcing (or offering a source-available license) could build community trust and attract contributors. Worth evaluating post-v1.0 based on business model. |
 | **Hi-res audio (24-bit/192kHz)** | play:Sub supports it. Niche but valued by audiophiles who specifically chose self-hosting for lossless playback. |
 | **Crossfade visualizer modes** | Leverage the existing Metal shader infrastructure to create reactive visualizer modes that respond to audio frequency data. No competitor has this on iOS. |
@@ -166,13 +166,13 @@ Self-hosted music users overwhelmingly track their listening habits. Last.fm and
 
 ## 6. Summary
 
-Veydrune enters a market with one strong incumbent (play:Sub), one fast-moving open-source competitor (Amperfy), and several stagnant or minimal alternatives. The opportunity is clear:
+Vibrdrome enters a market with one strong incumbent (play:Sub), one fast-moving open-source competitor (Amperfy), and several stagnant or minimal alternatives. The opportunity is clear:
 
-- **SwiftUI-native is uncontested.** No competitor builds with SwiftUI. This is Veydrune's structural advantage for both iOS and macOS.
+- **SwiftUI-native is uncontested.** No competitor builds with SwiftUI. This is Vibrdrome's structural advantage for both iOS and macOS.
 - **macOS is wide open.** Only Amperfy (Catalyst) exists. A native SwiftUI Mac app is a genuine gap in the market.
 - **CarPlay + visualizer + modern UI** is a combination no one else offers.
 
-The primary risk is launching without gapless playback, which would immediately position Veydrune as "nice-looking but incomplete" in community reviews. Closing the gapless + EQ + scrobbling gaps before v1.0 transforms Veydrune from "promising" to "competitive," and the SwiftUI + Metal differentiators do the rest.
+The primary risk is launching without gapless playback, which would immediately position Vibrdrome as "nice-looking but incomplete" in community reviews. Closing the gapless + EQ + scrobbling gaps before v1.0 transforms Vibrdrome from "promising" to "competitive," and the SwiftUI + Metal differentiators do the rest.
 
 ---
 

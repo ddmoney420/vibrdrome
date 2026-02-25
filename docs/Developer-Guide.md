@@ -1,4 +1,4 @@
-# Veydrune Developer Guide
+# Vibrdrome Developer Guide
 
 ## Prerequisites
 

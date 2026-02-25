@@ -47,8 +47,8 @@ jobs:
       - name: Build for iOS Simulator
         run: |
           xcodebuild build \
-            -project Veydrune.xcodeproj \
-            -scheme Veydrune \
+            -project Vibrdrome.xcodeproj \
+            -scheme Vibrdrome \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
@@ -79,8 +79,8 @@ jobs:
       - name: Build for macOS
         run: |
           xcodebuild build \
-            -project Veydrune.xcodeproj \
-            -scheme Veydrune \
+            -project Vibrdrome.xcodeproj \
+            -scheme Vibrdrome \
             -destination 'platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
@@ -111,8 +111,8 @@ jobs:
       - name: Run tests
         run: |
           xcodebuild test \
-            -project Veydrune.xcodeproj \
-            -scheme Veydrune \
+            -project Vibrdrome.xcodeproj \
+            -scheme Vibrdrome \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             CODE_SIGNING_ALLOWED=NO \
             -resultBundlePath TestResults.xcresult || true

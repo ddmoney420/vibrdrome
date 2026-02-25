@@ -1,6 +1,6 @@
 # 07 — Release Readiness Scorecard
 
-**Project:** Veydrune — iOS/macOS music player for Navidrome (Subsonic API)
+**Project:** Vibrdrome — iOS/macOS music player for Navidrome (Subsonic API)
 **Evaluated:** 2026-02-21
 **Version:** 1.0.0 (Build 1)
 **Sprints Complete:** 1-8 (development), 1-5 (release readiness)
@@ -131,7 +131,7 @@
 
 | # | Criterion | Grade | Evidence / Notes |
 |---|-----------|-------|------------------|
-| 7.1 | CarPlay entitlement declared | PASS | `com.apple.developer.carplay-audio` in `Veydrune.entitlements`. Restoration automated via `make generate` |
+| 7.1 | CarPlay entitlement declared | PASS | `com.apple.developer.carplay-audio` in `Vibrdrome.entitlements`. Restoration automated via `make generate` |
 | 7.2 | CarPlay entitlement approved by Apple | FAIL | Must be requested through Apple's CarPlay/MFi program. Not yet submitted |
 | 7.3 | Template-based UI (no custom rendering) | PASS | 100% CPTemplate: CPTabBarTemplate, CPListTemplate, CPNowPlayingTemplate, CPSearchTemplate. Audio-only, compliant with HIG |
 | 7.4 | List item limits respected | PASS | Genre list capped at 30 items (`prefix(30)`). Search results capped at 20 songs and 20 albums. Album tracks uncapped (inherently bounded) |

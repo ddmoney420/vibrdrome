@@ -1,13 +1,13 @@
-# Veydrune SwiftLint Configuration
+# Vibrdrome SwiftLint Configuration
 # Tuned for Swift 6, SwiftUI, @Observable/@MainActor codebase
 
 included:
-  - Veydrune
+  - Vibrdrome
 
 excluded:
   - DerivedData
   - .build
-  - Veydrune.xcodeproj
+  - Vibrdrome.xcodeproj
 
 # Rules
 disabled_rules:
