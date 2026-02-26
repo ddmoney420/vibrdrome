@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibrdrome — Music Player for Navidrome</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        .container { max-width: 720px; margin: 0 auto; padding: 60px 24px; }
+        .hero { text-align: center; margin-bottom: 48px; }
+        .hero img { width: 120px; height: 120px; border-radius: 26px; margin-bottom: 20px; }
+        .hero h1 { font-size: 2.5rem; color: #fff; margin-bottom: 8px; }
+        .hero .tagline { font-size: 1.1rem; color: #a29bfe; margin-bottom: 24px; }
+        .hero p { color: #888; font-size: 0.95rem; }
+        .features { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 40px 0; }
+        .feature { background: #12121f; border: 1px solid #1e1e32; border-radius: 12px; padding: 20px; }
+        .feature h3 { color: #a29bfe; font-size: 0.9rem; margin-bottom: 6px; }
+        .feature p { color: #999; font-size: 0.85rem; }
+        .links { text-align: center; margin-top: 48px; }
+        .links a {
+            display: inline-block; margin: 0 12px; color: #a29bfe;
+            text-decoration: none; font-size: 0.9rem;
+        }
+        .links a:hover { color: #d4cfff; }
+        footer { text-align: center; margin-top: 60px; color: #444; font-size: 0.8rem; }
+        @media (max-width: 520px) { .features { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>Vibrdrome</h1>
+            <p class="tagline">Music Player for Navidrome</p>
+            <p>A native iOS and macOS music player for your self-hosted Navidrome server. Stream your library, download for offline, and enjoy audiophile features — all from a fast, beautiful interface.</p>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <h3>Gapless Playback</h3>
+                <p>Seamless album listening with crossfade and adjustable playback speed.</p>
+            </div>
+            <div class="feature">
+                <h3>10-Band Equalizer</h3>
+                <p>Built-in EQ with presets and ReplayGain for consistent volume.</p>
+            </div>
+            <div class="feature">
+                <h3>Offline Downloads</h3>
+                <p>Download albums and playlists. Auto-download favorites. Manage cache limits.</p>
+            </div>
+            <div class="feature">
+                <h3>Internet Radio</h3>
+                <p>Browse and search thousands of stations. Add custom stream URLs.</p>
+            </div>
+            <div class="feature">
+                <h3>Synced Lyrics</h3>
+                <p>Follow along with time-synced lyrics during playback.</p>
+            </div>
+            <div class="feature">
+                <h3>Open Source</h3>
+                <p>Free, no ads, no tracking. Your music, your server, your data.</p>
+            </div>
+        </div>
+
+        <div class="links">
+            <a href="https://github.com/ddmoney420/vibrdrome">GitHub</a>
+            <a href="privacy-policy">Privacy Policy</a>
+        </div>
+
+        <footer>&copy; 2026 Vibrdrome</footer>
+    </div>
+</body>
+</html>

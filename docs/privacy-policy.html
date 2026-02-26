@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — Vibrdrome</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            line-height: 1.7;
+        }
+        .container { max-width: 680px; margin: 0 auto; padding: 60px 24px; }
+        h1 { color: #fff; font-size: 2rem; margin-bottom: 8px; }
+        .updated { color: #666; font-size: 0.85rem; margin-bottom: 40px; }
+        h2 { color: #a29bfe; font-size: 1.1rem; margin-top: 32px; margin-bottom: 12px; }
+        p { color: #bbb; margin-bottom: 16px; font-size: 0.95rem; }
+        strong { color: #e0e0e0; }
+        ul { color: #bbb; margin: 0 0 16px 24px; font-size: 0.95rem; }
+        li { margin-bottom: 6px; }
+        a { color: #a29bfe; text-decoration: none; }
+        a:hover { color: #d4cfff; }
+        .back { display: inline-block; margin-bottom: 32px; color: #666; font-size: 0.85rem; }
+        footer { text-align: center; margin-top: 60px; color: #444; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">&larr; Back to Vibrdrome</a>
+
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: February 25, 2026</p>
+
+        <h2>Overview</h2>
+        <p>Vibrdrome is a music player app that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.</p>
+
+        <h2>Data Collection</h2>
+        <p><strong>Vibrdrome does not collect, store, or transmit any personal data to us.</strong> We have no servers, no analytics, and no tracking.</p>
+
+        <h2>Data Stored on Your Device</h2>
+        <p>Vibrdrome stores the following data locally on your device:</p>
+        <ul>
+            <li><strong>Server credentials</strong> (URL, username, password) — stored securely in the iOS/macOS Keychain</li>
+            <li><strong>Music cache</strong> — downloaded songs stored in the app's sandboxed container</li>
+            <li><strong>Playback history and preferences</strong> — stored locally using SwiftData</li>
+            <li><strong>Settings</strong> (theme, equalizer presets, bitrate preferences) — stored in UserDefaults</li>
+        </ul>
+        <p>This data never leaves your device except to communicate directly with your configured media server.</p>
+
+        <h2>Network Communication</h2>
+        <p>Vibrdrome communicates only with:</p>
+        <ul>
+            <li><strong>Your Navidrome/Subsonic server</strong> — to authenticate, browse your library, stream music, and sync favorites/playlists. All communication uses the server URL you configure.</li>
+            <li><strong>radio-browser.info</strong> (optional) — only when you search for internet radio stations using the "Find Stations" feature. No personal data is sent; only search queries (genre, station name).</li>
+        </ul>
+        <p>Vibrdrome does not contact any other servers or third-party services.</p>
+
+        <h2>Third-Party Services</h2>
+        <p>Vibrdrome does not integrate any third-party analytics, advertising, crash reporting, or tracking services.</p>
+
+        <h2>Data Sharing</h2>
+        <p>We do not share, sell, or transfer any user data to third parties. There is no data to share because we do not collect any.</p>
+
+        <h2>Children's Privacy</h2>
+        <p>Vibrdrome does not knowingly collect any information from children under 13 years of age.</p>
+
+        <h2>Changes to This Policy</h2>
+        <p>If we update this privacy policy, the changes will be posted here with an updated date.</p>
+
+        <h2>Contact</h2>
+        <p>If you have questions about this privacy policy, please open an issue at:<br>
+        <a href="https://github.com/ddmoney420/vibrdrome/issues">github.com/ddmoney420/vibrdrome/issues</a></p>
+
+        <footer>&copy; 2026 Vibrdrome</footer>
+    </div>
+</body>
+</html>
