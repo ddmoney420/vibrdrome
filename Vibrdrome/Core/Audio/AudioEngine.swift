@@ -573,7 +573,7 @@ final class AudioEngine {
             let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 1000)
             player.seek(
                 to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-            ) { [weak self] finished in
+            ) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
                     self.currentTime = clampedTime

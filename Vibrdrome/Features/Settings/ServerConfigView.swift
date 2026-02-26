@@ -35,11 +35,10 @@ struct ServerConfigView: View {
             VStack(spacing: 24) {
                 // Header
                 VStack(spacing: 8) {
-                    Image(systemName: "music.note.house.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.linearGradient(
-                            colors: [.purple, .blue],
-                            startPoint: .topLeading, endPoint: .bottomTrailing))
+                    appIconImage
+                        .resizable()
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
 
                     Text("Vibrdrome")
                         .font(.largeTitle)
@@ -120,11 +119,10 @@ struct ServerConfigView: View {
             Form {
                 Section {
                     VStack(spacing: 8) {
-                        Image(systemName: "music.note.house.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.linearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                        appIconImage
+                            .resizable()
+                            .frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
 
                         Text("Vibrdrome")
                             .font(.title2)
@@ -197,6 +195,19 @@ struct ServerConfigView: View {
     }
 
     // MARK: - Test
+
+    private var appIconImage: Image {
+        #if os(iOS)
+        if let uiImage = UIImage(named: "AppIcon") {
+            return Image(uiImage: uiImage)
+        }
+        #else
+        if let nsImage = NSImage(named: "AppIcon") {
+            return Image(nsImage: nsImage)
+        }
+        #endif
+        return Image(systemName: "music.note.house.fill")
+    }
 
     private func testConnection() {
         isTesting = true

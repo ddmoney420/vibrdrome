@@ -428,13 +428,28 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section {
+            HStack(spacing: 14) {
+                appIconImage
+                    .resizable()
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Vibrdrome")
+                        .font(.headline)
+                    Text("Music player for Navidrome")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+
             infoRow(
                 "Version",
                 value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
                 icon: "info.circle.fill",
                 color: .gray
             )
-            infoRow("Client", value: "Vibrdrome", icon: "app.fill", color: .gray)
             infoRow("API Version", value: "1.16.1", icon: "number.circle.fill", color: .gray)
             offlineQueueStatus
 
@@ -547,5 +562,18 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fontWeight(.medium)
         }
+    }
+
+    private var appIconImage: Image {
+        #if os(iOS)
+        if let uiImage = UIImage(named: "AppIcon") {
+            return Image(uiImage: uiImage)
+        }
+        #else
+        if let nsImage = NSImage(named: "AppIcon") {
+            return Image(nsImage: nsImage)
+        }
+        #endif
+        return Image(systemName: "music.note.house.fill")
     }
 }
