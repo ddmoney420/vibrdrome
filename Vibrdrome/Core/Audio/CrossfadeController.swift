@@ -29,6 +29,7 @@ final class CrossfadeController {
     private var rampTimer: Timer?
     private var rampStartTime: Date?
     private var rampDuration: TimeInterval = 0
+    private var rampCompletion: (() -> Void)?
 
     /// Whether the dual-player system has been initialized
     var isSetUp: Bool { playerA != nil && playerB != nil }
@@ -77,13 +78,14 @@ final class CrossfadeController {
 
         rampDuration = duration
         rampStartTime = Date()
+        rampCompletion = onComplete
         outFactor = 1.0
         inFactor = 0.0
 
         rampTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                self.tickRamp(onComplete: onComplete)
+                self.tickRamp()
             }
         }
     }
@@ -105,7 +107,7 @@ final class CrossfadeController {
         inFactor = 0.0
     }
 
-    private func tickRamp(onComplete: @escaping () -> Void) {
+    private func tickRamp() {
         guard let startTime = rampStartTime, rampDuration > 0 else { return }
         let elapsed = Date().timeIntervalSince(startTime)
         let progress = Float(min(elapsed / rampDuration, 1.0))
@@ -117,12 +119,13 @@ final class CrossfadeController {
         AudioEngine.shared.applyEffectiveVolume()
 
         if progress >= 1.0 {
+            let completion = rampCompletion
             cancelRamp()
             // Old active player is done
             activePlayer?.pause()
             activePlayer?.replaceCurrentItem(with: nil)
             swapPlayers()
-            onComplete()
+            completion?()
         }
     }
 
@@ -134,5 +137,6 @@ final class CrossfadeController {
         rampTimer?.invalidate()
         rampTimer = nil
         rampStartTime = nil
+        rampCompletion = nil
     }
 }
