@@ -53,12 +53,11 @@ https://github.com/ddmoney420/vibrdrome/issues
 
 ## Privacy Policy URL
 
-https://ddmoney420.github.io/vibrdrome/privacy-policy
-(Host PRIVACY-POLICY.md on GitHub Pages, or use the raw GitHub URL)
+https://vibrdrome.io/privacy-policy
 
 ## Marketing URL (optional)
 
-https://github.com/ddmoney420/vibrdrome
+https://vibrdrome.io
 
 ## Screenshots Needed
 
