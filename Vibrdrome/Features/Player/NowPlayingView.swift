@@ -114,7 +114,7 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 310
+            let controlsNeeded: CGFloat = 330
             let maxArtFromWidth = geo.size.width - 80
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
@@ -123,8 +123,8 @@ struct NowPlayingView: View {
                 dismissHandle
 
                 albumArt(size: artSize)
-                    .padding(.top, 2)
-                    .padding(.bottom, 6)
+                    .padding(.top, 4)
+                    .padding(.bottom, 8)
 
                 songInfo
                     .padding(.bottom, 2)
@@ -163,7 +163,6 @@ struct NowPlayingView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: loadedCoverArtId)
             }
         }
-        .ignoresSafeArea(edges: .top)
         #endif
     }
 
