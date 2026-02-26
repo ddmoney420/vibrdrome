@@ -86,7 +86,7 @@ jobs:
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_STRICT_CONCURRENCY=minimal \
-            'OTHER_SWIFT_FLAGS=$(inherited) -Xfrontend -strict-concurrency=minimal'
+            'OTHER_SWIFT_FLAGS=$(inherited) -Xfrontend -disable-upcoming-feature -Xfrontend StrictConcurrency'
 
   test:
     name: Test
