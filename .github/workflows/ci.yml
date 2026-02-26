@@ -51,7 +51,8 @@ jobs:
             -scheme Vibrdrome \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=targeted
 
   build-macos:
     name: Build macOS
@@ -83,7 +84,8 @@ jobs:
             -scheme Vibrdrome \
             -destination 'platform=macOS' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=targeted
 
   test:
     name: Test
@@ -115,5 +117,6 @@ jobs:
             -scheme Vibrdrome \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
             CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=targeted \
             -resultBundlePath TestResults.xcresult || true
         # NOTE: test job uses || true until test target is added (Sprint 3)
