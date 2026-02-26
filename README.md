@@ -30,8 +30,6 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - An AI (Claude) wrote the code, debugged the issues, and iterated on the architecture
 - The result is a real, functional, App Store-ready music player
 
-We're not hiding it — we're proud of it. This is what vibe coding looks like when you push it to its limits.
-
 **Want to contribute?** We'd love that. This project is open for development — whether you're a human, an AI, or somewhere in between. See [Contributing](#contributing) below.
 
 ---
