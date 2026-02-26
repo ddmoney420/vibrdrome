@@ -9,7 +9,7 @@
  \___/  \___/ \____/ \_| \_||___/  \_| \_| \___/ \_|  |_/\____/
 ```
 
-**A native iOS/macOS music player for Navidrome servers**
+**A native iOS/macOS music player for Navidrome servers** ♪♫(◕‿◕)♫♪
 
 [Website](https://vibrdrome.io) · [Privacy Policy](https://vibrdrome.io/privacy-policy) · [Issues](https://github.com/ddmoney420/vibrdrome/issues)
 
@@ -17,18 +17,19 @@
 
 ---
 
-<h2 align="center">100% Vibe Coded</h2>
+<h2 align="center">&#x1F916; 100% Vibe Coded &#x1F916;</h2>
 
 <p align="center">
-<code>designed + built + shipped with</code> <a href="https://claude.ai/claude-code"><b>Claude Code</b></a>
+<code>designed + built + shipped with</code> <a href="https://claude.ai/claude-code"><b>Claude Code</b></a><br>
+<i>every line, every view, every architecture decision</i>
 </p>
 
-This entire project was **vibe coded** — every line of Swift, every SwiftUI view, every audio engine architecture decision, every CI pipeline, every pixel of the app icon.
+This entire project was **vibe coded** — designed, built, and shipped using [Claude Code](https://claude.ai/claude-code) (Anthropic's AI coding agent). Every line of Swift, every SwiftUI view, every audio engine architecture decision, every CI pipeline, every pixel of the app icon.
 
 **What does that mean?**
-- A human ([@ddmoney420](https://github.com/ddmoney420)) directed the vision, made decisions, and tested on real devices
-- An AI (Claude) wrote the code, debugged the issues, and iterated on the architecture
-- The result is a real, functional, App Store-ready music player
+- &#x1F468;&#x200D;&#x1F4BB; A human ([@ddmoney420](https://github.com/ddmoney420)) directed the vision, made decisions, and tested on real devices
+- &#x1F916; An AI (Claude) wrote the code, debugged the issues, and iterated on the architecture
+- &#x1F3B5; The result is a real, functional, App Store-ready music player
 
 We're not hiding it — we're proud of it. This is what vibe coding looks like when you push it to its limits.
 
@@ -36,9 +37,17 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 
 ---
 
-<h2 align="center">Features</h2>
+<h2 align="center">Features (&#x30CE;&#x25D5;&#x30EE;&#x25D5;)&#x30CE;*:&#x30FB;&#xFF9F;&#x2727;</h2>
 
-### Playback
+```
+  _____   _____      _      _____   _   _   ____    _____   ____
+ |  ___| | ____|    / \    |_   _| | | | | |  _ \  | ____| / ___|
+ | |_    |  _|     / _ \     | |   | | | | | |_) | |  _|   \___ \
+ |  _|   | |___   / ___ \    | |   | |_| | |  _ <  | |___   ___) |
+ |_|     |_____| /_/   \_\   |_|    \___/  |_| \_\ |_____| |____/
+```
+
+### &#x1F3B6; Playback
 - **Gapless playback** — AVQueuePlayer with lookahead for seamless transitions
 - **Crossfade** — configurable 0-12s overlap between tracks using dual-player architecture
 - **10-band equalizer** — parametric EQ with presets for downloaded tracks (AVAudioEngine)
@@ -46,20 +55,20 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 - **Playback speed** — 0.5x to 2.0x with pitch preservation
 - **Sleep timer** — 15m to 2h or end-of-track with volume fade
 
-### Library
+### &#x1F4DA; Library
 - **Library browsing** — artists, albums, songs, genres, playlists, and folder hierarchy
 - **Artist radio** — continuous auto-play seeded from any artist or track
 - **Smart playlists** — 6 auto-generated playlist types
 - **Search** — full-text search across artists, albums, and songs
 - **Synced lyrics** — scrolling lyrics with seek-to-line
 
-### Offline & Downloads
+### &#x2601;&#xFE0F; Offline & Downloads
 - **Offline mode** — download songs, albums, and entire playlists
 - **Offline playlists** — batch download with full metadata preservation
 - **Cache management** — configurable size limits with LRU eviction (pinned playlists protected)
 - **Offline star/scrobble queue** — actions sync automatically on reconnect
 
-### Platform
+### &#x1F4F1; Platform
 - **CarPlay support** — browse, search, artist radio, and playback controls
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
 - **Internet radio** — streaming radio stations with HTTP media support
@@ -67,14 +76,14 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 - **Audio visualizer** — Metal shader-based with 6 presets
 - **Bookmarks** — save and resume positions in long tracks
 
-### Customization
+### &#x1F3A8; Customization
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Accessibility** — VoiceOver support throughout, bold text, reduce motion
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
 ---
 
-## Requirements
+## &#x1F6E0;&#xFE0F; Requirements
 
 - Xcode 16+ (Swift 6.0)
 - iOS 17.0+ / macOS 14.0+
@@ -93,7 +102,7 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 | Image Loading | NukeUI (with disk caching) |
 | Credentials | KeychainAccess |
 
-## Build Instructions
+## &#x1F528; Build Instructions
 
 ```bash
 # Prerequisites: Xcode 16+, XcodeGen (brew install xcodegen)
@@ -112,7 +121,7 @@ make test
 make lint
 ```
 
-## Architecture
+## &#x1F3D7;&#xFE0F; Architecture
 
 ```
 App/                 App entry, AppState singleton, Theme
@@ -152,6 +161,18 @@ Mode Priority (highest wins):
 
 <h2 align="center">Contributing</h2>
 
+<p align="center">
+
+```
+ __     __  ___   ____    _____      ____    ___    ____    _____   ____
+ \ \   / / |_ _| | __ )  | ____|    / ___|  / _ \  |  _ \  | ____| |  _ \
+  \ \ / /   | |  |  _ \  |  _|     | |     | | | | | | | | |  _|   | | | |
+   \ V /    | |  | |_) | | |___    | |___  | |_| | | |_| | | |___  | |_| |
+    \_/    |___| |____/  |_____|    \____|  \___/  |____/  |_____| |____/
+```
+
+</p>
+
 Contributions are welcome and encouraged! This is a community project — whether you want to fix a bug, add a feature, improve the UI, or just clean up some code, we'd love to have you.
 
 **How to contribute:**
@@ -170,11 +191,11 @@ Contributions are welcome and encouraged! This is a community project — whethe
 - Performance optimizations
 - Bug fixes (check [Issues](https://github.com/ddmoney420/vibrdrome/issues))
 
-No contribution is too small. Even fixing a typo helps.
+No contribution is too small. Even fixing a typo helps. &#xAF;\\\_(&#x30C4;)\_/&#xAF;
 
 ---
 
-## License
+## &#x1F4DC; License
 
 This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
 
@@ -183,9 +204,9 @@ You're free to use, modify, and distribute this software. If you distribute modi
 ---
 
 <p align="center">
-  <b>Built with vibes, shipped with love</b>
+  <b>Built with vibes, shipped with love</b> &#x1F49C;
   <br>
-  ASCII art powered by <a href="https://github.com/ddmoney420/moji">moji</a> &#127912;
+  ASCII art powered by <a href="https://github.com/ddmoney420/moji">moji</a> &#x1F3A8;
   <br><br>
   <a href="https://vibrdrome.io">vibrdrome.io</a>
 </p>
