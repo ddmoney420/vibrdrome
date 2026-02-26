@@ -187,17 +187,17 @@ This guide walks through every user-facing feature with step-by-step instruction
 
 ### EQ Mode
 1. Go to **Settings > Playback > Equalizer** — enable it.
-2. **Download a track** first (EQ only works on local files).
-3. Play the downloaded track.
-4. Open **EQ** from the Now Playing toolbar.
-5. Try presets: Flat, Bass Boost, Treble Boost, Rock, Pop, Jazz, Classical, Vocal, Late Night.
-6. Adjust individual band sliders (32Hz to 16kHz).
-7. Save a custom preset.
-8. Verify: streaming (non-downloaded) tracks show "Download to enable EQ" messaging.
+2. Play any track (downloaded or streaming).
+3. Open **EQ** from the Now Playing toolbar.
+4. Try presets: Flat, Bass Boost, Treble Boost, Rock, Pop, Jazz, Classical, Vocal, Late Night.
+5. Adjust individual band sliders (32Hz to 16kHz).
+6. Save a custom preset.
+7. **Streaming tracks:** EQ activates after a brief buffer (music plays immediately via gapless while the stream downloads to a temp file, then seamlessly switches to EQ mode).
+8. **Downloaded tracks:** EQ applies instantly with no delay.
 
 ### Mode Priority
 The app automatically selects the playback mode:
-1. **EQ Mode** — if EQ enabled AND track is downloaded locally
+1. **EQ Mode** — if EQ enabled (works for all tracks; streams buffered to temp file)
 2. **Crossfade** — if crossfade duration > 0
 3. **Gapless** — default (crossfade = 0)
 
@@ -415,7 +415,7 @@ Album context menus offer: Star, Download Album, Play, Shuffle, Show Artist.
 | Gapless Playback | On/Off | Seamless track transitions |
 | Crossfade Duration | Off, 2s, 5s, 8s, 12s | Mutually exclusive with gapless |
 | ReplayGain Mode | Off, Track, Album | Volume normalization |
-| Equalizer | On/Off | Only for downloaded tracks |
+| Equalizer | On/Off | All tracks (streams buffered automatically) |
 | EQ Settings | → EQView | 10-band + presets |
 
 ### Download Settings
@@ -557,7 +557,7 @@ Use this for a fast smoke test covering the critical path:
 
 ## Known Limitations
 
-1. **EQ only for downloaded tracks** — streaming tracks cannot use AVAudioEngine pipeline.
+1. **EQ streaming buffer delay** — streaming tracks play via gapless while buffering, then switch to EQ mode once the temp file is ready.
 2. **CarPlay requires Apple entitlement** — must be approved before testing on real car.
 3. **Gapless gaps on transcoded streams** — server-side transcoding may introduce small gaps.
 4. **Visualizer iOS only** — macOS uses a separate window, not fullscreen cover.

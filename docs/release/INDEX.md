@@ -47,7 +47,7 @@ ______  _____  _      _____   ___   _____  _____
 7. **No privacy policy URL** -- Required field in App Store Connect
 8. **No crash reporting** -- No Sentry/Crashlytics means blind to production crashes
 9. **No analytics** -- Cannot measure retention, usage patterns, or feature adoption
-10. **EQ only for downloaded tracks** -- Streaming tracks cannot use AVAudioEngine EQ pipeline
+10. ~~EQ only for downloaded tracks~~ -- **FIXED:** EQ now works for all tracks (streams buffered to temp file)
 
 ---
 

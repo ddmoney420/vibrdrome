@@ -6,7 +6,8 @@ import os.log
 private let eqLog = Logger(subsystem: "com.vibrdrome.app", category: "EQ")
 
 /// AVAudioEngine-based playback path with 10-band parametric EQ.
-/// Only works with local (downloaded) files — cannot stream HTTP.
+/// Works with any local file URL. For streamed tracks, AudioEngine downloads
+/// to a temp file first, then hands off to this engine.
 @Observable
 @MainActor
 final class EQEngine {

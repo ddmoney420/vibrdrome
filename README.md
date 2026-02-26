@@ -47,7 +47,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 ### Playback &nbsp; ♪～(´ε｀ )
 - **Gapless playback** — AVQueuePlayer with lookahead for seamless transitions
 - **Crossfade** — configurable 0-12s overlap between tracks using dual-player architecture
-- **10-band equalizer** — parametric EQ with presets for downloaded tracks (AVAudioEngine)
+- **10-band equalizer** — parametric EQ with presets for all tracks (AVAudioEngine)
 - **ReplayGain** — track/album volume normalization from server metadata
 - **Playback speed** — 0.5x to 2.0x with pitch preservation
 - **Sleep timer** — 15m to 2h or end-of-track with volume fade
@@ -147,7 +147,7 @@ Three mutually exclusive playback topologies, selected by mode priority:
 
 ```
 Mode Priority (highest wins):
-1. EQ Mode    — eqEnabled + downloaded  -->  AVAudioEngine + EQ + TimePitch
+1. EQ Mode    — eqEnabled               -->  AVAudioEngine + EQ + TimePitch
 2. Crossfade  — crossfadeDuration > 0   -->  Dual AVPlayer with volume ramps
 3. Gapless    — crossfadeDuration == 0  -->  AVQueuePlayer with lookahead
 ```

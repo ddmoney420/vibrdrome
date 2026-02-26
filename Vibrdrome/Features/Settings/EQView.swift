@@ -57,16 +57,16 @@ struct EQView: View {
 
     @ViewBuilder
     private var downloadNotice: some View {
-        if !AudioEngine.shared.isCurrentTrackLocal {
+        if !AudioEngine.shared.isCurrentTrackLocal && AudioEngine.shared.currentSong != nil {
             HStack(spacing: 10) {
-                Image(systemName: "arrow.down.circle")
+                Image(systemName: "icloud.and.arrow.down")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Download to Enable EQ")
+                    Text("Streaming EQ")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text("EQ processing requires a downloaded track. Adjust settings now and they'll apply when playing downloaded music.")
+                    Text("EQ will activate after a brief buffer. Downloaded tracks apply EQ instantly.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

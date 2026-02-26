@@ -5,6 +5,7 @@ import MediaPlayer
 import Network
 import Observation
 import SwiftData
+import UniformTypeIdentifiers
 import os.log
 
 private let audioLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
@@ -19,7 +20,7 @@ enum PlaybackMode: Sendable {
     case gapless
     /// Dual AVPlayer with volume ramp crossfade
     case crossfade
-    /// AVAudioEngine pipeline with 10-band EQ (local files only)
+    /// AVAudioEngine pipeline with 10-band EQ (all tracks — streams buffered to temp file)
     case eq
 }
 
@@ -287,7 +288,7 @@ final class AudioEngine {
     // MARK: - Mode Selection
 
     private func selectMode(for song: Song) -> PlaybackMode {
-        if eqEnabled && isTrackLocal(song) { return .eq }
+        if eqEnabled { return .eq }
         if crossfadeDuration > 0 { return .crossfade }
         return .gapless
     }
@@ -306,6 +307,7 @@ final class AudioEngine {
             gaplessPlayer?.removeAllItems()
         case .eq:
             EQEngine.shared.stop()
+            cleanupEQTempFile()
             tearDownObservers()
             gaplessPlayer?.pause()
             gaplessPlayer?.removeAllItems()
@@ -596,6 +598,7 @@ final class AudioEngine {
     func stop() {
         submitScrobbleIfNeeded()
         tearDownCurrentMode()
+        cleanupEQTempFile()
         activeMode = .gapless
         stopRadioMode()
         isCrossfading = false
@@ -680,6 +683,9 @@ final class AudioEngine {
 
     // MARK: - EQ Playback
 
+    /// Temp file URL for streamed EQ playback
+    private var eqTempFileURL: URL?
+
     func startEQPlayback(url: URL) {
         tearDownObservers()
         clearLookahead()
@@ -688,6 +694,29 @@ final class AudioEngine {
         gaplessPlayer?.pause()
         gaplessPlayer?.removeAllItems()
 
+        if url.isFileURL {
+            // Local file — play directly through EQ
+            startEQDirect(url: url)
+        } else {
+            // Stream — download to temp file first, then play through EQ
+            // Start gapless playback immediately so user hears music while buffering
+            activeMode = .gapless
+            replacePlayerItem(with: url)
+            // Capture generation AFTER replacePlayerItem (which increments it)
+            let capturedGeneration = self.generation
+            applyEffectiveVolume()
+            gaplessPlayer?.rate = playbackRate
+            isPlaying = true
+
+            Task {
+                await downloadAndStartEQ(streamURL: url, generation: capturedGeneration)
+            }
+        }
+    }
+
+    /// Play a local file directly through EQEngine
+    private func startEQDirect(url: URL) {
+        cleanupEQTempFile()
         do {
             try EQEngine.shared.play(url: url, rate: playbackRate)
             duration = EQEngine.shared.fileDuration
@@ -699,6 +728,55 @@ final class AudioEngine {
             applyEffectiveVolume()
             gaplessPlayer?.rate = playbackRate
             prepareLookahead()
+        }
+    }
+
+    /// Download a stream to a temp file, then switch to EQ playback
+    private func downloadAndStartEQ(streamURL: URL, generation: Int) async {
+        do {
+            let (tempURL, response) = try await URLSession.shared.download(from: streamURL)
+            // Use song suffix, response MIME type, or fallback to mp3
+            let ext = currentSong?.suffix
+                ?? response.mimeType.flatMap { UTType(mimeType: $0)?.preferredFilenameExtension }
+                ?? "mp3"
+            let stableURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("eq_\(UUID().uuidString).\(ext)")
+            try FileManager.default.moveItem(at: tempURL, to: stableURL)
+
+            guard self.generation == generation else {
+                // Song changed while downloading — clean up
+                try? FileManager.default.removeItem(at: stableURL)
+                return
+            }
+
+            // Capture current playback position from gapless player
+            let currentPos = activePlayer?.currentTime().seconds ?? 0
+
+            // Tear down gapless observers before switching to EQ
+            tearDownObservers()
+            cleanupEQTempFile()
+            eqTempFileURL = stableURL
+            gaplessPlayer?.pause()
+            gaplessPlayer?.removeAllItems()
+            activeMode = .eq
+
+            try EQEngine.shared.play(url: stableURL, rate: playbackRate, startTime: currentPos)
+            duration = EQEngine.shared.fileDuration
+            applyEffectiveVolume()
+            setupEQTimeSync()
+            audioLog.info("Switched to EQ playback from stream buffer")
+        } catch {
+            guard self.generation == generation else { return }
+            audioLog.error("EQ stream buffer failed, staying on gapless: \(error)")
+            // Already playing via gapless — just stay there
+        }
+    }
+
+    /// Remove any temp file used for streamed EQ playback
+    func cleanupEQTempFile() {
+        if let tempURL = eqTempFileURL {
+            try? FileManager.default.removeItem(at: tempURL)
+            eqTempFileURL = nil
         }
     }
 
