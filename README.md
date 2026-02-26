@@ -184,6 +184,8 @@ You're free to use, modify, and distribute this software. If you distribute modi
 
 <p align="center">
   <b>Built with vibes, shipped with love</b>
+  <br>
+  ASCII art powered by <a href="https://github.com/ddmoney420/moji">moji</a> &#127912;
   <br><br>
   <a href="https://vibrdrome.io">vibrdrome.io</a>
 </p>
