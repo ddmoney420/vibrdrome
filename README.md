@@ -1,3 +1,5 @@
+<p align="center">
+
 ```
  _   _  _____ ______ ______ ______ ______  _____ ___  ___ _____
 | | | ||_   _|| ___ \| ___ \|  _  \| ___ \|  _  ||  \/  ||  ___|
@@ -7,46 +9,35 @@
  \___/  \___/ \____/ \_| \_||___/  \_| \_| \___/ \_|  |_/\____/
 ```
 
-> *A native iOS/macOS music player for Navidrome servers* ♪♫(◕‿◕)♫♪
+*A native iOS/macOS music player for Navidrome servers* ♪♫(◕‿◕)♫♪
 
-<p align="center">
-  <a href="https://vibrdrome.io">Website</a> •
-  <a href="https://vibrdrome.io/privacy-policy">Privacy Policy</a> •
-  <a href="https://github.com/ddmoney420/vibrdrome/issues">Issues</a>
+[Website](https://vibrdrome.io) ·
+[Privacy Policy](https://vibrdrome.io/privacy-policy) ·
+[Issues](https://github.com/ddmoney420/vibrdrome/issues)
+
 </p>
 
-```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
-```
+---
 
-## ╭─────────────────────────────╮
-## │   100% Vibe Coded  ᕙ(⇀‸↼‶)ᕗ │
-## ╰─────────────────────────────╯
+<h2 align="center">╭───────────────────────────────────╮<br>│  100% Vibe Coded  ᕙ(⇀‸↼‶)ᕗ  │<br>╰───────────────────────────────────╯</h2>
 
-This entire project was **vibe coded** — designed, built, and shipped using [Claude Code](https://claude.ai/claude-code) (Anthropic's AI coding agent). Every line of Swift, every SwiftUI view, every audio engine architecture decision, every CI pipeline — all of it.
+<p align="center">
+This entire project was <b>vibe coded</b> — designed, built, and shipped using <a href="https://claude.ai/claude-code">Claude Code</a> (Anthropic's AI coding agent).<br>
+Every line of Swift, every SwiftUI view, every audio engine architecture decision, every CI pipeline — all of it.
+</p>
 
 **What does that mean?**
 - A human ([@ddmoney420](https://github.com/ddmoney420)) directed the vision, made decisions, and tested on real devices
 - An AI (Claude) wrote the code, debugged the issues, and iterated on the architecture
 - The result is a real, functional, App Store-ready music player
 
-We're not hiding it — we're proud of it. This is what vibe coding looks like when you push it to its limits. ✧･ﾟ:*✧･ﾟ:*
+We're not hiding it — we're proud of it. This is what vibe coding looks like when you push it to its limits. ✧·ﾟ:*✧·ﾟ:*
 
 **Want to contribute?** We'd love that. This project is open for development — whether you're a human, an AI, or somewhere in between. See [Contributing](#contributing) below.
 
-```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
-```
+---
 
-## Features (ﾉ◕ヮ◕)ﾉ*:・゚✧
-
-```
-  _____   _____      _      _____   _   _   ____    _____   ____
- |  ___| | ____|    / \    |_   _| | | | | |  _ \  | ____| / ___|
- | |_    |  _|     / _ \     | |   | | | | | |_) | |  _|   \___ \
- |  _|   | |___   / ___ \    | |   | |_| | |  _ <  | |___   ___) |
- |_|     |_____| /_/   \_\   |_|    \___/  |_| \_\ |_____| |____/
-```
+<h2 align="center">Features (ﾉ◕ヮ◕)ﾉ*:・゚✧</h2>
 
 ### Playback ♪～(´ε｀ )
 - **Gapless playback** — AVQueuePlayer with lookahead for seamless transitions
@@ -82,9 +73,7 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 - **Accessibility** — VoiceOver support throughout, bold text, reduce motion
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
-```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
-```
+---
 
 ## Requirements
 
@@ -160,11 +149,11 @@ Mode Priority (highest wins):
 
 `AudioEngine.shared` is the single facade. All UI, CarPlay, and remote commands talk only to AudioEngine — never to backends directly.
 
-```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
-```
+---
 
-## Contributing
+<h2 align="center">Contributing</h2>
+
+<p align="center">
 
 ```
  __     __  ___   ____    _____      ____    ___    ____    _____   ____
@@ -173,6 +162,8 @@ Mode Priority (highest wins):
    \ V /    | |  | |_) | | |___    | |___  | |_| | | |_| | | |___  | |_| |
     \_/    |___| |____/  |_____|    \____|  \___/  |____/  |_____| |____/
 ```
+
+</p>
 
 Contributions are welcome and encouraged! This is a community project — whether you want to fix a bug, add a feature, improve the UI, or just clean up some code, we'd love to have you.
 
@@ -194,18 +185,18 @@ Contributions are welcome and encouraged! This is a community project — whethe
 
 No contribution is too small. Even fixing a typo helps. ¯\\\_(ツ)\_/¯
 
+---
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
 
 You're free to use, modify, and distribute this software. If you distribute modified versions, they must also be open source under GPL-3.0. Your music stays yours, and the code stays open.
 
-```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
-```
+---
 
 <p align="center">
-  <i>Built with vibes, shipped with love</i> ✧･ﾟ:*✧･ﾟ:*
+  <i>Built with vibes, shipped with love</i> ✧·ﾟ:*✧·ﾟ:*
   <br><br>
   <a href="https://vibrdrome.io">vibrdrome.io</a>
 </p>
