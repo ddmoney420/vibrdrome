@@ -22,12 +22,13 @@ final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
             return
         }
 
+        nonisolated(unsafe) let handler = completionHandler
         currentSearchTask = Task { @MainActor in
             do {
                 let client = AppState.shared.subsonicClient
                 let results = try await client.search(query: searchText, songCount: 10)
                 guard !Task.isCancelled else {
-                    completionHandler([])
+                    handler([])
                     return
                 }
                 let songs = results.song ?? []
@@ -42,9 +43,9 @@ final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
                     }
                     return item
                 }
-                completionHandler(items)
+                handler(items)
             } catch {
-                completionHandler([])
+                handler([])
             }
         }
     }

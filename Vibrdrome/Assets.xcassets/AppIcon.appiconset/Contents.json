@@ -7,7 +7,7 @@
       "size" : "1024x1024"
     },
     {
-      "filename" : "AppIcon.png",
+      "filename" : "AppIcon-512.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "512x512"
