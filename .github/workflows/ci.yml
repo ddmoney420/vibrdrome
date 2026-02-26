@@ -81,11 +81,12 @@ jobs:
         run: |
           xcodebuild build \
             -project Vibrdrome.xcodeproj \
-            -scheme Vibrdrome \
+            -scheme VibrdromeMac \
             -destination 'platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
-            SWIFT_STRICT_CONCURRENCY=minimal
+            SWIFT_STRICT_CONCURRENCY=minimal \
+            'OTHER_SWIFT_FLAGS=$(inherited) -Xfrontend -strict-concurrency=minimal'
 
   test:
     name: Test
