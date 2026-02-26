@@ -16,11 +16,11 @@
 </p>
 
 ```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
+∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
 ```
 
 ## ╭─────────────────────────────╮
-## │   100% Vibe Coded  ᕙ(⇀‸↼‶)ᕗ │
+## │           100% Vibe Coded  ᕙ(⇀‸↼‶)ᕗ            │
 ## ╰─────────────────────────────╯
 
 This entire project was **vibe coded** — designed, built, and shipped using [Claude Code](https://claude.ai/claude-code) (Anthropic's AI coding agent). Every line of Swift, every SwiftUI view, every audio engine architecture decision, every CI pipeline — all of it.
@@ -35,7 +35,7 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 **Want to contribute?** We'd love that. This project is open for development — whether you're a human, an AI, or somewhere in between. See [Contributing](#contributing) below.
 
 ```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
+∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
 ```
 
 ## Features (ﾉ◕ヮ◕)ﾉ*:・゚✧
@@ -83,7 +83,7 @@ We're not hiding it — we're proud of it. This is what vibe coding looks like w
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
 ```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
+∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
 ```
 
 ## Requirements
@@ -161,7 +161,7 @@ Mode Priority (highest wins):
 `AudioEngine.shared` is the single facade. All UI, CarPlay, and remote commands talk only to AudioEngine — never to backends directly.
 
 ```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
+∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
 ```
 
 ## Contributing
@@ -201,7 +201,7 @@ This project is licensed under the **GNU General Public License v3.0** — see t
 You're free to use, modify, and distribute this software. If you distribute modified versions, they must also be open source under GPL-3.0. Your music stays yours, and the code stays open.
 
 ```
-∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
+∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾∿∾
 ```
 
 <p align="center">
