@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="100%" stop-color="#12121f"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8b7cf7"/>
+      <stop offset="50%" stop-color="#d4cfff"/>
+      <stop offset="100%" stop-color="#8b7cf7"/>
+    </linearGradient>
+    <linearGradient id="ring1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2d2d44" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#1a1a2e" stop-opacity="0.3"/>
+    </linearGradient>
+    <clipPath id="roundedClip">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+    <mask id="waveMask">
+      <rect width="1024" height="1024" fill="white"/>
+    </mask>
+  </defs>
+
+  <!-- Background with iOS rounded rect -->
+  <g clip-path="url(#roundedClip)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+
+    <!-- Concentric circles - outer to inner -->
+    <circle cx="512" cy="512" r="420" fill="none" stroke="#5b4fa0" stroke-width="1.5" opacity="0.65"/>
+    <circle cx="512" cy="512" r="360" fill="none" stroke="#6054a8" stroke-width="1.5" opacity="0.7"/>
+    <circle cx="512" cy="512" r="300" fill="none" stroke="#6558b0" stroke-width="2" opacity="0.75"/>
+    <circle cx="512" cy="512" r="240" fill="none" stroke="#6a5cb8" stroke-width="2" opacity="0.8"/>
+    <circle cx="512" cy="512" r="180" fill="none" stroke="#7060c0" stroke-width="2.5" opacity="0.85"/>
+    <circle cx="512" cy="512" r="120" fill="none" stroke="#7564c8" stroke-width="2.5" opacity="0.9"/>
+    <circle cx="512" cy="512" r="60" fill="none" stroke="#7b68d0" stroke-width="3" opacity="0.95"/>
+
+    <!-- Subtle glow behind the waveform -->
+    <ellipse cx="512" cy="512" rx="400" ry="120" fill="#6c5ce7" opacity="0.04"/>
+
+    <!-- Outer glow layer -->
+    <path d="M 92 512
+             C 120 512, 130 512, 150 480
+             C 170 448, 180 460, 200 512
+             C 220 564, 230 548, 250 512
+             C 270 476, 280 440, 300 380
+             C 320 320, 330 340, 350 420
+             C 370 500, 375 530, 390 512
+             C 405 494, 410 360, 430 300
+             C 450 240, 460 280, 475 400
+             C 490 520, 495 620, 512 680
+             C 529 740, 535 700, 549 580
+             C 563 460, 570 340, 585 280
+             C 600 220, 610 300, 625 400
+             C 640 500, 650 540, 670 512
+             C 690 484, 700 380, 720 440
+             C 740 500, 750 560, 770 512
+             C 790 464, 800 480, 820 512
+             C 840 544, 855 530, 875 512
+             C 895 494, 910 512, 932 512"
+          fill="none" stroke="#a29bfe" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" opacity="0.2"/>
+
+    <!-- Mid glow layer -->
+    <path d="M 92 512
+             C 120 512, 130 512, 150 480
+             C 170 448, 180 460, 200 512
+             C 220 564, 230 548, 250 512
+             C 270 476, 280 440, 300 380
+             C 320 320, 330 340, 350 420
+             C 370 500, 375 530, 390 512
+             C 405 494, 410 360, 430 300
+             C 450 240, 460 280, 475 400
+             C 490 520, 495 620, 512 680
+             C 529 740, 535 700, 549 580
+             C 563 460, 570 340, 585 280
+             C 600 220, 610 300, 625 400
+             C 640 500, 650 540, 670 512
+             C 690 484, 700 380, 720 440
+             C 740 500, 750 560, 770 512
+             C 790 464, 800 480, 820 512
+             C 840 544, 855 530, 875 512
+             C 895 494, 910 512, 932 512"
+          fill="none" stroke="#b8b0ff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.35"/>
+
+    <!-- Main waveform - thick and bright -->
+    <path d="M 92 512
+             C 120 512, 130 512, 150 480
+             C 170 448, 180 460, 200 512
+             C 220 564, 230 548, 250 512
+             C 270 476, 280 440, 300 380
+             C 320 320, 330 340, 350 420
+             C 370 500, 375 530, 390 512
+             C 405 494, 410 360, 430 300
+             C 450 240, 460 280, 475 400
+             C 490 520, 495 620, 512 680
+             C 529 740, 535 700, 549 580
+             C 563 460, 570 340, 585 280
+             C 600 220, 610 300, 625 400
+             C 640 500, 650 540, 670 512
+             C 690 484, 700 380, 720 440
+             C 740 500, 750 560, 770 512
+             C 790 464, 800 480, 820 512
+             C 840 544, 855 530, 875 512
+             C 895 494, 910 512, 932 512"
+          fill="none" stroke="url(#wave)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Center dot -->
+    <circle cx="512" cy="512" r="6" fill="#a29bfe" opacity="0.8"/>
+  </g>
+</svg>
