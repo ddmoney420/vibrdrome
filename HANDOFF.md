@@ -9,7 +9,7 @@ This is a complete handoff document. Two files are provided:
 
 **To start**: Create a new Xcode project called "Vibrdrome", then follow Sprint 1 in the Implementation Order section. The IMPLEMENTATION-GUIDE.md has copy-ready Swift code for each file.
 
-**Server to test against**: `https://***REMOVED***` | Username: `dmoney`
+**Server to test against**: Set `TEST_SERVER_URL`, `TEST_SERVER_USER`, `TEST_SERVER_PASS` env vars in the Xcode scheme
 
 ---
 
@@ -17,8 +17,8 @@ This is a complete handoff document. Two files are provided:
 
 Build **Vibrdrome**, a Swift-native music player that connects to Navidrome via the Subsonic/OpenSubsonic API. Replaces Aonsoku and existing Subsonic clients with a purpose-built app featuring CarPlay support, offline downloads, synced lyrics, internet radio, and full library management.
 
-**Target server**: `https://***REMOVED***` (Navidrome, Subsonic API v1.16.1 + OpenSubsonic)
-**Username**: `dmoney` | **Library**: ~1,129 tracks, 87 albums, 53 radio stations
+**Target server**: Your Navidrome instance (Subsonic API v1.16.1 + OpenSubsonic)
+**Library**: ~1,129 tracks, 87 albums, 53 radio stations
 **Platforms**: iOS 17+ (iPhone/iPad), CarPlay, macOS 14+ (native SwiftUI)
 
 ---

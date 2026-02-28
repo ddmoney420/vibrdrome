@@ -68,13 +68,13 @@ final class CrossfadeController {
         activePlayer?.replaceCurrentItem(with: item)
     }
 
-    /// Begin crossfade transition: load next track on inactive player and start ramp
+    /// Begin crossfade transition: load next track on inactive player and start ramp.
+    /// Call `startInactivePlayback()` after applying any processing (e.g. EQ tap) to start playback.
     func beginCrossfade(nextURL: URL, duration: TimeInterval, onComplete: @escaping () -> Void) {
         cancelRamp()
 
         let item = AVPlayerItem(url: nextURL)
         inactivePlayer?.replaceCurrentItem(with: item)
-        inactivePlayer?.play()
 
         rampDuration = duration
         rampStartTime = Date()

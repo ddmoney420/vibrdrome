@@ -11,8 +11,6 @@ struct EQView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    downloadNotice
-
                     presetPicker
 
                     bandSliders
@@ -50,30 +48,6 @@ struct EQView: View {
             } message: {
                 Text("Enter a name for this EQ preset.")
             }
-        }
-    }
-
-    // MARK: - Download Notice
-
-    @ViewBuilder
-    private var downloadNotice: some View {
-        if !AudioEngine.shared.isCurrentTrackLocal && AudioEngine.shared.currentSong != nil {
-            HStack(spacing: 10) {
-                Image(systemName: "icloud.and.arrow.down")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Streaming EQ")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Text("EQ will activate after a brief buffer. Downloaded tracks apply EQ instantly.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 

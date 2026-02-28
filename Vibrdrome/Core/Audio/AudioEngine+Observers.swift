@@ -61,6 +61,7 @@ extension AudioEngine {
             .sink { [weak self] status in
                 guard let self, self.generationValue == observerGeneration else { return }
                 if status == .failed {
+                    item.audioMix = nil
                     self.isPlaying = false
                     self.isBuffering = false
                 }
@@ -114,7 +115,6 @@ extension AudioEngine {
 
     func tearDownObservers() {
         removeCurrentTimeObserver()
-        invalidateEQSyncTimer()
         tearDownItemEndObserver()
         tearDownPropertyObservers()
     }
@@ -151,13 +151,7 @@ extension AudioEngine {
 
     func submitScrobbleIfNeeded() {
         guard let song = currentSong, !isScrobbleSubmitted, duration > 0 else { return }
-        let played: Double
-        switch activeMode {
-        case .gapless, .crossfade:
-            played = activePlayer?.currentTime().seconds ?? currentTime
-        case .eq:
-            played = EQEngine.shared.currentTime
-        }
+        let played = activePlayer?.currentTime().seconds ?? currentTime
         let threshold = min(240, duration * 0.5)
         if played >= threshold {
             markScrobbleSubmitted()

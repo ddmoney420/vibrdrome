@@ -5,7 +5,6 @@ import MediaPlayer
 import Network
 import Observation
 import SwiftData
-import UniformTypeIdentifiers
 import os.log
 
 private let audioLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
@@ -20,8 +19,6 @@ enum PlaybackMode: Sendable {
     case gapless
     /// Dual AVPlayer with volume ramp crossfade
     case crossfade
-    /// AVAudioEngine pipeline with 10-band EQ (all tracks — streams buffered to temp file)
-    case eq
 }
 
 @Observable
@@ -44,10 +41,8 @@ final class AudioEngine {
     /// The currently active playback topology
     private(set) var activeMode: PlaybackMode = .gapless
 
-    /// Whether EQ processing is enabled (user setting)
-    var eqEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "eqEnabled")
-    }
+    /// Whether EQ processing is enabled (user setting, stored for @Observable reactivity)
+    var eqEnabled: Bool = UserDefaults.standard.bool(forKey: "eqEnabled")
 
     /// Whether crossfade is currently ramping between tracks
     var isCrossfading = false
@@ -67,8 +62,6 @@ final class AudioEngine {
                         crossfadeController.inactivePlayer?.rate = playbackRate
                     }
                 }
-            case .eq:
-                EQEngine.shared.setRate(playbackRate)
             }
             NowPlayingManager.shared.updatePlaybackRate(playbackRate)
         }
@@ -105,8 +98,6 @@ final class AudioEngine {
             let cc = crossfadeController
             cc.activePlayer?.volume = max(0, min(1, base * cc.outFactor))
             cc.inactivePlayer?.volume = max(0, min(1, base * cc.inFactor))
-        case .eq:
-            EQEngine.shared.setVolume(max(0, min(1, base)))
         }
     }
 
@@ -167,7 +158,6 @@ final class AudioEngine {
     private var durationObserver: AnyCancellable?
     private var bufferingObserver: AnyCancellable?
     private var statusObserver: AnyCancellable?
-    private var eqSyncTimer: Timer?
 
     /// Scrobble tracking
     private(set) var scrobbleSubmitted = false
@@ -219,11 +209,6 @@ final class AudioEngine {
         statusObserver?.cancel(); statusObserver = nil
     }
 
-    func invalidateEQSyncTimer() {
-        eqSyncTimer?.invalidate(); eqSyncTimer = nil
-    }
-
-    func setEQSyncTimer(_ timer: Timer) { eqSyncTimer = timer }
 
     private let networkMonitor = NWPathMonitor()
     private var isOnCellular = false
@@ -240,25 +225,19 @@ final class AudioEngine {
     /// Crossfade controller for dual-player transitions
     let crossfadeController = CrossfadeController()
 
-    /// Whether the current track is a local (downloaded) file
-    var isCurrentTrackLocal: Bool {
-        guard let song = currentSong else { return false }
-        return isTrackLocal(song)
-    }
-
     /// The active AVPlayer for the current mode (gapless or crossfade)
     var activePlayer: AVPlayer? {
         switch activeMode {
         case .gapless: return gaplessPlayer
         case .crossfade: return crossfadeController.activePlayer
-        case .eq: return nil
         }
     }
 
     private init() {
         AudioSessionManager.shared.configure()
         startNetworkMonitor()
-        setupEQCompletionHandler()
+        // Sync EQ coefficients on launch so taps pick up saved preset
+        EQEngine.shared.syncCoefficients()
     }
 
     private func startNetworkMonitor() {
@@ -268,14 +247,6 @@ final class AudioEngine {
             }
         }
         networkMonitor.start(queue: DispatchQueue(label: "com.vibrdrome.network"))
-    }
-
-    private func setupEQCompletionHandler() {
-        EQEngine.shared.onTrackEnd = { [weak self] in
-            Task { @MainActor in
-                self?.handleTrackEnd()
-            }
-        }
     }
 
     private var currentMaxBitRate: Int? {
@@ -288,12 +259,13 @@ final class AudioEngine {
     // MARK: - Mode Selection
 
     private func selectMode(for song: Song) -> PlaybackMode {
-        if eqEnabled { return .eq }
         if crossfadeDuration > 0 { return .crossfade }
         return .gapless
     }
 
     private func tearDownCurrentMode() {
+        // Invalidate any in-flight async EQ Tasks before destroying items
+        incrementGeneration()
         switch activeMode {
         case .gapless:
             tearDownObservers()
@@ -302,12 +274,6 @@ final class AudioEngine {
             gaplessPlayer?.removeAllItems()
         case .crossfade:
             crossfadeController.tearDown()
-            tearDownObservers()
-            gaplessPlayer?.pause()
-            gaplessPlayer?.removeAllItems()
-        case .eq:
-            EQEngine.shared.stop()
-            cleanupEQTempFile()
             tearDownObservers()
             gaplessPlayer?.pause()
             gaplessPlayer?.removeAllItems()
@@ -320,6 +286,7 @@ final class AudioEngine {
         submitScrobbleIfNeeded()
 
         if isCrossfading {
+            incrementGeneration()
             crossfadeController.forceComplete()
             isCrossfading = false
         }
@@ -364,9 +331,6 @@ final class AudioEngine {
         case .crossfade:
             startCrossfadePlayback(url: url)
             applyEffectiveVolume()
-        case .eq:
-            startEQPlayback(url: url)
-            applyEffectiveVolume()
         }
 
         isPlaying = true
@@ -405,41 +369,64 @@ final class AudioEngine {
     }
 
     func pause() {
-        switch activeMode {
-        case .gapless, .crossfade:
-            activePlayer?.pause()
-        case .eq:
-            EQEngine.shared.pause()
-        }
+        activePlayer?.pause()
         isPlaying = false
         NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
     }
 
     func resume() {
+        // Reactivate audio session (may have been deactivated by phone call or other interruption)
+        #if os(iOS)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            audioLog.error("Failed to reactivate audio session: \(error)")
+        }
+        #endif
+
+        // Cold start: no player loaded (e.g. restored from server queue).
+        // Route through play() for full setup (mode selection, observers, etc.)
+        if gaplessPlayer == nil, let song = currentSong {
+            let savedTime = currentTime
+            play(song: song)
+            if savedTime > 1 { seek(to: savedTime) }
+            return
+        }
+
         switch activeMode {
         case .gapless:
-            if let song = currentSong, gaplessPlayer?.currentItem == nil {
+            let itemNeedsReload = gaplessPlayer?.currentItem == nil
+                || gaplessPlayer?.currentItem?.status == .failed
+            if let song = currentSong, itemNeedsReload {
                 let savedTime = currentTime
                 let url = resolveURL(for: song)
                 replacePlayerItem(with: url)
                 if savedTime > 0 { seek(to: savedTime) }
                 prepareLookahead()
+            } else if eqEnabled, let item = gaplessPlayer?.currentItem {
+                // Reapply EQ tap after interruption to reset stale delay buffers
+                applyEQTapIfNeeded(to: item)
             }
             gaplessPlayer?.rate = playbackRate
         case .crossfade:
-            if let song = currentSong,
-               crossfadeController.activePlayer?.currentItem == nil {
+            let itemNeedsReload = crossfadeController.activePlayer?.currentItem == nil
+                || crossfadeController.activePlayer?.currentItem?.status == .failed
+            if let song = currentSong, itemNeedsReload {
                 let savedTime = currentTime
                 let url = resolveURL(for: song)
                 crossfadeController.loadOnActive(url: url)
+                if let item = crossfadeController.activePlayer?.currentItem {
+                    applyEQTapIfNeeded(to: item)
+                }
                 if savedTime > 0 {
                     let cmTime = CMTime(seconds: savedTime, preferredTimescale: 1000)
                     crossfadeController.activePlayer?.seek(to: cmTime)
                 }
+            } else if eqEnabled, let item = crossfadeController.activePlayer?.currentItem {
+                // Reapply EQ tap after interruption to reset stale delay buffers
+                applyEQTapIfNeeded(to: item)
             }
             crossfadeController.activePlayer?.rate = playbackRate
-        case .eq:
-            EQEngine.shared.resume()
         }
         isPlaying = true
         NowPlayingManager.shared.updatePlaybackState(isPlaying: true, elapsed: currentTime)
@@ -454,6 +441,7 @@ final class AudioEngine {
         submitScrobbleIfNeeded()
 
         if isCrossfading {
+            incrementGeneration()
             crossfadeController.forceComplete()
             isCrossfading = false
         }
@@ -470,16 +458,9 @@ final class AudioEngine {
 
     private func restartCurrentTrack() {
         trackStartTime = Date()
-        switch activeMode {
-        case .gapless, .crossfade:
-            seekInternal(to: 0) { [weak self] in
-                self?.scrobbleSubmitted = false
-                self?.activePlayer?.play()
-            }
-        case .eq:
-            EQEngine.shared.seek(to: 0)
-            EQEngine.shared.resume()
-            scrobbleSubmitted = false
+        seekInternal(to: 0) { [weak self] in
+            self?.scrobbleSubmitted = false
+            self?.activePlayer?.play()
         }
     }
 
@@ -567,29 +548,22 @@ final class AudioEngine {
             }
         }
 
-        switch activeMode {
-        case .gapless, .crossfade:
-            guard let player = activePlayer else { return }
-            let wasPlaying = isPlaying
-            let rate = playbackRate
-            let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 1000)
-            player.seek(
-                to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.currentTime = clampedTime
-                    NowPlayingManager.shared.updateElapsedTime(clampedTime)
-                    // Restore playback rate — AVPlayer can reset rate after seek
-                    if wasPlaying && player.rate == 0 {
-                        player.rate = rate
-                    }
+        guard let player = activePlayer else { return }
+        let wasPlaying = isPlaying
+        let rate = playbackRate
+        let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 1000)
+        player.seek(
+            to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.currentTime = clampedTime
+                NowPlayingManager.shared.updateElapsedTime(clampedTime)
+                // Restore playback rate — AVPlayer can reset rate after seek
+                if wasPlaying && player.rate == 0 {
+                    player.rate = rate
                 }
             }
-        case .eq:
-            EQEngine.shared.seek(to: clampedTime)
-            currentTime = clampedTime
-            NowPlayingManager.shared.updateElapsedTime(clampedTime)
         }
         // Update time immediately so UI doesn't show stale value
         currentTime = clampedTime
@@ -598,7 +572,6 @@ final class AudioEngine {
     func stop() {
         submitScrobbleIfNeeded()
         tearDownCurrentMode()
-        cleanupEQTempFile()
         activeMode = .gapless
         stopRadioMode()
         isCrossfading = false
@@ -681,123 +654,74 @@ final class AudioEngine {
         }
     }
 
-    // MARK: - EQ Playback
+    // MARK: - EQ Tap
 
-    /// Temp file URL for streamed EQ playback
-    private var eqTempFileURL: URL?
-
-    func startEQPlayback(url: URL) {
-        tearDownObservers()
-        clearLookahead()
-        generation += 1
-
-        gaplessPlayer?.pause()
-        gaplessPlayer?.removeAllItems()
-
-        if url.isFileURL {
-            // Local file — play directly through EQ
-            startEQDirect(url: url)
-        } else {
-            // Stream — download to temp file first, then play through EQ
-            // Start gapless playback immediately so user hears music while buffering
-            activeMode = .gapless
-            replacePlayerItem(with: url)
-            // Capture generation AFTER replacePlayerItem (which increments it)
-            let capturedGeneration = self.generation
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            isPlaying = true
-
-            Task {
-                await downloadAndStartEQ(streamURL: url, generation: capturedGeneration)
-            }
-        }
-    }
-
-    /// Play a local file directly through EQEngine
-    private func startEQDirect(url: URL) {
-        cleanupEQTempFile()
-        do {
-            try EQEngine.shared.play(url: url, rate: playbackRate)
-            duration = EQEngine.shared.fileDuration
-            setupEQTimeSync()
-        } catch {
-            audioLog.error("EQ playback failed, falling back to gapless: \(error)")
-            activeMode = .gapless
-            replacePlayerItem(with: url)
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            prepareLookahead()
-        }
-    }
-
-    /// Download a stream to a temp file, then switch to EQ playback
-    private func downloadAndStartEQ(streamURL: URL, generation: Int) async {
-        do {
-            let (tempURL, response) = try await URLSession.shared.download(from: streamURL)
-            // Use song suffix, response MIME type, or fallback to mp3
-            let ext = currentSong?.suffix
-                ?? response.mimeType.flatMap { UTType(mimeType: $0)?.preferredFilenameExtension }
-                ?? "mp3"
-            let stableURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("eq_\(UUID().uuidString).\(ext)")
-            try FileManager.default.moveItem(at: tempURL, to: stableURL)
-
-            guard self.generation == generation else {
-                // Song changed while downloading — clean up
-                try? FileManager.default.removeItem(at: stableURL)
-                return
-            }
-
-            // Capture current playback position from gapless player
-            let currentPos = activePlayer?.currentTime().seconds ?? 0
-
-            // Tear down gapless observers before switching to EQ
-            tearDownObservers()
-            cleanupEQTempFile()
-            eqTempFileURL = stableURL
-            gaplessPlayer?.pause()
-            gaplessPlayer?.removeAllItems()
-            activeMode = .eq
-
-            try EQEngine.shared.play(url: stableURL, rate: playbackRate, startTime: currentPos)
-            duration = EQEngine.shared.fileDuration
-            applyEffectiveVolume()
-            setupEQTimeSync()
-            audioLog.info("Switched to EQ playback from stream buffer")
-        } catch {
-            guard self.generation == generation else { return }
-            audioLog.error("EQ stream buffer failed, staying on gapless: \(error)")
-            // Already playing via gapless — just stay there
-        }
-    }
-
-    /// Remove any temp file used for streamed EQ playback
-    func cleanupEQTempFile() {
-        if let tempURL = eqTempFileURL {
-            try? FileManager.default.removeItem(at: tempURL)
-            eqTempFileURL = nil
-        }
-    }
-
-    func setupEQTimeSync() {
-        removeCurrentTimeObserver()
-
-        let observerGeneration = generation
-        invalidateEQSyncTimer()
-        eqSyncTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.5, repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self,
-                      self.generation == observerGeneration,
-                      self.activeMode == .eq else { return }
-                self.currentTime = EQEngine.shared.currentTime
-                self.duration = EQEngine.shared.fileDuration
-                if self.currentSong != nil {
-                    NowPlayingManager.shared.updateElapsedTime(self.currentTime)
+    /// Apply EQ audio tap to an AVPlayerItem (async — waits for tracks to load)
+    func applyEQTapIfNeeded(to item: AVPlayerItem) {
+        guard eqEnabled else { return }
+        let gen = generation
+        Task {
+            do {
+                let tracks = try await item.asset.loadTracks(withMediaType: .audio)
+                guard self.generation == gen, let track = tracks.first else { return }
+                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                    item.audioMix = mix
                 }
-                self.autoScrobbleIfNeeded()
+            } catch {
+                audioLog.error("Failed to apply EQ tap: \(error)")
+            }
+        }
+    }
+
+    /// Called when user toggles EQ on/off — applies or removes tap on currently playing item(s)
+    func applyEQToggle(enabled: Bool) {
+        eqEnabled = enabled
+        if enabled {
+            // Apply tap to all currently active items
+            EQEngine.shared.syncCoefficients()
+            switch activeMode {
+            case .gapless:
+                if let item = gaplessPlayer?.currentItem {
+                    applyEQTapForced(to: item)
+                }
+                if let lookahead = gaplessPlayer?.items().last,
+                   lookahead !== gaplessPlayer?.currentItem {
+                    applyEQTapForced(to: lookahead)
+                }
+            case .crossfade:
+                if let item = crossfadeController.activePlayer?.currentItem {
+                    applyEQTapForced(to: item)
+                }
+                if isCrossfading, let item = crossfadeController.inactivePlayer?.currentItem {
+                    applyEQTapForced(to: item)
+                }
+            }
+        } else {
+            // Remove EQ taps from all active items
+            switch activeMode {
+            case .gapless:
+                for item in gaplessPlayer?.items() ?? [] {
+                    item.audioMix = nil
+                }
+            case .crossfade:
+                crossfadeController.activePlayer?.currentItem?.audioMix = nil
+                crossfadeController.inactivePlayer?.currentItem?.audioMix = nil
+            }
+        }
+    }
+
+    /// Apply EQ tap unconditionally (bypasses eqEnabled check — used by applyEQToggle)
+    private func applyEQTapForced(to item: AVPlayerItem) {
+        let gen = generation
+        Task {
+            do {
+                let tracks = try await item.asset.loadTracks(withMediaType: .audio)
+                guard self.generation == gen, let track = tracks.first else { return }
+                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                    item.audioMix = mix
+                }
+            } catch {
+                audioLog.error("Failed to apply EQ tap: \(error)")
             }
         }
     }
@@ -846,6 +770,8 @@ final class AudioEngine {
         lookaheadItem = item
         lookaheadSongId = nextSong.id
         lookaheadIndex = nextIdx
+
+        applyEQTapIfNeeded(to: item)
 
         if let gaplessPlayer,
            gaplessPlayer.canInsert(item, after: gaplessPlayer.items().last) {
@@ -935,46 +861,27 @@ final class AudioEngine {
         )
     }
 
-    private func isTrackLocal(_ song: Song) -> Bool {
-        let modelContext = PersistenceController.shared.container.mainContext
-        let songId = song.id
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-        )
-        guard let download = try? modelContext.fetch(descriptor).first else { return false }
-        let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
-        return FileManager.default.fileExists(atPath: fileURL.path)
-    }
-
     func seekInternal(
         to time: TimeInterval, completion: (() -> Void)? = nil
     ) {
-        switch activeMode {
-        case .gapless, .crossfade:
-            guard let player = activePlayer else { completion?(); return }
-            let rate = playbackRate
-            let wasPlaying = isPlaying
-            let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
-            nonisolated(unsafe) let safeCompletion = completion
-            currentTime = time
-            player.seek(
-                to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.currentTime = time
-                    NowPlayingManager.shared.updateElapsedTime(time)
-                    if wasPlaying && player.rate == 0 {
-                        player.rate = rate
-                    }
-                    safeCompletion?()
+        guard let player = activePlayer else { completion?(); return }
+        let rate = playbackRate
+        let wasPlaying = isPlaying
+        let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
+        nonisolated(unsafe) let safeCompletion = completion
+        currentTime = time
+        player.seek(
+            to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.currentTime = time
+                NowPlayingManager.shared.updateElapsedTime(time)
+                if wasPlaying && player.rate == 0 {
+                    player.rate = rate
                 }
+                safeCompletion?()
             }
-        case .eq:
-            EQEngine.shared.seek(to: time)
-            currentTime = time
-            NowPlayingManager.shared.updateElapsedTime(time)
-            completion?()
         }
     }
 
@@ -984,6 +891,7 @@ final class AudioEngine {
         generation += 1
 
         let item = AVPlayerItem(url: url)
+        applyEQTapIfNeeded(to: item)
 
         if gaplessPlayer == nil {
             gaplessPlayer = AVQueuePlayer(items: [item])
@@ -1002,30 +910,19 @@ final class AudioEngine {
 
         if repeatMode == .one {
             trackStartTime = Date()
-            switch activeMode {
-            case .gapless, .crossfade:
-                seekInternal(to: 0) { [weak self] in
-                    guard let self else { return }
-                    if let lastScrobble = self.lastScrobbleTime,
-                       Date().timeIntervalSince(lastScrobble) < max(self.duration, 30) {
-                        // suppress re-scrobble
-                    } else {
-                        self.scrobbleSubmitted = false
-                    }
-                    self.activePlayer?.rate = self.playbackRate
-                }
-            case .eq:
-                EQEngine.shared.seek(to: 0)
-                EQEngine.shared.resume()
-                if let lastScrobble = lastScrobbleTime,
-                   Date().timeIntervalSince(lastScrobble) < max(duration, 30) {
+            seekInternal(to: 0) { [weak self] in
+                guard let self else { return }
+                if let lastScrobble = self.lastScrobbleTime,
+                   Date().timeIntervalSince(lastScrobble) < max(self.duration, 30) {
                     // suppress re-scrobble
                 } else {
-                    scrobbleSubmitted = false
+                    self.scrobbleSubmitted = false
                 }
+                self.activePlayer?.rate = self.playbackRate
             }
         } else {
             next()
         }
     }
 }
+

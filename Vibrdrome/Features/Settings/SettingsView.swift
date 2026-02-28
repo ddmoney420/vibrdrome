@@ -259,6 +259,9 @@ struct SettingsView: View {
                 Label("Equalizer", systemImage: "slider.vertical.3")
                     .foregroundColor(.primary)
             }
+            .onChange(of: eqEnabled) { _, newValue in
+                AudioEngine.shared.applyEQToggle(enabled: newValue)
+            }
 
             NavigationLink {
                 EQView()

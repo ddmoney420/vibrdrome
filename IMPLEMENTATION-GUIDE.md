@@ -33,8 +33,8 @@ I notice that `dmoney-player` is already registered as a DuckDNS subdomain. The 
 The target Navidrome server is already running and accessible:
 
 - **Internal URL**: `http://localhost:4533` (local Docker network)
-- **External URL**: `https://***REMOVED***` (Caddy reverse proxy with Let's Encrypt)
-- **DuckDNS subdomain `dmoney-player`** is already registered (in `docker-compose.yml` line 646) -- this could be used for a future web app or API gateway
+- **External URL**: Your Navidrome instance URL (Caddy reverse proxy with Let's Encrypt)
+- A DuckDNS subdomain can be used for a future web app or API gateway
 - **Subsonic API version**: `1.16.1` with OpenSubsonic extensions
 - **Username**: `dmoney`
 - **Library size**: ~1,129 tracks / 87 albums, with 53 internet radio stations
@@ -1308,7 +1308,7 @@ final class PlayHistory {
 final class ServerConfig {
     @Attribute(.unique) var id: UUID = UUID()
     var name: String = "My Server"
-    var url: String                          // "https://***REMOVED***"
+    var url: String                          // "https://your-server.example.com"
     var username: String
     // Password stored in Keychain, not SwiftData
     var isActive: Bool = true
@@ -2529,8 +2529,8 @@ struct SettingsView: View {
 ```swift
 struct ServerConfigView: View {
     @State private var name = ""
-    @State private var url = "https://***REMOVED***"
-    @State private var username = "dmoney"
+    @State private var url = ""
+    @State private var username = ""
     @State private var password = ""
     @State private var isTesting = false
     @State private var testResult: String?
@@ -2687,7 +2687,7 @@ struct MacContentView: View {
 6. Implement `AppState.swift` (global state container)
 7. Implement `ServerConfigView.swift` (server setup + Keychain)
 8. Implement basic `ArtistsView` and `AlbumDetailView`
-9. Test against `https://***REMOVED***`
+9. Test against your Navidrome server
 
 **Deliverable**: App launches, connects to server, shows artist/album list.
 

@@ -35,6 +35,7 @@ final class AppState {
     var activeServerId: String?
 
     private let keychain = Keychain(service: "com.vibrdrome")
+        .accessibility(.whenPasscodeSetThisDeviceOnly)
     private static let serversKey = "savedServers"
     private static let activeServerKey = "activeServerId"
 

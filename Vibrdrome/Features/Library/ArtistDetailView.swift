@@ -15,25 +15,7 @@ struct ArtistDetailView: View {
                     NavigationLink {
                         AlbumDetailView(albumId: album.id)
                     } label: {
-                        HStack(spacing: 12) {
-                            AlbumArtView(coverArtId: album.coverArt, size: 56)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(album.name)
-                                    .font(.body)
-                                    .lineLimit(1)
-                                HStack(spacing: 4) {
-                                    if let year = album.year {
-                                        Text(verbatim: "\(year)")
-                                    }
-                                    if let count = album.songCount {
-                                        Text(verbatim: "· \(count) song\(count == 1 ? "" : "s")")
-                                    }
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-                        }
+                        AlbumCard(album: album)
                     }
                 }
             }

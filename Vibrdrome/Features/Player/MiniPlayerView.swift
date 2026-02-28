@@ -62,14 +62,20 @@ struct MiniPlayerView: View {
                 .accessibilityHint("Open full player")
 
                 // Play/Pause — larger hit target
-                Button { engine.togglePlayPause() } label: {
-                    Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title3)
+                if engine.isBuffering {
+                    ProgressView()
+                        .tint(.primary)
                         .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
+                } else {
+                    Button { engine.togglePlayPause() } label: {
+                        Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.title3)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                 // Next
                 Button { engine.next() } label: {

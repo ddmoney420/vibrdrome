@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var searchTask: Task<Void, Never>?
+    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
 
     var body: some View {
         ScrollView {
@@ -183,7 +184,9 @@ struct SearchView: View {
 
     private func songRow(song: Song, songs: [Song], index: Int) -> some View {
         HStack(spacing: 12) {
-            AlbumArtView(coverArtId: song.coverArt, size: 48, cornerRadius: 8)
+            if showAlbumArtInLists {
+                AlbumArtView(coverArtId: song.coverArt, size: 48, cornerRadius: 8)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)

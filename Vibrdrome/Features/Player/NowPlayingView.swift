@@ -345,24 +345,26 @@ struct NowPlayingView: View {
     // MARK: - Controls
 
     private var playbackControls: some View {
-        HStack(spacing: 40) {
-            Button { engine.previous() } label: {
-                Image(systemName: "backward.fill")
-                    .font(.title2)
-            }
-            .accessibilityLabel("Previous Track")
+        VStack(spacing: 6) {
+            HStack(spacing: 40) {
+                Button { engine.previous() } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.title2)
+                }
+                .accessibilityLabel("Previous Track")
 
-            Button { engine.togglePlayPause() } label: {
-                Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 52))
-            }
-            .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
+                Button { engine.togglePlayPause() } label: {
+                    Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 52))
+                }
+                .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
-            Button { engine.next() } label: {
-                Image(systemName: "forward.fill")
-                    .font(.title2)
+                Button { engine.next() } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.title2)
+                }
+                .accessibilityLabel("Next Track")
             }
-            .accessibilityLabel("Next Track")
         }
         .foregroundColor(.white)
         .buttonStyle(.plain)
@@ -446,14 +448,14 @@ struct NowPlayingView: View {
                 Button { showEQ = true } label: {
                     Image(systemName: "slider.vertical.3")
                         .foregroundColor(
-                            engine.activeMode == .eq
+                            engine.eqEnabled
                                 ? .white
                                 : EQEngine.shared.currentPresetId != "flat"
                                     ? .white.opacity(0.7) : .white.opacity(0.4)
                         )
                 }
                 .accessibilityLabel("Equalizer")
-                .accessibilityValue(engine.activeMode == .eq ? "Active" : "Inactive")
+                .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
 
                 Spacer()
 

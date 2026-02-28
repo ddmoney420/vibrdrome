@@ -34,6 +34,7 @@ struct ContentView: View {
                 createBookmarkIfNeeded()
             case .active:
                 restorePlayQueue()
+                refreshPlaybackState()
             default:
                 break
             }
@@ -110,6 +111,21 @@ struct ContentView: View {
             } catch {
                 Logger(subsystem: "com.vibrdrome.app", category: "PlayQueue")
                     .error("Failed to create auto-bookmark: \(error)")
+            }
+        }
+    }
+
+    /// Sync UI state with actual player state on foreground return
+    private func refreshPlaybackState() {
+        // If audio is actively playing, make sure the time display is current
+        if engine.currentSong != nil {
+            if let player = engine.activePlayer,
+               let item = player.currentItem,
+               item.status == .readyToPlay {
+                engine.currentTime = player.currentTime().seconds
+                if item.duration.isNumeric {
+                    engine.duration = item.duration.seconds
+                }
             }
         }
     }

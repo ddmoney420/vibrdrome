@@ -1,11 +1,13 @@
 import XCTest
 
 // MARK: - Test Server Credentials
+// Reads from environment variables set in Xcode scheme or CI.
+// Set TEST_SERVER_URL, TEST_SERVER_USER, TEST_SERVER_PASS before running UI tests.
 
 enum TestServer {
-    static let url = "https://***REMOVED***"
-    static let username = "dmoney"
-    static let password = "***REMOVED***"
+    static let url = ProcessInfo.processInfo.environment["TEST_SERVER_URL"] ?? ""
+    static let username = ProcessInfo.processInfo.environment["TEST_SERVER_USER"] ?? ""
+    static let password = ProcessInfo.processInfo.environment["TEST_SERVER_PASS"] ?? ""
 }
 
 // MARK: - XCUIApplication Helpers

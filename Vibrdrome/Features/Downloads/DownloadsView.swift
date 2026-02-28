@@ -81,10 +81,13 @@ private struct DownloadedSongRow: View {
     let download: DownloadedSong
 
     @Environment(AppState.self) private var appState
+    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
-            AlbumArtView(coverArtId: download.coverArtId, size: 44)
+            if showAlbumArtInLists {
+                AlbumArtView(coverArtId: download.coverArtId, size: 44)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(download.songTitle)
@@ -165,11 +168,3 @@ struct DownloadProgressRow: View {
     }
 }
 
-// MARK: - Helpers
-
-func formatBytes(_ bytes: Int64) -> String {
-    let formatter = ByteCountFormatter()
-    formatter.allowedUnits = [.useKB, .useMB, .useGB]
-    formatter.countStyle = .file
-    return formatter.string(fromByteCount: bytes)
-}

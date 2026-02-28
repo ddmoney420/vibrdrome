@@ -55,6 +55,12 @@ final class AudioSessionManager: @unchecked Sendable {
             case .began:
                 AudioEngine.shared.pause()
             case .ended:
+                // Reactivate audio session — iOS deactivates it during interruptions
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true)
+                } catch {
+                    print("Failed to reactivate audio session: \(error)")
+                }
                 if shouldResume {
                     AudioEngine.shared.resume()
                 }

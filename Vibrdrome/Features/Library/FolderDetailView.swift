@@ -8,6 +8,7 @@ struct FolderDetailView: View {
     @State private var directory: MusicDirectory?
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
 
     private var subfolders: [DirectoryChild] {
         directory?.child?.filter(\.isDir) ?? []
@@ -87,19 +88,21 @@ struct FolderDetailView: View {
             AudioEngine.shared.play(song: allSongs[index], from: allSongs, at: index)
         } label: {
             HStack(spacing: 12) {
-                if let coverArt = child.coverArt {
-                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArt, size: 80)) { state in
-                        if let image = state.image {
-                            image.resizable()
-                        } else {
-                            albumArtPlaceholder
+                if showAlbumArtInLists {
+                    if let coverArt = child.coverArt {
+                        LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArt, size: 80)) { state in
+                            if let image = state.image {
+                                image.resizable()
+                            } else {
+                                albumArtPlaceholder
+                            }
                         }
-                    }
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                } else {
-                    albumArtPlaceholder
                         .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    } else {
+                        albumArtPlaceholder
+                            .frame(width: 40, height: 40)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -170,7 +173,7 @@ struct FolderDetailView: View {
             directory = try await appState.subsonicClient.getMusicDirectory(id: directoryId)
             isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorPresenter.userMessage(for: error)
             isLoading = false
         }
     }

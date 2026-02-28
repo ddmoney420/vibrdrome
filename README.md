@@ -143,13 +143,15 @@ Shared/              Reusable components (TrackRow, AlbumCard, StarButton) and e
 
 ### Playback Architecture
 
-Three mutually exclusive playback topologies, selected by mode priority:
+Two playback topologies, with inline EQ applied orthogonally via MTAudioProcessingTap:
 
 ```
-Mode Priority (highest wins):
-1. EQ Mode    — eqEnabled               -->  AVAudioEngine + EQ + TimePitch
-2. Crossfade  — crossfadeDuration > 0   -->  Dual AVPlayer with volume ramps
-3. Gapless    — crossfadeDuration == 0  -->  AVQueuePlayer with lookahead
+Topology Selection:
+1. Crossfade  — crossfadeDuration > 0   -->  Dual AVPlayer with volume ramps
+2. Gapless    — crossfadeDuration == 0  -->  AVQueuePlayer with lookahead
+
+EQ (optional, works with either topology):
+   eqEnabled  -->  10-band parametric EQ via MTAudioProcessingTap on AVPlayerItem
 ```
 
 `AudioEngine.shared` is the single facade. All UI, CarPlay, and remote commands talk only to AudioEngine — never to backends directly.

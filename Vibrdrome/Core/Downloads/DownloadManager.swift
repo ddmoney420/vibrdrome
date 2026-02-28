@@ -11,6 +11,11 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         )
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
+        // Security hardening: disable cookies and credential caching
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }()
 
@@ -295,7 +300,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         do {
             try FileManager.default.moveItem(at: location, to: safeCopy)
         } catch {
-            print("Failed to preserve download: \(error)")
+            print("Failed to preserve download for songId: \(songId)")
             return
         }
 
@@ -328,7 +333,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
                     ))?[.size] as? Int ?? 0
                 )
             } catch {
-                print("Failed to move download to destination: \(error)")
+                print("Failed to move download to destination for songId: \(songId)")
                 try? FileManager.default.removeItem(at: safeCopy)
             }
 
@@ -369,7 +374,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
         let isCancelled = (error as NSError).code == NSURLErrorCancelled
         if !isCancelled {
-            print("Download failed: \(error)")
+            print("Download failed for songId: \(songId)")
         }
 
         // Clean up incomplete SwiftData record for failed (non-cancelled) downloads

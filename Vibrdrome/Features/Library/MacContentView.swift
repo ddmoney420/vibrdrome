@@ -38,6 +38,7 @@ struct MacContentView: View {
                 createBookmarkIfNeeded()
             case .active:
                 restorePlayQueue()
+                refreshPlaybackState()
             default:
                 break
             }
@@ -72,6 +73,19 @@ struct MacContentView: View {
             } catch {
                 Logger(subsystem: "com.vibrdrome.app", category: "PlayQueue")
                     .error("Failed to create auto-bookmark: \(error)")
+            }
+        }
+    }
+
+    private func refreshPlaybackState() {
+        if engine.currentSong != nil {
+            if let player = engine.activePlayer,
+               let item = player.currentItem,
+               item.status == .readyToPlay {
+                engine.currentTime = player.currentTime().seconds
+                if item.duration.isNumeric {
+                    engine.duration = item.duration.seconds
+                }
             }
         }
     }

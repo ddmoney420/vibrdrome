@@ -22,6 +22,11 @@ final class SubsonicClient {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 300
+        // Security hardening: disable cookies and credential caching
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.httpCookieStorage = nil
+        config.urlCredentialStorage = nil
         self.session = URLSession(configuration: config)
     }
 

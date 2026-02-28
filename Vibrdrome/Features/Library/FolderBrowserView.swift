@@ -47,7 +47,7 @@ struct FolderBrowserView: View {
             folders = try await appState.subsonicClient.getMusicFolders()
             isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorPresenter.userMessage(for: error)
             isLoading = false
         }
     }

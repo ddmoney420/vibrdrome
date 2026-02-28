@@ -19,6 +19,9 @@ extension AudioEngine {
         }
 
         crossfadeController.loadOnActive(url: url)
+        if let item = crossfadeController.activePlayer?.currentItem {
+            applyEQTapIfNeeded(to: item)
+        }
         crossfadeController.activePlayer?.rate = playbackRate
         isCrossfading = false
 
@@ -89,6 +92,29 @@ extension AudioEngine {
                 nextIndex: nextIdx,
                 replayGainFactor: nextRGFactor
             )
+        }
+        // Apply EQ to the incoming crossfade track, then start playback
+        let inactivePlayer = crossfadeController.inactivePlayer
+        if eqEnabled, let item = inactivePlayer?.currentItem {
+            let gen = generation
+            Task {
+                do {
+                    let tracks = try await item.asset.loadTracks(withMediaType: .audio)
+                    guard self.generation == gen, let track = tracks.first else {
+                        inactivePlayer?.play()
+                        return
+                    }
+                    if let mix = EQTapProcessor.createAudioMix(track: track) {
+                        item.audioMix = mix
+                    }
+                    inactivePlayer?.play()
+                } catch {
+                    // Play without EQ on failure
+                    inactivePlayer?.play()
+                }
+            }
+        } else {
+            inactivePlayer?.play()
         }
     }
 

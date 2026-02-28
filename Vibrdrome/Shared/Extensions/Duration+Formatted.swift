@@ -13,3 +13,10 @@ func formatDuration(_ totalSeconds: Int) -> String {
     }
     return String(format: "%d:%02d", minutes, seconds)
 }
+
+func formatBytes(_ bytes: Int64) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useKB, .useMB, .useGB]
+    formatter.countStyle = .file
+    return formatter.string(fromByteCount: bytes)
+}
