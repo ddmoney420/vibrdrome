@@ -81,7 +81,7 @@ private struct DownloadedSongRow: View {
     let download: DownloadedSong
 
     @Environment(AppState.self) private var appState
-    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {

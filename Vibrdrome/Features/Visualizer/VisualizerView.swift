@@ -47,8 +47,8 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
 
 struct VisualizerView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("visualizerPreset") private var presetName: String = "Plasma"
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.visualizerPreset) private var presetName: String = "Plasma"
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5

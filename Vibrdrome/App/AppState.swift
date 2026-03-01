@@ -26,6 +26,7 @@ final class AppState {
 
     var subsonicClient: SubsonicClient
     var isConfigured: Bool = false
+    var requiresReAuth: Bool = false
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?
@@ -36,12 +37,12 @@ final class AppState {
 
     private let keychain = Keychain(service: "com.vibrdrome")
         .accessibility(.whenPasscodeSetThisDeviceOnly)
-    private static let serversKey = "savedServers"
-    private static let activeServerKey = "activeServerId"
+    private static let serversKey = UserDefaultsKeys.savedServers
+    private static let activeServerKey = UserDefaultsKeys.activeServerId
 
     private init() {
         // Register defaults for settings that should start as true
-        UserDefaults.standard.register(defaults: ["scrobblingEnabled": true])
+        UserDefaults.standard.register(defaults: [UserDefaultsKeys.scrobblingEnabled: true])
 
         // Initialize with a placeholder; reconfigure once server config is loaded
         subsonicClient = SubsonicClient(
@@ -78,8 +79,8 @@ final class AppState {
         }
 
         // Fall back to legacy single-server credentials
-        guard let url = UserDefaults.standard.string(forKey: "serverURL"),
-              let username = UserDefaults.standard.string(forKey: "username"),
+        guard let url = UserDefaults.standard.string(forKey: UserDefaultsKeys.serverURL),
+              let username = UserDefaults.standard.string(forKey: UserDefaultsKeys.username),
               let password = keychain["serverPassword"] else {
             return
         }
@@ -114,16 +115,23 @@ final class AppState {
         saveServers()
 
         // Keep legacy keys in sync for backwards compatibility
-        UserDefaults.standard.set(serverURL, forKey: "serverURL")
-        UserDefaults.standard.set(username, forKey: "username")
+        UserDefaults.standard.set(serverURL, forKey: UserDefaultsKeys.serverURL)
+        UserDefaults.standard.set(username, forKey: UserDefaultsKeys.username)
         keychain["serverPassword"] = password
     }
 
+    func reAuthenticate(password: String) {
+        guard !serverURL.isEmpty, !username.isEmpty else { return }
+        saveCredentials(url: serverURL, username: username, password: password)
+        requiresReAuth = false
+    }
+
     func clearCredentials() {
-        UserDefaults.standard.removeObject(forKey: "serverURL")
-        UserDefaults.standard.removeObject(forKey: "username")
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.serverURL)
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.username)
         try? keychain.remove("serverPassword")
         isConfigured = false
+        requiresReAuth = false
         serverURL = ""
         username = ""
         // Reset the client so stale creds aren't used
@@ -153,8 +161,8 @@ final class AppState {
         configure(url: server.url, username: server.username, password: password)
 
         // Update legacy keys
-        UserDefaults.standard.set(serverURL, forKey: "serverURL")
-        UserDefaults.standard.set(server.username, forKey: "username")
+        UserDefaults.standard.set(serverURL, forKey: UserDefaultsKeys.serverURL)
+        UserDefaults.standard.set(server.username, forKey: UserDefaultsKeys.username)
         keychain["serverPassword"] = password
     }
 
@@ -185,8 +193,8 @@ final class AppState {
         // If this is the active server, reconfigure
         if activeServerId == id {
             configure(url: normalizedURL, username: username, password: password)
-            UserDefaults.standard.set(serverURL, forKey: "serverURL")
-            UserDefaults.standard.set(username, forKey: "username")
+            UserDefaults.standard.set(serverURL, forKey: UserDefaultsKeys.serverURL)
+            UserDefaults.standard.set(username, forKey: UserDefaultsKeys.username)
             keychain["serverPassword"] = password
         }
     }

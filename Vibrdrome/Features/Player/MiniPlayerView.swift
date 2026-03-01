@@ -4,7 +4,7 @@ import NukeUI
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @State private var showNowPlaying = false
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -138,7 +138,7 @@ struct MiniPlayerView: View {
 struct MacMiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -279,7 +279,7 @@ struct MacMiniPlayerView: View {
 struct PopOutPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 

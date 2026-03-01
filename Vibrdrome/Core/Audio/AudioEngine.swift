@@ -42,7 +42,7 @@ final class AudioEngine {
     private(set) var activeMode: PlaybackMode = .gapless
 
     /// Whether EQ processing is enabled (user setting, stored for @Observable reactivity)
-    var eqEnabled: Bool = UserDefaults.standard.bool(forKey: "eqEnabled")
+    var eqEnabled: Bool = UserDefaults.standard.bool(forKey: UserDefaultsKeys.eqEnabled)
 
     /// Whether crossfade is currently ramping between tracks
     var isCrossfading = false
@@ -82,7 +82,7 @@ final class AudioEngine {
 
     var replayGainMode: ReplayGainMode {
         ReplayGainMode(
-            rawValue: UserDefaults.standard.string(forKey: "replayGainMode") ?? "off"
+            rawValue: UserDefaults.standard.string(forKey: UserDefaultsKeys.replayGainMode) ?? "off"
         ) ?? .off
     }
 
@@ -214,12 +214,12 @@ final class AudioEngine {
     private var isOnCellular = false
 
     private var gaplessEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "gaplessPlayback")
+        UserDefaults.standard.bool(forKey: UserDefaultsKeys.gaplessPlayback)
     }
 
     /// Crossfade duration in seconds (0 = disabled)
     var crossfadeDuration: Int {
-        UserDefaults.standard.integer(forKey: "crossfadeDuration")
+        UserDefaults.standard.integer(forKey: UserDefaultsKeys.crossfadeDuration)
     }
 
     /// Crossfade controller for dual-player transitions
@@ -256,7 +256,7 @@ final class AudioEngine {
 
     private var currentMaxBitRate: Int? {
         let defaults = UserDefaults.standard
-        let key = isOnCellular ? "cellularMaxBitRate" : "wifiMaxBitRate"
+        let key = isOnCellular ? UserDefaultsKeys.cellularMaxBitRate : UserDefaultsKeys.wifiMaxBitRate
         let value = defaults.integer(forKey: key)
         return value > 0 ? value : nil
     }

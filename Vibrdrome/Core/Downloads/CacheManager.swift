@@ -20,7 +20,7 @@ final class CacheManager {
 
     /// Current cache limit in bytes from UserDefaults (0 = unlimited)
     var cacheLimitBytes: Int64 {
-        Int64(UserDefaults.standard.integer(forKey: "cacheLimitBytes"))
+        Int64(UserDefaults.standard.integer(forKey: UserDefaultsKeys.cacheLimitBytes))
     }
 
     /// Total size of all completed downloads

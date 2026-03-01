@@ -96,8 +96,12 @@ final class SubsonicClient {
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
-            throw SubsonicError.httpError(
-                (response as? HTTPURLResponse)?.statusCode ?? 0)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 401, !AppState.shared.requiresReAuth {
+                networkLog.warning("401 Unauthorized — triggering re-authentication prompt")
+                AppState.shared.requiresReAuth = true
+            }
+            throw SubsonicError.httpError(statusCode)
         }
 
         let decoded: SubsonicResponse
@@ -111,6 +115,11 @@ final class SubsonicClient {
 
         if body.status != "ok" {
             if let error = body.error {
+                // Subsonic error code 40 = Wrong username or password
+                if error.code == 40, !AppState.shared.requiresReAuth {
+                    networkLog.warning("Subsonic auth error (code 40) — triggering re-authentication prompt")
+                    AppState.shared.requiresReAuth = true
+                }
                 throw SubsonicError.apiError(code: error.code, message: error.message)
             }
             throw SubsonicError.apiError(code: 0, message: "Server returned status: \(body.status)")

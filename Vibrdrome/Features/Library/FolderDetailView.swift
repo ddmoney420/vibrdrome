@@ -8,7 +8,7 @@ struct FolderDetailView: View {
     @State private var directory: MusicDirectory?
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     private var subfolders: [DirectoryChild] {
         directory?.child?.filter(\.isDir) ?? []

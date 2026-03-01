@@ -16,7 +16,7 @@ struct NowPlayingView: View {
     @State private var isDragging = false
     @State private var albumImage: PlatformImage?
     @State private var loadedCoverArtId: String?
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @State private var nsWindow: NSWindow?
@@ -488,7 +488,7 @@ struct NowPlayingView: View {
                                 try await OfflineActionQueue.shared.unstar(id: songId)
                             } else {
                                 try await OfflineActionQueue.shared.star(id: songId)
-                                if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
                                     DownloadManager.shared.download(song: song, client: appState.subsonicClient)
                                 }
                             }

@@ -7,7 +7,7 @@ struct SmartPlaylistView: View {
     @State private var isGenerating = false
     @State private var genres: [Genre] = []
     @State private var error: String?
-    @AppStorage("reduceMotion") private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     // Selection state
     @State private var artistQuery = ""

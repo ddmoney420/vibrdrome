@@ -96,7 +96,7 @@ final class RemoteCommandManager {
                         Logger(subsystem: "com.vibrdrome.app", category: "RemoteCommand")
                             .error("Failed to star track: \(error)")
                     }
-                    if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                    if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
                         DownloadManager.shared.download(song: song, client: AppState.shared.subsonicClient)
                     }
                 }

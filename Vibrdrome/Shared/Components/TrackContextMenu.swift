@@ -93,7 +93,7 @@ struct TrackContextMenuModifier: ViewModifier {
                         try await OfflineActionQueue.shared.unstar(id: song.id)
                     } else {
                         try await OfflineActionQueue.shared.star(id: song.id)
-                        if UserDefaults.standard.bool(forKey: "autoDownloadFavorites") {
+                        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
                             DownloadManager.shared.download(song: song, client: appState.subsonicClient)
                         }
                     }

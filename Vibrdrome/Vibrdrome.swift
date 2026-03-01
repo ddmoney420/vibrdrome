@@ -31,11 +31,11 @@ struct VibrdromeApp: App {
     @NSApplicationDelegateAdaptor(VibrdromeMacDelegate.self) var appDelegate
     #endif
     @State private var appState = AppState.shared
-    @AppStorage("appColorScheme") private var appColorScheme: String = "system"
-    @AppStorage("accentColorTheme") private var accentColorTheme: String = "blue"
-    @AppStorage("largerText") private var largerText: Bool = false
-    @AppStorage("boldText") private var boldText: Bool = false
-    @AppStorage("reduceMotion") private var reduceMotion: Bool = false
+    @AppStorage(UserDefaultsKeys.appColorScheme) private var appColorScheme: String = "system"
+    @AppStorage(UserDefaultsKeys.accentColorTheme) private var accentColorTheme: String = "blue"
+    @AppStorage(UserDefaultsKeys.largerText) private var largerText: Bool = false
+    @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     private let persistenceController = PersistenceController.shared
 
     private var colorScheme: ColorScheme? {
@@ -64,6 +64,7 @@ struct VibrdromeApp: App {
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
+                    DownloadManager.shared.resumeIncompleteDownloads()
                 }
             #else
             ContentView()
@@ -76,6 +77,7 @@ struct VibrdromeApp: App {
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
+                    DownloadManager.shared.resumeIncompleteDownloads()
                 }
             #endif
         }

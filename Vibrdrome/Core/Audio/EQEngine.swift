@@ -10,23 +10,23 @@ final class EQEngine {
     static let shared = EQEngine()
 
     var currentPresetId: String = "flat" {
-        didSet { UserDefaults.standard.set(currentPresetId, forKey: "eqCurrentPresetId") }
+        didSet { UserDefaults.standard.set(currentPresetId, forKey: UserDefaultsKeys.eqCurrentPresetId) }
     }
 
     var customGains: [Float] = Array(repeating: 0, count: 10) {
         didSet {
             if let data = try? JSONEncoder().encode(customGains) {
-                UserDefaults.standard.set(data, forKey: "eqCurrentGains")
+                UserDefaults.standard.set(data, forKey: UserDefaultsKeys.eqCurrentGains)
             }
         }
     }
 
     private init() {
         // Restore saved state
-        if let savedId = UserDefaults.standard.string(forKey: "eqCurrentPresetId") {
+        if let savedId = UserDefaults.standard.string(forKey: UserDefaultsKeys.eqCurrentPresetId) {
             currentPresetId = savedId
         }
-        if let data = UserDefaults.standard.data(forKey: "eqCurrentGains"),
+        if let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.eqCurrentGains),
            let gains = try? JSONDecoder().decode([Float].self, from: data),
            gains.count == 10 {
             customGains = gains
@@ -63,13 +63,13 @@ final class EQEngine {
         var presets = loadCustomPresets()
         presets[name] = customGains
         if let data = try? JSONEncoder().encode(presets) {
-            UserDefaults.standard.set(data, forKey: "customEQPresets")
+            UserDefaults.standard.set(data, forKey: UserDefaultsKeys.customEQPresets)
         }
     }
 
     /// Load custom presets from UserDefaults
     func loadCustomPresets() -> [String: [Float]] {
-        guard let data = UserDefaults.standard.data(forKey: "customEQPresets"),
+        guard let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.customEQPresets),
               let presets = try? JSONDecoder().decode([String: [Float]].self, from: data)
         else { return [:] }
         return presets

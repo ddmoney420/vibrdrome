@@ -1,5 +1,4 @@
 #if os(macOS)
-import os.log
 import SwiftUI
 
 struct MacContentView: View {
@@ -34,87 +33,22 @@ struct MacContentView: View {
             switch newPhase {
             case .inactive:
                 // macOS rarely gets .background; save on .inactive
-                savePlayQueue()
-                createBookmarkIfNeeded()
+                engine.savePlayQueue(client: appState.subsonicClient)
+                engine.saveQueueLocally()
+                engine.createBookmarkIfNeeded(client: appState.subsonicClient)
             case .active:
-                restorePlayQueue()
-                refreshPlaybackState()
+                engine.restorePlayQueue(client: appState.subsonicClient)
+                engine.refreshPlaybackState()
             default:
                 break
             }
         }
-    }
-
-    private func savePlayQueue() {
-        let queue = engine.queue
-        guard !queue.isEmpty else { return }
-        let ids = queue.map(\.id)
-        let currentId = engine.currentSong?.id
-        let position = Int(engine.currentTime * 1000)
-        Task {
-            do {
-                try await appState.subsonicClient.savePlayQueue(
-                    ids: ids, current: currentId, position: position)
-            } catch {
-                Logger(subsystem: "com.vibrdrome.app", category: "PlayQueue")
-                    .error("Failed to save play queue: \(error)")
-            }
+        .sheet(isPresented: Bindable(appState).requiresReAuth) {
+            ReAuthView()
+                .environment(appState)
+                .interactiveDismissDisabled()
         }
     }
 
-    private func createBookmarkIfNeeded() {
-        guard let song = engine.currentSong,
-              engine.currentTime > 30 else { return }
-        let position = Int(engine.currentTime * 1000)
-        Task {
-            do {
-                try await appState.subsonicClient.createBookmark(
-                    id: song.id, position: position, comment: "Auto-bookmark")
-            } catch {
-                Logger(subsystem: "com.vibrdrome.app", category: "PlayQueue")
-                    .error("Failed to create auto-bookmark: \(error)")
-            }
-        }
-    }
-
-    private func refreshPlaybackState() {
-        if engine.currentSong != nil {
-            if let player = engine.activePlayer,
-               let item = player.currentItem,
-               item.status == .readyToPlay {
-                engine.currentTime = player.currentTime().seconds
-                if item.duration.isNumeric {
-                    engine.duration = item.duration.seconds
-                }
-            }
-        }
-    }
-
-    private func restorePlayQueue() {
-        guard engine.currentSong == nil, engine.queue.isEmpty else { return }
-        Task {
-            let playQueue: PlayQueue?
-            do {
-                playQueue = try await appState.subsonicClient.getPlayQueue()
-            } catch {
-                Logger(subsystem: "com.vibrdrome.app", category: "PlayQueue")
-                    .error("Failed to restore play queue: \(error.localizedDescription)")
-                return
-            }
-            guard let songs = playQueue?.entry, !songs.isEmpty else { return }
-
-            engine.queue = songs
-
-            if let currentId = playQueue?.current,
-               let index = songs.firstIndex(where: { $0.id == currentId }) {
-                engine.currentIndex = index
-                engine.currentSong = songs[index]
-                if let position = playQueue?.position, position > 0 {
-                    engine.currentTime = Double(position) / 1000.0
-                }
-                NowPlayingManager.shared.update(song: songs[index], isPlaying: false)
-            }
-        }
-    }
 }
 #endif

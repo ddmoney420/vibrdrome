@@ -143,7 +143,8 @@ struct EQView: View {
                                 get: { eqEngine.customGains[index] },
                                 set: { eqEngine.setGain($0, forBand: index) }
                             ),
-                            range: -12...12
+                            range: -12...12,
+                            label: EQPresets.bands[index]
                         )
                         .frame(height: 180)
 
@@ -189,6 +190,9 @@ struct EQView: View {
 private struct VerticalSlider: View {
     @Binding var value: Float
     let range: ClosedRange<Float>
+    var label: String = ""
+
+    private let step: Float = 1.0
 
     var body: some View {
         GeometryReader { geo in
@@ -234,5 +238,26 @@ private struct VerticalSlider: View {
                     }
             )
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label) Hz")
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                value = min(value + step, range.upperBound)
+            case .decrement:
+                value = max(value - step, range.lowerBound)
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private var accessibilityValueText: String {
+        let rounded = Int(value.rounded())
+        if rounded >= 0 {
+            return "+\(rounded) dB"
+        }
+        return "\(rounded) dB"
     }
 }

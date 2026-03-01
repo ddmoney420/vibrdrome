@@ -136,7 +136,7 @@ extension AudioEngine {
               let song = currentSong else { return }
         markScrobbleSubmitted()
         PersistenceController.shared.recordPlay(song: song)
-        if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.scrobblingEnabled) {
             Task {
                 do {
                     try await OfflineActionQueue.shared.scrobble(
@@ -156,7 +156,7 @@ extension AudioEngine {
         if played >= threshold {
             markScrobbleSubmitted()
             PersistenceController.shared.recordPlay(song: song)
-            if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
+            if UserDefaults.standard.bool(forKey: UserDefaultsKeys.scrobblingEnabled) {
                 Task {
                     do {
                         try await OfflineActionQueue.shared.scrobble(
@@ -172,7 +172,7 @@ extension AudioEngine {
 
     /// Fire-and-forget scrobble "now playing" notification
     func scrobbleNowPlaying(songId: String) {
-        if UserDefaults.standard.bool(forKey: "scrobblingEnabled") {
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.scrobblingEnabled) {
             Task {
                 do {
                     try await OfflineActionQueue.shared.scrobble(

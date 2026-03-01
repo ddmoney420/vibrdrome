@@ -52,25 +52,25 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
 
-    @AppStorage("wifiMaxBitRate") private var wifiMaxBitRate: Int = 0
-    @AppStorage("cellularMaxBitRate") private var cellularMaxBitRate: Int = 0
-    @AppStorage("scrobblingEnabled") private var scrobblingEnabled: Bool = true
-    @AppStorage("appColorScheme") private var appColorScheme: String = "system"
-    @AppStorage("accentColorTheme") private var accentColorTheme: String = "blue"
-    @AppStorage("gaplessPlayback") private var gaplessPlayback: Bool = true
-    @AppStorage("replayGainMode") private var replayGainMode: String = "off"
-    @AppStorage("crossfadeDuration") private var crossfadeDuration: Int = 0
-    @AppStorage("eqEnabled") private var eqEnabled: Bool = false
-    @AppStorage("autoDownloadFavorites") private var autoDownloadFavorites: Bool = false
-    @AppStorage("downloadOverCellular") private var downloadOverCellular: Bool = false
-    @AppStorage("largerText") private var largerText: Bool = false
-    @AppStorage("reduceMotion") private var reduceMotion: Bool = false
-    @AppStorage("boldText") private var boldText: Bool = false
-    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
-    @AppStorage("carPlayRecentCount") private var carPlayRecentCount: Int = 25
-    @AppStorage("carPlayShowGenres") private var carPlayShowGenres: Bool = true
-    @AppStorage("carPlayShowRadio") private var carPlayShowRadio: Bool = true
-    @AppStorage("cacheLimitBytes") private var cacheLimitBytes: Int = 0
+    @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
+    @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
+    @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
+    @AppStorage(UserDefaultsKeys.appColorScheme) private var appColorScheme: String = "system"
+    @AppStorage(UserDefaultsKeys.accentColorTheme) private var accentColorTheme: String = "blue"
+    @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
+    @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
+    @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
+    @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
+    @AppStorage(UserDefaultsKeys.autoDownloadFavorites) private var autoDownloadFavorites: Bool = false
+    @AppStorage(UserDefaultsKeys.downloadOverCellular) private var downloadOverCellular: Bool = false
+    @AppStorage(UserDefaultsKeys.largerText) private var largerText: Bool = false
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
+    @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
+    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.carPlayRecentCount) private var carPlayRecentCount: Int = 25
+    @AppStorage(UserDefaultsKeys.carPlayShowGenres) private var carPlayShowGenres: Bool = true
+    @AppStorage(UserDefaultsKeys.carPlayShowRadio) private var carPlayShowRadio: Bool = true
+    @AppStorage(UserDefaultsKeys.cacheLimitBytes) private var cacheLimitBytes: Int = 0
 
     @Query private var downloadedSongs: [DownloadedSong]
 

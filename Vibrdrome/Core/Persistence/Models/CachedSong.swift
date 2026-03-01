@@ -47,4 +47,33 @@ final class CachedSong {
         self.size = song.size
         self.isStarred = song.starred != nil
     }
+
+    /// Convert back to a Song value type for playback queue reconstruction.
+    func toSong() -> Song {
+        Song(
+            id: id,
+            parent: nil,
+            title: title,
+            album: albumName,
+            artist: artist,
+            albumId: albumId,
+            artistId: artistId,
+            track: track,
+            year: year,
+            genre: genre,
+            coverArt: coverArtId,
+            size: size,
+            contentType: contentType,
+            suffix: suffix,
+            duration: duration,
+            bitRate: bitRate,
+            path: nil,
+            discNumber: discNumber,
+            created: nil,
+            starred: isStarred ? "true" : nil,
+            bpm: nil,
+            replayGain: nil,
+            musicBrainzId: nil
+        )
+    }
 }

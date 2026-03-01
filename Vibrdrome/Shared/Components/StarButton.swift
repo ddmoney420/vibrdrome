@@ -67,7 +67,7 @@ struct StarButton: View {
     private func autoDownloadIfEnabled() {
         guard type == .song,
               let song,
-              UserDefaults.standard.bool(forKey: "autoDownloadFavorites") else { return }
+              UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) else { return }
         DownloadManager.shared.download(song: song, client: appState.subsonicClient)
     }
 }

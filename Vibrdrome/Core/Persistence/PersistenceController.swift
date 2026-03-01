@@ -21,6 +21,7 @@ final class PersistenceController {
             ServerConfig.self,
             OfflinePlaylist.self,
             PendingAction.self,
+            SavedQueue.self,
         ])
 
         let config = ModelConfiguration(
@@ -47,8 +48,8 @@ final class PersistenceController {
             }
         }
 
-        // D5: Clean up orphaned incomplete download records on launch
-        cleanupIncompleteDownloads()
+        // D5: Incomplete downloads are now handled by DownloadManager.resumeIncompleteDownloads()
+        // which checks the background URLSession before deleting records.
 
         // D6: Prune old play history
         prunePlayHistory()
@@ -76,23 +77,6 @@ final class PersistenceController {
     }
 
     // MARK: - Cleanup
-
-    /// D5: Remove DownloadedSong records that were never completed (app killed mid-download)
-    private func cleanupIncompleteDownloads() {
-        let context = container.mainContext
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.isComplete == false }
-        )
-        guard let orphans = try? context.fetch(descriptor), !orphans.isEmpty else { return }
-        for orphan in orphans {
-            context.delete(orphan)
-        }
-        do {
-            try context.save()
-        } catch {
-            persistLog.error("Failed to save after cleanup of incomplete downloads: \(error)")
-        }
-    }
 
     /// D6: Prune play history older than 90 days, cap at 10000 entries
     private func prunePlayHistory() {

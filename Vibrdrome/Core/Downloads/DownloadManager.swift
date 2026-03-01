@@ -1,6 +1,9 @@
 import Foundation
 import Network
 import SwiftData
+import os.log
+
+private let downloadLog = Logger(subsystem: "com.vibrdrome.app", category: "Downloads")
 
 final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     static let shared = DownloadManager()
@@ -41,12 +44,81 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         networkMonitor.start(queue: DispatchQueue(label: "com.vibrdrome.download.network"))
     }
 
+    // MARK: - Resume Incomplete Downloads
+
+    /// Check the background URLSession for pending tasks and reconnect them to the
+    /// progress tracking system. Truly orphaned incomplete DownloadedSong records
+    /// (those with no matching background session task) are deleted.
+    func resumeIncompleteDownloads() {
+        // Force lazy session init so we can query pending tasks
+        _ = session
+
+        session.getAllTasks { [weak self] tasks in
+            guard let self else { return }
+
+            // Build a set of songIds that have active background session tasks
+            var activeSongIds = Set<String>()
+            for task in tasks {
+                guard let songId = task.taskDescription,
+                      task.state == .running || task.state == .suspended else { continue }
+                activeSongIds.insert(songId)
+
+                // Reconnect the task to activeDownloads tracking
+                if let downloadTask = task as? URLSessionDownloadTask {
+                    self.lock.withLock {
+                        self.activeDownloads[songId] = downloadTask
+                    }
+                    // Resume suspended tasks
+                    if task.state == .suspended {
+                        downloadTask.resume()
+                    }
+                }
+            }
+
+            downloadLog.info("Found \(activeSongIds.count) active background download tasks")
+
+            // On the main actor, reconcile SwiftData records with active tasks
+            Task { @MainActor in
+                let modelContext = PersistenceController.shared.container.mainContext
+                let descriptor = FetchDescriptor<DownloadedSong>(
+                    predicate: #Predicate { $0.isComplete == false }
+                )
+                guard let incompleteRecords = try? modelContext.fetch(descriptor) else { return }
+
+                var deletedCount = 0
+                var reconnectedCount = 0
+                for record in incompleteRecords {
+                    if activeSongIds.contains(record.songId) {
+                        // This record has an active background task — reconnect progress tracking
+                        DownloadProgress.shared.update(songId: record.songId, progress: 0)
+                        reconnectedCount += 1
+                    } else {
+                        // Truly orphaned — no background task exists, delete the record
+                        modelContext.delete(record)
+                        deletedCount += 1
+                    }
+                }
+
+                if deletedCount > 0 || reconnectedCount > 0 {
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        downloadLog.error("Failed to save after incomplete download cleanup: \(error)")
+                    }
+                    downloadLog.info(
+                        "Incomplete downloads: \(reconnectedCount) resumed, \(deletedCount) orphaned records removed"
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Public API
 
     @MainActor
     func download(song: Song, client: SubsonicClient) {
         // Block downloads over cellular if setting is off
-        if isOnCellular && !UserDefaults.standard.bool(forKey: "downloadOverCellular") {
+        if isOnCellular && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.downloadOverCellular) {
             return
         }
 

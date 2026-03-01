@@ -7,7 +7,7 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var searchTask: Task<Void, Never>?
-    @AppStorage("showAlbumArtInLists") private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     var body: some View {
         ScrollView {

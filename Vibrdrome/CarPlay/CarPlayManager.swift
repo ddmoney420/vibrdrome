@@ -61,8 +61,8 @@ final class CarPlayManager {
             makeLibraryTab(),
             makePlaylistsTab(),
         ]
-        if UserDefaults.standard.bool(forKey: "carPlayShowRadio") ||
-           !UserDefaults.standard.dictionaryRepresentation().keys.contains("carPlayShowRadio") {
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.carPlayShowRadio) ||
+           !UserDefaults.standard.dictionaryRepresentation().keys.contains(UserDefaultsKeys.carPlayShowRadio) {
             // Default to showing radio (true) if key not set
             tabs.append(makeRadioTab())
         }
@@ -150,8 +150,8 @@ final class CarPlayManager {
         }
 
         // Add Genres if setting is enabled (default: true)
-        let showGenres = UserDefaults.standard.bool(forKey: "carPlayShowGenres") ||
-            !UserDefaults.standard.dictionaryRepresentation().keys.contains("carPlayShowGenres")
+        let showGenres = UserDefaults.standard.bool(forKey: UserDefaultsKeys.carPlayShowGenres) ||
+            !UserDefaults.standard.dictionaryRepresentation().keys.contains(UserDefaultsKeys.carPlayShowGenres)
         if showGenres {
             let genreItem = CPListItem(text: "Genres", detailText: nil, image: UIImage(systemName: "guitars"))
             genreItem.handler = { [weak self] _, completion in
@@ -313,7 +313,7 @@ final class CarPlayManager {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
             let size = type == .newest
-                ? max(10, UserDefaults.standard.integer(forKey: "carPlayRecentCount"))
+                ? max(10, UserDefaults.standard.integer(forKey: UserDefaultsKeys.carPlayRecentCount))
                 : 50
             let albums = try await client.getAlbumList(type: type, size: size == 0 ? 25 : size)
             let items = albums.map { album in
