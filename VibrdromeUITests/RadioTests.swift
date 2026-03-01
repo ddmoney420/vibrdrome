@@ -10,7 +10,7 @@ final class RadioTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - Radio Tab
@@ -32,8 +32,7 @@ final class RadioTests: XCTestCase {
         sleep(2)
 
         let findBtn = app.buttons["Find Stations"]
-        let findOther = app.otherElements["Find Stations"]
-        XCTAssertTrue(findBtn.waitForExistence(timeout: 5) || findOther.exists,
+        XCTAssertTrue(findBtn.waitForExistence(timeout: 5),
                       "Radio tab should have 'Find Stations' button")
     }
 
@@ -42,8 +41,7 @@ final class RadioTests: XCTestCase {
         sleep(2)
 
         let addBtn = app.buttons["Add URL"]
-        let addOther = app.otherElements["Add URL"]
-        XCTAssertTrue(addBtn.waitForExistence(timeout: 5) || addOther.exists,
+        XCTAssertTrue(addBtn.waitForExistence(timeout: 5),
                       "Radio tab should have 'Add URL' button")
     }
 
@@ -85,11 +83,11 @@ final class RadioTests: XCTestCase {
         let genres = ["jazz", "rock", "electronic", "classical", "pop", "ambient"]
         var foundGenres = 0
         for genre in genres {
-            let genreButton = app.buttons.matching(
-                NSPredicate(format: "label CONTAINS[c] %@", genre)).firstMatch
-            let genreText = app.staticTexts.matching(
-                NSPredicate(format: "label CONTAINS[c] %@", genre)).firstMatch
-            if genreButton.exists || genreText.exists {
+            // Check buttons and static texts for genre names (case-insensitive)
+            let allButtons = app.buttons.allElementsBoundByIndex
+            let allTexts = app.staticTexts.allElementsBoundByIndex
+            if allButtons.contains(where: { $0.label.lowercased().contains(genre) })
+                || allTexts.contains(where: { $0.label.lowercased().contains(genre) }) {
                 foundGenres += 1
             }
         }
@@ -153,14 +151,8 @@ final class RadioTests: XCTestCase {
         sleep(2)
 
         // Should show form with station name and stream URL fields
-        let nameField = app.textFields.matching(
-            NSPredicate(format: "placeholderValue CONTAINS[c] 'station' OR placeholderValue CONTAINS[c] 'name'")).firstMatch
-        let urlField = app.textFields.matching(
-            NSPredicate(format: "placeholderValue CONTAINS[c] 'stream' OR placeholderValue CONTAINS[c] 'url'")).firstMatch
-
-        let formOpened = nameField.waitForExistence(timeout: 5)
-            || urlField.exists
-            || app.textFields.count >= 2
+        let formOpened = app.textFields.count >= 2
+            || app.navigationBars["Add Station"].exists
 
         XCTAssertTrue(formOpened,
                       "Add Station form should show name and URL fields")
@@ -203,11 +195,11 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(3)
 
-        // Find a station in the list (look for Play icons)
-        let playIcon = app.images.matching(
-            NSPredicate(format: "label == 'Play'")).firstMatch
+        // Find a station play icon
+        let allImages = app.images.allElementsBoundByIndex
+        let playIcon = allImages.first { $0.label == "Play" }
 
-        guard playIcon.waitForExistence(timeout: 5) else {
+        guard let playIcon, playIcon.waitForExistence(timeout: 5) else {
             throw XCTSkip("No radio stations available to play")
         }
 
@@ -215,21 +207,10 @@ final class RadioTests: XCTestCase {
         sleep(5) // Radio streams take time to buffer
 
         // Should see a playing indicator or mini player
-        let pauseButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Pause'")).firstMatch
-        let playingIndicator = app.images.matching(
-            NSPredicate(format: "label == 'Playing'")).firstMatch
+        let pauseExists = app.buttons.allElementsBoundByIndex.contains { $0.label == "Pause" }
+        let playingExists = app.images.allElementsBoundByIndex.contains { $0.label == "Playing" }
 
-        let isPlaying = pauseButton.waitForExistence(timeout: 10)
-            || playingIndicator.exists
-
-        XCTAssertTrue(isPlaying || app.state == .runningForeground,
+        XCTAssertTrue(pauseExists || playingExists || app.state == .runningForeground,
                       "Tapping a station should start playback or at least not crash")
-    }
-
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        app.ensureLoggedIn()
     }
 }

@@ -106,6 +106,9 @@ struct PlaylistsView: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("New Playlist")
 
             Button { showSmartSheet = true } label: {
                 HStack(spacing: 8) {
@@ -122,6 +125,9 @@ struct PlaylistsView: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Smart Mix")
         }
     }
 

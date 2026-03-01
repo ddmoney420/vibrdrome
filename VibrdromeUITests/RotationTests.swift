@@ -10,7 +10,7 @@ final class RotationTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     override func tearDownWithError() throws {
@@ -186,12 +186,4 @@ final class RotationTests: XCTestCase {
                       "Playback should continue through rotation")
     }
 
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
 }

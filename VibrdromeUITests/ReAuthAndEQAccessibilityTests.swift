@@ -10,37 +10,13 @@ final class ReAuthAndEQAccessibilityTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - EQ Slider Accessibility
 
     func testEQViewOpens() throws {
-        app.goToSettings()
-        sleep(2)
-
-        // Find and tap Equalizer button/row
-        let eqButton = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Equalizer'")).firstMatch
-        let eqText = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Equalizer'")).firstMatch
-
-        for _ in 0..<3 {
-            if eqButton.exists || eqText.exists { break }
-            app.swipeUpInDetail()
-            sleep(1)
-        }
-
-        guard eqButton.waitForExistence(timeout: 5) || eqText.exists else {
-            throw XCTSkip("Equalizer button not found in Settings")
-        }
-
-        if eqButton.exists {
-            eqButton.tap()
-        } else {
-            eqText.tap()
-        }
-        sleep(2)
+        try openEQView()
 
         // EQ view should show preset buttons and Done button
         let doneButton = app.buttons["Done"]
@@ -157,36 +133,27 @@ final class ReAuthAndEQAccessibilityTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
-
     private func openEQView() throws {
         app.goToSettings()
         sleep(2)
 
+        // Use accessibilityIdentifier first (most reliable on iOS 26)
+        let eqLink = app.buttons["eqSettingsLink"]
         let eqButton = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Equalizer'")).firstMatch
-        let eqText = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Equalizer'")).firstMatch
+            NSPredicate(format: "label CONTAINS[c] 'EQ Settings'")).firstMatch
 
-        for _ in 0..<3 {
-            if eqButton.exists || eqText.exists { break }
-            app.swipeUpInDetail()
+        for _ in 0..<5 {
+            if eqLink.exists || eqButton.exists { break }
+            app.swipeUp()
             sleep(1)
         }
 
-        guard eqButton.waitForExistence(timeout: 5) || eqText.exists else {
-            throw XCTSkip("Equalizer button not found in Settings")
-        }
-
-        if eqButton.exists {
+        if eqLink.waitForExistence(timeout: 5) {
+            eqLink.tap()
+        } else if eqButton.exists {
             eqButton.tap()
         } else {
-            eqText.tap()
+            throw XCTSkip("EQ Settings link not found in Settings")
         }
         sleep(2)
     }

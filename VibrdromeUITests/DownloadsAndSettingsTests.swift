@@ -10,7 +10,7 @@ final class DownloadsAndSettingsTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - Downloads Section in Settings
@@ -19,20 +19,27 @@ final class DownloadsAndSettingsTests: XCTestCase {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["Downloads"].exists || self.app.staticTexts["Downloaded Songs"].exists }
+        scrollToFind { self.app.otherElements["sectionHeader_Downloads"].exists }
 
-        XCTAssertTrue(app.staticTexts["Downloads"].exists || app.staticTexts["Downloaded Songs"].exists,
-                      "Settings should show Downloads section")
+        XCTAssertTrue(app.otherElements["sectionHeader_Downloads"].exists,
+                      "Settings should show Downloads section header")
     }
 
     func testCacheLimitPickerExists() throws {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["Cache Limit"].exists || self.app.buttons["Cache Limit"].exists }
+        scrollToFind {
+            self.app.otherElements["cacheLimitPicker"].exists
+                || self.app.cells["cacheLimitPicker"].exists
+        }
 
-        XCTAssertTrue(app.staticTexts["Cache Limit"].exists || app.buttons["Cache Limit"].exists,
-                      "Settings should have Cache Limit setting")
+        let found = app.otherElements["cacheLimitPicker"].exists
+            || app.cells["cacheLimitPicker"].exists
+            // Fall back to label text
+            || app.staticTexts["Cache Limit"].exists
+            || app.buttons["Cache Limit"].exists
+        XCTAssertTrue(found, "Settings should have Cache Limit setting")
     }
 
     func testAutoDownloadFavoritesToggle() throws {
@@ -40,24 +47,30 @@ final class DownloadsAndSettingsTests: XCTestCase {
         sleep(3)
 
         scrollToFind {
-            self.app.staticTexts["Auto-Download Favorites"].exists
-                || self.app.switches["Auto-Download Favorites"].exists
+            self.app.switches["autoDownloadFavoritesToggle"].exists
+                || self.app.otherElements["autoDownloadFavoritesToggle"].exists
         }
 
-        XCTAssertTrue(
-            app.staticTexts["Auto-Download Favorites"].exists
-                || app.switches["Auto-Download Favorites"].exists,
-            "Settings should have Auto-Download Favorites toggle")
+        let found = app.switches["autoDownloadFavoritesToggle"].exists
+            || app.otherElements["autoDownloadFavoritesToggle"].exists
+            // Fall back to label text
+            || app.staticTexts["Auto-Download Favorites"].exists
+            || app.switches["Auto-Download Favorites"].exists
+        XCTAssertTrue(found, "Settings should have Auto-Download Favorites toggle")
     }
 
     func testDownloadedSongsCountDisplayed() throws {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["Downloaded Songs"].exists }
+        scrollToFind {
+            self.app.otherElements["downloadedSongsRow"].exists
+                || self.app.staticTexts["Downloaded Songs"].exists
+        }
 
-        XCTAssertTrue(app.staticTexts["Downloaded Songs"].exists,
-                      "Settings should show downloaded songs count")
+        let found = app.otherElements["downloadedSongsRow"].exists
+            || app.staticTexts["Downloaded Songs"].exists
+        XCTAssertTrue(found, "Settings should show downloaded songs count")
     }
 
     // MARK: - Playback Settings
@@ -66,21 +79,17 @@ final class DownloadsAndSettingsTests: XCTestCase {
         app.goToSettings()
         sleep(3)
 
-        // Look for section header "Playback" or any playback setting
         scrollToFind {
-            self.app.staticTexts["Playback"].exists
-                || self.app.staticTexts["WiFi Quality"].exists
-                || self.app.buttons["WiFi Quality"].exists
-                || self.app.switches["Scrobbling"].exists
-                || self.app.staticTexts["Scrobbling"].exists
+            self.app.otherElements["sectionHeader_Playback"].exists
+                || self.app.otherElements["wifiQualityPicker"].exists
+                || self.app.switches["scrobblingToggle"].exists
         }
 
-        let hasPlayback = app.staticTexts["Playback"].exists
-            || app.staticTexts["WiFi Quality"].exists
-            || app.buttons["WiFi Quality"].exists
-            || app.switches["Scrobbling"].exists
-            || app.staticTexts["Scrobbling"].exists
-
+        let hasPlayback = app.otherElements["sectionHeader_Playback"].exists
+            || app.otherElements["wifiQualityPicker"].exists
+            || app.cells["wifiQualityPicker"].exists
+            || app.switches["scrobblingToggle"].exists
+            || app.otherElements["scrobblingToggle"].exists
         XCTAssertTrue(hasPlayback, "Settings should have Playback section")
     }
 
@@ -88,10 +97,16 @@ final class DownloadsAndSettingsTests: XCTestCase {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["ReplayGain"].exists || self.app.buttons["ReplayGain"].exists }
+        scrollToFind {
+            self.app.otherElements["replayGainPicker"].exists
+                || self.app.cells["replayGainPicker"].exists
+        }
 
-        XCTAssertTrue(app.staticTexts["ReplayGain"].exists || app.buttons["ReplayGain"].exists,
-                      "Settings should have ReplayGain setting")
+        let found = app.otherElements["replayGainPicker"].exists
+            || app.cells["replayGainPicker"].exists
+            || app.staticTexts["ReplayGain"].exists
+            || app.buttons["ReplayGain"].exists
+        XCTAssertTrue(found, "Settings should have ReplayGain setting")
     }
 
     // MARK: - Appearance Settings
@@ -101,23 +116,22 @@ final class DownloadsAndSettingsTests: XCTestCase {
         sleep(3)
 
         scrollToFind {
-            self.app.staticTexts["Theme"].exists
-                || self.app.buttons["Theme"].exists
-                || self.app.staticTexts["Appearance"].exists
+            self.app.otherElements["themePicker"].exists
+                || self.app.cells["themePicker"].exists
         }
 
-        XCTAssertTrue(
-            app.staticTexts["Theme"].exists
-                || app.buttons["Theme"].exists
-                || app.staticTexts["Appearance"].exists,
-            "Settings should have Theme picker or Appearance section")
+        let found = app.otherElements["themePicker"].exists
+            || app.cells["themePicker"].exists
+            || app.staticTexts["Theme"].exists
+            || app.buttons["Theme"].exists
+        XCTAssertTrue(found, "Settings should have Theme picker")
     }
 
     func testAccentColorExists() throws {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["Accent Color"].exists || self.app.buttons["Accent Color"].exists }
+        scrollToFind { self.app.staticTexts["Accent Color"].exists }
 
         XCTAssertTrue(
             app.staticTexts["Accent Color"].exists || app.buttons["Accent Color"].exists,
@@ -130,11 +144,16 @@ final class DownloadsAndSettingsTests: XCTestCase {
         app.goToSettings()
         sleep(3)
 
-        scrollToFind { self.app.staticTexts["WiFi Quality"].exists || self.app.buttons["WiFi Quality"].exists }
+        scrollToFind {
+            self.app.otherElements["wifiQualityPicker"].exists
+                || self.app.cells["wifiQualityPicker"].exists
+        }
 
-        XCTAssertTrue(
-            app.staticTexts["WiFi Quality"].exists || app.buttons["WiFi Quality"].exists,
-            "Settings should have WiFi Quality setting")
+        let found = app.otherElements["wifiQualityPicker"].exists
+            || app.cells["wifiQualityPicker"].exists
+            || app.staticTexts["WiFi Quality"].exists
+            || app.buttons["WiFi Quality"].exists
+        XCTAssertTrue(found, "Settings should have WiFi Quality setting")
     }
 
     // MARK: - About Section
@@ -145,13 +164,15 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
         // About is at the bottom — scroll aggressively
         for _ in 0..<12 {
-            if app.staticTexts["Vibrdrome"].exists || app.staticTexts["About"].exists { break }
+            if app.staticTexts["Vibrdrome"].exists
+                || app.otherElements["sectionHeader_About"].exists { break }
             app.swipeUp()
             sleep(1)
         }
 
         XCTAssertTrue(
-            app.staticTexts["Vibrdrome"].exists || app.staticTexts["About"].exists,
+            app.staticTexts["Vibrdrome"].exists
+                || app.otherElements["sectionHeader_About"].exists,
             "Settings should show About section with app name or version")
     }
 
@@ -194,13 +215,9 @@ final class DownloadsAndSettingsTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func ensureLoggedIn() {
-        app.ensureLoggedIn()
-    }
-
-    /// Scroll up to 8 times until the condition is met.
+    /// Scroll up to 10 times until the condition is met.
     private func scrollToFind(_ condition: () -> Bool) {
-        for _ in 0..<8 {
+        for _ in 0..<10 {
             if condition() { return }
             app.swipeUp()
             sleep(1)

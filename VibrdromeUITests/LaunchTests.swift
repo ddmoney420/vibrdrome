@@ -15,10 +15,12 @@ final class LaunchTests: XCTestCase {
 
     func testAppLaunches() throws {
         app.launch()
-        // App should show either login screen or main screen
+        // App should show either login screen or main screen or ReAuth
         let showsLogin = app.isOnLoginScreen
         let showsMain = app.isOnMainScreen
-        XCTAssertTrue(showsLogin || showsMain, "App should show login or main screen after launch")
+        let showsReAuth = app.isShowingReAuth
+        XCTAssertTrue(showsLogin || showsMain || showsReAuth,
+                      "App should show login, main screen, or re-auth after launch")
     }
 
     func testAppDoesNotCrashOnLaunch() throws {
@@ -34,6 +36,13 @@ final class LaunchTests: XCTestCase {
         // Reset app state by signing out if needed
         app.launch()
 
+        if app.isShowingReAuth {
+            app.handleReAuth()
+            guard app.waitForMainScreen() else {
+                throw XCTSkip("Could not get past ReAuth modal")
+            }
+        }
+
         if !app.isOnLoginScreen {
             // Already logged in — sign out first
             app.signOut()
@@ -42,20 +51,21 @@ final class LaunchTests: XCTestCase {
             }
         }
 
-        // Verify all login fields exist
-        // SwiftUI Form renders TextField("URL") with "URL" as a label;
-        // the actual text field may use the prompt text as its identifier.
-        let urlField = app.textFields["URL"].exists
+        // Verify all login fields exist using accessibility identifiers (most reliable on iOS 26)
+        let urlField = app.textFields["serverURLField"].exists
+            || app.textFields["URL"].exists
             || app.textFields["Server URL"].exists
             || app.textFields["https://..."].exists
             || app.textFields.count >= 2
         XCTAssertTrue(urlField, "Login screen should have a URL field")
 
-        let usernameField = app.textFields["Username"]
-        XCTAssertTrue(usernameField.exists, "Login screen should have a Username field")
+        let usernameField = app.textFields["usernameField"].exists
+            || app.textFields["Username"].exists
+        XCTAssertTrue(usernameField, "Login screen should have a Username field")
 
-        let passwordField = app.secureTextFields["Password"]
-        XCTAssertTrue(passwordField.exists, "Login screen should have a Password field")
+        let passwordField = app.secureTextFields["passwordField"].exists
+            || app.secureTextFields["Password"].exists
+        XCTAssertTrue(passwordField, "Login screen should have a Password field")
 
         let signInButton = app.buttons["Sign In"]
         XCTAssertTrue(signInButton.exists, "Login screen should have a Sign In button")
@@ -63,6 +73,11 @@ final class LaunchTests: XCTestCase {
 
     func testSignInButtonDisabledWithEmptyFields() throws {
         app.launch()
+
+        if app.isShowingReAuth {
+            // Can't test empty-field state if ReAuth is showing
+            throw XCTSkip("ReAuth modal is showing, cannot test empty login fields")
+        }
 
         guard app.isOnLoginScreen else { return }
 

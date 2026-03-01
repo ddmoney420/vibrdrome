@@ -10,7 +10,7 @@ final class NowPlayingFeatureTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
         try app.playAnyTrack()
     }
 
@@ -454,12 +454,4 @@ final class NowPlayingFeatureTests: XCTestCase {
         }
     }
 
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
 }

@@ -35,7 +35,7 @@ final class LoginTests: XCTestCase {
     }
 
     func testSignInShowsAllTabs() throws {
-        ensureLoggedIn()
+        app.ensureLoggedIn()
 
         if app.isSidebarLayout {
             // iPad: verify key sidebar items exist
@@ -56,7 +56,7 @@ final class LoginTests: XCTestCase {
     }
 
     func testSignOutReturnsToLoginScreen() throws {
-        ensureLoggedIn()
+        app.ensureLoggedIn()
 
         app.signOut()
 
@@ -70,12 +70,4 @@ final class LoginTests: XCTestCase {
                       "Should return to login screen after sign out")
     }
 
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
 }

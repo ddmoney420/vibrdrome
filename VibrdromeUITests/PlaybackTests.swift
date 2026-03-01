@@ -10,7 +10,7 @@ final class PlaybackTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - Play a Track via Library
@@ -120,12 +120,4 @@ final class PlaybackTests: XCTestCase {
                       "Now Playing should have a Track Progress slider")
     }
 
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
 }

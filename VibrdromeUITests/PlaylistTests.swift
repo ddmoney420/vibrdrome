@@ -10,7 +10,7 @@ final class PlaylistTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - Playlists Tab
@@ -90,9 +90,6 @@ final class PlaylistTests: XCTestCase {
 
         // Should have a search field for adding songs
         let searchField = app.searchFields.firstMatch
-            ?? app.textFields.matching(
-                NSPredicate(format: "placeholderValue CONTAINS[c] 'search'")).firstMatch
-
         let hasSearch = searchField.waitForExistence(timeout: 5)
         // May also just have the name field
         XCTAssertTrue(hasSearch || app.textFields.count > 0,
@@ -199,7 +196,6 @@ final class PlaylistTests: XCTestCase {
 
         // Playlists render as NavigationLinks in a LazyVGrid.
         // XCUITest may expose them as buttons, links, or other elements.
-        // Find any tappable element that looks like a playlist card.
         var tappedPlaylist = false
         let skipLabels = Set(["new playlist", "smart mix", "library", "search",
             "playlists", "radio", "settings", "refresh", "back", ""])
@@ -265,14 +261,5 @@ final class PlaylistTests: XCTestCase {
         }
         XCTAssertTrue(hasPlayback,
                       "Playlist detail should have Play or Shuffle button")
-    }
-
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
     }
 }

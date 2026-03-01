@@ -10,7 +10,7 @@ final class NavigationTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
         app.launch()
-        ensureLoggedIn()
+        app.ensureLoggedIn()
     }
 
     // MARK: - Tab Navigation
@@ -61,9 +61,8 @@ final class NavigationTests: XCTestCase {
             sleep(1)
         }
         let hasContent = signOutButton.waitForExistence(timeout: 5)
-            || app.staticTexts.matching(
-                NSPredicate(format: "label CONTAINS[c] 'Server'")).firstMatch.exists
             || app.buttons["Test Connection"].exists
+            || app.otherElements["sectionHeader_Server"].exists
         XCTAssertTrue(hasContent,
                       "Settings should show server section content")
     }
@@ -72,7 +71,7 @@ final class NavigationTests: XCTestCase {
         if app.isSidebarLayout {
             // iPad: navigate between sidebar items
             let items = ["Artists", "Search", "Playlists", "Stations", "Settings"]
-            for item in items {
+            for _ in items {
                 app.goToLibrary()  // Reset to known state
                 sleep(1)
             }
@@ -107,19 +106,15 @@ final class NavigationTests: XCTestCase {
         sleep(5)
 
         // Search uses ScrollView with sections (Artists, Albums, Songs)
-        // Look for section headers or any new content appearing
         let songSection = app.staticTexts["Songs"]
         let albumSection = app.staticTexts["Albums"]
         let artistSection = app.staticTexts["Artists"]
-        let matchingText = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] 'the'"))
         // Also check if any result cells appeared (buttons or static texts beyond the search field)
         let contentCount = app.staticTexts.count
 
         let hasResults = songSection.waitForExistence(timeout: 8)
             || albumSection.exists
             || artistSection.exists
-            || matchingText.count > 0
             || contentCount > 3
         XCTAssertTrue(hasResults,
                       "Search for 'the' should return results")
@@ -131,11 +126,10 @@ final class NavigationTests: XCTestCase {
         app.goToSettings()
         sleep(2)
 
-        // Should show the server URL or connection info
-        let hasServerInfo = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] 'dmoney'")).count > 0
-            || app.staticTexts.matching(
-                NSPredicate(format: "label CONTAINS[c] 'duckdns'")).count > 0
+        // Should show the server URL or connection info — check for username or domain
+        let hasServerInfo = app.staticTexts.allElementsBoundByIndex.contains {
+            $0.label.lowercased().contains("dmoney") || $0.label.lowercased().contains("duckdns")
+        }
         XCTAssertTrue(hasServerInfo, "Settings should show server info")
     }
 
@@ -146,14 +140,5 @@ final class NavigationTests: XCTestCase {
         let manageButton = app.buttons["Manage Servers"]
         XCTAssertTrue(manageButton.waitForExistence(timeout: 5),
                       "Settings should have Manage Servers button")
-    }
-
-    // MARK: - Helpers
-
-    private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
     }
 }

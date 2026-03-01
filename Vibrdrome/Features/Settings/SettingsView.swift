@@ -213,6 +213,7 @@ struct SettingsView: View {
                 Label("WiFi Quality", systemImage: "wifi")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("wifiQualityPicker")
 
             #if os(iOS)
             Picker(selection: $cellularMaxBitRate) {
@@ -223,17 +224,20 @@ struct SettingsView: View {
                 Label("Cellular Quality", systemImage: "cellularbars")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("cellularQualityPicker")
             #endif
 
             Toggle(isOn: $scrobblingEnabled) {
                 Label("Scrobbling", systemImage: "music.note.tv")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("scrobblingToggle")
 
             Toggle(isOn: $gaplessPlayback) {
                 Label("Gapless Playback", systemImage: "waveform.path")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("gaplessPlaybackToggle")
 
             Picker(selection: $crossfadeDuration) {
                 Text("Off").tag(0)
@@ -245,6 +249,7 @@ struct SettingsView: View {
                 Label("Crossfade", systemImage: "waveform.path.ecg")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("crossfadePicker")
 
             Picker(selection: $replayGainMode) {
                 Text("Off").tag("off")
@@ -254,11 +259,13 @@ struct SettingsView: View {
                 Label("ReplayGain", systemImage: "speaker.wave.2")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("replayGainPicker")
 
             Toggle(isOn: $eqEnabled) {
                 Label("Equalizer", systemImage: "slider.vertical.3")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("equalizerToggle")
             .onChange(of: eqEnabled) { _, newValue in
                 AudioEngine.shared.applyEQToggle(enabled: newValue)
             }
@@ -269,6 +276,7 @@ struct SettingsView: View {
                 Label("EQ Settings", systemImage: "slider.horizontal.3")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("eqSettingsLink")
         } header: {
             settingSectionHeader("Playback", icon: "play.circle.fill", color: .purple)
         }
@@ -287,6 +295,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fontWeight(.medium)
             }
+            .accessibilityIdentifier("downloadedSongsRow")
 
             cacheStorageRow(completed: completed)
 
@@ -298,17 +307,20 @@ struct SettingsView: View {
                 Label("Cache Limit", systemImage: "internaldrive")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("cacheLimitPicker")
 
             Toggle(isOn: $autoDownloadFavorites) {
                 Label("Auto-Download Favorites", systemImage: "heart.fill")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("autoDownloadFavoritesToggle")
 
             #if os(iOS)
             Toggle(isOn: $downloadOverCellular) {
                 Label("Download Over Cellular", systemImage: "cellularbars")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("downloadOverCellularToggle")
             #endif
 
             if !completed.isEmpty {
@@ -335,6 +347,7 @@ struct SettingsView: View {
                 Label("Theme", systemImage: "circle.lefthalf.filled")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("themePicker")
 
             // Accent color picker
             VStack(alignment: .leading, spacing: 10) {
@@ -370,6 +383,7 @@ struct SettingsView: View {
                 Label("Album Art in Lists", systemImage: "photo")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("albumArtInListsToggle")
         } header: {
             settingSectionHeader("Appearance", icon: "paintbrush.fill", color: .orange)
         }
@@ -388,16 +402,19 @@ struct SettingsView: View {
                 Label("Recent Albums", systemImage: "clock.fill")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("carPlayRecentAlbumsPicker")
 
             Toggle(isOn: $carPlayShowGenres) {
                 Label("Show Genres", systemImage: "guitars.fill")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("carPlayShowGenresToggle")
 
             Toggle(isOn: $carPlayShowRadio) {
                 Label("Show Radio", systemImage: "radio.fill")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("carPlayShowRadioToggle")
         } header: {
             settingSectionHeader("CarPlay", icon: "car.fill", color: .blue)
         }
@@ -412,16 +429,19 @@ struct SettingsView: View {
                 Label("Larger Text", systemImage: "textformat.size.larger")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("largerTextToggle")
 
             Toggle(isOn: $boldText) {
                 Label("Bold Text", systemImage: "bold")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("boldTextToggle")
 
             Toggle(isOn: $reduceMotion) {
                 Label("Reduce Motion", systemImage: "figure.walk")
                     .foregroundColor(.primary)
             }
+            .accessibilityIdentifier("reduceMotionToggle")
         } header: {
             settingSectionHeader("Accessibility", icon: "accessibility", color: .indigo)
         }
@@ -555,6 +575,7 @@ struct SettingsView: View {
                 .foregroundColor(color)
             Text(title)
         }
+        .accessibilityIdentifier("sectionHeader_\(title)")
     }
 
     private func infoRow(_ label: String, value: String, icon: String, color: Color) -> some View {
