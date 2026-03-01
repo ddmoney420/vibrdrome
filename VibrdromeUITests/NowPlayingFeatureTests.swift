@@ -11,14 +11,13 @@ final class NowPlayingFeatureTests: XCTestCase {
         app.launchArguments = ["--uitesting"]
         app.launch()
         ensureLoggedIn()
-        try playAnyTrack()
+        try app.playAnyTrack()
     }
 
     /// Attempts to open Now Playing. Call per-test rather than in setUp.
     private func ensureNowPlayingOpen() throws {
-        // Check if already in Now Playing
         if app.buttons["Shuffle"].exists { return }
-        try openNowPlaying()
+        try app.openNowPlaying()
     }
 
     // MARK: - Visualizer
@@ -40,8 +39,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         visualizer.tap()
         sleep(3)
 
-        // Visualizer should be a full screen view — look for transport controls
-        // that appear in the visualizer (play/pause, previous, next)
         let closeButton = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] 'close' OR label CONTAINS[c] 'xmark'")).firstMatch
         let pauseOrPlay = app.buttons.matching(
@@ -68,7 +65,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         app.tap()
         sleep(1)
 
-        // Look for preset names in the visualizer
         let presetNames = ["Plasma", "Aurora", "Nebula", "Waveform", "Tunnel", "Kaleidoscope"]
         var foundPreset = false
         for name in presetNames {
@@ -93,7 +89,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         visualizer.tap()
         sleep(2)
 
-        // Swipe left to change preset
         app.swipeLeft()
         sleep(1)
         app.swipeLeft()
@@ -101,11 +96,9 @@ final class NowPlayingFeatureTests: XCTestCase {
         app.swipeRight()
         sleep(1)
 
-        // Just verify no crash
         XCTAssertTrue(app.state == .runningForeground,
                       "App should not crash when swiping presets")
 
-        // Dismiss visualizer by swiping down
         app.swipeDown()
         sleep(1)
     }
@@ -129,8 +122,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         lyrics.tap()
         sleep(3)
 
-        // Lyrics view should show either lyrics content, a loading state,
-        // or "No Lyrics" message
         let lyricsTitle = app.navigationBars["Lyrics"]
         let noLyricsMessage = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] 'lyrics' OR label CONTAINS[c] 'No Lyrics'")).firstMatch
@@ -155,17 +146,14 @@ final class NowPlayingFeatureTests: XCTestCase {
         lyrics.tap()
         sleep(2)
 
-        // Dismiss lyrics
         let doneButton = app.buttons["Done"]
         if doneButton.waitForExistence(timeout: 3) {
             doneButton.tap()
         } else {
-            // Swipe down to dismiss sheet
             app.swipeDown()
         }
         sleep(1)
 
-        // Should be back on Now Playing
         let shuffleButton = app.buttons["Shuffle"]
         XCTAssertTrue(shuffleButton.waitForExistence(timeout: 5),
                       "Should return to Now Playing after dismissing lyrics")
@@ -190,7 +178,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         speedButton.tap()
         sleep(1)
 
-        // Menu should show speed options
         let normalOption = app.buttons["Normal"]
         let has15x = app.buttons["1.5x"]
         let has2x = app.buttons["2x"]
@@ -204,7 +191,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         XCTAssertTrue(hasSpeedOptions,
                       "Speed menu should show playback rate options")
 
-        // Dismiss menu by tapping elsewhere
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
         sleep(1)
     }
@@ -228,7 +214,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         eqButton.tap()
         sleep(2)
 
-        // EQ view should show "Equalizer" title and presets
         let eqTitle = app.navigationBars["Equalizer"]
         let presetsLabel = app.staticTexts["Presets"]
         let flatPreset = app.buttons["Flat"]
@@ -273,7 +258,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         eqButton.tap()
         sleep(2)
 
-        // Look for frequency band labels
         let bandLabels = ["32", "64", "125", "250", "500", "1K", "2K", "4K", "8K", "16K"]
         var foundBands = 0
         for band in bandLabels {
@@ -319,7 +303,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         doneButton.tap()
         sleep(1)
 
-        // Should be back on Now Playing
         let shuffleButton = app.buttons["Shuffle"]
         XCTAssertTrue(shuffleButton.waitForExistence(timeout: 5),
                       "Should return to Now Playing after dismissing EQ")
@@ -359,7 +342,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         sleepTimer.tap()
         sleep(1)
 
-        // Menu should show timer options
         let has15m = app.buttons["15 minutes"].exists
             || app.buttons["15 Minutes"].exists
             || app.buttons.matching(NSPredicate(format: "label CONTAINS '15'")).firstMatch.exists
@@ -373,7 +355,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         XCTAssertTrue(hasTimerOptions,
                       "Sleep timer should show duration options")
 
-        // Dismiss menu
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
         sleep(1)
     }
@@ -431,7 +412,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         queueButton.tap()
         sleep(2)
 
-        // Queue should show content
         let hasContent = app.staticTexts.count > 2
         XCTAssertTrue(hasContent || app.state == .runningForeground,
                       "Queue view should open without crashing")
@@ -458,11 +438,9 @@ final class NowPlayingFeatureTests: XCTestCase {
         if addFav.waitForExistence(timeout: 5) {
             addFav.tap()
             sleep(2)
-            // Should now show "Remove from Favorites"
             XCTAssertTrue(removeFav.waitForExistence(timeout: 5)
                           || app.state == .runningForeground,
                           "Should toggle to Remove from Favorites")
-            // Toggle back
             if removeFav.exists { removeFav.tap(); sleep(2) }
         } else if removeFav.exists {
             removeFav.tap()
@@ -470,7 +448,6 @@ final class NowPlayingFeatureTests: XCTestCase {
             XCTAssertTrue(addFav.waitForExistence(timeout: 5)
                           || app.state == .runningForeground,
                           "Should toggle to Add to Favorites")
-            // Toggle back
             if addFav.exists { addFav.tap(); sleep(2) }
         } else {
             throw XCTSkip("Favorites button not found")
@@ -483,65 +460,6 @@ final class NowPlayingFeatureTests: XCTestCase {
         if app.isOnLoginScreen {
             app.signIn()
             XCTAssertTrue(app.waitForMainScreen())
-        }
-    }
-
-    private func playAnyTrack() throws {
-        let pauseButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Pause'")).firstMatch
-        let playButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Play'")).firstMatch
-        if pauseButton.exists || playButton.exists { return }
-
-        app.goToLibrary()
-        sleep(3)
-
-        // Find an album button in the library
-        let albumButtons = app.buttons.allElementsBoundByIndex
-        for btn in albumButtons {
-            let label = btn.label.lowercased()
-            if ["library", "search", "playlists", "radio", "settings",
-                "pause", "play", "next track"].contains(label) { continue }
-            if btn.frame.width < 50 || btn.frame.height < 50 { continue }
-            btn.tap()
-            break
-        }
-        sleep(3)
-
-        // Tap a track in the album detail
-        let songTexts = app.staticTexts.allElementsBoundByIndex
-        for text in songTexts {
-            if text.frame.minY < 300 { continue }
-            if text.label.isEmpty { continue }
-            let label = text.label.lowercased()
-            if ["songs", "recently added", "most played", "library",
-                "shuffle", "play all"].contains(label) { continue }
-            text.tap()
-            break
-        }
-        sleep(3)
-
-        let playing = pauseButton.waitForExistence(timeout: 10) || playButton.exists
-        if !playing { throw XCTSkip("Could not start playback") }
-    }
-
-    private func openNowPlaying() throws {
-        sleep(1)
-
-        // The mini player has a "Now Playing" button that opens the full screen view
-        let nowPlayingButton = app.buttons["Now Playing"]
-        if nowPlayingButton.waitForExistence(timeout: 5) {
-            nowPlayingButton.tap()
-        } else {
-            // Fallback: tap near the bottom where mini player lives
-            let coordinate = app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.92))
-            coordinate.tap()
-        }
-        sleep(2)
-
-        let shuffleButton = app.buttons["Shuffle"]
-        guard shuffleButton.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Could not open Now Playing view")
         }
     }
 }

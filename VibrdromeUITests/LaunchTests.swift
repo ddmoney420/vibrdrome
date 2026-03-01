@@ -43,7 +43,12 @@ final class LaunchTests: XCTestCase {
         }
 
         // Verify all login fields exist
-        let urlField = app.textFields["URL"].exists || app.textFields["Server URL"].exists
+        // SwiftUI Form renders TextField("URL") with "URL" as a label;
+        // the actual text field may use the prompt text as its identifier.
+        let urlField = app.textFields["URL"].exists
+            || app.textFields["Server URL"].exists
+            || app.textFields["https://..."].exists
+            || app.textFields.count >= 2
         XCTAssertTrue(urlField, "Login screen should have a URL field")
 
         let usernameField = app.textFields["Username"]

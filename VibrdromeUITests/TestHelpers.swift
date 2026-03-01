@@ -43,24 +43,33 @@ extension XCUIApplication {
 
     /// Sign in with test credentials. Assumes app is on the login screen.
     func signIn() {
-        let urlField = textFields["URL"].exists
-            ? textFields["URL"]
-            : textFields["Server URL"]
-
-        // Clear and type URL
-        if urlField.waitForExistence(timeout: 5) {
+        // URL field: SwiftUI Form renders TextField("URL", prompt: "https://...")
+        // with "URL" as a label. Try multiple identifiers.
+        let urlCandidates = [
+            textFields["URL"],
+            textFields["Server URL"],
+            textFields["https://..."],
+        ]
+        if let urlField = urlCandidates.first(where: { $0.waitForExistence(timeout: 3) }) {
             urlField.tap()
             urlField.clearAndType(TestServer.url)
+        } else {
+            // Last resort: tap the first text field on screen
+            let firstField = textFields.firstMatch
+            if firstField.waitForExistence(timeout: 3) {
+                firstField.tap()
+                firstField.clearAndType(TestServer.url)
+            }
         }
 
         let usernameField = textFields["Username"]
-        if usernameField.exists {
+        if usernameField.waitForExistence(timeout: 3) {
             usernameField.tap()
             usernameField.clearAndType(TestServer.username)
         }
 
         let passwordField = secureTextFields["Password"]
-        if passwordField.exists {
+        if passwordField.waitForExistence(timeout: 3) {
             passwordField.tap()
             passwordField.clearAndType(TestServer.password)
         }
@@ -236,6 +245,109 @@ extension XCUIApplication {
         let sidebarTitle = staticTexts["Vibrdrome"]
         if sidebarTitle.waitForExistence(timeout: 3) { return true }
         return false
+    }
+
+    // MARK: - Playback Helpers
+
+    /// Whether playback is active (Play or Pause button visible in mini player).
+    var isPlaybackActive: Bool {
+        buttons.matching(NSPredicate(format: "label == 'Pause'")).firstMatch.exists
+            || buttons.matching(NSPredicate(format: "label == 'Play'")).firstMatch.exists
+    }
+
+    /// Start playback reliably. Uses "Random Mix" button in Library as primary
+    /// strategy (single tap, no navigation into album detail needed). Falls back
+    /// to tapping an album card then a track row.
+    /// - Throws: `XCTSkip` if playback cannot be started.
+    func playAnyTrack() throws {
+        // Already playing?
+        if isPlaybackActive { return }
+
+        goToLibrary()
+        sleep(2)
+
+        // Strategy 1: Tap "Random Mix" — most reliable, loads 50 songs and plays
+        let randomMix = buttons["Random Mix"]
+        if !randomMix.waitForExistence(timeout: 3) {
+            // Scroll down to find Random Mix in the "More" section
+            swipeUpInDetail()
+            sleep(1)
+        }
+        if randomMix.exists {
+            randomMix.tap()
+            // Wait for API call + SwiftUI render. The "Now Playing" button on
+            // the mini player is the most reliable indicator.
+            let nowPlaying = buttons["Now Playing"]
+            if nowPlaying.waitForExistence(timeout: 15) { return }
+            // Also check Play/Pause
+            if isPlaybackActive { return }
+        }
+
+        // Strategy 2: Navigate to album detail → tap Play button
+        goToLibrary()
+        sleep(1)
+        // Album cards may appear as buttons or otherElements depending on
+        // how NavigationLink renders with .accessibilityElement(children: .combine)
+        let albumCardPred = NSPredicate(format: "identifier == 'albumCard'")
+        let albumFromButtons = buttons.matching(albumCardPred)
+        let albumFromOthers = otherElements.matching(albumCardPred)
+        let albumCard = albumFromButtons.count > 0
+            ? albumFromButtons.firstMatch
+            : albumFromOthers.firstMatch
+        if albumCard.waitForExistence(timeout: 5) {
+            albumCard.tap()
+            sleep(2)
+            // Tap the Play button in album detail header
+            let playButton = buttons["Play"]
+            if playButton.waitForExistence(timeout: 5) {
+                playButton.tap()
+                sleep(2)
+                if isPlaybackActive || buttons["Now Playing"].exists { return }
+            }
+            // Fallback: tap the first track row
+            let trackRowPred = NSPredicate(format: "identifier BEGINSWITH 'trackRow_'")
+            let trackRow = buttons.matching(trackRowPred).firstMatch.exists
+                ? buttons.matching(trackRowPred).firstMatch
+                : otherElements.matching(trackRowPred).firstMatch
+            if trackRow.waitForExistence(timeout: 3) {
+                trackRow.tap()
+                sleep(2)
+                if isPlaybackActive || buttons["Now Playing"].exists { return }
+            }
+        }
+
+        throw XCTSkip("Could not start playback")
+    }
+
+    /// Open Now Playing full screen view. Assumes playback is active.
+    /// - Throws: `XCTSkip` if Now Playing cannot be opened.
+    func openNowPlaying() throws {
+        // Already in Now Playing?
+        if buttons["Shuffle"].exists { return }
+
+        // Tap the "Now Playing" button on the mini player
+        let nowPlayingButton = buttons["Now Playing"]
+        if nowPlayingButton.waitForExistence(timeout: 5) {
+            nowPlayingButton.tap()
+            sleep(2)
+            if buttons["Shuffle"].waitForExistence(timeout: 5) { return }
+        }
+
+        // Fallback: tap the mini player area by coordinate
+        let miniPlayer = otherElements["MiniPlayer"]
+        if miniPlayer.exists {
+            miniPlayer.tap()
+            sleep(2)
+            if buttons["Shuffle"].waitForExistence(timeout: 5) { return }
+        }
+
+        // Last resort: tap near bottom of screen
+        let coord = coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.90))
+        coord.tap()
+        sleep(2)
+        if buttons["Shuffle"].waitForExistence(timeout: 5) { return }
+
+        throw XCTSkip("Could not open Now Playing view")
     }
 }
 

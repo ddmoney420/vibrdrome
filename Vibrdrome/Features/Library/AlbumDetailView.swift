@@ -30,6 +30,7 @@ struct AlbumDetailView: View {
                                 .onTapGesture {
                                     AudioEngine.shared.play(song: song, from: songs, at: index)
                                 }
+                                .accessibilityIdentifier("trackRow_\(index)")
                                 .trackContextMenu(song: song, queue: songs, index: index)
                             Divider()
                                 .padding(.leading, 56)

@@ -568,15 +568,6 @@ struct SettingsView: View {
     }
 
     private var appIconImage: Image {
-        #if os(iOS)
-        if let uiImage = UIImage(named: "AppIcon") {
-            return Image(uiImage: uiImage)
-        }
-        #else
-        if let nsImage = NSImage(named: "AppIcon") {
-            return Image(nsImage: nsImage)
-        }
-        #endif
-        return Image(systemName: "music.note.house.fill")
+        Image("AppIconImage")
     }
 }

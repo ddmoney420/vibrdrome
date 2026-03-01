@@ -13,6 +13,11 @@ settings:
     SWIFT_VERSION: "6.0"
     STRICT_CONCURRENCY: complete
     GENERATE_INFOPLIST_FILE: false
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 
 packages:
   Nuke:
@@ -35,6 +40,16 @@ schemes:
         - VibrdromeTests
         - VibrdromeUITests
         - VibrdromeUITestsMac
+      environmentVariables:
+        - variable: TEST_SERVER_URL
+          value: $(TEST_SERVER_URL)
+          isEnabled: true
+        - variable: TEST_SERVER_USER
+          value: $(TEST_SERVER_USER)
+          isEnabled: true
+        - variable: TEST_SERVER_PASS
+          value: $(TEST_SERVER_PASS)
+          isEnabled: true
   VibrdromeMac:
     build:
       targets:
@@ -43,6 +58,16 @@ schemes:
     test:
       targets:
         - VibrdromeUITestsMac
+      environmentVariables:
+        - variable: TEST_SERVER_URL
+          value: $(TEST_SERVER_URL)
+          isEnabled: true
+        - variable: TEST_SERVER_USER
+          value: $(TEST_SERVER_USER)
+          isEnabled: true
+        - variable: TEST_SERVER_PASS
+          value: $(TEST_SERVER_PASS)
+          isEnabled: true
 
 targets:
   Vibrdrome:

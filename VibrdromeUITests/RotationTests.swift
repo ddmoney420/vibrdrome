@@ -92,7 +92,6 @@ final class RotationTests: XCTestCase {
         XCTAssertTrue(app.state == .runningForeground,
                       "Settings should not crash in landscape")
 
-        // Scroll while in landscape to check layout
         app.swipeUpInDetail()
         sleep(1)
         XCTAssertTrue(app.state == .runningForeground,
@@ -105,27 +104,14 @@ final class RotationTests: XCTestCase {
     // MARK: - Now Playing
 
     func testNowPlayingRotation() throws {
-        try playAnyTrack()
-
-        let nowPlayingButton = app.buttons["Now Playing"]
-        guard nowPlayingButton.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Mini player not visible")
-        }
-
-        nowPlayingButton.tap()
-        sleep(2)
-
-        let shuffleButton = app.buttons["Shuffle"]
-        guard shuffleButton.waitForExistence(timeout: 5) else {
-            throw XCTSkip("Could not open Now Playing view")
-        }
+        try app.playAnyTrack()
+        try app.openNowPlaying()
 
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
         XCTAssertTrue(app.state == .runningForeground,
                       "Now Playing should not crash in landscape")
 
-        // Verify controls still exist in landscape
         XCTAssertTrue(app.buttons["Shuffle"].exists || app.buttons["Play"].exists
                       || app.buttons["Pause"].exists,
                       "Controls should remain visible in landscape")
@@ -139,20 +125,11 @@ final class RotationTests: XCTestCase {
     // MARK: - Mini Player
 
     func testMiniPlayerRotation() throws {
-        try playAnyTrack()
-
-        let pauseButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Pause'")).firstMatch
-        guard pauseButton.waitForExistence(timeout: 5)
-            || app.buttons.matching(
-                NSPredicate(format: "label == 'Play'")).firstMatch.exists else {
-            throw XCTSkip("Could not start playback")
-        }
+        try app.playAnyTrack()
 
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
 
-        // Mini player should still be visible
         let hasControls = app.buttons.matching(
             NSPredicate(format: "label == 'Pause' OR label == 'Play'")).firstMatch.exists
         XCTAssertTrue(hasControls || app.state == .runningForeground,
@@ -168,12 +145,11 @@ final class RotationTests: XCTestCase {
         app.goToLibrary()
         sleep(2)
 
-        // Rapidly cycle through orientations
         for orientation: UIDeviceOrientation in [.landscapeLeft, .portrait,
                                                   .landscapeRight, .portrait,
                                                   .landscapeLeft, .portrait] {
             XCUIDevice.shared.orientation = orientation
-            usleep(500_000) // 0.5s between rotations
+            usleep(500_000)
         }
 
         sleep(1)
@@ -184,13 +160,12 @@ final class RotationTests: XCTestCase {
     // MARK: - Rotation During Playback
 
     func testRotationDuringPlayback() throws {
-        try playAnyTrack()
+        try app.playAnyTrack()
         sleep(2)
 
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
 
-        // Verify playback controls still work
         let pauseButton = app.buttons.matching(
             NSPredicate(format: "label == 'Pause'")).firstMatch
         let playButton = app.buttons.matching(
@@ -218,42 +193,5 @@ final class RotationTests: XCTestCase {
             app.signIn()
             XCTAssertTrue(app.waitForMainScreen())
         }
-    }
-
-    private func playAnyTrack() throws {
-        let pauseButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Pause'")).firstMatch
-        let playButton = app.buttons.matching(
-            NSPredicate(format: "label == 'Play'")).firstMatch
-        if pauseButton.exists || playButton.exists { return }
-
-        app.goToLibrary()
-        sleep(3)
-
-        let albumButtons = app.buttons.allElementsBoundByIndex
-        for btn in albumButtons {
-            let label = btn.label.lowercased()
-            if ["library", "search", "playlists", "radio", "settings",
-                "pause", "play", "next track", "artists"].contains(label) { continue }
-            if btn.frame.width < 50 || btn.frame.height < 50 { continue }
-            btn.tap()
-            break
-        }
-        sleep(3)
-
-        let songTexts = app.staticTexts.allElementsBoundByIndex
-        for text in songTexts {
-            if text.frame.minY < 300 { continue }
-            if text.label.isEmpty { continue }
-            let label = text.label.lowercased()
-            if ["songs", "recently added", "most played", "library",
-                "shuffle", "play all"].contains(label) { continue }
-            text.tap()
-            break
-        }
-        sleep(3)
-
-        let playing = pauseButton.waitForExistence(timeout: 10) || playButton.exists
-        if !playing { throw XCTSkip("Could not start playback") }
     }
 }

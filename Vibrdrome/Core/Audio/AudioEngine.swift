@@ -233,7 +233,12 @@ final class AudioEngine {
         }
     }
 
+    /// When true, skip all AVPlayer/AVAudioSession operations but still update
+    /// observable state so the UI renders correctly for XCUITest.
+    let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
+
     private init() {
+        guard !isUITesting else { return }
         AudioSessionManager.shared.configure()
         startNetworkMonitor()
         // Sync EQ coefficients on launch so taps pick up saved preset
@@ -283,6 +288,23 @@ final class AudioEngine {
     // MARK: - Playback Control
 
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
+        // UI testing: update observable state only, skip AVPlayer operations
+        if isUITesting {
+            if let newQueue {
+                queue = newQueue
+                currentIndex = newQueue.isEmpty ? 0 : min(index, newQueue.count - 1)
+            } else {
+                queue = [song]
+                currentIndex = 0
+            }
+            currentSong = song
+            currentRadioStation = nil
+            isPlaying = true
+            duration = Double(song.duration ?? 180)
+            currentTime = 0
+            return
+        }
+
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -339,6 +361,15 @@ final class AudioEngine {
     }
 
     func playRadio(station: InternetRadioStation) {
+        if isUITesting {
+            currentSong = nil
+            currentRadioStation = station
+            queue.removeAll()
+            currentIndex = 0
+            isPlaying = true
+            return
+        }
+
         submitScrobbleIfNeeded()
         guard let url = URL(string: station.streamUrl) else { return }
 
@@ -369,12 +400,15 @@ final class AudioEngine {
     }
 
     func pause() {
+        if isUITesting { isPlaying = false; return }
         activePlayer?.pause()
         isPlaying = false
         NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
     }
 
     func resume() {
+        if isUITesting { isPlaying = true; return }
+
         // Reactivate audio session (may have been deactivated by phone call or other interruption)
         #if os(iOS)
         do {
@@ -570,6 +604,14 @@ final class AudioEngine {
     }
 
     func stop() {
+        if isUITesting {
+            isPlaying = false
+            currentSong = nil
+            currentRadioStation = nil
+            currentTime = 0
+            duration = 0
+            return
+        }
         submitScrobbleIfNeeded()
         tearDownCurrentMode()
         activeMode = .gapless

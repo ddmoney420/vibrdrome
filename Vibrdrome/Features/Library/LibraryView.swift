@@ -166,6 +166,8 @@ struct LibraryView: View {
                 .lineLimit(1)
         }
         .frame(width: Theme.albumCardSize)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("albumCard")
     }
 
     // MARK: - Rediscover Section
