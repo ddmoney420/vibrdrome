@@ -8,7 +8,7 @@ final class PlaylistTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
+        app.configureForTesting()
         app.launch()
         app.ensureLoggedIn()
     }
@@ -19,8 +19,8 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(3)
 
-        let hasNewPlaylist = app.buttons["New Playlist"].exists
-        let hasSmartMix = app.buttons["Smart Mix"].exists
+        let hasNewPlaylist = app.buttons["New Playlist"].firstMatch.exists
+        let hasSmartMix = app.buttons["Smart Mix"].firstMatch.exists
         let hasContent = app.staticTexts.count > 1
 
         XCTAssertTrue(hasNewPlaylist || hasSmartMix || hasContent,
@@ -31,7 +31,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let newPlaylist = app.buttons["New Playlist"]
+        let newPlaylist = app.buttons["New Playlist"].firstMatch
         XCTAssertTrue(newPlaylist.waitForExistence(timeout: 5),
                       "Playlists tab should have 'New Playlist' button")
     }
@@ -40,7 +40,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let smartMix = app.buttons["Smart Mix"]
+        let smartMix = app.buttons["Smart Mix"].firstMatch
         XCTAssertTrue(smartMix.waitForExistence(timeout: 5),
                       "Playlists tab should have 'Smart Mix' button")
     }
@@ -51,7 +51,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let newPlaylist = app.buttons["New Playlist"]
+        let newPlaylist = app.buttons["New Playlist"].firstMatch
         guard newPlaylist.waitForExistence(timeout: 5) else {
             throw XCTSkip("New Playlist button not found")
         }
@@ -80,7 +80,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let newPlaylist = app.buttons["New Playlist"]
+        let newPlaylist = app.buttons["New Playlist"].firstMatch.firstMatch
         guard newPlaylist.waitForExistence(timeout: 5) else {
             throw XCTSkip("New Playlist button not found")
         }
@@ -107,7 +107,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let smartMix = app.buttons["Smart Mix"]
+        let smartMix = app.buttons["Smart Mix"].firstMatch
         guard smartMix.waitForExistence(timeout: 5) else {
             throw XCTSkip("Smart Mix button not found")
         }
@@ -133,7 +133,7 @@ final class PlaylistTests: XCTestCase {
         app.goToPlaylists()
         sleep(2)
 
-        let smartMix = app.buttons["Smart Mix"]
+        let smartMix = app.buttons["Smart Mix"].firstMatch
         guard smartMix.waitForExistence(timeout: 5) else {
             throw XCTSkip("Smart Mix button not found")
         }

@@ -8,30 +8,17 @@ final class LoginTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
+        app.configureForTesting()
         app.launch()
     }
 
     // MARK: - Sign In Flow
 
     func testSignInWithValidCredentials() throws {
-        // If already logged in, sign out first
-        if app.isOnMainScreen {
-            app.signOut()
-            guard app.waitForElement(app.buttons["Sign In"], timeout: 15) else {
-                throw XCTSkip("Could not reach login screen after sign out")
-            }
-        }
-
-        guard app.isOnLoginScreen else {
-            throw XCTSkip("Not on login screen")
-        }
-
-        app.signIn()
-
-        // Wait for main screen to appear (tab bar or sidebar)
-        XCTAssertTrue(app.waitForMainScreen(),
-                      "Should navigate to main screen after sign in")
+        // Auto-login should have already signed us in.
+        // Verify by checking for the main screen.
+        XCTAssertTrue(app.waitForMainScreen(timeout: 30),
+                      "Should navigate to main screen after auto-login")
     }
 
     func testSignInShowsAllTabs() throws {

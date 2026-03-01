@@ -52,6 +52,17 @@ final class AppState {
         )
         loadServers()
         loadSavedCredentials()
+
+        // UI testing: auto-login with credentials from environment variables
+        // so XCUITest doesn't have to type them (avoids idle-wait SIGKILL).
+        if ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           !isConfigured,
+           let url = ProcessInfo.processInfo.environment["TEST_SERVER_URL"],
+           let user = ProcessInfo.processInfo.environment["TEST_SERVER_USER"],
+           let pass = ProcessInfo.processInfo.environment["TEST_SERVER_PASS"],
+           !url.isEmpty {
+            saveCredentials(url: url, username: user, password: pass)
+        }
     }
 
     func configure(url: String, username: String, password: String) {
