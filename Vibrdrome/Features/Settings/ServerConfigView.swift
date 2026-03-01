@@ -144,12 +144,15 @@ struct ServerConfigView: View {
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
+                        .accessibilityIdentifier("serverURLField")
                     TextField("Username", text: $username)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
+                        .accessibilityIdentifier("usernameField")
                     SecureField("Password", text: $password)
+                        .accessibilityIdentifier("passwordField")
                 }
 
                 Section {

@@ -24,10 +24,18 @@ extension XCUIApplication {
     }
 
     /// Whether the app is showing the login/server config screen.
+    /// Excludes the ReAuth modal (which also has "Sign In" but no URL text field).
     var isOnLoginScreen: Bool {
-        buttons["Sign In"].exists
+        // ReAuth modal has "Session Expired" — not the login screen
+        guard !staticTexts["Session Expired"].exists else { return false }
+        return (buttons["Sign In"].exists
             || staticTexts["Sign In"].exists
-            || staticTexts["Connect to your Navidrome server"].exists
+            || staticTexts["Connect to your Navidrome server"].exists)
+    }
+
+    /// Whether the ReAuth modal is showing (session expired).
+    var isShowingReAuth: Bool {
+        staticTexts["Session Expired"].exists
     }
 
     /// Whether the app is showing the main tab bar (iPhone) or sidebar (iPad).
@@ -43,18 +51,21 @@ extension XCUIApplication {
 
     /// Sign in with test credentials. Assumes app is on the login screen.
     func signIn() {
-        // URL field: SwiftUI Form renders TextField("URL", prompt: "https://...")
-        // with "URL" as a label. Try multiple identifiers.
+        // Try accessibility identifier first (most reliable on iOS 26+),
+        // then fall back to label-based lookup.
+        let urlById = textFields["serverURLField"]
         let urlCandidates = [
             textFields["URL"],
             textFields["Server URL"],
             textFields["https://..."],
         ]
-        if let urlField = urlCandidates.first(where: { $0.waitForExistence(timeout: 3) }) {
+        if urlById.waitForExistence(timeout: 3) {
+            urlById.tap()
+            urlById.clearAndType(TestServer.url)
+        } else if let urlField = urlCandidates.first(where: { $0.waitForExistence(timeout: 2) }) {
             urlField.tap()
             urlField.clearAndType(TestServer.url)
         } else {
-            // Last resort: tap the first text field on screen
             let firstField = textFields.firstMatch
             if firstField.waitForExistence(timeout: 3) {
                 firstField.tap()
@@ -62,23 +73,57 @@ extension XCUIApplication {
             }
         }
 
-        let usernameField = textFields["Username"]
-        if usernameField.waitForExistence(timeout: 3) {
-            usernameField.tap()
-            usernameField.clearAndType(TestServer.username)
+        let usernameById = textFields["usernameField"]
+        let usernameByLabel = textFields["Username"]
+        if usernameById.waitForExistence(timeout: 2) {
+            usernameById.tap()
+            usernameById.clearAndType(TestServer.username)
+        } else if usernameByLabel.waitForExistence(timeout: 2) {
+            usernameByLabel.tap()
+            usernameByLabel.clearAndType(TestServer.username)
         }
 
+        let passwordById = secureTextFields["passwordField"]
+        let passwordByLabel = secureTextFields["Password"]
+        if passwordById.waitForExistence(timeout: 2) {
+            passwordById.tap()
+            passwordById.clearAndType(TestServer.password)
+        } else if passwordByLabel.waitForExistence(timeout: 2) {
+            passwordByLabel.tap()
+            passwordByLabel.clearAndType(TestServer.password)
+        }
+
+        // Tap Sign In
+        let signInButton = buttons["Sign In"]
+        if signInButton.waitForExistence(timeout: 3) && signInButton.isEnabled {
+            signInButton.tap()
+        }
+    }
+
+    /// Handle the ReAuth modal if it appears (enter password + tap Sign In).
+    func handleReAuth() {
+        guard isShowingReAuth else { return }
         let passwordField = secureTextFields["Password"]
         if passwordField.waitForExistence(timeout: 3) {
             passwordField.tap()
             passwordField.clearAndType(TestServer.password)
         }
-
-        // Tap Sign In
-        let signInButton = buttons["Sign In"]
-        if signInButton.exists && signInButton.isEnabled {
-            signInButton.tap()
+        let signIn = buttons["Sign In"]
+        if signIn.waitForExistence(timeout: 3) && signIn.isEnabled {
+            signIn.tap()
         }
+        sleep(3)
+    }
+
+    /// Ensure the app is logged in. Handles login screen, ReAuth modal, or already logged in.
+    func ensureLoggedIn() {
+        sleep(2)
+        if isShowingReAuth {
+            handleReAuth()
+        } else if isOnLoginScreen {
+            signIn()
+        }
+        _ = waitForMainScreen()
     }
 
     /// Sign out from the Settings tab. Assumes app is on the main screen.

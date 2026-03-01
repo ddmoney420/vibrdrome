@@ -43,6 +43,8 @@ struct RadioView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Find Stations")
 
                     Button { showAddSheet = true } label: {
@@ -60,6 +62,8 @@ struct RadioView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Add URL")
                 }
                 .padding(.horizontal, 16)

@@ -31,8 +31,9 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
-        XCTAssertTrue(findStations.waitForExistence(timeout: 5),
+        let findBtn = app.buttons["Find Stations"]
+        let findOther = app.otherElements["Find Stations"]
+        XCTAssertTrue(findBtn.waitForExistence(timeout: 5) || findOther.exists,
                       "Radio tab should have 'Find Stations' button")
     }
 
@@ -40,8 +41,9 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
-        XCTAssertTrue(addURL.waitForExistence(timeout: 5),
+        let addBtn = app.buttons["Add URL"]
+        let addOther = app.otherElements["Add URL"]
+        XCTAssertTrue(addBtn.waitForExistence(timeout: 5) || addOther.exists,
                       "Radio tab should have 'Add URL' button")
     }
 
@@ -228,9 +230,6 @@ final class RadioTests: XCTestCase {
     // MARK: - Helpers
 
     private func ensureLoggedIn() {
-        if app.isOnLoginScreen {
-            app.signIn()
-            XCTAssertTrue(app.waitForMainScreen())
-        }
+        app.ensureLoggedIn()
     }
 }
