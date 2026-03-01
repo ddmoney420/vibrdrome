@@ -8,7 +8,7 @@ final class RadioTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
+        app.configureForTesting()
         app.launch()
         app.ensureLoggedIn()
     }
@@ -19,8 +19,8 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(3)
 
-        let hasFindStations = app.buttons["Find Stations"].exists
-        let hasAddURL = app.buttons["Add URL"].exists
+        let hasFindStations = app.buttons["Find Stations"].firstMatch.exists
+        let hasAddURL = app.buttons["Add URL"].firstMatch.exists
         let hasContent = app.staticTexts.count > 1
 
         XCTAssertTrue(hasFindStations || hasAddURL || hasContent,
@@ -31,7 +31,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findBtn = app.buttons["Find Stations"]
+        let findBtn = app.buttons["Find Stations"].firstMatch
         XCTAssertTrue(findBtn.waitForExistence(timeout: 5),
                       "Radio tab should have 'Find Stations' button")
     }
@@ -40,7 +40,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addBtn = app.buttons["Add URL"]
+        let addBtn = app.buttons["Add URL"].firstMatch
         XCTAssertTrue(addBtn.waitForExistence(timeout: 5),
                       "Radio tab should have 'Add URL' button")
     }
@@ -51,7 +51,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
@@ -71,7 +71,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
@@ -100,7 +100,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let findStations = app.buttons["Find Stations"]
+        let findStations = app.buttons["Find Stations"].firstMatch
         guard findStations.waitForExistence(timeout: 5) else {
             throw XCTSkip("Find Stations button not found")
         }
@@ -142,7 +142,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
+        let addURL = app.buttons["Add URL"].firstMatch
         guard addURL.waitForExistence(timeout: 5) else {
             throw XCTSkip("Add URL button not found")
         }
@@ -167,7 +167,7 @@ final class RadioTests: XCTestCase {
         app.goToRadio()
         sleep(2)
 
-        let addURL = app.buttons["Add URL"]
+        let addURL = app.buttons["Add URL"].firstMatch
         guard addURL.waitForExistence(timeout: 5) else {
             throw XCTSkip("Add URL button not found")
         }

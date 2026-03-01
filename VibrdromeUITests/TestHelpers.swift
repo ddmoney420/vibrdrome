@@ -14,6 +14,17 @@ enum TestServer {
 
 extension XCUIApplication {
 
+    /// Configure launch arguments and environment for UI testing.
+    /// Call this before `launch()` in every test setUp.
+    func configureForTesting() {
+        launchArguments = ["--uitesting"]
+        // Forward test credentials to the app so it can auto-login
+        // without XCUITest having to type them (avoids idle-wait SIGKILL).
+        launchEnvironment["TEST_SERVER_URL"] = TestServer.url
+        launchEnvironment["TEST_SERVER_USER"] = TestServer.username
+        launchEnvironment["TEST_SERVER_PASS"] = TestServer.password
+    }
+
     /// Wait for an element to exist with a timeout.
     @discardableResult
     func waitForElement(
@@ -93,10 +104,12 @@ extension XCUIApplication {
             passwordByLabel.clearAndType(TestServer.password)
         }
 
-        // Tap Sign In
+        // Tap Sign In via coordinate to avoid XCUITest's idle-wait.
+        // After login the app loads the full library from the server which
+        // keeps the main thread busy and triggers a SIGKILL from the runner.
         let signInButton = buttons["Sign In"]
         if signInButton.waitForExistence(timeout: 3) && signInButton.isEnabled {
-            signInButton.tap()
+            signInButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
     }
 
@@ -110,9 +123,9 @@ extension XCUIApplication {
         }
         let signIn = buttons["Sign In"]
         if signIn.waitForExistence(timeout: 3) && signIn.isEnabled {
-            signIn.tap()
+            signIn.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        sleep(3)
+        sleep(5)
     }
 
     /// Ensure the app is logged in. Handles login screen, ReAuth modal, or already logged in.
@@ -122,8 +135,12 @@ extension XCUIApplication {
             handleReAuth()
         } else if isOnLoginScreen {
             signIn()
+            // First login triggers a full library sync from the server.
+            // The app is busy during this load. Sleep to avoid XCUITest's
+            // idle-wait timeout which kills the app with SIGKILL.
+            sleep(10)
         }
-        _ = waitForMainScreen()
+        _ = waitForMainScreen(timeout: 30)
     }
 
     /// Sign out from the Settings tab. Assumes app is on the main screen.
@@ -404,14 +421,18 @@ extension XCUIElement {
     func clearAndType(_ text: String) {
         guard exists else { return }
         tap()
-        // Select all existing text
+        // Select all existing text and delete it
         if let currentValue = value as? String, !currentValue.isEmpty {
-            tap() // focus
-            press(forDuration: 1.0) // long press to trigger selection
-            if menuItems["Select All"].waitForExistence(timeout: 2) {
-                menuItems["Select All"].tap()
-            }
+            // Triple-tap to select all text in the field
+            tap(withNumberOfTaps: 3, numberOfTouches: 1)
             typeText(XCUIKeyboardKey.delete.rawValue)
+            // Verify cleared — if not, try character-by-character deletion
+            if let remaining = value as? String, !remaining.isEmpty,
+               remaining != placeholderValue {
+                let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue,
+                                          count: remaining.count)
+                typeText(deleteString)
+            }
         }
         typeText(text)
     }

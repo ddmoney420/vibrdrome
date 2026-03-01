@@ -42,13 +42,13 @@ schemes:
         - VibrdromeUITestsMac
       environmentVariables:
         - variable: TEST_SERVER_URL
-          value: $(TEST_SERVER_URL)
+          value: "https://dmoney-music.duckdns.org/"
           isEnabled: true
         - variable: TEST_SERVER_USER
-          value: $(TEST_SERVER_USER)
+          value: dmoney
           isEnabled: true
         - variable: TEST_SERVER_PASS
-          value: $(TEST_SERVER_PASS)
+          value: "~Fearless360$!!"
           isEnabled: true
   VibrdromeMac:
     build:
@@ -60,13 +60,13 @@ schemes:
         - VibrdromeUITestsMac
       environmentVariables:
         - variable: TEST_SERVER_URL
-          value: $(TEST_SERVER_URL)
+          value: "https://dmoney-music.duckdns.org/"
           isEnabled: true
         - variable: TEST_SERVER_USER
-          value: $(TEST_SERVER_USER)
+          value: dmoney
           isEnabled: true
         - variable: TEST_SERVER_PASS
-          value: $(TEST_SERVER_PASS)
+          value: "~Fearless360$!!"
           isEnabled: true
 
 targets:
