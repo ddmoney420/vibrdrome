@@ -20,8 +20,8 @@ final class SubsonicClient {
         self.baseURL = baseURL
         self.auth = SubsonicAuth(username: username, password: password)
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 300
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 600
         // Security hardening: disable cookies and credential caching
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never
