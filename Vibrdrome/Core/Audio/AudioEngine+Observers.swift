@@ -61,9 +61,19 @@ extension AudioEngine {
             .sink { [weak self] status in
                 guard let self, self.generationValue == observerGeneration else { return }
                 if status == .failed {
-                    item.audioMix = nil
-                    self.isPlaying = false
-                    self.isBuffering = false
+                    observerLog.warning("Player item failed — attempting auto-retry")
+                    // Auto-retry: reload the current track instead of giving up
+                    if let song = self.currentSong {
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(2))
+                            guard self.generationValue == observerGeneration else { return }
+                            self.play(song: song)
+                        }
+                    } else {
+                        item.audioMix = nil
+                        self.isPlaying = false
+                        self.isBuffering = false
+                    }
                 }
             })
     }
