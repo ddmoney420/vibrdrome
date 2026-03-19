@@ -133,17 +133,28 @@ struct AlbumsView: View {
     }
 
     private func loadAlbums() async {
-        isLoading = true
+        let client = appState.subsonicClient
+        let endpoint = SubsonicEndpoint.getAlbumList2(
+            type: listType, size: pageSize, offset: 0,
+            fromYear: fromYear, toYear: toYear, genre: genre)
+        // Show cached first page instantly
+        if albums.isEmpty,
+           let cached = await client.cachedResponse(for: endpoint, ttl: 600) {
+            albums = cached.albumList2?.album ?? []
+        }
+        isLoading = albums.isEmpty
         error = nil
         defer { isLoading = false }
         do {
-            let result = try await appState.subsonicClient.getAlbumList(
+            let result = try await client.getAlbumList(
                 type: listType, size: pageSize, offset: 0, genre: genre,
                 fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            if albums.isEmpty {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
         }
     }
 

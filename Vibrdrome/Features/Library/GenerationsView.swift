@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct DecadesView: View {
+struct GenerationsView: View {
     @Environment(AppState.self) private var appState
 
     private let decades: [(String, Int, Int)] = [

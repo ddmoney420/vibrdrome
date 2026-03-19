@@ -79,7 +79,7 @@ struct LibraryView: View {
             quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
             quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
             quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
-            quickAccessPill("Generations", icon: "calendar", color: .red) { DecadesView() }
+            quickAccessPill("Generations", icon: "calendar", color: .red) { GenerationsView() }
             randomMixPill
         }
         .padding(.horizontal, 16)
@@ -266,16 +266,34 @@ struct LibraryView: View {
     // MARK: - Data Loading
 
     private func loadSections() async {
-        async let recent = appState.subsonicClient.getAlbumList(type: .newest, size: 10)
-        async let frequent = appState.subsonicClient.getAlbumList(type: .frequent, size: 10)
-        async let random = appState.subsonicClient.getAlbumList(type: .random, size: 10)
-        async let starred = appState.subsonicClient.getStarred()
+        let client = appState.subsonicClient
 
-        recentAlbums = (try? await recent) ?? []
-        frequentAlbums = (try? await frequent) ?? []
-        randomAlbums = (try? await random) ?? []
+        // Show cached data instantly
+        if let cached = await client.cachedResponse(
+            for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
+            recentAlbums = cached.albumList2?.album ?? []
+        }
+        if let cached = await client.cachedResponse(
+            for: .getAlbumList2(type: .frequent, size: 10, offset: 0), ttl: 900) {
+            frequentAlbums = cached.albumList2?.album ?? []
+        }
+        if let cached = await client.cachedResponse(for: .getStarred2, ttl: 300) {
+            if var songs = cached.starred2?.song, !songs.isEmpty {
+                songs.shuffle()
+                starredSongs = Array(songs.prefix(15))
+            }
+        }
 
-        // Shuffle starred songs and take a subset for "Rediscover"
+        // Refresh from server in background
+        async let recent = client.getAlbumList(type: .newest, size: 10)
+        async let frequent = client.getAlbumList(type: .frequent, size: 10)
+        async let random = client.getAlbumList(type: .random, size: 10)
+        async let starred = client.getStarred()
+
+        recentAlbums = (try? await recent) ?? recentAlbums
+        frequentAlbums = (try? await frequent) ?? frequentAlbums
+        randomAlbums = (try? await random) ?? randomAlbums
+
         if let result = try? await starred, var songs = result.song, !songs.isEmpty {
             songs.shuffle()
             starredSongs = Array(songs.prefix(15))

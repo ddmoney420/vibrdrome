@@ -59,14 +59,23 @@ struct GenresView: View {
     }
 
     private func loadGenres() async {
-        isLoading = true
+        let client = appState.subsonicClient
+        // Show cached data instantly
+        if genres.isEmpty,
+           let cached = await client.cachedResponse(for: .getGenres, ttl: 3600) {
+            genres = (cached.genres?.genre ?? [])
+                .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+        }
+        isLoading = genres.isEmpty
         error = nil
         defer { isLoading = false }
         do {
-            genres = try await appState.subsonicClient.getGenres()
+            genres = try await client.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            if genres.isEmpty {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
         }
     }
 }

@@ -50,13 +50,21 @@ struct ArtistsView: View {
     }
 
     private func loadArtists() async {
-        isLoading = true
+        let client = appState.subsonicClient
+        // Show cached data instantly
+        if indexes.isEmpty,
+           let cached = await client.cachedResponse(for: .getArtists(), ttl: 1800) {
+            indexes = cached.artists?.index ?? []
+        }
+        isLoading = indexes.isEmpty
         error = nil
         defer { isLoading = false }
         do {
-            indexes = try await appState.subsonicClient.getArtists()
+            indexes = try await client.getArtists()
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            if indexes.isEmpty {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
         }
     }
 }
