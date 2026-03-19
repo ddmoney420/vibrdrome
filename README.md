@@ -196,9 +196,9 @@ No contribution is too small. Even fixing a typo helps. ¯\\\_(ツ)\_/¯
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
-You're free to use, modify, and distribute this software. If you distribute modified versions, they must also be open source under GPL-3.0. Your music stays yours, and the code stays open.
+You're free to use, modify, and distribute this software. Your music stays yours, and the code stays open.
 
 ---
 
