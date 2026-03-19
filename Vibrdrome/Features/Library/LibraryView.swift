@@ -79,7 +79,7 @@ struct LibraryView: View {
             quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
             quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
             quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
-            quickAccessPill("Decades", icon: "calendar", color: .red) { DecadesView() }
+            quickAccessPill("Generations", icon: "calendar", color: .red) { DecadesView() }
             randomMixPill
         }
         .padding(.horizontal, 16)

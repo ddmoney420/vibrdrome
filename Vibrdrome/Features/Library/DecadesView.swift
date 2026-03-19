@@ -31,7 +31,7 @@ struct DecadesView: View {
                 }
             }
         }
-        .navigationTitle("Decades")
+        .navigationTitle("Generations")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
