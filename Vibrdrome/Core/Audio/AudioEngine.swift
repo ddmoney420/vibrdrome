@@ -123,6 +123,12 @@ final class AudioEngine {
     var repeatMode: RepeatMode = .off
     private var shufflePlayCount = 0
 
+    // MARK: - Repeat-One Tracking
+
+    /// Tracks whether repeat-one has already replayed the current track.
+    /// When true, the next track-end advances instead of replaying.
+    private var repeatOneUsed = false
+
     // MARK: - Artist Radio (methods in AudioEngine+Radio.swift)
 
     var isRadioMode = false
@@ -327,9 +333,11 @@ final class AudioEngine {
             currentIndex = 0
         }
 
+        let isNewTrack = currentSong?.id != song.id
         currentSong = song
         currentRadioStation = nil
         scrobbleSubmitted = false
+        if isNewTrack { repeatOneUsed = false }
         trackStartTime = Date()
         currentTime = 0
         duration = 0
@@ -418,13 +426,19 @@ final class AudioEngine {
         }
         #endif
 
-        // Cold start: no player loaded (e.g. restored from server queue).
-        // Route through play() for full setup (mode selection, observers, etc.)
-        if gaplessPlayer == nil, let song = currentSong {
-            let savedTime = currentTime
-            play(song: song)
-            if savedTime > 1 { seek(to: savedTime) }
-            return
+        // Cold start: no player loaded (e.g. restored from saved queue).
+        // Route through play()/playRadio() for full setup.
+        if gaplessPlayer == nil {
+            if let station = currentRadioStation {
+                playRadio(station: station)
+                return
+            }
+            if let song = currentSong {
+                let savedTime = currentTime
+                play(song: song)
+                if savedTime > 1 { seek(to: savedTime) }
+                return
+            }
         }
 
         switch activeMode {
@@ -480,11 +494,8 @@ final class AudioEngine {
             isCrossfading = false
         }
 
-        if repeatMode == .one {
-            restartCurrentTrack()
-            return
-        }
-
+        // Manual next always advances — reset repeat-one state
+        repeatOneUsed = false
         guard advanceIndex() else { return }
         play(song: queue[currentIndex])
         refillRadioIfNeeded()
@@ -502,9 +513,7 @@ final class AudioEngine {
         if shuffleEnabled { return advanceShuffleIndex() }
         currentIndex += 1
         if currentIndex >= queue.count {
-            if repeatMode == .all {
-                currentIndex = 0
-            } else if isRadioMode {
+            if isRadioMode {
                 currentIndex = queue.count - 1
                 refillRadioIfNeeded()
                 return false
@@ -551,12 +560,8 @@ final class AudioEngine {
         }
         guard !queue.isEmpty else { return }
         if currentIndex == 0 {
-            if repeatMode == .all {
-                currentIndex = queue.count - 1
-            } else {
-                seek(to: 0)
-                return
-            }
+            seek(to: 0)
+            return
         } else {
             currentIndex -= 1
         }
@@ -646,6 +651,7 @@ final class AudioEngine {
         case .all: repeatMode = .one
         case .one: repeatMode = .off
         }
+        repeatOneUsed = false
         if activeMode == .gapless { prepareLookahead() }
     }
 
@@ -772,7 +778,8 @@ final class AudioEngine {
 
     func nextSongIndex() -> Int? {
         guard !queue.isEmpty else { return nil }
-        if repeatMode == .one { return nil }
+        if repeatMode == .all { return currentIndex }  // Gapless loop of same track
+        if repeatMode == .one { return nil }  // Handled in handleTrackEnd
         if currentRadioStation != nil { return nil }
 
         if shuffleEnabled {
@@ -950,19 +957,29 @@ final class AudioEngine {
         SleepTimer.shared.trackDidEnd()
         if !isPlaying { return }
 
-        if repeatMode == .one {
-            trackStartTime = Date()
-            seekInternal(to: 0) { [weak self] in
-                guard let self else { return }
-                if let lastScrobble = self.lastScrobbleTime,
-                   Date().timeIntervalSince(lastScrobble) < max(self.duration, 30) {
-                    // suppress re-scrobble
-                } else {
-                    self.scrobbleSubmitted = false
+        switch repeatMode {
+        case .all:
+            // Loop current track — reload since AVQueuePlayer removed the item
+            guard let song = currentSong else { return }
+            play(song: song)
+        case .one:
+            // Repeat once then advance
+            if !repeatOneUsed {
+                guard let song = currentSong else { return }
+                repeatOneUsed = true
+                play(song: song)
+            } else {
+                repeatOneUsed = false
+                if isCrossfading {
+                    incrementGeneration()
+                    crossfadeController.forceComplete()
+                    isCrossfading = false
                 }
-                self.activePlayer?.rate = self.playbackRate
+                guard advanceIndex() else { return }
+                play(song: queue[currentIndex])
+                refillRadioIfNeeded()
             }
-        } else {
+        case .off:
             next()
         }
     }

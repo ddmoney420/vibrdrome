@@ -26,13 +26,9 @@ struct FolderBrowserView: View {
                 )
             } else {
                 List(folders) { folder in
-                    NavigationLink(value: folder.id) {
+                    NavigationLink(destination: FolderIndexView(folder: folder).environment(appState)) {
                         Label(folder.name ?? "Unknown Folder", systemImage: "folder.fill")
                     }
-                }
-                .navigationDestination(for: String.self) { folderId in
-                    FolderDetailView(directoryId: folderId)
-                        .environment(appState)
                 }
             }
         }

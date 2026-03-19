@@ -60,8 +60,6 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>
-        <string>fetch</string>
-        <string>processing</string>
     </array>
     <key>NSAppTransportSecurity</key>
     <dict>

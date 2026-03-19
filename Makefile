@@ -5,26 +5,11 @@ PROJECT = Vibrdrome.xcodeproj
 IOS_DEST = platform=iOS Simulator,name=iPhone 17 Pro
 MACOS_DEST = platform=macOS
 
-# Entitlements content that xcodegen clears on every run
-define ENTITLEMENTS_CONTENT
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>com.apple.developer.carplay-audio</key>
-	<true/>
-</dict>
-</plist>
-endef
-export ENTITLEMENTS_CONTENT
-
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-generate: ## Run xcodegen and restore entitlements
+generate: ## Run xcodegen
 	xcodegen generate
-	@echo "$$ENTITLEMENTS_CONTENT" > Vibrdrome/Vibrdrome.entitlements
-	@echo "✓ Entitlements restored"
 
 build-ios: ## Build for iOS Simulator (iPhone 17 Pro)
 	xcodebuild build \
