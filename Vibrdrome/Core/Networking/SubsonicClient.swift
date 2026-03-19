@@ -104,6 +104,16 @@ final class SubsonicClient {
             throw SubsonicError.httpError(statusCode)
         }
 
+        let body = try decodeResponse(data)
+
+        // Cache the raw response data on success
+        let key = await ResponseCache.shared.cacheKey(for: endpoint)
+        await ResponseCache.shared.store(data: data, for: key)
+
+        return body
+    }
+
+    private func decodeResponse(_ data: Data) throws -> SubsonicResponseBody {
         let decoded: SubsonicResponse
         do {
             decoded = try JSONDecoder().decode(SubsonicResponse.self, from: data)
@@ -115,7 +125,6 @@ final class SubsonicClient {
 
         if body.status != "ok" {
             if let error = body.error {
-                // Subsonic error code 40 = Wrong username or password
                 if error.code == 40, !AppState.shared.requiresReAuth {
                     networkLog.warning("Subsonic auth error (code 40) — triggering re-authentication prompt")
                     AppState.shared.requiresReAuth = true
@@ -126,6 +135,24 @@ final class SubsonicClient {
         }
 
         return body
+    }
+
+    /// Read a cached response for an endpoint, returning nil if missing or expired.
+    func cachedResponse(for endpoint: SubsonicEndpoint, ttl: TimeInterval) async -> SubsonicResponseBody? {
+        let key = await ResponseCache.shared.cacheKey(for: endpoint)
+        guard let data = await ResponseCache.shared.data(for: key, ttl: ttl) else { return nil }
+        return try? decodeResponse(data)
+    }
+
+    /// Invalidate cached response for an endpoint.
+    func invalidateCache(for endpoint: SubsonicEndpoint) async {
+        let key = await ResponseCache.shared.cacheKey(for: endpoint)
+        await ResponseCache.shared.remove(for: key)
+    }
+
+    /// Clear all cached responses (logout, server switch).
+    func clearCache() async {
+        await ResponseCache.shared.clearAll()
     }
 
     /// Fire-and-forget request for endpoints that don't return meaningful data
@@ -236,10 +263,12 @@ final class SubsonicClient {
 
     func star(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
         try await performAction(.star(id: id, albumId: albumId, artistId: artistId))
+        await invalidateCache(for: .getStarred2)
     }
 
     func unstar(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
         try await performAction(.unstar(id: id, albumId: albumId, artistId: artistId))
+        await invalidateCache(for: .getStarred2)
     }
 
     func setRating(id: String, rating: Int) async throws {
@@ -265,6 +294,7 @@ final class SubsonicClient {
 
     func createPlaylist(name: String, songIds: [String] = []) async throws {
         try await performAction(.createPlaylist(name: name, songIds: songIds))
+        await invalidateCache(for: .getPlaylists)
     }
 
     func updatePlaylist(id: String, name: String? = nil, comment: String? = nil,
@@ -277,6 +307,7 @@ final class SubsonicClient {
 
     func deletePlaylist(id: String) async throws {
         try await performAction(.deletePlaylist(id: id))
+        await invalidateCache(for: .getPlaylists)
     }
 
     func getLyrics(songId: String) async throws -> LyricsList? {
@@ -356,5 +387,6 @@ final class SubsonicClient {
         self.baseURL = baseURL
         self.auth = SubsonicAuth(username: username, password: password)
         self.isConnected = false
+        Task { await clearCache() }
     }
 }
