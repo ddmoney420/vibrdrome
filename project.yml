@@ -81,6 +81,7 @@ targets:
       base:
         INFOPLIST_FILE: Vibrdrome/Info.plist
         CODE_SIGN_ENTITLEMENTS: Vibrdrome/Vibrdrome.entitlements
+        DEVELOPMENT_TEAM: 85JD2B827Q
         PRODUCT_BUNDLE_IDENTIFIER: com.vibrdrome.app
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"

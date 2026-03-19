@@ -47,6 +47,7 @@ enum SubsonicEndpoint: Sendable {
     case getSimilarSongs2(id: String, count: Int = 50)
     case getTopSongs(artist: String, count: Int = 50)
     case getMusicFolders
+    case getIndexes(musicFolderId: String? = nil)
     case getMusicDirectory(id: String)
 
     var path: String {
@@ -85,6 +86,7 @@ enum SubsonicEndpoint: Sendable {
         case .getSimilarSongs2: "/rest/getSimilarSongs2"
         case .getTopSongs: "/rest/getTopSongs"
         case .getMusicFolders: "/rest/getMusicFolders"
+        case .getIndexes: "/rest/getIndexes"
         case .getMusicDirectory: "/rest/getMusicDirectory"
         }
     }
@@ -255,6 +257,11 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "artist", value: artist),
                 URLQueryItem(name: "count", value: "\(count)")
             ]
+
+        case .getIndexes(let musicFolderId):
+            var items: [URLQueryItem] = []
+            if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
+            return items
 
         case .getMusicDirectory(let id):
             return [URLQueryItem(name: "id", value: id)]

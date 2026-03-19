@@ -71,7 +71,7 @@ extension AudioEngine {
         let fadeStart = duration - fadeDur
         guard fadeStart > 0, fadeDur > 0, currentTime >= fadeStart else { return }
 
-        guard repeatMode != .one else { return }
+        guard repeatMode == .off else { return }
 
         guard let nextIdx = nextSongIndex(), nextIdx < queue.count else { return }
         let nextSong = queue[nextIdx]

@@ -525,27 +525,17 @@ struct SettingsView: View {
         let failed = queue.failedCount
 
         if pending > 0 || failed > 0 {
-            HStack {
-                Label("Pending Actions", systemImage: "arrow.triangle.2.circlepath")
-                Spacer()
-                if pending > 0 {
-                    Text(verbatim: "\(pending) pending")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if failed > 0 {
-                    Text(verbatim: "\(failed) failed")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-
             if pending > 0 {
                 Button {
                     Task { await queue.flushPending() }
                 } label: {
-                    Label("Sync Now", systemImage: "arrow.clockwise")
-                        .foregroundColor(.accentColor)
+                    HStack {
+                        Label("Sync \(pending) Pending", systemImage: "arrow.clockwise")
+                        Spacer()
+                        Text(verbatim: "\(pending)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -553,8 +543,13 @@ struct SettingsView: View {
                 Button {
                     Task { await queue.retryFailed() }
                 } label: {
-                    Label("Retry Failed", systemImage: "arrow.counterclockwise")
-                        .foregroundColor(.accentColor)
+                    HStack {
+                        Label("Retry \(failed) Failed", systemImage: "arrow.counterclockwise")
+                        Spacer()
+                        Text(verbatim: "\(failed)")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Button(role: .destructive) {

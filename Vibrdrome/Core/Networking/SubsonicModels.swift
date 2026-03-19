@@ -38,6 +38,7 @@ struct SubsonicResponseBody: Decodable {
     let topSongs: TopSongsResponse?
     let musicFolders: MusicFoldersWrapper?
     let directory: MusicDirectory?
+    let indexes: IndexesResponse?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
@@ -45,7 +46,7 @@ struct SubsonicResponseBody: Decodable {
         case playlists, playlist, genres, starred2, albumList2, randomSongs
         case internetRadioStations, lyricsList, playQueue, bookmarks
         case similarSongs2, topSongs
-        case musicFolders, directory
+        case musicFolders, directory, indexes
     }
 
     init(from decoder: Decoder) throws {
@@ -75,6 +76,7 @@ struct SubsonicResponseBody: Decodable {
         topSongs = try container.decodeIfPresent(TopSongsResponse.self, forKey: .topSongs)
         musicFolders = try container.decodeIfPresent(MusicFoldersWrapper.self, forKey: .musicFolders)
         directory = try container.decodeIfPresent(MusicDirectory.self, forKey: .directory)
+        indexes = try container.decodeIfPresent(IndexesResponse.self, forKey: .indexes)
     }
 }
 
@@ -284,6 +286,24 @@ struct Genre: Decodable, Identifiable, Sendable {
 
 struct MusicFoldersWrapper: Decodable, Sendable {
     let musicFolder: [MusicFolder]?
+}
+
+struct IndexesResponse: Decodable, Sendable {
+    let lastModified: Int?
+    let ignoredArticles: String?
+    let index: [FolderIndex]?
+    let child: [DirectoryChild]?
+}
+
+struct FolderIndex: Decodable, Sendable {
+    let name: String
+    let artist: [FolderArtist]?
+}
+
+struct FolderArtist: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let albumCount: Int?
 }
 
 struct MusicFolder: Decodable, Identifiable, Sendable {

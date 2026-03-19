@@ -44,8 +44,6 @@ struct LibraryView: View {
                         }
                     }
 
-                    // More section
-                    moreSection
                 }
                 #if os(iOS)
                 .padding(.bottom, 80)
@@ -72,15 +70,48 @@ struct LibraryView: View {
 
     private var quickAccessBar: some View {
         LazyVGrid(columns: quickAccessColumns, spacing: 10) {
-            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
-            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-            quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
+            // Left column          // Right column
             quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
-            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
-            quickAccessPill("Bookmarks", icon: "bookmark.fill", color: .brown) { BookmarksView() }
             quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
+            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
+            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
+            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
+            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
+            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
+            quickAccessPill("Decades", icon: "calendar", color: .red) { DecadesView() }
+            randomMixPill
         }
         .padding(.horizontal, 16)
+    }
+
+    private var randomMixPill: some View {
+        Button {
+            guard !isLoadingRandomMix else { return }
+            Task { await playRandomMix() }
+        } label: {
+            HStack(spacing: 8) {
+                if isLoadingRandomMix {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "dice.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.indigo)
+                }
+                Text("Random Mix")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoadingRandomMix)
     }
 
     private func quickAccessPill<D: View>(
@@ -220,88 +251,6 @@ struct LibraryView: View {
                 .lineLimit(1)
         }
         .frame(width: Theme.songCardSize)
-    }
-
-    // MARK: - More Section
-
-    private var moreSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("More")
-                .font(.title3)
-                .bold()
-                .padding(.horizontal, 16)
-
-            VStack(spacing: 0) {
-                moreRow("Recently Played", icon: "play.circle.fill", color: .cyan) {
-                    AlbumsView(listType: .recent, title: "Recently Played")
-                }
-                Divider().padding(.leading, 52)
-                randomMixRow
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    private func moreRow<D: View>(
-        _ title: String, icon: String, color: Color,
-        @ViewBuilder destination: @escaping () -> D
-    ) -> some View {
-        NavigationLink {
-            destination()
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(color)
-                    .frame(width: 28)
-
-                Text(title)
-                    .font(.body)
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.vertical, 12)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Random Mix
-
-    private var randomMixRow: some View {
-        Button {
-            guard !isLoadingRandomMix else { return }
-            Task { await playRandomMix() }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "dice.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.indigo)
-                    .frame(width: 28)
-
-                Text("Random Mix")
-                    .font(.body)
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                if isLoadingRandomMix {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.vertical, 12)
-        }
-        .buttonStyle(.plain)
-        .disabled(isLoadingRandomMix)
     }
 
     private func playRandomMix() async {

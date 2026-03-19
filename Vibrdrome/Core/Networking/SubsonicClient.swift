@@ -211,8 +211,11 @@ final class SubsonicClient {
     }
 
     func getAlbumList(type: AlbumListType, size: Int = 20,
-                      offset: Int = 0, genre: String? = nil) async throws -> [Album] {
-        let body = try await request(.getAlbumList2(type: type, size: size, offset: offset, genre: genre))
+                      offset: Int = 0, genre: String? = nil,
+                      fromYear: Int? = nil, toYear: Int? = nil) async throws -> [Album] {
+        let body = try await request(.getAlbumList2(
+            type: type, size: size, offset: offset,
+            fromYear: fromYear, toYear: toYear, genre: genre))
         return body.albumList2?.album ?? []
     }
 
@@ -329,6 +332,14 @@ final class SubsonicClient {
     func getMusicFolders() async throws -> [MusicFolder] {
         let body = try await request(.getMusicFolders)
         return body.musicFolders?.musicFolder ?? []
+    }
+
+    func getIndexes(musicFolderId: String? = nil) async throws -> IndexesResponse {
+        let body = try await request(.getIndexes(musicFolderId: musicFolderId))
+        guard let indexes = body.indexes else {
+            throw SubsonicError.apiError(code: 70, message: "Indexes not found")
+        }
+        return indexes
     }
 
     func getMusicDirectory(id: String) async throws -> MusicDirectory {

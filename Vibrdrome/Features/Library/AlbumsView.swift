@@ -5,6 +5,8 @@ struct AlbumsView: View {
     let listType: AlbumListType
     var title: String = "Albums"
     var genre: String?
+    var fromYear: Int?
+    var toYear: Int?
 
     @Environment(AppState.self) private var appState
     @State private var albums: [Album] = []
@@ -136,7 +138,8 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await appState.subsonicClient.getAlbumList(
-                type: listType, size: pageSize, offset: 0, genre: genre)
+                type: listType, size: pageSize, offset: 0, genre: genre,
+                fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
         } catch {
@@ -150,7 +153,8 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await appState.subsonicClient.getAlbumList(
-                type: listType, size: pageSize, offset: albums.count, genre: genre)
+                type: listType, size: pageSize, offset: albums.count, genre: genre,
+                fromYear: fromYear, toYear: toYear)
             albums.append(contentsOf: result)
             hasMore = result.count >= pageSize
         } catch {
