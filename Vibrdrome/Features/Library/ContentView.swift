@@ -6,9 +6,6 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var engine: AudioEngine { AudioEngine.shared }
-    @State private var showMiniPlayer = true
-    @State private var hideTask: Task<Void, Never>?
-    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     var body: some View {
         Group {
@@ -63,27 +60,8 @@ struct ContentView: View {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
                     .padding(.bottom, 68)
-                    .offset(y: showMiniPlayer ? 0 : 140)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showMiniPlayer)
             }
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 15)
-                .onChanged { _ in
-                    hideTask?.cancel()
-                    if showMiniPlayer {
-                        showMiniPlayer = false
-                    }
-                }
-                .onEnded { _ in
-                    hideTask?.cancel()
-                    hideTask = Task {
-                        try? await Task.sleep(for: .seconds(2))
-                        guard !Task.isCancelled else { return }
-                        showMiniPlayer = true
-                    }
-                }
-        )
     }
 
 }
