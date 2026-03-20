@@ -11,37 +11,38 @@
 
 ## Description
 
-Vibrdrome is a native music player for your Navidrome server. Stream your entire library, download songs for offline listening, and enjoy gapless playback — all from a beautiful, fast interface built specifically for iOS.
+Vibrdrome is a native music player for your Navidrome server. Stream your entire library, download for offline, and enjoy audiophile-grade playback — all from a fast, beautiful interface built for iOS.
 
 **Your Music, Your Server**
-Connect to any Navidrome or Subsonic-compatible server and access your full library. Browse by artist, album, genre, or folder. Search across your entire collection instantly.
+Connect to any Navidrome or Subsonic-compatible server. Browse by artist, album, genre, folder, or decade. Search your entire collection instantly. Smart caching means screens load instantly after your first visit.
 
 **Audiophile Features**
 - Gapless playback for seamless album listening
 - Crossfade between tracks with adjustable duration
-- 10-band equalizer with presets
-- ReplayGain support for consistent volume
-- Adjustable playback speed
+- 10-band parametric equalizer with custom presets
+- ReplayGain for consistent volume across albums
+- Adjustable playback speed (0.5x–2.0x)
+
+**Smart Playlists & Radio**
+Generate mixes by artist, genre, or mood — Random Mix, B-Sides & Obscure, and Curated Weekly built in. Browse thousands of internet radio stations or add your own stream URLs.
 
 **Offline & Downloads**
-Download albums and playlists for offline listening. Auto-download your favorites. Manage storage with configurable cache limits.
-
-**Playlists & Radio**
-Create and edit playlists. Generate smart mixes. Browse and search thousands of internet radio stations.
+Download albums, playlists, and individual tracks. Auto-download favorites. Resume interrupted downloads. Manage storage with configurable cache limits.
 
 **And More**
-- Synced lyrics display
-- Sleep timer with fade-out
-- Background audio with lock screen controls
-- CarPlay support (coming soon)
-- Full dark mode with customizable accent colors
-- VoiceOver accessibility support
+- Metal-powered audio visualizer with 6 reactive presets
+- Synced lyrics with tap-to-seek
+- Sleep timer with volume fade-out
+- CarPlay support for hands-free listening
+- Background audio with lock screen and Control Center controls
+- Dark mode with 10 customizable accent colors
+- AirPlay streaming
 
 Vibrdrome is free, open source, and contains no ads or tracking.
 
 ## Keywords
 
-navidrome,subsonic,music,player,streaming,self-hosted,gapless,offline,equalizer,audiophile
+navidrome,subsonic,music,player,streaming,self-hosted,gapless,offline,equalizer,carplay
 
 ## What's New (Version 1.0)
 
@@ -68,11 +69,11 @@ https://vibrdrome.io
 | iPad Pro 12.9" | 2048 x 2732 | If submitting for iPad |
 
 **Suggested screenshots (in order):**
-1. Library view — album grid with cover art
+1. Library — home screen with quick access pills and album carousels
 2. Now Playing — full player with album art, controls, progress
 3. Equalizer — 10-band EQ with preset selector
-4. Playlists — playlist list or smart mix view
-5. Settings — showing server connection, theme options
-6. Radio — internet radio stations
-7. Lyrics — synced lyrics display during playback
-8. Offline — downloads view showing cached songs
+4. Playlists — smart mix or playlist detail
+5. Radio — internet radio stations
+6. Visualizer — full-screen audio visualizer
+7. Lyrics — synced lyrics during playback
+8. Search — search results with artists, albums, songs
