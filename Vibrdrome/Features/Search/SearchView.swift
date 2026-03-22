@@ -33,37 +33,7 @@ struct SearchView: View {
             }
 
             searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
-
-                isSearching = true
-                defer { isSearching = false }
-
-                do {
-                    var searchResults = try await appState.subsonicClient.search(query: newValue)
-                    guard !Task.isCancelled else { return }
-
-                    // Fuzzy: if few results, try with dots between letters
-                    // (e.g. "REM" → "R.E.M.", "AC DC" → "AC/DC")
-                    let totalCount = (searchResults.artist?.count ?? 0)
-                        + (searchResults.album?.count ?? 0)
-                        + (searchResults.song?.count ?? 0)
-                    if totalCount < 3 {
-                        let fuzzy = fuzzyVariant(of: newValue)
-                        if let fuzzy, fuzzy != newValue {
-                            let extra = try await appState.subsonicClient.search(query: fuzzy)
-                            guard !Task.isCancelled else { return }
-                            searchResults = mergeResults(searchResults, extra)
-                        }
-                    }
-
-                    searchError = nil
-                    results = searchResults
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    searchError = ErrorPresenter.userMessage(for: error)
-                    results = nil
-                }
+                await performSearch(newValue)
             }
         }
         .overlay {
@@ -284,26 +254,68 @@ struct SearchView: View {
         .padding(.top, 100)
     }
 
+    // MARK: - Search Logic
+
+    private func performSearch(_ query: String) async {
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+
+        isSearching = true
+        defer { isSearching = false }
+
+        do {
+            var searchResults = try await appState.subsonicClient.search(query: query)
+            guard !Task.isCancelled else { return }
+
+            // Fuzzy: if few results, try acronym variants
+            let totalCount = resultCount(searchResults)
+            if totalCount < 3 {
+                for variant in fuzzyVariants(of: query) {
+                    guard !Task.isCancelled else { return }
+                    let extra = try await appState.subsonicClient.search(query: variant)
+                    searchResults = mergeResults(searchResults, extra)
+                    if resultCount(searchResults) >= 3 { break }
+                }
+            }
+
+            searchError = nil
+            results = searchResults
+        } catch {
+            guard !Task.isCancelled else { return }
+            searchError = ErrorPresenter.userMessage(for: error)
+            results = nil
+        }
+    }
+
+    private func resultCount(_ r: SearchResult3) -> Int {
+        (r.artist?.count ?? 0) + (r.album?.count ?? 0) + (r.song?.count ?? 0)
+    }
+
     // MARK: - Fuzzy Search Helpers
 
-    /// Generate a dotted variant for acronym-style queries (e.g. "REM" → "R.E.M.")
-    private func fuzzyVariant(of query: String) -> String? {
+    /// Generate fuzzy search variants for acronym-style queries
+    /// Returns multiple variants to try (e.g. "REM" → ["R.E.M.", "R.E.M", "R E M"])
+    private func fuzzyVariants(of query: String) -> [String] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
+        var variants = [String]()
 
-        // If query is all letters with no spaces/dots (likely an acronym), try dotted version
+        // If query is all letters with no spaces/dots (likely an acronym), try dotted versions
         let lettersOnly = trimmed.filter(\.isLetter)
-        if lettersOnly.count == trimmed.count && trimmed.count >= 2 && trimmed.count <= 5 {
-            let dotted = trimmed.map { String($0) }.joined(separator: ".") + "."
-            return dotted
+        if lettersOnly.count == trimmed.count && trimmed.count >= 2 && trimmed.count <= 6 {
+            let upper = trimmed.uppercased()
+            // R.E.M.
+            variants.append(upper.map { String($0) }.joined(separator: ".") + ".")
+            // R.E.M (no trailing dot)
+            variants.append(upper.map { String($0) }.joined(separator: "."))
         }
 
         // If query contains dots/punctuation, try without them
         let stripped = trimmed.filter { $0.isLetter || $0.isNumber }
         if stripped != trimmed && stripped.count >= 2 {
-            return stripped
+            variants.append(stripped)
         }
 
-        return nil
+        return variants.filter { $0 != trimmed }
     }
 
     /// Merge two search results, deduplicating by ID
