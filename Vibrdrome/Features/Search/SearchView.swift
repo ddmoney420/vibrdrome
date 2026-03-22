@@ -264,18 +264,31 @@ struct SearchView: View {
         defer { isSearching = false }
 
         do {
-            var searchResults = try await appState.subsonicClient.search(query: query)
-            guard !Task.isCancelled else { return }
+            let variants = fuzzyVariants(of: query)
 
-            // Fuzzy: if few results, try acronym variants
-            let totalCount = resultCount(searchResults)
-            if totalCount < 3 {
-                for variant in fuzzyVariants(of: query) {
+            // If we have fuzzy variants, search them first (more specific)
+            // then merge with the original query results
+            var searchResults: SearchResult3
+            if !variants.isEmpty {
+                // Search the dotted/specific variant first
+                searchResults = try await appState.subsonicClient.search(query: variants[0])
+                guard !Task.isCancelled else { return }
+
+                // Try remaining variants if still few results
+                for variant in variants.dropFirst() {
                     guard !Task.isCancelled else { return }
+                    if resultCount(searchResults) >= 3 { break }
                     let extra = try await appState.subsonicClient.search(query: variant)
                     searchResults = mergeResults(searchResults, extra)
-                    if resultCount(searchResults) >= 3 { break }
                 }
+
+                // Merge with original query results (adds broader matches)
+                let original = try await appState.subsonicClient.search(query: query)
+                guard !Task.isCancelled else { return }
+                searchResults = mergeResults(searchResults, original)
+            } else {
+                searchResults = try await appState.subsonicClient.search(query: query)
+                guard !Task.isCancelled else { return }
             }
 
             searchError = nil
