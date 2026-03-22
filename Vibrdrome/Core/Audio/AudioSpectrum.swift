@@ -1,0 +1,133 @@
+import Accelerate
+import Foundation
+import os.log
+
+/// Thread-safe storage for real-time FFT spectrum data extracted from the audio tap.
+/// Updated on the audio render thread, read by the visualizer on the main thread at 60fps.
+final class AudioSpectrum: @unchecked Sendable {
+    static let shared = AudioSpectrum()
+
+    /// Number of FFT bins (must be power of 2)
+    static let fftSize = 1024
+    /// Number of output frequency bands for visualization
+    static let bandCount = 32
+
+    private let lock = OSAllocatedUnfairLock()
+
+    // Smoothed frequency bands (0.0 - 1.0)
+    private var _bass: Float = 0
+    private var _mid: Float = 0
+    private var _treble: Float = 0
+    private var _energy: Float = 0
+    private var _bands: [Float] = Array(repeating: 0, count: bandCount)
+
+    // FFT setup (reusable, created once)
+    private let fftSetup: FFTSetup?
+    private let log2n: vDSP_Length
+
+    private init() {
+        log2n = vDSP_Length(log2(Float(Self.fftSize)))
+        fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
+    }
+
+    deinit {
+        if let fftSetup { vDSP_destroy_fftsetup(fftSetup) }
+    }
+
+    // MARK: - Thread-Safe Accessors
+
+    var bass: Float { lock.withLock { _bass } }
+    var mid: Float { lock.withLock { _mid } }
+    var treble: Float { lock.withLock { _treble } }
+    var energy: Float { lock.withLock { _energy } }
+    var bands: [Float] { lock.withLock { _bands } }
+
+    /// Reset all values to zero (e.g. when playback stops)
+    func reset() {
+        lock.withLock {
+            _bass = 0; _mid = 0; _treble = 0; _energy = 0
+            _bands = Array(repeating: 0, count: Self.bandCount)
+        }
+    }
+
+    // MARK: - FFT Processing (called from audio render thread)
+
+    /// Process raw PCM samples and extract frequency data.
+    /// Called from the MTAudioProcessingTap callback — must be fast and lock-free where possible.
+    func processPCM(_ samples: UnsafePointer<Float>, count: Int, sampleRate: Float) {
+        guard let fftSetup, count >= Self.fftSize else { return }
+        let magnitudes = computeFFT(samples: samples, fftSetup: fftSetup)
+        let newBands = bucketIntoBands(magnitudes: magnitudes, sampleRate: sampleRate)
+        smoothAndStore(newBands)
+    }
+
+    private func computeFFT(samples: UnsafePointer<Float>, fftSetup: FFTSetup) -> [Float] {
+        let n = Self.fftSize
+        let halfN = n / 2
+
+        var windowed = [Float](repeating: 0, count: n)
+        var window = [Float](repeating: 0, count: n)
+        vDSP_hann_window(&window, vDSP_Length(n), Int32(vDSP_HANN_NORM))
+        windowed.withUnsafeMutableBufferPointer { dst in
+            vDSP_vmul(samples, 1, window, 1, dst.baseAddress!, 1, vDSP_Length(n))
+        }
+
+        var realPart = [Float](repeating: 0, count: halfN)
+        var imagPart = [Float](repeating: 0, count: halfN)
+        var magnitudes = [Float](repeating: 0, count: halfN)
+
+        realPart.withUnsafeMutableBufferPointer { realBuf in
+            imagPart.withUnsafeMutableBufferPointer { imagBuf in
+                var split = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                windowed.withUnsafeBytes { raw in
+                    vDSP_ctoz(raw.baseAddress!.assumingMemoryBound(to: DSPComplex.self),
+                              2, &split, 1, vDSP_Length(halfN))
+                }
+                vDSP_fft_zrip(fftSetup, &split, 1, log2n, FFTDirection(FFT_FORWARD))
+                vDSP_zvmags(&split, 1, &magnitudes, 1, vDSP_Length(halfN))
+            }
+        }
+
+        var scale = Float(1.0 / Float(n))
+        var scaled = [Float](repeating: 0, count: halfN)
+        vDSP_vsmul(&magnitudes, 1, &scale, &scaled, 1, vDSP_Length(halfN))
+        return scaled
+    }
+
+    private func bucketIntoBands(magnitudes: [Float], sampleRate: Float) -> [Float] {
+        let binFreqWidth = sampleRate / Float(Self.fftSize)
+        var bands = [Float](repeating: 0, count: Self.bandCount)
+
+        for band in 0..<Self.bandCount {
+            let lowFreq = 20.0 * pow(1000.0, Float(band) / Float(Self.bandCount))
+            let highFreq = 20.0 * pow(1000.0, Float(band + 1) / Float(Self.bandCount))
+            let lowBin = max(1, Int(lowFreq / binFreqWidth))
+            let highBin = min(magnitudes.count - 1, Int(highFreq / binFreqWidth))
+            guard highBin > lowBin else { continue }
+
+            var sum: Float = 0
+            for bin in lowBin...highBin { sum += magnitudes[bin] }
+            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
+        }
+        return bands
+    }
+
+    private func smoothAndStore(_ newBands: [Float]) {
+        let third = Self.bandCount / 3
+        let newBass = newBands[0..<third].reduce(0, +) / Float(third)
+        let newMid = newBands[third..<(2 * third)].reduce(0, +) / Float(third)
+        let newTreble = newBands[(2 * third)..<Self.bandCount].reduce(0, +) / Float(Self.bandCount - 2 * third)
+        let newEnergy = (newBass + newMid + newTreble) / 3.0
+        let smoothing: Float = 0.3
+
+        lock.withLock {
+            _bass += (newBass - _bass) * smoothing
+            _mid += (newMid - _mid) * smoothing
+            _treble += (newTreble - _treble) * smoothing
+            _energy += (newEnergy - _energy) * smoothing
+            for i in 0..<Self.bandCount {
+                _bands[i] += (newBands[i] - _bands[i]) * smoothing
+            }
+        }
+    }
+}

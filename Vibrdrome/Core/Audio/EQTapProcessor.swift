@@ -222,5 +222,14 @@ enum EQTapProcessor {
                 buffer[i] = min(max(buffer[i], -1.0), 1.0)
             }
         }
+
+        // Extract PCM for FFT spectrum analysis (first channel only)
+        if bufferList.count > 0, let data = bufferList[0].mData {
+            let samples = data.assumingMemoryBound(to: Float.self)
+            let sampleRate = Unmanaged<TapContext>.fromOpaque(
+                MTAudioProcessingTapGetStorage(tap)
+            ).takeUnretainedValue().sampleRate
+            AudioSpectrum.shared.processPCM(samples, count: frameCount, sampleRate: sampleRate)
+        }
     }
 }
