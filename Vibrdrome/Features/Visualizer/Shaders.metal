@@ -518,36 +518,36 @@ float3 hsv2rgb(float3 c) {
     float radius = length(uv);
     float angle = atan2(uv.y, uv.x);
 
-    // Strong spiral distortion driven by bass
-    float spiral = angle + radius * (3.0 + bass * 8.0) - t * (1.5 + bass);
+    // Spiral distortion driven by bass
+    float spiral = angle + radius * (3.0 + bass * 5.0) - t * (1.0 + bass * 0.5);
 
-    // Multiple spiral arms with mid-driven count
-    float arms = 3.0 + mid * 3.0;
+    // Multiple spiral arms
+    float arms = 3.0;
     float pattern = sin(spiral * arms) * 0.5 + 0.5;
     pattern *= smoothstep(1.5, 0.0, radius);
 
-    // Treble turbulence — fine detail
-    float turb = noise2d(uv * 8.0 + float2(t * 0.8, t * 0.5)) * treble * 0.5;
+    // Turbulence from treble
+    float turb = noise2d(uv * 5.0 + float2(t * 0.5, t * 0.3)) * treble * 0.3;
     pattern += turb;
 
-    // Bass ripples radiating outward
-    float ripple = sin(radius * 12.0 - t * 5.0 - bass * 8.0) * bass * 0.3;
+    // Mid-frequency ripples
+    float ripple = sin(radius * 15.0 - t * 3.0) * mid * 0.15;
     pattern += ripple;
 
     // Vivid color cycling
-    float hue = fract(angle / 6.28 + t * 0.06 + radius * 0.3 + bass * 0.2);
+    float hue = fract(angle / 6.28 + t * 0.05 + radius * 0.2);
     float3 col = hsv2rgb(float3(hue, 0.85, pattern * (0.5 + energy * 0.7)));
 
-    // Bright center glow on bass
-    float centerGlow = 0.08 / (radius + 0.03) * (bass * 1.2 + 0.2);
-    col += hsv2rgb(float3(fract(t * 0.05), 0.7, 1.0)) * centerGlow;
+    // Center glow
+    float centerGlow = 0.05 / (radius + 0.05) * (bass * 0.7 + 0.3);
+    col += float3(0.6, 0.3, 0.9) * centerGlow;
 
     // Boost saturation
     float gray = dot(col, float3(0.299, 0.587, 0.114));
-    col = mix(float3(gray), col, 1.4);
+    col = mix(float3(gray), col, 1.3);
 
     // Edge vignette
-    col *= smoothstep(2.0, 0.3, radius);
+    col *= smoothstep(2.0, 0.5, radius);
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
