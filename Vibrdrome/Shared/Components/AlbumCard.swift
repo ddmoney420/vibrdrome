@@ -19,10 +19,10 @@ struct AlbumCard: View {
                 }
                 HStack(spacing: 4) {
                     if let year = album.year {
-                        Text("\(year)")
+                        Text(verbatim: "\(year)")
                     }
                     if let count = album.songCount {
-                        Text("· \(count) songs")
+                        Text(verbatim: "· \(count) songs")
                     }
                 }
                 .font(.caption2)
