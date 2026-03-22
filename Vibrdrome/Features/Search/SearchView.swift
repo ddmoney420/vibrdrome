@@ -40,8 +40,23 @@ struct SearchView: View {
                 defer { isSearching = false }
 
                 do {
-                    let searchResults = try await appState.subsonicClient.search(query: newValue)
+                    var searchResults = try await appState.subsonicClient.search(query: newValue)
                     guard !Task.isCancelled else { return }
+
+                    // Fuzzy: if few results, try with dots between letters
+                    // (e.g. "REM" → "R.E.M.", "AC DC" → "AC/DC")
+                    let totalCount = (searchResults.artist?.count ?? 0)
+                        + (searchResults.album?.count ?? 0)
+                        + (searchResults.song?.count ?? 0)
+                    if totalCount < 3 {
+                        let fuzzy = fuzzyVariant(of: newValue)
+                        if let fuzzy, fuzzy != newValue {
+                            let extra = try await appState.subsonicClient.search(query: fuzzy)
+                            guard !Task.isCancelled else { return }
+                            searchResults = mergeResults(searchResults, extra)
+                        }
+                    }
+
                     searchError = nil
                     results = searchResults
                 } catch {
@@ -267,5 +282,54 @@ struct SearchView: View {
             .buttonStyle(.bordered)
         }
         .padding(.top, 100)
+    }
+
+    // MARK: - Fuzzy Search Helpers
+
+    /// Generate a dotted variant for acronym-style queries (e.g. "REM" → "R.E.M.")
+    private func fuzzyVariant(of query: String) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+
+        // If query is all letters with no spaces/dots (likely an acronym), try dotted version
+        let lettersOnly = trimmed.filter(\.isLetter)
+        if lettersOnly.count == trimmed.count && trimmed.count >= 2 && trimmed.count <= 5 {
+            let dotted = trimmed.map { String($0) }.joined(separator: ".") + "."
+            return dotted
+        }
+
+        // If query contains dots/punctuation, try without them
+        let stripped = trimmed.filter { $0.isLetter || $0.isNumber }
+        if stripped != trimmed && stripped.count >= 2 {
+            return stripped
+        }
+
+        return nil
+    }
+
+    /// Merge two search results, deduplicating by ID
+    private func mergeResults(_ a: SearchResult3, _ b: SearchResult3) -> SearchResult3 {
+        let artists = dedup((a.artist ?? []) + (b.artist ?? []))
+        let albums = dedupAlbums((a.album ?? []) + (b.album ?? []))
+        let songs = dedupSongs((a.song ?? []) + (b.song ?? []))
+        return SearchResult3(
+            artist: artists.isEmpty ? nil : artists,
+            album: albums.isEmpty ? nil : albums,
+            song: songs.isEmpty ? nil : songs
+        )
+    }
+
+    private func dedup(_ artists: [Artist]) -> [Artist] {
+        var seen = Set<String>()
+        return artists.filter { seen.insert($0.id).inserted }
+    }
+
+    private func dedupAlbums(_ albums: [Album]) -> [Album] {
+        var seen = Set<String>()
+        return albums.filter { seen.insert($0.id).inserted }
+    }
+
+    private func dedupSongs(_ songs: [Song]) -> [Song] {
+        var seen = Set<String>()
+        return songs.filter { seen.insert($0.id).inserted }
     }
 }

@@ -233,7 +233,7 @@ struct NowPlayingView: View {
     private var dismissHandle: some View {
         HStack {
             Button { dismiss() } label: {
-                Image(systemName: "chevron.down")
+                Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white.opacity(0.8))
                     .frame(width: 36, height: 36)
