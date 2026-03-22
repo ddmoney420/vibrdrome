@@ -704,9 +704,12 @@ final class AudioEngine {
 
     // MARK: - EQ Tap
 
-    /// Apply EQ audio tap to an AVPlayerItem (async — waits for tracks to load)
+    /// Whether the visualizer is currently active (keeps audio tap alive for FFT)
+    var visualizerActive = false
+
+    /// Apply audio tap to an AVPlayerItem for EQ processing and/or FFT spectrum extraction.
     func applyEQTapIfNeeded(to item: AVPlayerItem) {
-        guard eqEnabled else { return }
+        guard eqEnabled || visualizerActive else { return }
         let gen = generation
         Task {
             do {

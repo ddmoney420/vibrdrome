@@ -9,6 +9,12 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
     case waveform = "Waveform"
     case tunnel = "Tunnel"
     case kaleidoscope = "Kaleidoscope"
+    case particles = "Particles"
+    case fractal = "Fractal"
+    case fluid = "Fluid"
+    case rings = "Rings"
+    case spectrum = "Spectrum"
+    case vortex = "Vortex"
 
     var id: String { rawValue }
 
@@ -20,25 +26,35 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
         case .waveform: "waveform.path"
         case .tunnel: "circle.circle"
         case .kaleidoscope: "hexagon.fill"
+        case .particles: "sparkle"
+        case .fractal: "camera.filters"
+        case .fluid: "drop.fill"
+        case .rings: "circles.hexagonpath"
+        case .spectrum: "chart.bar.fill"
+        case .vortex: "tornado"
         }
     }
 
-    func shader(size: CGSize, time: Float, energy: Float) -> Shader {
-        let w = Float(size.width)
-        let h = Float(size.height)
+    // swiftlint:disable:next function_parameter_count
+    func shader(size: CGSize, time: Float, energy: Float,
+                bass: Float, mid: Float, treble: Float) -> Shader {
+        let args: [Shader.Argument] = [
+            .float2(Float(size.width), Float(size.height)),
+            .float(time), .float(energy), .float(bass), .float(mid), .float(treble)
+        ]
         switch self {
-        case .plasma:
-            return ShaderLibrary.plasma(.float2(w, h), .float(time), .float(energy))
-        case .aurora:
-            return ShaderLibrary.aurora(.float2(w, h), .float(time), .float(energy))
-        case .nebula:
-            return ShaderLibrary.nebula(.float2(w, h), .float(time), .float(energy))
-        case .waveform:
-            return ShaderLibrary.waveform(.float2(w, h), .float(time), .float(energy))
-        case .tunnel:
-            return ShaderLibrary.tunnel(.float2(w, h), .float(time), .float(energy))
-        case .kaleidoscope:
-            return ShaderLibrary.kaleidoscope(.float2(w, h), .float(time), .float(energy))
+        case .plasma: return ShaderLibrary.plasma(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .aurora: return ShaderLibrary.aurora(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .nebula: return ShaderLibrary.nebula(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .waveform: return ShaderLibrary.waveform(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .tunnel: return ShaderLibrary.tunnel(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .kaleidoscope: return ShaderLibrary.kaleidoscope(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .particles: return ShaderLibrary.particles(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .fractal: return ShaderLibrary.fractal(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .fluid: return ShaderLibrary.fluid(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .rings: return ShaderLibrary.rings(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .spectrum: return ShaderLibrary.spectrumVis(args[0], args[1], args[2], args[3], args[4], args[5])
+        case .vortex: return ShaderLibrary.vortex(args[0], args[1], args[2], args[3], args[4], args[5])
         }
     }
 }
@@ -52,6 +68,9 @@ struct VisualizerView: View {
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5
+    @State private var bass: Float = 0
+    @State private var mid: Float = 0
+    @State private var treble: Float = 0
     @State private var showControls = true
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
@@ -60,6 +79,7 @@ struct VisualizerView: View {
     #endif
 
     private var engine: AudioEngine { AudioEngine.shared }
+    private let audioSpectrum = AudioSpectrum.shared
 
     private var preset: VisualizerPreset {
         VisualizerPreset(rawValue: presetName) ?? .plasma
@@ -73,7 +93,9 @@ struct VisualizerView: View {
                 // Shader canvas
                 TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
                     Rectangle()
-                        .colorEffect(preset.shader(size: geo.size, time: time, energy: energy))
+                        .colorEffect(preset.shader(
+                            size: geo.size, time: time, energy: energy,
+                            bass: bass, mid: mid, treble: treble))
                 }
                 .ignoresSafeArea()
                 #if os(macOS)
@@ -93,7 +115,7 @@ struct VisualizerView: View {
         .onReceive(timer) { _ in
             guard !reduceMotion else { return }
             updateTime()
-            updateEnergy()
+            updateSpectrum()
         }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -107,13 +129,21 @@ struct VisualizerView: View {
                     if value.translation.height > 100 {
                         dismiss()
                     } else if abs(value.translation.width) > 50 {
-                        // Swipe left/right to change preset
                         cyclePreset(forward: value.translation.width < 0)
                     }
                 }
         )
         .onAppear {
+            engine.visualizerActive = true
+            // Reapply tap if EQ is off but we need FFT data
+            if !engine.eqEnabled, let item = engine.activePlayer?.currentItem {
+                engine.applyEQTapIfNeeded(to: item)
+            }
             scheduleHideControls()
+        }
+        .onDisappear {
+            engine.visualizerActive = false
+            AudioSpectrum.shared.reset()
         }
     }
 
@@ -161,7 +191,6 @@ struct VisualizerView: View {
                         .shadow(radius: 4)
                 }
                 #else
-                // Placeholder for symmetry
                 Color.clear.frame(width: 28, height: 28)
                 #endif
             }
@@ -172,7 +201,6 @@ struct VisualizerView: View {
 
             // Bottom playback controls
             VStack(spacing: 12) {
-                // Song info
                 if let song = engine.currentSong {
                     VStack(spacing: 4) {
                         Text(song.title)
@@ -194,7 +222,6 @@ struct VisualizerView: View {
                         .lineLimit(1)
                 }
 
-                // Transport controls
                 HStack(spacing: 40) {
                     Button { engine.previous() } label: {
                         Image(systemName: "backward.fill")
@@ -221,34 +248,37 @@ struct VisualizerView: View {
     }
 
     private var presetPickerContent: some View {
-        VStack(spacing: 0) {
-            ForEach(VisualizerPreset.allCases) { p in
-                Button {
-                    presetName = p.rawValue
-                    showPresetPicker = false
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: p.icon)
-                            .frame(width: 24)
-                            .foregroundColor(.accentColor)
-                        Text(p.rawValue)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if p == preset {
-                            Image(systemName: "checkmark")
+        ScrollView {
+            VStack(spacing: 0) {
+                ForEach(VisualizerPreset.allCases) { p in
+                    Button {
+                        presetName = p.rawValue
+                        showPresetPicker = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: p.icon)
+                                .frame(width: 24)
                                 .foregroundColor(.accentColor)
+                            Text(p.rawValue)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if p == preset {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
-                if p != VisualizerPreset.allCases.last {
-                    Divider().padding(.leading, 52)
+                    .buttonStyle(.plain)
+                    if p != VisualizerPreset.allCases.last {
+                        Divider().padding(.leading, 52)
+                    }
                 }
             }
         }
         .frame(width: 220)
+        .frame(maxHeight: 500)
         .presentationCompactAdaptation(.popover)
     }
 
@@ -260,18 +290,38 @@ struct VisualizerView: View {
         }
     }
 
-    private func updateEnergy() {
+    private func updateSpectrum() {
         if engine.isPlaying {
-            let t = time
-            // Simulated beat at ~120 BPM with harmonics and noise
-            let beat = sin(t * 2.0 * .pi * 2.0) * 0.25
-            let beat2 = sin(t * 2.0 * .pi * 4.0) * 0.12
-            let beat3 = sin(t * 2.0 * .pi * 1.3) * 0.08
-            let noise = sin(t * 17.3) * sin(t * 23.7) * 0.08
-            let target = 0.55 + beat + beat2 + beat3 + noise
-            energy += (max(0.15, min(1.0, target)) - energy) * 0.15
+            // Read real FFT data from the audio tap
+            let spectrum = audioSpectrum
+            let realBass = spectrum.bass
+            let realMid = spectrum.mid
+            let realTreble = spectrum.treble
+            let realEnergy = spectrum.energy
+
+            // Use real data if available, fall back to simulated
+            if realEnergy > 0.001 {
+                bass = realBass
+                mid = realMid
+                treble = realTreble
+                energy = realEnergy
+            } else {
+                // Fallback: simulated energy when no FFT data
+                let t = time
+                let beat = sin(t * 2.0 * .pi * 2.0) * 0.25
+                let beat2 = sin(t * 2.0 * .pi * 4.0) * 0.12
+                let noise = sin(t * 17.3) * sin(t * 23.7) * 0.08
+                let target = 0.55 + beat + beat2 + noise
+                energy += (max(0.15, min(1.0, target)) - energy) * 0.15
+                bass = energy * 1.2
+                mid = energy
+                treble = energy * 0.8
+            }
         } else {
             energy += (0.0 - energy) * 0.05
+            bass += (0.0 - bass) * 0.05
+            mid += (0.0 - mid) * 0.05
+            treble += (0.0 - treble) * 0.05
         }
     }
 

@@ -9,6 +9,7 @@ struct LibraryView: View {
     @State private var starredSongs: [Song] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
+    @State private var isLoadingRandomAlbum = false
 
     var body: some View {
         NavigationStack {
@@ -70,16 +71,20 @@ struct LibraryView: View {
 
     private var quickAccessBar: some View {
         LazyVGrid(columns: quickAccessColumns, spacing: 10) {
-            // Left column          // Right column
-            quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
-            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
-            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
-            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
-            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
-            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
-            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
+            // Left column                                      // Right column
+            quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
+            quickAccessPill("Radio", icon: "antenna.radiowaves.left.and.right", color: .mint) { RadioView() }
             quickAccessPill("Generations", icon: "calendar", color: .red) { GenerationsView() }
+            quickAccessPill("Playlists", icon: "music.note.list", color: .purple) { PlaylistsView() }
+            quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
+            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
+            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
+            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
+            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
+            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
+            randomAlbumPill
+            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
             randomMixPill
         }
         .padding(.horizontal, 16)
@@ -112,6 +117,35 @@ struct LibraryView: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoadingRandomMix)
+    }
+
+    private var randomAlbumPill: some View {
+        Button {
+            guard !isLoadingRandomAlbum else { return }
+            Task { await playRandomAlbum() }
+        } label: {
+            HStack(spacing: 8) {
+                if isLoadingRandomAlbum {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "opticaldisc.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.orange)
+                }
+                Text("Random Album")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoadingRandomAlbum)
     }
 
     private func quickAccessPill<D: View>(
@@ -259,6 +293,18 @@ struct LibraryView: View {
         do {
             let songs = try await appState.subsonicClient.getRandomSongs(size: 50)
             guard let first = songs.first else { return }
+            AudioEngine.shared.play(song: first, from: songs)
+        } catch {}
+    }
+
+    private func playRandomAlbum() async {
+        isLoadingRandomAlbum = true
+        defer { isLoadingRandomAlbum = false }
+        do {
+            let albums = try await appState.subsonicClient.getAlbumList(type: .random, size: 1)
+            guard let album = albums.first else { return }
+            let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+            guard let songs = detail.song, let first = songs.first else { return }
             AudioEngine.shared.play(song: first, from: songs)
         } catch {}
     }
