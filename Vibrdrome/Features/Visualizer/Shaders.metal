@@ -324,38 +324,52 @@ float3 hsv2rgb(float3 c) {
 [[ stitchable ]] half4 fluid(float2 position, half4 color, float2 size, float time, float energy,
                               float bass, float mid, float treble) {
     float2 uv = (position / size - 0.5) * 2.0;
-    float t = time * 0.3;
+    uv.x *= size.x / size.y;
+    float t = time;
 
-    // Multiple fluid layers with frequency-driven distortion
-    float2 p1 = uv * 2.0 + float2(t * 0.5, t * 0.3);
-    float2 p2 = uv * 3.0 + float2(-t * 0.3, t * 0.4);
+    // Strong bass-driven warping — the core "fluid" feel
+    float2 warp = float2(
+        sin(uv.y * 3.0 + t * 1.5) * bass * 1.5 + cos(uv.y * 7.0 + t) * mid * 0.5,
+        cos(uv.x * 3.0 + t * 1.2) * bass * 1.5 + sin(uv.x * 5.0 - t) * mid * 0.5
+    );
 
-    // Bass creates pressure waves
-    float distort = bass * 0.5;
-    p1 += float2(sin(uv.y * 4.0 + t) * distort, cos(uv.x * 4.0 + t) * distort);
+    float2 p = uv + warp * 0.3;
 
-    float f1 = fbm(p1);
-    float f2 = fbm(p2 + float2(f1 * (1.0 + mid)));
+    // Layered fluid motion — each layer reacts to different frequency
+    float f1 = fbm(p * 2.0 + float2(t * 0.8, t * 0.6));
+    float f2 = fbm(p * 3.0 + float2(f1 * bass * 3.0, -t * 0.5));
+    float f3 = fbm(p * 5.0 + float2(f2 * mid * 2.0, f1 + t * 0.3));
 
-    // Treble adds fine turbulence
-    float f3 = fbm(uv * 8.0 + float2(f2, t) + treble * 2.0) * treble;
+    // Treble adds shimmering detail
+    float detail = noise2d(uv * 12.0 + float2(t * 2.0, f3)) * treble;
 
-    float v = (f1 + f2 * 0.5 + f3 * 0.3) * (0.5 + energy * 0.5);
+    float v = f1 * 0.4 + f2 * 0.35 + f3 * 0.25 + detail * 0.3;
+    v *= (0.6 + energy * 0.8);
 
-    // Deep ocean-like color palette
-    float3 col = float3(0.0);
-    col = mix(col, float3(0.0, 0.05, 0.15), smoothstep(0.0, 0.3, v));
-    col = mix(col, float3(0.05, 0.15, 0.4), smoothstep(0.2, 0.5, v));
-    col = mix(col, float3(0.1, 0.4, 0.6), smoothstep(0.4, 0.7, v));
-    col = mix(col, float3(0.3, 0.7, 0.9), smoothstep(0.6, 0.85, v));
-    col = mix(col, float3(0.9, 0.95, 1.0), smoothstep(0.8, 1.0, v));
+    // Vivid color palette that shifts with frequency
+    float hueBase = fract(t * 0.03 + bass * 0.2);
+    float3 col;
+    col.r = sin(v * 5.0 + hueBase * 6.28 + 0.0) * 0.5 + 0.5;
+    col.g = sin(v * 5.0 + hueBase * 6.28 + 2.094) * 0.5 + 0.5;
+    col.b = sin(v * 5.0 + hueBase * 6.28 + 4.189) * 0.5 + 0.5;
 
-    // Bass pulse glow from center
-    float centerDist = length(uv);
-    float pulse = exp(-centerDist * 2.0) * bass * 0.5;
-    col += float3(0.2, 0.5, 0.8) * pulse;
+    // Boost saturation
+    float gray = dot(col, float3(0.299, 0.587, 0.114));
+    col = mix(float3(gray), col, 1.5);
 
-    return half4(half3(col), 1.0h);
+    // Bass shock waves ripple outward
+    float radius = length(uv);
+    float wave = sin(radius * 8.0 - t * 4.0 - bass * 10.0) * 0.5 + 0.5;
+    wave *= exp(-radius * 1.5) * bass;
+    col += float3(0.4, 0.2, 0.8) * wave;
+
+    // Mid-frequency swirl
+    float swirl = sin(atan2(uv.y, uv.x) * 3.0 + t + mid * 5.0) * mid * 0.2;
+    col *= 1.0 + swirl;
+
+    col *= (0.7 + energy * 0.5);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
 
 // MARK: - 10. Rings
