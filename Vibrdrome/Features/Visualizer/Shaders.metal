@@ -40,24 +40,28 @@ float3 hsv2rgb(float3 c) {
 [[ stitchable ]] half4 plasma(float2 position, half4 color, float2 size, float time, float energy,
                                float bass, float mid, float treble) {
     float2 uv = position / size;
-    float t = time * (0.4 + energy * 0.6);
+    float t = time * (0.5 + energy * 0.8);
 
-    float scale = 10.0 + bass * 4.0;
-    float v1 = sin(uv.x * scale + t);
-    float v2 = sin(uv.y * scale + t * 0.7);
+    float scale = 10.0 + bass * 8.0;
+    float v1 = sin(uv.x * scale + t + bass * 3.0);
+    float v2 = sin(uv.y * scale + t * 0.7 + mid * 2.0);
     float v3 = sin((uv.x + uv.y) * scale + t * 0.5);
-    float v4 = sin(length(uv - 0.5) * (14.0 + mid * 6.0) - t * 1.3);
+    float v4 = sin(length(uv - 0.5) * (14.0 + mid * 10.0) - t * 1.3);
 
     float v = (v1 + v2 + v3 + v4) * 0.25;
-    v = v * (0.5 + energy * 0.5);
+    v = v * (0.4 + energy * 0.8);
 
-    float hueShift = treble * 0.3;
+    float hueShift = treble * 0.6 + bass * 0.3;
     float r = sin(v * 3.14159 + hueShift) * 0.5 + 0.5;
     float g = sin(v * 3.14159 + 2.094 + hueShift) * 0.5 + 0.5;
     float b2 = sin(v * 3.14159 + 4.189 + hueShift) * 0.5 + 0.5;
 
-    float brightness = 0.6 + energy * 0.4;
-    return half4(half3(r, g, b2) * half(brightness), 1.0h);
+    float brightness = 0.5 + energy * 0.6;
+    float3 col = float3(r, g, b2) * brightness;
+    // Boost saturation
+    float gray = dot(col, float3(0.299, 0.587, 0.114));
+    col = mix(float3(gray), col, 1.4);
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
 
 // MARK: - 2. Aurora
@@ -82,17 +86,24 @@ float3 hsv2rgb(float3 c) {
     float band2 = smoothstep(0.06 + mid * 0.03, 0.0, abs(y - 0.5 - wave * 0.7));
     float band3 = smoothstep(0.05 + mid * 0.02, 0.0, abs(y - 0.65 - wave * 0.5));
 
-    float3 c1 = float3(0.1, 0.8, 0.4) * band1;
-    float3 c2 = float3(0.2, 0.5, 0.9) * band2;
-    float3 c3 = float3(0.6, 0.2, 0.8) * band3;
+    // Vivid aurora colors that shift with frequency
+    float hShift = treble * 0.4 + t * 0.05;
+    float3 c1 = hsv2rgb(float3(fract(0.35 + hShift), 0.9, 1.0)) * band1;
+    float3 c2 = hsv2rgb(float3(fract(0.6 + hShift), 0.8, 1.0)) * band2;
+    float3 c3 = hsv2rgb(float3(fract(0.8 + hShift), 0.85, 1.0)) * band3;
 
     float3 col = c1 + c2 + c3;
-    col *= (0.7 + treble * 0.5);
+    col *= (0.6 + energy * 0.6);
 
-    float glow = fbm(uv * 3.0 + float2(t * 0.1, 0.0)) * 0.05;
-    col += float3(glow * 0.3, glow * 0.5, glow * 0.7);
+    // Background glow reacts to mid
+    float glow = fbm(uv * 3.0 + float2(t * 0.15, mid)) * (0.05 + mid * 0.1);
+    col += hsv2rgb(float3(fract(0.5 + hShift), 0.5, glow));
 
-    return half4(half3(col), 1.0h);
+    // Bass pulse at horizon
+    float horizon = exp(-abs(uv.y - 0.5) * 8.0) * bass * 0.4;
+    col += float3(0.3, 0.8, 0.5) * horizon;
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
 
 // MARK: - 3. Nebula
@@ -100,25 +111,41 @@ float3 hsv2rgb(float3 c) {
 [[ stitchable ]] half4 nebula(float2 position, half4 color, float2 size, float time, float energy,
                                float bass, float mid, float treble) {
     float2 uv = (position / size - 0.5) * 2.0;
-    float t = time * 0.2;
+    float t = time * (0.3 + bass * 0.3);
 
-    float2 p = uv * (3.0 + bass * 2.0);
+    // Bass warps the coordinate space
+    float2 warp = float2(sin(t + uv.y * 2.0) * bass * 0.4, cos(t * 0.8 + uv.x * 2.0) * bass * 0.4);
+    float2 p = uv * (3.0 + bass * 3.0) + warp;
+
     float f1 = fbm(p + float2(t, t * 0.7));
-    float f2 = fbm(p + float2(f1 * 2.0 + t * 0.3, f1 * 1.5));
-    float f3 = fbm(p + float2(f2 * 1.5 - t * 0.2, f2 * 2.0 + t * 0.1));
+    float f2 = fbm(p + float2(f1 * (2.0 + mid * 2.0) + t * 0.3, f1 * 1.5));
+    float f3 = fbm(p + float2(f2 * 1.5 - t * 0.2, f2 * (2.0 + bass) + t * 0.1));
 
-    float v = f3 * (0.6 + energy * 0.4);
+    float v = f3 * (0.5 + energy * 0.7);
 
+    // Color wash that shifts with frequency bands
+    float hueShift = bass * 0.4 + treble * 0.3 + t * 0.05;
     float3 col = float3(0.0);
-    col = mix(col, float3(0.1, 0.0, 0.2), smoothstep(0.0, 0.4, v));
-    col = mix(col, float3(0.4, 0.1, 0.6), smoothstep(0.2, 0.6, v));
-    col = mix(col, float3(0.8, 0.3, 0.5), smoothstep(0.4, 0.8, v));
-    col = mix(col, float3(1.0, 0.8, 0.6), smoothstep(0.6, 1.0, v));
+    col = mix(col, hsv2rgb(float3(fract(0.75 + hueShift), 0.8, 0.3)), smoothstep(0.0, 0.3, v));
+    col = mix(col, hsv2rgb(float3(fract(0.85 + hueShift), 0.7, 0.6)), smoothstep(0.15, 0.5, v));
+    col = mix(col, hsv2rgb(float3(fract(0.0 + hueShift), 0.6, 0.8)), smoothstep(0.3, 0.7, v));
+    col = mix(col, hsv2rgb(float3(fract(0.1 + hueShift), 0.4, 1.0)), smoothstep(0.5, 0.9, v));
 
-    float stars = pow(hash(floor(uv * 100.0)), 20.0);
-    col += stars * (0.3 + treble * 0.7);
+    // Mid-driven pulsing glow
+    float radius = length(uv);
+    float pulse = exp(-radius * (1.5 - mid * 0.5)) * mid * 0.6;
+    col += hsv2rgb(float3(fract(t * 0.08 + 0.6), 0.7, 1.0)) * pulse;
 
-    return half4(half3(col), 1.0h);
+    // Stars shimmer with treble
+    float stars = pow(hash(floor(uv * 120.0)), 18.0);
+    float starFlicker = 0.5 + 0.5 * sin(hash(floor(uv * 120.0)) * 100.0 + t * 5.0);
+    col += stars * starFlicker * (0.4 + treble * 1.0);
+
+    // Boost vibrancy
+    float gray = dot(col, float3(0.299, 0.587, 0.114));
+    col = mix(float3(gray), col, 1.3);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
 
 // MARK: - 4. Waveform
@@ -129,35 +156,41 @@ float3 hsv2rgb(float3 c) {
     float t = time;
     float3 col = float3(0.02, 0.02, 0.05);
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 8; i++) {
         float fi = float(i);
-        float freq = 3.0 + fi * 2.0;
+        float freq = 2.0 + fi * 1.5;
         float phase = fi * 1.047;
-        float speed = 1.0 + fi * 0.3;
+        float speed = 1.0 + fi * 0.4;
 
-        // Different frequency bands drive different wave layers
-        float bandEnergy = (i < 2) ? bass : (i < 4) ? mid : treble;
-        float amp = (0.03 + bandEnergy * 0.08) / (fi * 0.3 + 1.0);
+        // Strong frequency-band response per layer
+        float bandEnergy = (i < 3) ? bass : (i < 6) ? mid : treble;
+        float amp = (0.04 + bandEnergy * 0.15) / (fi * 0.25 + 1.0);
 
-        float wave = sin(uv.x * freq * 6.28 + t * speed + phase) * amp;
-        wave += sin(uv.x * freq * 3.14 + t * speed * 0.7) * amp * 0.5;
+        float wave = sin(uv.x * freq * 6.28 + t * speed + phase + bandEnergy * 4.0) * amp;
+        wave += sin(uv.x * freq * 3.14 + t * speed * 0.7 + bandEnergy * 2.0) * amp * 0.6;
 
         float y = 0.5 + wave;
         float d = abs(uv.y - y);
-        float glow = 0.003 / (d + 0.001);
-        glow *= energy * 0.7 + 0.3;
 
-        float hue = fract(fi / 6.0 + t * 0.05);
-        float3 waveColor;
-        float3 p2 = abs(fract(float3(hue) + float3(0.0, 0.333, 0.667)) * 6.0 - 3.0);
-        waveColor = clamp(p2 - 1.0, 0.0, 1.0);
-        waveColor = mix(float3(1.0), waveColor, 0.8);
+        // Thicker, brighter glow
+        float glowWidth = 0.004 + bandEnergy * 0.003;
+        float glow = glowWidth / (d + 0.0005);
+        glow = min(glow, 5.0);
+        glow *= (0.4 + energy * 0.8);
 
-        col += waveColor * glow * 0.15;
+        float hue = fract(fi / 8.0 + t * 0.04 + bandEnergy * 0.2);
+        float3 waveColor = hsv2rgb(float3(hue, 0.8, 1.0));
+
+        col += waveColor * glow * 0.1;
     }
 
-    float mirror = smoothstep(0.01, 0.0, abs(uv.y - 0.5)) * energy * 0.3;
-    col += float3(0.3, 0.5, 0.8) * mirror;
+    // Bass pulse behind waves
+    float bassPulse = (0.5 + 0.5 * sin(t * 4.0)) * bass * 0.15;
+    col += float3(0.2, 0.1, 0.4) * bassPulse;
+
+    // Center line glow
+    float mirror = smoothstep(0.015, 0.0, abs(uv.y - 0.5)) * energy * 0.5;
+    col += float3(0.4, 0.6, 1.0) * mirror;
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
@@ -379,32 +412,49 @@ float3 hsv2rgb(float3 c) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
-    float3 col = float3(0.02, 0.01, 0.04);
+    float3 col = float3(0.03, 0.01, 0.06);
 
     float radius = length(uv);
     float angle = atan2(uv.y, uv.x);
 
-    // Concentric rings that pulse with bass
-    for (int i = 0; i < 8; i++) {
+    // Background energy wash
+    float bgWash = fbm(uv * 1.5 + float2(t * 0.1, bass)) * energy * 0.15;
+    col += hsv2rgb(float3(fract(t * 0.02), 0.5, bgWash));
+
+    // Concentric rings — each strongly tied to a frequency band
+    for (int i = 0; i < 10; i++) {
         float fi = float(i);
-        float ringRadius = 0.15 + fi * 0.2;
-        float pulseAmt = (i < 3) ? bass : (i < 6) ? mid : treble;
-        ringRadius += sin(t * (2.0 + fi * 0.5) + fi) * 0.03 * (1.0 + pulseAmt * 2.0);
+        float ringRadius = 0.1 + fi * 0.17;
+        float pulseAmt = (i < 4) ? bass : (i < 7) ? mid : treble;
+
+        // Strong pulsing — rings breathe with the music
+        ringRadius += sin(t * (3.0 + fi * 0.7) + fi * 1.5) * 0.05 * (1.0 + pulseAmt * 4.0);
 
         float d = abs(radius - ringRadius);
-        float ringWidth = 0.008 + pulseAmt * 0.01;
-        float glow = ringWidth / (d + 0.001);
-        glow = min(glow, 3.0);
+        // Wider, brighter rings
+        float ringWidth = 0.012 + pulseAmt * 0.02;
+        float glow = ringWidth / (d + 0.0005);
+        glow = min(glow, 5.0);
 
-        // Rotate each ring at different speeds
-        float rotAngle = angle + t * (0.2 + fi * 0.1) * (fmod(fi, 2.0) > 0.5 ? 1.0 : -1.0);
-        float angularPattern = 0.7 + 0.3 * sin(rotAngle * (3.0 + fi));
+        // Rotating angular pattern — breaks up the rings
+        float rotAngle = angle + t * (0.3 + fi * 0.15) * (fmod(fi, 2.0) > 0.5 ? 1.0 : -1.0);
+        float segments = 4.0 + fi * 2.0;
+        float angularPattern = 0.5 + 0.5 * sin(rotAngle * segments + pulseAmt * 3.0);
 
-        float hue = fract(fi / 8.0 + t * 0.03);
-        float3 ringColor = hsv2rgb(float3(hue, 0.7, 1.0));
+        // Vivid colors cycling through rainbow
+        float hue = fract(fi / 10.0 + t * 0.04 + pulseAmt * 0.3);
+        float3 ringColor = hsv2rgb(float3(hue, 0.85, 1.0));
 
-        col += ringColor * glow * angularPattern * 0.06 * (0.5 + energy);
+        col += ringColor * glow * angularPattern * 0.1 * (0.3 + energy * 0.8);
     }
+
+    // Center bass burst
+    float centerGlow = exp(-radius * 4.0) * bass * 1.2;
+    col += hsv2rgb(float3(fract(t * 0.06), 0.6, 1.0)) * centerGlow;
+
+    // Outer treble shimmer
+    float outerShimmer = smoothstep(1.0, 1.8, radius) * treble * 0.3;
+    col += float3(0.5, 0.3, 0.8) * outerShimmer * sin(angle * 8.0 + t * 2.0);
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
@@ -468,32 +518,36 @@ float3 hsv2rgb(float3 c) {
     float radius = length(uv);
     float angle = atan2(uv.y, uv.x);
 
-    // Spiral distortion driven by bass
-    float spiral = angle + radius * (3.0 + bass * 5.0) - t * (1.0 + bass * 0.5);
+    // Strong spiral distortion driven by bass
+    float spiral = angle + radius * (3.0 + bass * 8.0) - t * (1.5 + bass);
 
-    // Multiple spiral arms
-    float arms = 3.0;
+    // Multiple spiral arms with mid-driven count
+    float arms = 3.0 + mid * 3.0;
     float pattern = sin(spiral * arms) * 0.5 + 0.5;
     pattern *= smoothstep(1.5, 0.0, radius);
 
-    // Turbulence from treble
-    float turb = noise2d(uv * 5.0 + float2(t * 0.5, t * 0.3)) * treble * 0.3;
+    // Treble turbulence — fine detail
+    float turb = noise2d(uv * 8.0 + float2(t * 0.8, t * 0.5)) * treble * 0.5;
     pattern += turb;
 
-    // Mid-frequency ripples
-    float ripple = sin(radius * 15.0 - t * 3.0) * mid * 0.15;
+    // Bass ripples radiating outward
+    float ripple = sin(radius * 12.0 - t * 5.0 - bass * 8.0) * bass * 0.3;
     pattern += ripple;
 
-    // Color cycling
-    float hue = fract(angle / 6.28 + t * 0.05 + radius * 0.2);
-    float3 col = hsv2rgb(float3(hue, 0.7 + energy * 0.3, pattern * (0.6 + energy * 0.4)));
+    // Vivid color cycling
+    float hue = fract(angle / 6.28 + t * 0.06 + radius * 0.3 + bass * 0.2);
+    float3 col = hsv2rgb(float3(hue, 0.85, pattern * (0.5 + energy * 0.7)));
 
-    // Center glow
-    float centerGlow = 0.05 / (radius + 0.05) * (bass * 0.7 + 0.3);
-    col += float3(0.6, 0.3, 0.9) * centerGlow;
+    // Bright center glow on bass
+    float centerGlow = 0.08 / (radius + 0.03) * (bass * 1.2 + 0.2);
+    col += hsv2rgb(float3(fract(t * 0.05), 0.7, 1.0)) * centerGlow;
+
+    // Boost saturation
+    float gray = dot(col, float3(0.299, 0.587, 0.114));
+    col = mix(float3(gray), col, 1.4);
 
     // Edge vignette
-    col *= smoothstep(2.0, 0.5, radius);
+    col *= smoothstep(2.0, 0.3, radius);
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
