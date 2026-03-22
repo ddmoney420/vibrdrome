@@ -241,33 +241,41 @@ float3 hsv2rgb(float3 c) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
-    float3 col = float3(0.01, 0.01, 0.03);
+    float3 col = float3(0.02, 0.01, 0.05);
+
+    // Background nebula glow
+    float bgNoise = fbm(uv * 2.0 + float2(t * 0.05, t * 0.03));
+    col += float3(0.05, 0.02, 0.1) * bgNoise * (0.5 + bass * 0.5);
 
     // Particle field
-    for (int i = 0; i < 80; i++) {
+    for (int i = 0; i < 50; i++) {
         float fi = float(i);
         float seed = hash(float2(fi * 13.7, fi * 7.3));
         float seed2 = hash(float2(fi * 31.1, fi * 17.9));
 
         // Spiral outward from center, speed driven by bass
-        float angle = seed * 6.28 + t * (0.3 + seed2 * 0.5) + bass * 2.0;
-        float dist = fract(seed2 + t * (0.1 + bass * 0.15)) * 1.5;
+        float angle = seed * 6.28 + t * (0.3 + seed2 * 0.5) + bass * 3.0;
+        float dist = fract(seed2 + t * (0.08 + bass * 0.12)) * 1.2;
 
         float2 particlePos = float2(cos(angle), sin(angle)) * dist;
-
         float d = length(uv - particlePos);
 
-        // Size pulses with mid
-        float particleSize = 0.003 + mid * 0.004;
-        float glow = particleSize / (d + 0.001);
-        glow = min(glow, 3.0);
+        // Larger particles that pulse with energy
+        float particleSize = 0.008 + mid * 0.012 + energy * 0.005;
+        float glow = particleSize / (d * d + 0.0001);
+        glow = min(glow, 4.0);
 
-        // Color based on distance and treble
-        float hue = fract(seed + t * 0.05 + treble * 0.5);
-        float3 pColor = hsv2rgb(float3(hue, 0.8, 1.0));
+        // Bright color with hue cycling
+        float hue = fract(seed + t * 0.03 + treble * 0.5);
+        float3 pColor = hsv2rgb(float3(hue, 0.7, 1.0));
 
-        col += pColor * glow * 0.02 * (0.5 + energy);
+        col += pColor * glow * 0.08 * (0.4 + energy * 0.6);
     }
+
+    // Center energy burst
+    float centerDist = length(uv);
+    float burst = exp(-centerDist * 3.0) * bass * 0.8;
+    col += float3(0.6, 0.3, 1.0) * burst;
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
