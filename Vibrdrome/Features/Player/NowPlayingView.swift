@@ -28,8 +28,28 @@ struct NowPlayingView: View {
         340 // Used by macOS path; iOS uses GeometryReader
     }
 
+    @State private var dragOffset: CGFloat = 0
+
     var body: some View {
         mainContent
+            .offset(y: max(0, dragOffset))
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if value.translation.height > 0 {
+                            dragOffset = value.translation.height
+                        }
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 150 || value.predictedEndTranslation.height > 300 {
+                            dismiss()
+                        } else {
+                            withAnimation(.spring(response: 0.3)) {
+                                dragOffset = 0
+                            }
+                        }
+                    }
+            )
             .task(id: engine.currentSong?.coverArt) {
                 await loadAlbumArt()
             }
@@ -211,14 +231,30 @@ struct NowPlayingView: View {
     // MARK: - Dismiss Handle
 
     private var dismissHandle: some View {
-        Capsule()
-            .fill(.white.opacity(0.4))
-            .frame(width: 36, height: 5)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .onTapGesture { dismiss() }
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+
+            Spacer()
+
+            Capsule()
+                .fill(.white.opacity(0.4))
+                .frame(width: 36, height: 5)
+
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Album Art
@@ -301,7 +337,7 @@ struct NowPlayingView: View {
     private func buildBadges(_ song: Song?) -> [String] {
         guard let song else { return [] }
         var result = [String]()
-        if let year = song.year { result.append("\(year)") }
+        if let year = song.year { result.append(String(year)) }
         if let genre = song.genre { result.append(genre) }
         if let bitRate = song.bitRate { result.append("\(bitRate) kbps") }
         if let suffix = song.suffix { result.append(suffix.uppercased()) }

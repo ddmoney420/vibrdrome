@@ -238,7 +238,7 @@ final class CarPlayManager {
 
             let albumItems = (artist.album ?? []).map { album in
                 let item = CPListItem(text: album.name,
-                                      detailText: album.year.map { "\($0)" })
+                                      detailText: album.year.map { String($0) })
                 if let coverArtId = album.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
