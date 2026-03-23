@@ -167,4 +167,3 @@ struct DownloadProgressRow: View {
         }
     }
 }
-

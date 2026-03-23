@@ -146,6 +146,7 @@ enum EQTapProcessor {
 
     // MARK: - C Callbacks
 
+    // swiftlint:disable closure_parameter_position
     private static let tapInit: MTAudioProcessingTapInitCallback = {
         _, clientInfo, tapStorageOut in
         tapStorageOut.pointee = clientInfo
@@ -171,6 +172,7 @@ enum EQTapProcessor {
 
     private static let tapProcess: MTAudioProcessingTapProcessCallback = {
         tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
+    // swiftlint:enable closure_parameter_position
 
         let status = MTAudioProcessingTapGetSourceAudio(
             tap, numberFrames, bufferListInOut, flagsOut, nil, numberFramesOut
@@ -224,7 +226,7 @@ enum EQTapProcessor {
         }
 
         // Extract PCM for FFT spectrum analysis (first channel only)
-        if bufferList.count > 0, let data = bufferList[0].mData {
+        if !bufferList.isEmpty, let data = bufferList[0].mData {
             let samples = data.assumingMemoryBound(to: Float.self)
             let sampleRate = Unmanaged<TapContext>.fromOpaque(
                 MTAudioProcessingTapGetStorage(tap)
