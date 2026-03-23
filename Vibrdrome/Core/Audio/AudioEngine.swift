@@ -215,7 +215,6 @@ final class AudioEngine {
         statusObserver?.cancel(); statusObserver = nil
     }
 
-
     private let networkMonitor = NWPathMonitor()
     private var isOnCellular = false
 
@@ -293,6 +292,7 @@ final class AudioEngine {
 
     // MARK: - Playback Control
 
+    // swiftlint:disable:next function_body_length
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
@@ -987,4 +987,3 @@ final class AudioEngine {
         }
     }
 }
-
