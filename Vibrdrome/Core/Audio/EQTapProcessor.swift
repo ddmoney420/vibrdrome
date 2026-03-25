@@ -142,15 +142,18 @@ enum EQTapProcessor {
             kCFAllocatorDefault, &callbacks,
             kMTAudioProcessingTapCreationFlag_PostEffects, &tap
         )
-        guard status == noErr, let unwrappedTap = tap?.takeRetainedValue() else {
+        guard status == noErr, let createdTap = tap?.takeRetainedValue() else {
             tapLog.error("MTAudioProcessingTapCreate failed: \(status)")
             return nil
         }
-        let tap = unwrappedTap
         #endif
 
         let params = AVMutableAudioMixInputParameters(track: track)
+        #if swift(>=6.1)
         params.audioTapProcessor = tap
+        #else
+        params.audioTapProcessor = createdTap
+        #endif
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = [params]
