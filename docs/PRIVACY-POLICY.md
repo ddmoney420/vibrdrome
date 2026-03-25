@@ -1,10 +1,10 @@
 # Privacy Policy for Vibrdrome
 
-**Last updated: February 25, 2026**
+**Last updated: March 24, 2026**
 
 ## Overview
 
-Vibrdrome is a music player app that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.
+Vibrdrome is a music player app for iOS, macOS, and Android that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.
 
 ## Data Collection
 
@@ -14,7 +14,7 @@ Vibrdrome is a music player app that connects to your personal Navidrome or Subs
 
 Vibrdrome stores the following data locally on your device:
 
-- **Server credentials** (URL, username, password) — stored securely in the iOS/macOS Keychain
+- **Server credentials** (URL, username, password) — stored securely in the iOS/macOS Keychain or Android Keystore
 - **Music cache** — downloaded songs stored in the app's sandboxed container
 - **Playback history and preferences** — stored locally using SwiftData
 - **Settings** (theme, equalizer presets, bitrate preferences) — stored in UserDefaults
