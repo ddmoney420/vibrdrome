@@ -132,6 +132,24 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
             margin-bottom: 12px;
+            display: none;
+        }
+        .ascii-banner {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.55rem;
+            line-height: 1.1;
+            white-space: pre;
+            background: linear-gradient(135deg, #fff 0%, #c4b5fd 50%, #8b5cf6 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 6s ease infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            display: block;
+            width: fit-content;
+            margin: 0 auto 12px;
+            text-align: left;
         }
         .hero .tagline {
             font-size: 1.3rem;
@@ -225,9 +243,10 @@
             box-shadow: 0 8px 30px rgba(139,92,246,0.1);
         }
         .feature .icon {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             margin-bottom: 10px;
             display: block;
+            white-space: nowrap;
         }
         .feature h3 {
             color: #c4b5fd;
@@ -335,6 +354,7 @@
         @media (max-width: 700px) {
             .features { grid-template-columns: 1fr 1fr; }
             .hero h1 { font-size: 2.5rem; }
+            .ascii-banner { font-size: 0.38rem; }
             .hero { padding: 70px 0 40px; }
             .icon-ring:nth-child(4) { display: none; }
             .platforms { flex-direction: column; align-items: center; }
@@ -342,6 +362,7 @@
         @media (max-width: 480px) {
             .features { grid-template-columns: 1fr; }
             .hero h1 { font-size: 2rem; }
+            .ascii-banner { font-size: 0.28rem; }
             .hero .tagline { font-size: 1.1rem; }
             .links { flex-direction: column; align-items: center; }
         }
@@ -352,18 +373,24 @@
 
     <div class="container">
         <div class="hero">
+            <h1>Vibrdrome</h1>
+            <pre class="ascii-banner">██╗   ██╗██╗██████╗ ██████╗ ██████╗ ██████╗  ██████╗ ███╗   ███╗███████╗
+██║   ██║██║██╔══██╗██╔══██╗██╔══██╗██╔══██╗██╔═══██╗████╗ ████║██╔════╝
+██║   ██║██║██████╔╝██████╔╝██║  ██║██████╔╝██║   ██║██╔████╔██║█████╗
+╚██╗ ██╔╝██║██╔══██╗██╔══██╗██║  ██║██╔══██╗██║   ██║██║╚██╔╝██║██╔══╝
+ ╚████╔╝ ██║██████╔╝██║  ██║██████╔╝██║  ██║╚██████╔╝██║ ╚═╝ ██║███████╗
+  ╚═══╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝</pre>
             <div class="icon-wrap">
                 <img src="icon.png" alt="Vibrdrome">
                 <div class="icon-ring"></div>
                 <div class="icon-ring"></div>
                 <div class="icon-ring"></div>
             </div>
-            <h1>Vibrdrome</h1>
             <p class="tagline">Music Player for Navidrome</p>
             <p class="desc">A native music player for your self-hosted Navidrome server. Stream your library, download for offline, and enjoy audiophile features &mdash; all from a fast, beautiful interface.</p>
             <div class="platforms">
                 <span class="platform-badge">&#63743; iOS &amp; macOS</span>
-                <span class="platform-badge">&#9679; Android</span>
+                <span class="platform-badge">🤖 Android</span>
             </div>
         </div>
 
@@ -377,55 +404,55 @@
 
         <div class="features">
             <div class="feature">
-                <span class="icon">&#127925;</span>
+                <span class="icon">🎵 ♪(⌐■_■)♪</span>
                 <h3>Gapless Playback</h3>
                 <p>Seamless album listening with crossfade and adjustable playback speed.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#127899;</span>
+                <span class="icon">🎛️ ♪┏(・o・)┛♪</span>
                 <h3>10-Band Equalizer</h3>
                 <p>Built-in EQ with presets and ReplayGain for consistent volume.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#128229;</span>
+                <span class="icon">📥 ᕙ(⇀‸↼)ᕗ</span>
                 <h3>Offline Downloads</h3>
                 <p>Download albums and playlists. Auto-download favorites. Manage cache.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#128225;</span>
+                <span class="icon">📡 ヽ(°◇° )ノ～♪</span>
                 <h3>Internet Radio</h3>
                 <p>Browse and search thousands of stations. Add custom stream URLs. PLS/M3U support.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#127908;</span>
+                <span class="icon">🎤 ♪( ´θ`)ノ</span>
                 <h3>Synced Lyrics</h3>
                 <p>Follow along with time-synced lyrics. Tap any line to seek.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#128663;</span>
+                <span class="icon">🚗 ♪⛰️～⛐～♪</span>
                 <h3>CarPlay &amp; Android Auto</h3>
                 <p>Browse your library, control playback, and stream from your car's dashboard.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#10024;</span>
+                <span class="icon">🌀 *.+:. o(≧▽≦)o .:+.*</span>
                 <h3>Milkdrop Visualizer</h3>
                 <p>Real projectM engine with 50 Milkdrop presets plus 6 custom GLSL shaders. Audio-reactive GPU rendering.</p>
                 <span class="platform-tag tag-android">Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#127922;</span>
+                <span class="icon">🎲 (☞ﾟ∀ﾟ)☞</span>
                 <h3>Smart Radio &amp; Playlists</h3>
-                <p>Artist and song radio with smart deduplication. Auto-generate mixes by genre, mood, or mood.</p>
+                <p>Artist and song radio with smart deduplication. Auto-generate mixes by genre, mood, or era.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
             </div>
             <div class="feature">
-                <span class="icon">&#128275;</span>
+                <span class="icon">🔓 ╰(*°▽°*)╯</span>
                 <h3>Open Source</h3>
                 <p>Free, no ads, no tracking. Your music, your server, your data.</p>
                 <span class="platform-tag tag-both">iOS &amp; Android</span>
