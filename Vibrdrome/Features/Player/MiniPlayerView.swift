@@ -3,7 +3,6 @@ import NukeUI
 
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
-    @State private var showNowPlaying = false
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
 
     private var engine: AudioEngine { AudioEngine.shared }
@@ -29,7 +28,7 @@ struct MiniPlayerView: View {
             HStack(spacing: 12) {
                 // Tappable area: album art + song info opens Now Playing
                 Button {
-                    showNowPlaying = true
+                    appState.showNowPlaying = true
                 } label: {
                     HStack(spacing: 12) {
                         // Album art — rounded
@@ -97,13 +96,8 @@ struct MiniPlayerView: View {
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
         .accessibilityIdentifier("MiniPlayer")
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showNowPlaying) {
-            NowPlayingView()
-                .environment(appState)
-        }
-        #else
-        .sheet(isPresented: $showNowPlaying) {
+        #if os(macOS)
+        .sheet(isPresented: Bindable(appState).showNowPlaying) {
             NowPlayingView()
                 .environment(appState)
                 .frame(minWidth: 400, idealWidth: 440, minHeight: 600, idealHeight: 680)

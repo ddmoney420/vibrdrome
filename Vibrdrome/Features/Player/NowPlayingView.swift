@@ -8,8 +8,6 @@ struct NowPlayingView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showQueue = false
-    @State private var showLyrics = false
-    @State private var showVisualizer = false
     @State private var showEQ = false
     @State private var isStarred = false
     @State private var sliderValue: Double = 0
@@ -57,7 +55,7 @@ struct NowPlayingView: View {
                 QueueView()
                     .environment(appState)
             }
-            .sheet(isPresented: $showLyrics) {
+            .sheet(isPresented: Bindable(appState).showLyrics) {
                 if let song = engine.currentSong {
                     LyricsView(songId: song.id)
                         .environment(appState)
@@ -67,7 +65,7 @@ struct NowPlayingView: View {
                 EQView()
             }
             #if os(iOS)
-            .fullScreenCover(isPresented: $showVisualizer) {
+            .fullScreenCover(isPresented: Bindable(appState).showVisualizer) {
                 VisualizerView()
             }
             #endif
@@ -495,7 +493,7 @@ struct NowPlayingView: View {
 
                 Spacer()
 
-                Button { showLyrics = true } label: {
+                Button { appState.showLyrics = true } label: {
                     Image(systemName: "quote.bubble")
                         .foregroundColor(.white.opacity(0.4))
                 }
@@ -544,7 +542,7 @@ struct NowPlayingView: View {
                 Spacer()
 
                 #if os(iOS)
-                Button { showVisualizer = true } label: {
+                Button { appState.showVisualizer = true } label: {
                     Image(systemName: "waveform.path")
                         .foregroundColor(.white.opacity(0.4))
                 }

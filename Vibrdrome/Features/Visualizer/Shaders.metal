@@ -489,7 +489,6 @@ float3 hsv2rgb(float3 c) {
     float inBar = step(abs(uv.x - barCenter), barWidth * 0.5) * step(1.0 - uv.y, barHeight);
 
     // Gradient color based on height
-    float heightNorm = (1.0 - uv.y) / max(barHeight, 0.01);
     float hue = fract(normalizedPos * 0.7 + time * 0.02);
     float3 barColor = hsv2rgb(float3(hue, 0.8, 0.9));
 

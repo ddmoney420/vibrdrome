@@ -22,6 +22,12 @@ struct ContentView: View {
                     .environment(appState)
             }
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: Bindable(appState).showNowPlaying) {
+            NowPlayingView()
+                .environment(appState)
+        }
+        #endif
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
             switch newPhase {
