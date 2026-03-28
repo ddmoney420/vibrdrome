@@ -27,6 +27,12 @@ final class AppState {
     var subsonicClient: SubsonicClient
     var isConfigured: Bool = false
     var requiresReAuth: Bool = false
+
+    // Player presentation state — stored here so it survives
+    // view hierarchy recreation during device rotation (sizeClass change).
+    var showNowPlaying: Bool = false
+    var showVisualizer: Bool = false
+    var showLyrics: Bool = false
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?

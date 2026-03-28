@@ -107,19 +107,107 @@ final class RotationTests: XCTestCase {
         try app.playAnyTrack()
         try app.openNowPlaying()
 
+        // Verify Now Playing is open
+        let shuffleButton = app.buttons["Shuffle"]
+        XCTAssertTrue(shuffleButton.waitForExistence(timeout: 5),
+                      "Now Playing should be open before rotation")
+
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
         XCTAssertTrue(app.state == .runningForeground,
                       "Now Playing should not crash in landscape")
 
-        XCTAssertTrue(app.buttons["Shuffle"].exists || app.buttons["Play"].exists
-                      || app.buttons["Pause"].exists,
-                      "Controls should remain visible in landscape")
+        // Shuffle button should still be hittable (Now Playing is the frontmost view)
+        XCTAssertTrue(shuffleButton.exists && shuffleButton.isHittable,
+                      "Now Playing Shuffle should be hittable after rotating to landscape")
+
+        // Tab bar should NOT be hittable (it's behind the fullScreenCover)
+        let libraryTab = app.tabBars.buttons["Library"]
+        XCTAssertFalse(libraryTab.exists && libraryTab.isHittable,
+                       "Tab bar should not be hittable while Now Playing is open")
 
         XCUIDevice.shared.orientation = .portrait
         sleep(2)
         XCTAssertTrue(app.state == .runningForeground,
                       "Now Playing should not crash returning to portrait")
+        XCTAssertTrue(shuffleButton.exists && shuffleButton.isHittable,
+                      "Now Playing Shuffle should be hittable after rotating back to portrait")
+    }
+
+    // MARK: - Now Playing Stays Open Through Multiple Rotations
+
+    func testNowPlayingMultipleRotations() throws {
+        try app.playAnyTrack()
+        try app.openNowPlaying()
+
+        let shuffleButton = app.buttons["Shuffle"]
+        for orientation: UIDeviceOrientation in [.landscapeLeft, .portrait,
+                                                  .landscapeRight, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            sleep(2)
+            XCTAssertTrue(shuffleButton.exists && shuffleButton.isHittable,
+                          "Now Playing Shuffle should be hittable after rotation to \(orientation.rawValue)")
+        }
+    }
+
+    // MARK: - Visualizer Stays Open Through Rotation
+
+    func testVisualizerRotation() throws {
+        try app.playAnyTrack()
+        try app.openNowPlaying()
+
+        // Tap Visualizer button
+        let visualizerButton = app.buttons["Visualizer"]
+        guard visualizerButton.waitForExistence(timeout: 5) else {
+            throw XCTSkip("Visualizer button not found")
+        }
+        visualizerButton.tap()
+        sleep(2)
+
+        // Tab bar should not be interactable (visualizer is fullscreen)
+        let libraryTab = app.tabBars.buttons["Library"]
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        sleep(2)
+        XCTAssertTrue(app.state == .runningForeground,
+                      "Visualizer should not crash in landscape")
+        XCTAssertFalse(libraryTab.exists && libraryTab.isHittable,
+                       "Visualizer should not dismiss to main menu on rotation")
+
+        XCUIDevice.shared.orientation = .portrait
+        sleep(2)
+        XCTAssertFalse(libraryTab.exists && libraryTab.isHittable,
+                       "Visualizer should not dismiss to main menu on rotation back")
+    }
+
+    // MARK: - Lyrics Stays Open Through Rotation
+
+    func testLyricsRotation() throws {
+        try app.playAnyTrack()
+        try app.openNowPlaying()
+
+        // Tap Lyrics button
+        let lyricsButton = app.buttons["Lyrics"]
+        guard lyricsButton.waitForExistence(timeout: 5) else {
+            throw XCTSkip("Lyrics button not found")
+        }
+        lyricsButton.tap()
+        sleep(2)
+
+        // Tab bar should not be interactable (lyrics sheet is over it)
+        let libraryTab = app.tabBars.buttons["Library"]
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        sleep(2)
+        XCTAssertTrue(app.state == .runningForeground,
+                      "Lyrics should not crash in landscape")
+        XCTAssertFalse(libraryTab.exists && libraryTab.isHittable,
+                       "Lyrics should not dismiss to main menu on rotation")
+
+        XCUIDevice.shared.orientation = .portrait
+        sleep(2)
+        XCTAssertFalse(libraryTab.exists && libraryTab.isHittable,
+                       "Lyrics should not dismiss to main menu on rotation back")
     }
 
     // MARK: - Mini Player
