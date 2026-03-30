@@ -66,6 +66,7 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.largerText) private var largerText: Bool = false
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
+    @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayRecentCount) private var carPlayRecentCount: Int = 25
     @AppStorage(UserDefaultsKeys.carPlayShowGenres) private var carPlayShowGenres: Bool = true
@@ -442,8 +443,18 @@ struct SettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("reduceMotionToggle")
+
+            Toggle(isOn: $disableVisualizer) {
+                Label("Disable Visualizer", systemImage: "eye.slash")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("disableVisualizerToggle")
         } header: {
             settingSectionHeader("Accessibility", icon: "accessibility", color: .indigo)
+        } footer: {
+            if disableVisualizer {
+                Text("The visualizer button is hidden from the player. Disable this to restore it.")
+            }
         }
     }
 

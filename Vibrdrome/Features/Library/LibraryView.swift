@@ -10,51 +10,76 @@ struct LibraryView: View {
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
     @State private var isLoadingRandomAlbum = false
+    @State private var layoutConfig = LibraryLayoutConfig.load()
+    @State private var showCustomize = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 28) {
                     // Quick access pills
-                    quickAccessBar
-                        .padding(.top, 4)
-
-                    // Recently Added — hero row
-                    if !recentAlbums.isEmpty {
-                        albumSection("Recently Added", albums: recentAlbums) {
-                            AlbumsView(listType: .newest, title: "Recently Added")
-                        }
+                    if !layoutConfig.visiblePills.isEmpty {
+                        quickAccessBar
+                            .padding(.top, 4)
                     }
 
-                    // Most Played
-                    if !frequentAlbums.isEmpty {
-                        albumSection("Most Played", albums: frequentAlbums) {
-                            AlbumsView(listType: .frequent, title: "Most Played")
-                        }
+                    // Dynamic carousels
+                    ForEach(layoutConfig.visibleCarousels) { carousel in
+                        carouselView(for: carousel)
                     }
-
-                    // Rediscover — starred songs shuffled
-                    if !starredSongs.isEmpty {
-                        rediscoverSection
-                    }
-
-                    // Random picks
-                    if !randomAlbums.isEmpty {
-                        albumSection("Random Picks", albums: randomAlbums) {
-                            AlbumsView(listType: .random, title: "Random")
-                        }
-                    }
-
                 }
                 #if os(iOS)
                 .padding(.bottom, 80)
                 #endif
             }
             .navigationTitle("Library")
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        showCustomize = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("Customize Library")
+                }
+            }
+            .sheet(isPresented: $showCustomize) {
+                LibraryCustomizeView(config: $layoutConfig)
+            }
             .task {
                 guard !isLoaded else { return }
                 await loadSections()
                 isLoaded = true
+            }
+        }
+    }
+
+    // MARK: - Dynamic Carousel
+
+    @ViewBuilder
+    private func carouselView(for carousel: LibraryCarousel) -> some View {
+        switch carousel {
+        case .recentlyAdded:
+            if !recentAlbums.isEmpty {
+                albumSection("Recently Added", albums: recentAlbums) {
+                    AlbumsView(listType: .newest, title: "Recently Added")
+                }
+            }
+        case .mostPlayed:
+            if !frequentAlbums.isEmpty {
+                albumSection("Most Played", albums: frequentAlbums) {
+                    AlbumsView(listType: .frequent, title: "Most Played")
+                }
+            }
+        case .rediscover:
+            if !starredSongs.isEmpty {
+                rediscoverSection
+            }
+        case .randomPicks:
+            if !randomAlbums.isEmpty {
+                albumSection("Random Picks", albums: randomAlbums) {
+                    AlbumsView(listType: .random, title: "Random")
+                }
             }
         }
     }
@@ -71,23 +96,45 @@ struct LibraryView: View {
 
     private var quickAccessBar: some View {
         LazyVGrid(columns: quickAccessColumns, spacing: 10) {
-            // Left column                                      // Right column
-            quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
-            quickAccessPill("Radio", icon: "antenna.radiowaves.left.and.right", color: .mint) { RadioView() }
-            quickAccessPill("Generations", icon: "calendar", color: .red) { GenerationsView() }
-            quickAccessPill("Playlists", icon: "music.note.list", color: .purple) { PlaylistsView() }
-            quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
-            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
-            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
-            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
-            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
-            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
-            randomAlbumPill
-            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
-            randomMixPill
+            ForEach(layoutConfig.visiblePills) { pill in
+                pillView(for: pill)
+            }
         }
         .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func pillView(for pill: LibraryPill) -> some View {
+        switch pill {
+        case .favorites:
+            quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
+        case .radio:
+            quickAccessPill("Radio", icon: "antenna.radiowaves.left.and.right", color: .mint) { RadioView() }
+        case .generations:
+            quickAccessPill("Generations", icon: "calendar", color: .red) { GenerationsView() }
+        case .playlists:
+            quickAccessPill("Playlists", icon: "music.note.list", color: .purple) { PlaylistsView() }
+        case .genres:
+            quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
+        case .downloads:
+            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
+        case .artists:
+            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
+        case .recentlyAdded:
+            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
+        case .albums:
+            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+        case .recentlyPlayed:
+            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
+        case .songs:
+            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
+        case .randomAlbum:
+            randomAlbumPill
+        case .folders:
+            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
+        case .randomMix:
+            randomMixPill
+        }
     }
 
     private var randomMixPill: some View {

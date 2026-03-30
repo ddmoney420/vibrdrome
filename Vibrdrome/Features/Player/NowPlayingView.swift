@@ -15,6 +15,7 @@ struct NowPlayingView: View {
     @State private var albumImage: PlatformImage?
     @State private var loadedCoverArtId: String?
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @State private var nsWindow: NSWindow?
@@ -542,13 +543,15 @@ struct NowPlayingView: View {
                 Spacer()
 
                 #if os(iOS)
-                Button { appState.showVisualizer = true } label: {
-                    Image(systemName: "waveform.path")
-                        .foregroundColor(.white.opacity(0.4))
-                }
-                .accessibilityLabel("Visualizer")
+                if !disableVisualizer {
+                    Button { appState.showVisualizer = true } label: {
+                        Image(systemName: "waveform.path")
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .accessibilityLabel("Visualizer")
 
-                Spacer()
+                    Spacer()
+                }
 
                 AirPlayButton()
                     .frame(width: 24, height: 24)

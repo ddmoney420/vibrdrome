@@ -15,6 +15,12 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
     case rings = "Rings"
     case spectrum = "Spectrum"
     case vortex = "Vortex"
+    case lavaLamp = "Lava Lamp"
+    case starfield = "Starfield"
+    case ripple = "Ripple"
+    case fireflies = "Fireflies"
+    case prism = "Prism"
+    case ocean = "Ocean"
 
     var id: String { rawValue }
 
@@ -32,30 +38,45 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
         case .rings: "circles.hexagonpath"
         case .spectrum: "chart.bar.fill"
         case .vortex: "tornado"
+        case .lavaLamp: "lamp.desk.fill"
+        case .starfield: "star.fill"
+        case .ripple: "water.waves"
+        case .fireflies: "light.max"
+        case .prism: "triangle.fill"
+        case .ocean: "cloud.rain.fill"
+        }
+    }
+
+    private var shaderFunction: ShaderFunction {
+        switch self {
+        case .plasma: ShaderLibrary.plasma
+        case .aurora: ShaderLibrary.aurora
+        case .nebula: ShaderLibrary.nebula
+        case .waveform: ShaderLibrary.waveform
+        case .tunnel: ShaderLibrary.tunnel
+        case .kaleidoscope: ShaderLibrary.kaleidoscope
+        case .particles: ShaderLibrary.particles
+        case .fractal: ShaderLibrary.fractal
+        case .fluid: ShaderLibrary.fluid
+        case .rings: ShaderLibrary.rings
+        case .spectrum: ShaderLibrary.spectrumVis
+        case .vortex: ShaderLibrary.vortex
+        case .lavaLamp: ShaderLibrary.lavaLamp
+        case .starfield: ShaderLibrary.starfield
+        case .ripple: ShaderLibrary.ripple
+        case .fireflies: ShaderLibrary.fireflies
+        case .prism: ShaderLibrary.prism
+        case .ocean: ShaderLibrary.ocean
         }
     }
 
     // swiftlint:disable:next function_parameter_count
     func shader(size: CGSize, time: Float, energy: Float,
                 bass: Float, mid: Float, treble: Float) -> Shader {
-        let args: [Shader.Argument] = [
+        shaderFunction(
             .float2(Float(size.width), Float(size.height)),
             .float(time), .float(energy), .float(bass), .float(mid), .float(treble)
-        ]
-        switch self {
-        case .plasma: return ShaderLibrary.plasma(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .aurora: return ShaderLibrary.aurora(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .nebula: return ShaderLibrary.nebula(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .waveform: return ShaderLibrary.waveform(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .tunnel: return ShaderLibrary.tunnel(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .kaleidoscope: return ShaderLibrary.kaleidoscope(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .particles: return ShaderLibrary.particles(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .fractal: return ShaderLibrary.fractal(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .fluid: return ShaderLibrary.fluid(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .rings: return ShaderLibrary.rings(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .spectrum: return ShaderLibrary.spectrumVis(args[0], args[1], args[2], args[3], args[4], args[5])
-        case .vortex: return ShaderLibrary.vortex(args[0], args[1], args[2], args[3], args[4], args[5])
-        }
+        )
     }
 }
 
@@ -65,6 +86,7 @@ struct VisualizerView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(UserDefaultsKeys.visualizerPreset) private var presetName: String = "Plasma"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.visualizerWarningShown) private var warningShown = false
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5
@@ -74,6 +96,7 @@ struct VisualizerView: View {
     @State private var showControls = true
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
+    @State private var showWarning = false
     #if os(macOS)
     @State private var nsWindow: NSWindow?
     #endif
@@ -140,6 +163,25 @@ struct VisualizerView: View {
                 engine.applyEQTapIfNeeded(to: item)
             }
             scheduleHideControls()
+            if !warningShown {
+                showWarning = true
+            }
+        }
+        .alert("Photosensitivity Warning", isPresented: $showWarning) {
+            Button("Continue") { }
+            Button("Don't Show Again") {
+                warningShown = true
+            }
+            Button("Close Visualizer", role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text("""
+            This visualizer contains flashing lights and rapid color changes \
+            that may cause discomfort or trigger seizures in people with \
+            photosensitive epilepsy. You can disable the visualizer in \
+            Settings > Accessibility.
+            """)
         }
         .onDisappear {
             engine.visualizerActive = false
@@ -301,10 +343,11 @@ struct VisualizerView: View {
 
             // Use real data if available, fall back to simulated
             if realEnergy > 0.001 {
-                bass = realBass
-                mid = realMid
-                treble = realTreble
-                energy = realEnergy
+                let lerp: Float = 0.2
+                bass += (realBass - bass) * lerp
+                mid += (realMid - mid) * lerp
+                treble += (realTreble - treble) * lerp
+                energy += (realEnergy - energy) * lerp
             } else {
                 // Fallback: simulated energy when no FFT data
                 let t = time

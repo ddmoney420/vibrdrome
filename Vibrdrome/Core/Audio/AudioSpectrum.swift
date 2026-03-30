@@ -107,7 +107,7 @@ final class AudioSpectrum: @unchecked Sendable {
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
-            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
+            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 5.0)
         }
         return bands
     }
@@ -118,7 +118,7 @@ final class AudioSpectrum: @unchecked Sendable {
         let newMid = newBands[third..<(2 * third)].reduce(0, +) / Float(third)
         let newTreble = newBands[(2 * third)..<Self.bandCount].reduce(0, +) / Float(Self.bandCount - 2 * third)
         let newEnergy = (newBass + newMid + newTreble) / 3.0
-        let smoothing: Float = 0.3
+        let smoothing: Float = 0.15
 
         lock.withLock {
             _bass += (newBass - _bass) * smoothing
