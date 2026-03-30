@@ -550,3 +550,341 @@ float3 hsv2rgb(float3 c) {
 
     return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
 }
+
+// MARK: - 13. Lava Lamp
+
+[[ stitchable ]] half4 lavaLamp(float2 position, half4 color, float2 size, float time, float energy,
+                                 float bass, float mid, float treble) {
+    float2 uv = (position / size - 0.5) * 2.0;
+    uv.x *= size.x / size.y;
+    float t = time * 0.25;
+
+    // Metaball field — blobs merge when close, creating lava lamp flow
+    float field = 0.0;
+    float3 blobColorSum = float3(0.0);
+
+    for (int i = 0; i < 7; i++) {
+        float fi = float(i);
+        float seed1 = hash(float2(fi * 7.3, fi * 13.1));
+        float seed2 = hash(float2(fi * 17.9, fi * 3.7));
+
+        // Slow vertical drift with gentle horizontal sway — lava lamp motion
+        float ySpeed = 0.12 + seed1 * 0.1 + bass * 0.08;
+        float yPos = fract(seed2 + t * ySpeed) * 2.8 - 1.4;
+        float xSway = sin(t * (0.2 + seed1 * 0.15) + fi * 2.5) * (0.25 + mid * 0.1);
+
+        float2 center = float2(xSway, yPos);
+
+        // Blob radius varies — bigger blobs rise slower
+        float blobRadius = 0.2 + seed1 * 0.15 + bass * 0.08;
+        float d = length(uv - center);
+
+        // Metaball contribution: smooth falloff that sums to create merging
+        float contribution = blobRadius * blobRadius / (d * d + 0.01);
+        field += contribution;
+
+        // Accumulate weighted color per blob
+        float hue = fract(0.0 + fi * 0.12 + t * 0.015);
+        float3 bc = hsv2rgb(float3(hue, 0.85, 1.0));
+        blobColorSum += bc * contribution;
+    }
+
+    // Threshold the metaball field — creates the blobby lava shapes
+    float threshold = 2.5 - energy * 0.5;
+    float shape = smoothstep(threshold - 0.8, threshold + 0.3, field);
+
+    // Normalize accumulated color
+    float3 lavaColor = blobColorSum / max(field, 0.01);
+
+    // Lava lamp glass tint — warm amber background
+    float3 glassColor = float3(0.06, 0.02, 0.08);
+    float3 glowBg = float3(0.12, 0.04, 0.1) * (0.5 + energy * 0.3);
+
+    // Inner glow on the blobs — brighter in the center
+    float innerGlow = smoothstep(threshold, threshold + 2.0, field);
+
+    float3 col = mix(glassColor + glowBg, lavaColor * (0.7 + innerGlow * 0.4), shape);
+
+    // Subtle light refraction at blob edges
+    float edge = smoothstep(threshold - 0.3, threshold, field)
+               - smoothstep(threshold, threshold + 0.5, field);
+    col += float3(0.3, 0.15, 0.1) * edge * 0.4;
+
+    // Warm ambient glow from bottom (like the lamp base light)
+    float baseLamp = smoothstep(0.5, -1.2, uv.y) * 0.12;
+    col += float3(0.2, 0.08, 0.04) * baseLamp * (0.7 + bass * 0.5);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}
+
+// MARK: - 14. Starfield
+
+[[ stitchable ]] half4 starfield(float2 position, half4 color, float2 size, float time, float energy,
+                                  float bass, float mid, float treble) {
+    float2 uv = (position / size - 0.5) * 2.0;
+    uv.x *= size.x / size.y;
+    float t = time;
+    float3 col = float3(0.0);
+
+    // Multiple star layers at different depths
+    for (int layer = 0; layer < 4; layer++) {
+        float fl = float(layer);
+        float depth = 1.0 + fl * 0.8;
+        float speed = 0.1 + fl * 0.05 + bass * 0.15;
+
+        float2 st = uv * depth + float2(0.0, t * speed);
+        float2 cell = floor(st * 30.0);
+        float2 f = fract(st * 30.0) - 0.5;
+
+        float starSeed = hash(cell + fl * 100.0);
+        float starBright = pow(starSeed, 20.0 - energy * 8.0);
+
+        // Twinkle with treble
+        float twinkle = 0.7 + 0.3 * sin(starSeed * 50.0 + t * (2.0 + treble * 3.0));
+        float d = length(f);
+        float star = starBright * twinkle * smoothstep(0.3, 0.0, d);
+
+        float hue = fract(starSeed + fl * 0.25);
+        float3 starColor = hsv2rgb(float3(hue, 0.3 + mid * 0.4, 1.0));
+        col += starColor * star * (0.4 + energy * 0.6);
+    }
+
+    // Nebula background glow
+    float bg = fbm(uv * 1.5 + float2(t * 0.02, 0.0)) * 0.15;
+    col += hsv2rgb(float3(fract(t * 0.01 + bass * 0.2), 0.6, bg)) * (0.5 + mid * 0.5);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}
+
+// MARK: - 15. Ripple
+
+[[ stitchable ]] half4 ripple(float2 position, half4 color, float2 size, float time, float energy,
+                               float bass, float mid, float treble) {
+    float2 uv = (position / size - 0.5) * 2.0;
+    uv.x *= size.x / size.y;
+    float t = time;
+    float radius = length(uv);
+    float angle = atan2(uv.y, uv.x);
+
+    // Concentric ripples expanding outward, driven by bass
+    float wave1 = sin(radius * 12.0 - t * 3.0 - bass * 6.0) * 0.5 + 0.5;
+    float wave2 = sin(radius * 8.0 - t * 2.0 + mid * 4.0) * 0.5 + 0.5;
+    float wave3 = sin(radius * 18.0 - t * 5.0 - treble * 3.0) * 0.5 + 0.5;
+
+    // Blend waves
+    float v = wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2;
+    v *= smoothstep(2.0, 0.0, radius);
+
+    // Color based on angle and frequency
+    float hue = fract(angle / 6.28 + t * 0.03 + v * 0.2);
+    float3 col = hsv2rgb(float3(hue, 0.6 + mid * 0.3, v * (0.6 + energy * 0.5)));
+
+    // Center pool glow
+    float pool = exp(-radius * 2.5) * (0.3 + bass * 0.5);
+    col += hsv2rgb(float3(fract(t * 0.04), 0.5, 1.0)) * pool;
+
+    // Surface caustics
+    float caustic = noise2d(uv * 6.0 + float2(t * 0.5, t * 0.3));
+    caustic = pow(caustic, 2.0) * treble * 0.4;
+    col += float3(0.4, 0.7, 1.0) * caustic * smoothstep(1.5, 0.0, radius);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}
+
+// MARK: - 16. Fireflies
+
+[[ stitchable ]] half4 fireflies(float2 position, half4 color, float2 size, float time, float energy,
+                                  float bass, float mid, float treble) {
+    float2 uv = (position / size - 0.5) * 2.0;
+    uv.x *= size.x / size.y;
+    float t = time;
+
+    // Night sky with visible color
+    float3 col = float3(0.02, 0.03, 0.06);
+
+    // Moonlight — bright disc with wide halo
+    float2 moonPos = float2(0.6, 0.7);
+    float moonDist = length(uv - moonPos);
+    float moonDisc = smoothstep(0.12, 0.08, moonDist) * 0.6;
+    float moonHalo = exp(-moonDist * 1.5) * 0.15;
+    float moonWideGlow = exp(-moonDist * 0.4) * 0.06;
+    col += float3(0.5, 0.55, 0.7) * moonDisc;
+    col += float3(0.15, 0.18, 0.3) * moonHalo;
+    col += float3(0.06, 0.08, 0.15) * moonWideGlow;
+
+    // Sky gradient — lighter near top, darker at bottom
+    float skyGrad = smoothstep(-1.0, 1.0, uv.y);
+    col += float3(0.02, 0.04, 0.08) * skyGrad;
+
+    // Tree canopy silhouette layers — more visible with moonlit edges
+    for (int layer = 0; layer < 3; layer++) {
+        float fl = float(layer);
+        float yBase = -0.2 - fl * 0.25;
+        float treeline = yBase + noise2d(float2(uv.x * (2.0 + fl) + fl * 5.0, fl)) * 0.5;
+        treeline += noise2d(float2(uv.x * (5.0 + fl * 3.0) + fl * 10.0, fl)) * 0.2;
+        float mask = smoothstep(treeline + 0.05, treeline - 0.05, uv.y);
+        // Moonlit tree edges — lighter where moon would illuminate
+        float shade = 0.04 + fl * 0.015;
+        float moonlit = exp(-length(uv - moonPos) * 0.8) * 0.03;
+        col = mix(col, float3(0.01, shade, shade * 0.6) + moonlit, mask);
+    }
+
+    // Fireflies — fewer, with long fading trails and blink patterns
+    for (int i = 0; i < 15; i++) {
+        float fi = float(i);
+        float s1 = hash(float2(fi * 7.3, fi * 13.1));
+        float s2 = hash(float2(fi * 23.7, fi * 3.9));
+        float s3 = hash(float2(fi * 41.3, fi * 19.7));
+
+        // Lazy meandering paths
+        float2 pos = float2(
+            sin(t * (0.08 + s1 * 0.06) + s2 * 6.28) * (0.7 + s1 * 0.5)
+                + sin(t * 0.13 + fi * 3.0) * 0.15,
+            cos(t * (0.06 + s2 * 0.05) + s1 * 6.28) * (0.3 + s2 * 0.3)
+                - 0.2 + sin(t * 0.04 + fi) * 0.2
+        );
+
+        // Blink pattern — fireflies blink on and off rhythmically
+        float blinkCycle = t * (0.4 + s3 * 0.6) + s1 * 6.28 + energy;
+        float blink = smoothstep(0.0, 0.15, sin(blinkCycle))
+                     * smoothstep(0.6, 0.3, sin(blinkCycle));
+        blink *= blink; // sharper on/off
+
+        float d = length(uv - pos);
+
+        // Warm soft glow with halo
+        float core = exp(-d * d * 800.0) * 1.5;
+        float halo = exp(-d * d * 40.0) * 0.4;
+        float glow = (core + halo) * blink * (0.4 + energy * 0.6);
+
+        // Trail — longer, more visible afterglow at previous positions
+        for (int tr = 1; tr < 6; tr++) {
+            float tOff = float(tr) * 0.2;
+            float fade = 1.0 / (float(tr) * 0.6 + 0.4);
+            float2 trailPos = float2(
+                sin((t - tOff) * (0.08 + s1 * 0.06) + s2 * 6.28) * (0.7 + s1 * 0.5)
+                    + sin((t - tOff) * 0.13 + fi * 3.0) * 0.15,
+                cos((t - tOff) * (0.06 + s2 * 0.05) + s1 * 6.28) * (0.3 + s2 * 0.3)
+                    - 0.2 + sin((t - tOff) * 0.04 + fi) * 0.2
+            );
+            float td = length(uv - trailPos);
+            float trailGlow = exp(-td * td * 60.0) * 0.3 * fade;
+            glow += trailGlow * blink;
+        }
+
+        // Yellow-green firefly color
+        float3 flyColor = float3(0.7, 0.9, 0.2) + float3(0.2, 0.1, 0.0) * s1;
+        col += flyColor * glow;
+    }
+
+    // Ground fog — thick, rolling, reactive to bass
+    float fogBase = smoothstep(0.0, -0.8, uv.y);
+    float fogWisps = noise2d(float2(uv.x * 3.0 + t * 0.2, uv.y * 2.0 + t * 0.1)) * 0.5 + 0.5;
+    fogWisps *= noise2d(float2(uv.x * 1.5 - t * 0.15, uv.y * 3.0)) * 0.5 + 0.5;
+    float fog = fogBase * (0.15 + fogWisps * 0.2 + bass * 0.12);
+    col += float3(0.08, 0.12, 0.06) * fog;
+    // Fog catches moonlight
+    float fogMoon = fogBase * exp(-length(uv - moonPos) * 1.0) * 0.08;
+    col += float3(0.1, 0.12, 0.15) * fogMoon;
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}
+
+// MARK: - 17. Prism
+
+[[ stitchable ]] half4 prism(float2 position, half4 color, float2 size, float time, float energy,
+                              float bass, float mid, float treble) {
+    float2 uv = (position / size - 0.5) * 2.0;
+    uv.x *= size.x / size.y;
+    float t = time * 0.5;
+    float3 col = float3(0.0);
+
+    // Rotating triangular prism geometry
+    float angle = atan2(uv.y, uv.x) + t * 0.2;
+    float radius = length(uv);
+
+    // Multiple facets
+    for (int i = 0; i < 6; i++) {
+        float fi = float(i);
+        float facetAngle = angle + fi * 1.047; // 60 degrees
+        float facetDist = abs(sin(facetAngle * 3.0));
+
+        // Light refraction bands
+        float band = sin(facetDist * (8.0 + mid * 6.0) - t * 2.0 + bass * 3.0);
+        band = smoothstep(0.0, 0.3, band);
+
+        // Rainbow dispersion
+        float hue = fract(facetDist + fi / 6.0 + t * 0.05);
+        float3 facetColor = hsv2rgb(float3(hue, 0.8, band));
+
+        float mask = smoothstep(1.5, 0.2, radius);
+        col += facetColor * mask * 0.2 * (0.4 + energy * 0.6);
+    }
+
+    // Central bright point
+    float center = 0.03 / (radius + 0.03) * (0.5 + bass * 0.5);
+    col += float3(1.0, 0.95, 0.9) * center;
+
+    // Edge dispersion shimmer
+    float edge = smoothstep(0.8, 1.3, radius) * treble * 0.3;
+    float edgeHue = fract(angle / 6.28 + t * 0.1);
+    col += hsv2rgb(float3(edgeHue, 0.9, 1.0)) * edge;
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}
+
+// MARK: - 18. Ocean
+
+[[ stitchable ]] half4 ocean(float2 position, half4 color, float2 size, float time, float energy,
+                              float bass, float mid, float treble) {
+    float2 uv = position / size;
+    float t = time * 0.6;
+    float3 col = float3(0.0);
+
+    // Deep water base color
+    float3 deepColor = float3(0.0, 0.05, 0.15);
+    float3 surfaceColor = float3(0.0, 0.2, 0.4);
+
+    // Wave layers
+    float waveSum = 0.0;
+    for (int i = 0; i < 5; i++) {
+        float fi = float(i);
+        float freq = 3.0 + fi * 2.0;
+        float speed = 0.5 + fi * 0.3;
+        float amp = (0.03 + bass * 0.04) / (fi + 1.0);
+
+        float wave = sin(uv.x * freq + t * speed + fi * 1.3 + bass * 2.0) * amp;
+        wave += sin(uv.x * freq * 1.5 - t * speed * 0.7 + mid * 1.5) * amp * 0.5;
+        waveSum += wave;
+    }
+
+    float surface = uv.y - 0.5 - waveSum;
+    float underwater = smoothstep(0.02, -0.02, surface);
+
+    // Water color with depth
+    col = mix(surfaceColor, deepColor, smoothstep(0.5, 1.0, uv.y));
+    col *= underwater;
+
+    // Surface highlight
+    float surfaceGlow = exp(-abs(surface) * 30.0) * (0.5 + energy * 0.5);
+    col += float3(0.3, 0.6, 0.8) * surfaceGlow;
+
+    // Caustics underwater
+    float2 caustUv = uv * 8.0 + float2(t * 0.3, t * 0.2);
+    float caust = noise2d(caustUv) * noise2d(caustUv * 1.5 + 0.5);
+    caust = pow(caust, 1.5) * underwater * (0.3 + mid * 0.5);
+    col += float3(0.2, 0.5, 0.7) * caust;
+
+    // Sky/atmosphere above water
+    float sky = smoothstep(-0.02, 0.15, surface);
+    float3 skyColor = mix(float3(0.1, 0.15, 0.3), float3(0.02, 0.03, 0.08), uv.y);
+    col += skyColor * sky;
+
+    // Treble sparkles on surface
+    float sparkle = pow(hash(floor(uv * 200.0 + t * 3.0)), 25.0) * treble;
+    col += float3(0.8, 0.9, 1.0) * sparkle * exp(-abs(surface) * 50.0);
+
+    col *= (0.7 + energy * 0.4);
+
+    return half4(half3(clamp(col, 0.0, 1.0)), 1.0h);
+}

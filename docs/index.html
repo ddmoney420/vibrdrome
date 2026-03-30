@@ -366,6 +366,12 @@
             .hero .tagline { font-size: 1.1rem; }
             .links { flex-direction: column; align-items: center; }
         }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -479,6 +485,13 @@
             <a href="https://github.com/ddmoney420/vibrdrome-android" class="secondary">
                 GitHub (Android)
             </a>
+        </div>
+
+        <div style="max-width: 600px; margin: 2rem auto; padding: 1rem 1.5rem; background: rgba(255,200,50,0.08); border: 1px solid rgba(255,200,50,0.2); border-radius: 12px; text-align: center;">
+            <p style="margin: 0; font-size: 0.85rem; color: #ccc;">
+                <strong style="color: #f0c040;">Photosensitivity Warning:</strong>
+                The visualizer feature contains flashing lights and rapid color changes that may cause discomfort or trigger seizures in people with photosensitive epilepsy. You can disable the visualizer in Settings &gt; Accessibility.
+            </p>
         </div>
 
         <footer>

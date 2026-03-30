@@ -49,6 +49,12 @@ enum UserDefaultsKeys {
     static let largerText = "largerText"
     static let boldText = "boldText"
     static let reduceMotion = "reduceMotion"
+    static let disableVisualizer = "disableVisualizer"
+    static let visualizerWarningShown = "visualizerWarningShown"
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"
+
+    // MARK: - Library Layout
+
+    static let libraryLayout = "libraryLayout"
 }
