@@ -14,5 +14,14 @@ build/
 *.swp
 *~
 
+# Secrets / Signing (preventive)
+*.env
+*.p12
+*.pem
+*.key
+*.cer
+credentials.*
+secrets.*
+
 # Claude Code
 .claude/
