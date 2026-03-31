@@ -75,7 +75,9 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 
 ### Customization &nbsp; ─=≡Σ((( つ◕ل͜◕)つ
 - **Theming** — dark/light/system mode with 10 accent color themes
-- **Accessibility** — VoiceOver support throughout, bold text, reduce motion
+- **Customizable library** — reorder & show/hide pills and carousels
+- **Library folder switching** — filter by music folder on multi-library servers
+- **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
 ---
@@ -207,6 +209,24 @@ Contributions are welcome and encouraged! This is a community project — whethe
 - Bug fixes (check [Issues](https://github.com/ddmoney420/vibrdrome/issues))
 
 No contribution is too small. Even fixing a typo helps. ¯\\\_(ツ)\_/¯
+
+---
+
+## Other Vibrdrome Apps ヽ(>∀<)ノ
+
+| Platform | Link |
+|----------|------|
+| iOS / macOS | You're here! |
+| Android | [GitHub](https://github.com/ddmoney420/vibrdrome-android) |
+| Web | [web.vibrdrome.io](https://web.vibrdrome.io) / [GitHub](https://github.com/ddmoney420/vibrdrome-web) |
+
+---
+
+## (♥‿♥) Community
+
+- **Website:** [vibrdrome.io](https://vibrdrome.io)
+- **Discord:** [Join the server](https://discord.gg/9q5uw3CfN)
+- **GitHub Issues:** [Report bugs or request features](https://github.com/ddmoney420/vibrdrome/issues)
 
 ---
 
