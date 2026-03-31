@@ -66,9 +66,13 @@ final class CarPlayManager {
             // Default to showing radio (true) if key not set
             tabs.append(makeRadioTab())
         }
-        tabs.append(makeSearchTab())
 
-        let tabBar = CPTabBarTemplate(templates: tabs)
+        // CPTabBarTemplate supports max 4 CPListTemplate tabs.
+        // CPSearchTemplate is NOT valid as a tab — it must be
+        // presented separately. Add search as a list item in Library instead.
+        // Limit to 4 tabs max (CarPlay requirement).
+        let validTabs = Array(tabs.prefix(4))
+        let tabBar = CPTabBarTemplate(templates: validTabs)
         interfaceController.setRootTemplate(tabBar, animated: false) { _, _ in }
     }
 
@@ -160,6 +164,14 @@ final class CarPlayManager {
             }
             items.insert(genreItem, at: 3)
         }
+
+        // Search item at the end
+        let searchItem = CPListItem(text: "Search", detailText: nil, image: UIImage(systemName: "magnifyingglass"))
+        searchItem.handler = { [weak self] _, completion in
+            self?.showSearch()
+            completion()
+        }
+        items.append(searchItem)
 
         let section = CPListSection(items: items)
         let template = CPListTemplate(title: "Library", sections: [section])
@@ -514,15 +526,14 @@ final class CarPlayManager {
         return template
     }
 
-    // MARK: - Search Tab
+    // MARK: - Search
 
-    private func makeSearchTab() -> CPTemplate {
+    private func showSearch() {
         let handler = CarPlaySearchHandler()
         self.searchHandler = handler
         let template = CPSearchTemplate()
         template.delegate = handler
-        template.tabImage = UIImage(systemName: "magnifyingglass")
-        return template
+        interfaceController.pushTemplate(template, animated: true) { _, _ in }
     }
 
     // MARK: - Helpers
