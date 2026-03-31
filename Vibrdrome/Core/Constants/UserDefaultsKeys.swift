@@ -57,4 +57,5 @@ enum UserDefaultsKeys {
     // MARK: - Library Layout
 
     static let libraryLayout = "libraryLayout"
+    static let activeMusicFolderId = "activeMusicFolderId"
 }

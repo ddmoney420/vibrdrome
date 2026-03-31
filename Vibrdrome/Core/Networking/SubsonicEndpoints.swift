@@ -14,12 +14,14 @@ enum SubsonicEndpoint: Sendable {
     case getSong(id: String)
     case search3(query: String, artistCount: Int = 20, albumCount: Int = 20,
                  songCount: Int = 20, artistOffset: Int = 0, albumOffset: Int = 0,
-                 songOffset: Int = 0)
+                 songOffset: Int = 0, musicFolderId: String? = nil)
     case getAlbumList2(type: AlbumListType, size: Int = 20, offset: Int = 0,
-                       fromYear: Int? = nil, toYear: Int? = nil, genre: String? = nil)
+                       fromYear: Int? = nil, toYear: Int? = nil, genre: String? = nil,
+                       musicFolderId: String? = nil)
     case getRandomSongs(size: Int = 20, genre: String? = nil,
-                        fromYear: Int? = nil, toYear: Int? = nil)
-    case getStarred2
+                        fromYear: Int? = nil, toYear: Int? = nil,
+                        musicFolderId: String? = nil)
+    case getStarred2(musicFolderId: String? = nil)
     case getGenres
     case star(id: String? = nil, albumId: String? = nil, artistId: String? = nil)
     case unstar(id: String? = nil, albumId: String? = nil, artistId: String? = nil)
@@ -93,10 +95,15 @@ enum SubsonicEndpoint: Sendable {
 
     var queryItems: [URLQueryItem] {
         switch self {
-        case .ping, .getStarred2, .getGenres, .getPlaylists,
+        case .ping, .getGenres, .getPlaylists,
              .getInternetRadioStations, .getPlayQueue, .getBookmarks,
              .getMusicFolders:
             return []
+
+        case .getStarred2(let musicFolderId):
+            var items: [URLQueryItem] = []
+            if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
+            return items
 
         case .getArtists(let musicFolderId):
             var items: [URLQueryItem] = []
@@ -113,7 +120,7 @@ enum SubsonicEndpoint: Sendable {
             return [URLQueryItem(name: "id", value: id)]
 
         case .search3(let query, let artistCount, let albumCount, let songCount,
-                      let artistOffset, let albumOffset, let songOffset):
+                      let artistOffset, let albumOffset, let songOffset, let musicFolderId):
             var items = [
                 URLQueryItem(name: "query", value: query),
                 URLQueryItem(name: "artistCount", value: "\(artistCount)"),
@@ -123,9 +130,11 @@ enum SubsonicEndpoint: Sendable {
             if artistOffset > 0 { items.append(URLQueryItem(name: "artistOffset", value: "\(artistOffset)")) }
             if albumOffset > 0 { items.append(URLQueryItem(name: "albumOffset", value: "\(albumOffset)")) }
             if songOffset > 0 { items.append(URLQueryItem(name: "songOffset", value: "\(songOffset)")) }
+            if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
             return items
 
-        case .getAlbumList2(let type, let size, let offset, let fromYear, let toYear, let genre):
+        case .getAlbumList2(let type, let size, let offset, let fromYear, let toYear,
+                            let genre, let musicFolderId):
             var items = [
                 URLQueryItem(name: "type", value: type.rawValue),
                 URLQueryItem(name: "size", value: "\(size)"),
@@ -134,13 +143,15 @@ enum SubsonicEndpoint: Sendable {
             if let fromYear { items.append(URLQueryItem(name: "fromYear", value: "\(fromYear)")) }
             if let toYear { items.append(URLQueryItem(name: "toYear", value: "\(toYear)")) }
             if let genre { items.append(URLQueryItem(name: "genre", value: genre)) }
+            if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
             return items
 
-        case .getRandomSongs(let size, let genre, let fromYear, let toYear):
+        case .getRandomSongs(let size, let genre, let fromYear, let toYear, let musicFolderId):
             var items = [URLQueryItem(name: "size", value: "\(size)")]
             if let genre { items.append(URLQueryItem(name: "genre", value: genre)) }
             if let fromYear { items.append(URLQueryItem(name: "fromYear", value: "\(fromYear)")) }
             if let toYear { items.append(URLQueryItem(name: "toYear", value: "\(toYear)")) }
+            if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
             return items
 
         case .star(let id, let albumId, let artistId):

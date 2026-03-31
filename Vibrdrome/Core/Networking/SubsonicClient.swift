@@ -201,8 +201,8 @@ final class SubsonicClient {
         }
     }
 
-    func getArtists() async throws -> [ArtistIndex] {
-        let body = try await request(.getArtists())
+    func getArtists(musicFolderId: String? = nil) async throws -> [ArtistIndex] {
+        let body = try await request(.getArtists(musicFolderId: musicFolderId))
         return body.artists?.index ?? []
     }
 
@@ -231,28 +231,33 @@ final class SubsonicClient {
     }
 
     func search(query: String, artistCount: Int = 20, albumCount: Int = 20,
-                songCount: Int = 40) async throws -> SearchResult3 {
+                songCount: Int = 40, musicFolderId: String? = nil) async throws -> SearchResult3 {
         let body = try await request(.search3(query: query, artistCount: artistCount,
-                                              albumCount: albumCount, songCount: songCount))
+                                              albumCount: albumCount, songCount: songCount,
+                                              musicFolderId: musicFolderId))
         return body.searchResult3 ?? SearchResult3(artist: nil, album: nil, song: nil)
     }
 
     func getAlbumList(type: AlbumListType, size: Int = 20,
                       offset: Int = 0, genre: String? = nil,
-                      fromYear: Int? = nil, toYear: Int? = nil) async throws -> [Album] {
+                      fromYear: Int? = nil, toYear: Int? = nil,
+                      musicFolderId: String? = nil) async throws -> [Album] {
         let body = try await request(.getAlbumList2(
             type: type, size: size, offset: offset,
-            fromYear: fromYear, toYear: toYear, genre: genre))
+            fromYear: fromYear, toYear: toYear, genre: genre,
+            musicFolderId: musicFolderId))
         return body.albumList2?.album ?? []
     }
 
-    func getRandomSongs(size: Int = 20, genre: String? = nil) async throws -> [Song] {
-        let body = try await request(.getRandomSongs(size: size, genre: genre))
+    func getRandomSongs(size: Int = 20, genre: String? = nil,
+                        musicFolderId: String? = nil) async throws -> [Song] {
+        let body = try await request(.getRandomSongs(size: size, genre: genre,
+                                                     musicFolderId: musicFolderId))
         return body.randomSongs?.song ?? []
     }
 
-    func getStarred() async throws -> Starred2 {
-        let body = try await request(.getStarred2)
+    func getStarred(musicFolderId: String? = nil) async throws -> Starred2 {
+        let body = try await request(.getStarred2(musicFolderId: musicFolderId))
         return body.starred2 ?? Starred2(artist: nil, album: nil, song: nil)
     }
 
@@ -263,12 +268,12 @@ final class SubsonicClient {
 
     func star(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
         try await performAction(.star(id: id, albumId: albumId, artistId: artistId))
-        await invalidateCache(for: .getStarred2)
+        await invalidateCache(for: .getStarred2())
     }
 
     func unstar(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
         try await performAction(.unstar(id: id, albumId: albumId, artistId: artistId))
-        await invalidateCache(for: .getStarred2)
+        await invalidateCache(for: .getStarred2())
     }
 
     func setRating(id: String, rating: Int) async throws {

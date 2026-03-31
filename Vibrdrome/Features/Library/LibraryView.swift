@@ -12,6 +12,8 @@ struct LibraryView: View {
     @State private var isLoadingRandomAlbum = false
     @State private var layoutConfig = LibraryLayoutConfig.load()
     @State private var showCustomize = false
+    @State private var musicFolders: [MusicFolder] = []
+    @AppStorage(UserDefaultsKeys.activeMusicFolderId) private var activeFolderId: String = ""
 
     var body: some View {
         NavigationStack {
@@ -34,6 +36,35 @@ struct LibraryView: View {
             }
             .navigationTitle("Library")
             .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    if musicFolders.count > 1 {
+                        Menu {
+                            Button {
+                                activeFolderId = ""
+                                Task { await reloadSections() }
+                            } label: {
+                                HStack {
+                                    Text("All Libraries")
+                                    if activeFolderId.isEmpty { Image(systemName: "checkmark") }
+                                }
+                            }
+                            ForEach(musicFolders) { folder in
+                                Button {
+                                    activeFolderId = folder.id
+                                    Task { await reloadSections() }
+                                } label: {
+                                    HStack {
+                                        Text(folder.name ?? folder.id)
+                                        if activeFolderId == folder.id { Image(systemName: "checkmark") }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "building.2")
+                        }
+                        .accessibilityLabel("Switch Library")
+                    }
+                }
                 ToolbarItem(placement: .automatic) {
                     Button {
                         showCustomize = true
@@ -334,11 +365,16 @@ struct LibraryView: View {
         .frame(width: Theme.songCardSize)
     }
 
+    /// Returns the active folder ID or nil for "All Libraries"
+    private var folderId: String? {
+        activeFolderId.isEmpty ? nil : activeFolderId
+    }
+
     private func playRandomMix() async {
         isLoadingRandomMix = true
         defer { isLoadingRandomMix = false }
         do {
-            let songs = try await appState.subsonicClient.getRandomSongs(size: 50)
+            let songs = try await appState.subsonicClient.getRandomSongs(size: 50, musicFolderId: folderId)
             guard let first = songs.first else { return }
             AudioEngine.shared.play(song: first, from: songs)
         } catch {}
@@ -348,7 +384,7 @@ struct LibraryView: View {
         isLoadingRandomAlbum = true
         defer { isLoadingRandomAlbum = false }
         do {
-            let albums = try await appState.subsonicClient.getAlbumList(type: .random, size: 1)
+            let albums = try await appState.subsonicClient.getAlbumList(type: .random, size: 1, musicFolderId: folderId)
             guard let album = albums.first else { return }
             let detail = try await appState.subsonicClient.getAlbum(id: album.id)
             guard let songs = detail.song, let first = songs.first else { return }
@@ -361,27 +397,50 @@ struct LibraryView: View {
     private func loadSections() async {
         let client = appState.subsonicClient
 
-        // Show cached data instantly
-        if let cached = await client.cachedResponse(
-            for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
-            recentAlbums = cached.albumList2?.album ?? []
+        // Load music folders for the picker
+        if let folders = try? await client.getMusicFolders(), folders.count > 1 {
+            musicFolders = folders
         }
-        if let cached = await client.cachedResponse(
-            for: .getAlbumList2(type: .frequent, size: 10, offset: 0), ttl: 900) {
-            frequentAlbums = cached.albumList2?.album ?? []
-        }
-        if let cached = await client.cachedResponse(for: .getStarred2, ttl: 300) {
-            if var songs = cached.starred2?.song, !songs.isEmpty {
-                songs.shuffle()
-                starredSongs = Array(songs.prefix(15))
+
+        await fetchSections(client: client)
+    }
+
+    private func reloadSections() async {
+        isLoaded = false
+        recentAlbums = []
+        frequentAlbums = []
+        randomAlbums = []
+        starredSongs = []
+        await fetchSections(client: appState.subsonicClient)
+        isLoaded = true
+    }
+
+    private func fetchSections(client: SubsonicClient) async {
+        let folder = folderId
+
+        // Show cached data instantly (only for unfiltered/default)
+        if folder == nil {
+            if let cached = await client.cachedResponse(
+                for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
+                recentAlbums = cached.albumList2?.album ?? []
+            }
+            if let cached = await client.cachedResponse(
+                for: .getAlbumList2(type: .frequent, size: 10, offset: 0), ttl: 900) {
+                frequentAlbums = cached.albumList2?.album ?? []
+            }
+            if let cached = await client.cachedResponse(for: .getStarred2(), ttl: 300) {
+                if var songs = cached.starred2?.song, !songs.isEmpty {
+                    songs.shuffle()
+                    starredSongs = Array(songs.prefix(15))
+                }
             }
         }
 
-        // Refresh from server in background
-        async let recent = client.getAlbumList(type: .newest, size: 10)
-        async let frequent = client.getAlbumList(type: .frequent, size: 10)
-        async let random = client.getAlbumList(type: .random, size: 10)
-        async let starred = client.getStarred()
+        // Refresh from server
+        async let recent = client.getAlbumList(type: .newest, size: 10, musicFolderId: folder)
+        async let frequent = client.getAlbumList(type: .frequent, size: 10, musicFolderId: folder)
+        async let random = client.getAlbumList(type: .random, size: 10, musicFolderId: folder)
+        async let starred = client.getStarred(musicFolderId: folder)
 
         recentAlbums = (try? await recent) ?? recentAlbums
         frequentAlbums = (try? await frequent) ?? frequentAlbums

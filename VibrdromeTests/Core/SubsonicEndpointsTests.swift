@@ -74,7 +74,7 @@ struct SubsonicEndpointsTests {
             .search3(query: "x"),
             .getAlbumList2(type: .random),
             .getRandomSongs(),
-            .getStarred2,
+            .getStarred2(),
             .getGenres,
             .star(id: "1"),
             .unstar(id: "1"),
@@ -441,7 +441,7 @@ struct SubsonicEndpointsTests {
     @Test func noQueryItemEndpoints() {
         let emptyQueryEndpoints: [SubsonicEndpoint] = [
             .ping,
-            .getStarred2,
+            .getStarred2(),
             .getGenres,
             .getPlaylists,
             .getInternetRadioStations,
