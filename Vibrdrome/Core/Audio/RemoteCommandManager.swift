@@ -65,24 +65,11 @@ final class RemoteCommandManager {
     }
 
     private func setupSkipCommands() {
-        commandCenter.skipForwardCommand.isEnabled = true
-        commandCenter.skipForwardCommand.preferredIntervals = [15]
-        commandCenter.skipForwardCommand.addTarget { _ in
-            let engine = AudioEngine.shared
-            guard engine.duration > 0 else { return .commandFailed }
-            let target = min(engine.currentTime + 15, engine.duration - 0.5)
-            engine.seek(to: max(0, target))
-            return .success
-        }
-
-        commandCenter.skipBackwardCommand.isEnabled = true
-        commandCenter.skipBackwardCommand.preferredIntervals = [15]
-        commandCenter.skipBackwardCommand.addTarget { _ in
-            let engine = AudioEngine.shared
-            guard engine.duration > 0 else { return .commandFailed }
-            engine.seek(to: max(0, engine.currentTime - 15))
-            return .success
-        }
+        // Disable skip forward/backward so iOS shows next/previous track
+        // buttons on the lock screen instead of 15-second skip buttons.
+        // The seek bar handles position scrubbing.
+        commandCenter.skipForwardCommand.isEnabled = false
+        commandCenter.skipBackwardCommand.isEnabled = false
     }
 
     private func setupRatingCommands() {
