@@ -1,6 +1,7 @@
 #if os(iOS)
 import CarPlay
 
+@MainActor
 final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
     private var currentSearchTask: Task<Void, Never>?
 
@@ -22,8 +23,8 @@ final class CarPlaySearchHandler: NSObject, CPSearchTemplateDelegate {
             return
         }
 
-        nonisolated(unsafe) let handler = completionHandler
-        currentSearchTask = Task { @MainActor in
+        let handler = completionHandler
+        currentSearchTask = Task {
             do {
                 let client = AppState.shared.subsonicClient
                 let results = try await client.search(query: searchText, songCount: 10)

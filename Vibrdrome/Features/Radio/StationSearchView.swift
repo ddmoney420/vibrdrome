@@ -163,7 +163,7 @@ struct StationSearchView: View {
 
     private func stationResultRow(_ station: RadioBrowserStation) -> some View {
         HStack(spacing: 12) {
-            stationIcon
+            stationIcon(favicon: station.favicon)
             stationInfo(station)
             Spacer()
             stationPreviewButton(station)
@@ -172,14 +172,26 @@ struct StationSearchView: View {
         .padding(.vertical, 10)
     }
 
-    private var stationIcon: some View {
+    private func stationIcon(favicon: String?) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.accentColor.opacity(0.15))
                 .frame(width: 44, height: 44)
-            Image(systemName: "radio")
-                .font(.system(size: 16))
-                .foregroundColor(.accentColor)
+            if let favicon, let url = URL(string: favicon), !favicon.isEmpty {
+                AsyncImage(url: url) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Image(systemName: "radio")
+                        .font(.system(size: 16))
+                        .foregroundColor(.accentColor)
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Image(systemName: "radio")
+                    .font(.system(size: 16))
+                    .foregroundColor(.accentColor)
+            }
         }
     }
 

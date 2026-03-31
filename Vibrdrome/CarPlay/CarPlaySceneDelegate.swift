@@ -1,6 +1,7 @@
 #if os(iOS)
 import CarPlay
 
+@MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     var interfaceController: CPInterfaceController?
     private var carPlayManager: CarPlayManager?

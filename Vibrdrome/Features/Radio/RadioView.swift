@@ -208,6 +208,29 @@ struct RadioView: View {
         .padding(.horizontal, 16)
     }
 
+    private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(color.gradient.opacity(isPlaying ? 1.0 : 0.7))
+                .frame(width: 48, height: 48)
+            if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }),
+               let faviconURL = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=64") {
+                AsyncImage(url: faviconURL) { image in
+                    image.resizable().aspectRatio(contentMode: .fit)
+                        .frame(width: 28, height: 28)
+                } placeholder: {
+                    Image(systemName: "radio")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            } else {
+                Image(systemName: "radio")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+
     private func stationRow(_ station: InternetRadioStation, colorIndex: Int) -> some View {
         let color = Self.stationColors[colorIndex % Self.stationColors.count]
         let isPlaying = isCurrentStation(station)
@@ -216,15 +239,7 @@ struct RadioView: View {
             engine.playRadio(station: station)
         } label: {
             HStack(spacing: 14) {
-                // Station icon with color
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(color.gradient.opacity(isPlaying ? 1.0 : 0.7))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: "radio")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                stationIcon(station, color: color, isPlaying: isPlaying)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(station.name)
