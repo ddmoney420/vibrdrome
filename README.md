@@ -70,13 +70,29 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
 - **Internet radio** — streaming radio stations with HTTP media support
 - **Multi-server support** — per-server Keychain credentials with server switching
-- **Audio visualizer** — Metal shader-based with 6 presets
+- **Audio visualizer** — 18 audio-reactive Metal shader presets
 - **Bookmarks** — save and resume positions in long tracks
 
 ### Customization &nbsp; ─=≡Σ((( つ◕ل͜◕)つ
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Accessibility** — VoiceOver support throughout, bold text, reduce motion
 - **Scrobbling** — automatic scrobble submission with offline queuing
+
+---
+
+<h2 align="center">Screenshots</h2>
+
+<p align="center">
+<img src="docs/screenshots/01-library.png" width="180" alt="Library">
+<img src="docs/screenshots/02-now-playing.png" width="180" alt="Now Playing">
+<img src="docs/screenshots/05-visualizer.png" width="180" alt="Visualizer">
+<img src="docs/screenshots/06-lyrics.png" width="180" alt="Lyrics">
+</p>
+<p align="center">
+<img src="docs/screenshots/03-equalizer.png" width="180" alt="Equalizer">
+<img src="docs/screenshots/04-smart-playlists.png" width="180" alt="Smart Playlists">
+<img src="docs/screenshots/07-search.png" width="180" alt="Search">
+</p>
 
 ---
 
