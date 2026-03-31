@@ -9,6 +9,17 @@ struct ServerConfigView: View {
     @State private var testResult: String?
     @Environment(\.dismiss) private var dismiss
 
+    private var isHTTP: Bool {
+        url.lowercased().hasPrefix("http://") && !isLocalAddress
+    }
+
+    private var isLocalAddress: Bool {
+        guard let parsed = URL(string: url), let host = parsed.host else { return false }
+        return host == "localhost" || host == "127.0.0.1"
+            || host.hasPrefix("10.") || host.hasPrefix("192.168.")
+            || host.hasPrefix("172.16.") || host.hasSuffix(".local")
+    }
+
     init() {
         let state = AppState.shared
         if state.isConfigured {
@@ -56,6 +67,17 @@ struct ServerConfigView: View {
                         .textContentType(.URL)
                         .autocorrectionDisabled()
 
+                    if isHTTP {
+                        Label {
+                            Text("This connection is not encrypted. Consider using HTTPS with a reverse proxy for security.")
+                                .font(.caption)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                        }
+                        .foregroundColor(.orange)
+                    }
+
                     TextField("Username", text: $username)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
@@ -69,7 +91,7 @@ struct ServerConfigView: View {
                     Button {
                         appState.saveCredentials(url: url, username: username, password: password)
                         if !appState.isConfigured {
-                            testResult = "Invalid server URL. Please enter a valid https:// URL."
+                            testResult = "Invalid server URL. Please enter a valid URL."
                         }
                     } label: {
                         Text("Sign In")
@@ -145,6 +167,18 @@ struct ServerConfigView: View {
                         #endif
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("serverURLField")
+
+                    if isHTTP {
+                        Label {
+                            Text("This connection is not encrypted. Consider using HTTPS with a reverse proxy for security.")
+                                .font(.caption)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                        }
+                        .foregroundColor(.orange)
+                    }
+
                     TextField("Username", text: $username)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
@@ -161,7 +195,7 @@ struct ServerConfigView: View {
                         if appState.isConfigured {
                             dismiss()
                         } else {
-                            testResult = "Invalid server URL. Please enter a valid https:// URL."
+                            testResult = "Invalid server URL. Please enter a valid URL."
                         }
                     } label: {
                         Text("Sign In")
