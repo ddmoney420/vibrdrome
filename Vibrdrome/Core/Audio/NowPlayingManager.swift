@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import WidgetKit
 #if os(macOS)
 import AppKit
 #endif
@@ -40,6 +41,11 @@ final class NowPlayingManager {
 
         infoCenter.nowPlayingInfo = currentInfo
 
+        // Update widget
+        updateWidget(title: song.title, artist: song.artist ?? "",
+                     album: song.album ?? "", isPlaying: isPlaying,
+                     coverArtId: song.coverArt)
+
         // Load cover art asynchronously
         if let coverArtId = song.coverArt {
             let songId = song.id
@@ -78,6 +84,17 @@ final class NowPlayingManager {
         currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
         infoCenter.nowPlayingInfo = currentInfo
+
+        // Update widget play/pause state
+        if var state = NowPlayingState.load() {
+            let updated = NowPlayingState(
+                title: state.title, artist: state.artist, album: state.album,
+                isPlaying: isPlaying, coverArtId: state.coverArtId,
+                serverURL: state.serverURL, timestamp: .now
+            )
+            updated.save()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     func updatePlaybackRate(_ rate: Float) {
@@ -89,5 +106,30 @@ final class NowPlayingManager {
     func clear() {
         currentInfo.removeAll()
         infoCenter.nowPlayingInfo = nil
+        NowPlayingState.clear()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private func updateWidget(title: String, artist: String, album: String,
+                              isPlaying: Bool, coverArtId: String?) {
+        let state = NowPlayingState(
+            title: title, artist: artist, album: album,
+            isPlaying: isPlaying, coverArtId: coverArtId,
+            serverURL: AppState.shared.serverURL,
+            timestamp: .now
+        )
+        state.save()
+
+        // Cache cover art for the widget
+        if let coverArtId {
+            let url = AppState.shared.subsonicClient.coverArtURL(id: coverArtId, size: 200)
+            Task {
+                guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
+                NowPlayingState.shared?.set(data, forKey: "widgetCoverArt_\(coverArtId)")
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        } else {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 }
