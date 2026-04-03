@@ -15,9 +15,17 @@ struct ServerConfigView: View {
 
     private var isLocalAddress: Bool {
         guard let parsed = URL(string: url), let host = parsed.host else { return false }
-        return host == "localhost" || host == "127.0.0.1"
-            || host.hasPrefix("10.") || host.hasPrefix("192.168.")
-            || host.hasPrefix("172.16.") || host.hasSuffix(".local")
+        if host == "localhost" || host == "127.0.0.1" || host == "::1"
+            || host.hasSuffix(".local") { return true }
+        if host.hasPrefix("10.") || host.hasPrefix("192.168.")
+            || host.hasPrefix("169.254.") { return true }
+        // RFC 1918: 172.16.0.0 - 172.31.255.255
+        if host.hasPrefix("172.") {
+            let parts = host.split(separator: ".")
+            if parts.count >= 2, let second = Int(parts[1]),
+               (16...31).contains(second) { return true }
+        }
+        return false
     }
 
     init() {

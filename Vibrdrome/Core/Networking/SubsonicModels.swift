@@ -229,6 +229,17 @@ struct InternetRadioStation: Decodable, Identifiable, Sendable {
     let name: String
     let streamUrl: String
     let homePageUrl: String?
+    let coverArt: String?
+
+    /// Navidrome 0.61 returns coverArt as a raw filename instead of the correct
+    /// ra-{id} format (issue #5293). This property returns the corrected ID.
+    var radioCoverArtId: String? {
+        guard coverArt != nil else { return nil }
+        if let coverArt, coverArt.hasPrefix("ra-") {
+            return coverArt
+        }
+        return "ra-\(id)"
+    }
 }
 
 // MARK: - Lyrics (OpenSubsonic)

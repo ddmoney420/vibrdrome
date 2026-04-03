@@ -6,6 +6,10 @@ import Network
 import Observation
 import SwiftData
 import os.log
+#if os(macOS)
+import AppKit
+#endif
+// swiftlint:disable file_length
 
 private let audioLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
 
@@ -405,6 +409,26 @@ final class AudioEngine {
         info[MPNowPlayingInfoPropertyIsLiveStream] = true
         info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        // Load radio station artwork for lock screen
+        if let artId = station.radioCoverArtId {
+            let stationId = station.id
+            let artURL = AppState.shared.subsonicClient.coverArtURL(id: artId, size: 600)
+            Task {
+                guard let (data, _) = try? await URLSession.shared.data(from: artURL),
+                      self.currentRadioStation?.id == stationId else { return }
+                #if os(iOS)
+                guard let image = UIImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                #else
+                guard let image = NSImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                #endif
+                var nowInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                nowInfo[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowInfo
+            }
+        }
     }
 
     func pause() {

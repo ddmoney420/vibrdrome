@@ -49,7 +49,7 @@ struct NowPlayingView: View {
                         }
                     }
             )
-            .task(id: engine.currentSong?.coverArt) {
+            .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
                 await loadAlbumArt()
             }
             .sheet(isPresented: $showQueue) {
@@ -188,7 +188,11 @@ struct NowPlayingView: View {
     // MARK: - Image Loading
 
     private func loadAlbumArt() async {
-        guard let coverArtId = engine.currentSong?.coverArt else {
+        // Try song coverArt first, then radio station artwork
+        let coverArtId = engine.currentSong?.coverArt
+            ?? engine.currentRadioStation?.radioCoverArtId
+
+        guard let coverArtId else {
             albumImage = nil
             loadedCoverArtId = nil
             return
@@ -198,7 +202,9 @@ struct NowPlayingView: View {
         let url = appState.subsonicClient.coverArtURL(id: coverArtId, size: 800)
         do {
             let response = try await ImagePipeline.shared.image(for: url)
-            guard engine.currentSong?.coverArt == coverArtId else { return }
+            let currentId = engine.currentSong?.coverArt
+                ?? engine.currentRadioStation?.radioCoverArtId
+            guard currentId == coverArtId else { return }
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.3)) {
                 albumImage = response
                 loadedCoverArtId = coverArtId

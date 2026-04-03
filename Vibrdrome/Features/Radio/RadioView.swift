@@ -213,8 +213,21 @@ struct RadioView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(color.gradient.opacity(isPlaying ? 1.0 : 0.7))
                 .frame(width: 48, height: 48)
-            if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }),
-               let faviconURL = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=64") {
+            if let artId = station.radioCoverArtId {
+                // Navidrome 0.61+ server artwork
+                let url = appState.subsonicClient.coverArtURL(id: artId, size: 120)
+                AsyncImage(url: url) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                } placeholder: {
+                    Image(systemName: "radio")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }),
+                      let faviconURL = URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico") {
+                // Favicon fallback
                 AsyncImage(url: faviconURL) { image in
                     image.resizable().aspectRatio(contentMode: .fit)
                         .frame(width: 28, height: 28)

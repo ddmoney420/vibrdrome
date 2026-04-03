@@ -166,7 +166,8 @@ extension AudioEngine {
                     id: "restored",
                     name: stationName,
                     streamUrl: stationUrl,
-                    homePageUrl: nil
+                    homePageUrl: nil,
+                    coverArt: nil
                 )
                 currentRadioStation = station
                 queueLog.info("Restored radio station locally: \(stationName)")

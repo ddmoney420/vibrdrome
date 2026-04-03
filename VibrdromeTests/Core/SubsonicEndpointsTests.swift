@@ -453,4 +453,43 @@ struct SubsonicEndpointsTests {
             #expect(endpoint.queryItems.isEmpty, "\(endpoint) should have no query items")
         }
     }
+
+    // MARK: - musicFolderId on New Endpoints
+
+    @Test func getAlbumList2WithMusicFolderId() {
+        let items = SubsonicEndpoint.getAlbumList2(
+            type: .newest, size: 10, musicFolderId: "3"
+        ).queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == "3")
+    }
+
+    @Test func getAlbumList2WithoutMusicFolderId() {
+        let items = SubsonicEndpoint.getAlbumList2(type: .newest, size: 10).queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == nil)
+    }
+
+    @Test func getRandomSongsWithMusicFolderId() {
+        let items = SubsonicEndpoint.getRandomSongs(size: 20, musicFolderId: "5").queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == "5")
+    }
+
+    @Test func getStarred2WithMusicFolderId() {
+        let items = SubsonicEndpoint.getStarred2(musicFolderId: "2").queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == "2")
+    }
+
+    @Test func getStarred2WithoutMusicFolderId() {
+        let items = SubsonicEndpoint.getStarred2().queryItems
+        #expect(items.isEmpty)
+    }
+
+    @Test func search3WithMusicFolderId() {
+        let items = SubsonicEndpoint.search3(query: "test", musicFolderId: "4").queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == "4")
+    }
+
+    @Test func search3WithoutMusicFolderId() {
+        let items = SubsonicEndpoint.search3(query: "test").queryItems
+        #expect(findQueryItem(items, name: "musicFolderId") == nil)
+    }
 }
