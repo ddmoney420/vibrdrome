@@ -304,15 +304,43 @@ struct NowPlayingView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
-            Text(engine.currentSong?.artist ?? "")
-                .font(.body)
-                .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
+            if let artistId = engine.currentSong?.artistId {
+                Button {
+                    appState.pendingNavigation = .artist(id: artistId)
+                    appState.showNowPlaying = false
+                } label: {
+                    Text(engine.currentSong?.artist ?? "")
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                        .underline(color: .white.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(engine.currentSong?.artist ?? "")
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+            }
 
-            Text(engine.currentSong?.album ?? "")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
-                .lineLimit(1)
+            if let albumId = engine.currentSong?.albumId {
+                Button {
+                    appState.pendingNavigation = .album(id: albumId)
+                    appState.showNowPlaying = false
+                } label: {
+                    Text(engine.currentSong?.album ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                        .underline(color: .white.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(engine.currentSong?.album ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity)

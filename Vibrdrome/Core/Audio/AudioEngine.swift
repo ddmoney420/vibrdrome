@@ -9,7 +9,7 @@ import os.log
 #if os(macOS)
 import AppKit
 #endif
-// swiftlint:disable file_length
+// swiftlint:disable file_length type_body_length
 
 // Free function so the MPMediaItemArtwork closure doesn't inherit @MainActor isolation.
 // MPMediaItemArtwork calls its requestHandler on a background queue.
@@ -699,6 +699,29 @@ final class AudioEngine {
         return Array(queue[(currentIndex + 1)...])
     }
 
+    /// Jump to a specific index in the existing queue without replacing it.
+    /// Unlike play(song:from:at:), this preserves the full queue intact.
+    func skipToIndex(_ index: Int) {
+        guard index >= 0, index < queue.count else { return }
+        let song = queue[index]
+        currentIndex = index
+        currentSong = song
+        currentRadioStation = nil
+        scrobbleSubmitted = false
+        repeatOneUsed = false
+        trackStartTime = Date()
+        currentTime = 0
+        duration = 0
+
+        let url = resolveURL(for: song)
+        replacePlayerItem(with: url)
+        activePlayer?.play()
+        isPlaying = true
+
+        NowPlayingManager.shared.update(song: song, isPlaying: true)
+        scrobbleNowPlaying(songId: song.id)
+    }
+
     func addToQueue(_ song: Song) {
         queue.append(song)
         if queue.count == currentIndex + 2 && activeMode == .gapless {
@@ -1024,3 +1047,5 @@ final class AudioEngine {
         }
     }
 }
+
+// swiftlint:enable type_body_length

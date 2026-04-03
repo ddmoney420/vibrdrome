@@ -86,7 +86,7 @@ final class NowPlayingManager {
         infoCenter.nowPlayingInfo = currentInfo
 
         // Update widget play/pause state
-        if var state = NowPlayingState.load() {
+        if let state = NowPlayingState.load() {
             let updated = NowPlayingState(
                 title: state.title, artist: state.artist, album: state.album,
                 isPlaying: isPlaying, coverArtId: state.coverArtId,

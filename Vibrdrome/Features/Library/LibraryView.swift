@@ -3,6 +3,7 @@ import NukeUI
 
 struct LibraryView: View {
     @Environment(AppState.self) private var appState
+    @Binding var navPath: NavigationPath
     @State private var recentAlbums: [Album] = []
     @State private var frequentAlbums: [Album] = []
     @State private var randomAlbums: [Album] = []
@@ -15,8 +16,12 @@ struct LibraryView: View {
     @State private var musicFolders: [MusicFolder] = []
     @AppStorage(UserDefaultsKeys.activeMusicFolderId) private var activeFolderId: String = ""
 
+    init(navPath: Binding<NavigationPath> = .constant(NavigationPath())) {
+        _navPath = navPath
+    }
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navPath) {
             ScrollView {
                 VStack(spacing: 28) {
                     // Quick access pills
@@ -84,6 +89,12 @@ struct LibraryView: View {
                 guard !isLoaded else { return }
                 await loadSections()
                 isLoaded = true
+            }
+            .navigationDestination(for: ArtistNavItem.self) { item in
+                ArtistDetailView(artistId: item.id)
+            }
+            .navigationDestination(for: AlbumNavItem.self) { item in
+                AlbumDetailView(albumId: item.id)
             }
         }
     }

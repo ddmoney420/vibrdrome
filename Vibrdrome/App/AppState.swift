@@ -33,6 +33,13 @@ final class AppState {
     var showNowPlaying: Bool = false
     var showVisualizer: Bool = false
     var showLyrics: Bool = false
+
+    // Navigation from Now Playing — set destination, dismiss, then navigate
+    enum PendingNavigation: Equatable {
+        case artist(id: String)
+        case album(id: String)
+    }
+    var pendingNavigation: PendingNavigation?
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?

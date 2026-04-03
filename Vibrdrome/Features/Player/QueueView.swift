@@ -89,10 +89,32 @@ struct QueueView: View {
                                 let absoluteIndex = engine.currentIndex + 1 + index
                                 engine.play(song: song, from: engine.queue, at: absoluteIndex)
                             }
-                        }
-                        .onDelete { offsets in
-                            for offset in offsets.sorted().reversed() {
-                                engine.removeFromQueue(at: offset)
+                            .contextMenu {
+                                Button {
+                                    let absoluteIndex = engine.currentIndex + 1 + index
+                                    engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                                } label: {
+                                    Label("Play Now", systemImage: "play.fill")
+                                }
+                                Button {
+                                    engine.addToQueueNext(song)
+                                } label: {
+                                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                                }
+                                Divider()
+                                Button(role: .destructive) {
+                                    engine.removeFromQueue(at: index)
+                                } label: {
+                                    Label("Remove from Queue", systemImage: "minus.circle")
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    engine.removeFromQueue(at: index)
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                                .tint(.red)
                             }
                         }
                         .onMove { source, destination in
