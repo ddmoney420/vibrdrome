@@ -42,13 +42,13 @@ schemes:
         - VibrdromeUITestsMac
       environmentVariables:
         - variable: TEST_SERVER_URL
-          value: "https://REDACTED_SERVER/"
+          value: "$(TEST_SERVER_URL)"
           isEnabled: true
         - variable: TEST_SERVER_USER
-          value: dmoney
+          value: "$(TEST_SERVER_USER)"
           isEnabled: true
         - variable: TEST_SERVER_PASS
-          value: "REDACTED"
+          value: "$(TEST_SERVER_PASS)"
           isEnabled: true
   VibrdromeMac:
     build:
@@ -60,13 +60,13 @@ schemes:
         - VibrdromeUITestsMac
       environmentVariables:
         - variable: TEST_SERVER_URL
-          value: "https://REDACTED_SERVER/"
+          value: "$(TEST_SERVER_URL)"
           isEnabled: true
         - variable: TEST_SERVER_USER
-          value: dmoney
+          value: "$(TEST_SERVER_USER)"
           isEnabled: true
         - variable: TEST_SERVER_PASS
-          value: "REDACTED"
+          value: "$(TEST_SERVER_PASS)"
           isEnabled: true
 
 targets:
