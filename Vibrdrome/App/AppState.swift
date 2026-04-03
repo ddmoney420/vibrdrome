@@ -87,19 +87,37 @@ final class AppState {
     }
 
     func loadSavedCredentials() {
+        // Don't reset if already configured (prevents CarPlay reconnect issues)
+        guard !isConfigured else { return }
+
+        if attemptLoadCredentials() { return }
+
+        // Keychain might be temporarily unavailable (device locked, CarPlay connect).
+        // Retry after a short delay.
+        if activeServerId != nil || UserDefaults.standard.string(forKey: UserDefaultsKeys.serverURL) != nil {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                if !self.isConfigured {
+                    _ = self.attemptLoadCredentials()
+                }
+            }
+        }
+    }
+
+    private func attemptLoadCredentials() -> Bool {
         // Try active server first
         if let activeId = activeServerId,
            let server = servers.first(where: { $0.id == activeId }),
            let password = keychain["server_\(activeId)"] {
             configure(url: server.url, username: server.username, password: password)
-            return
+            return true
         }
 
         // Fall back to legacy single-server credentials
         guard let url = UserDefaults.standard.string(forKey: UserDefaultsKeys.serverURL),
               let username = UserDefaults.standard.string(forKey: UserDefaultsKeys.username),
               let password = keychain["serverPassword"] else {
-            return
+            return false
         }
         configure(url: url, username: username, password: password)
 
@@ -111,6 +129,7 @@ final class AppState {
             keychain["server_\(config.id)"] = password
             saveServers()
         }
+        return true
     }
 
     func saveCredentials(url: String, username: String, password: String) {
