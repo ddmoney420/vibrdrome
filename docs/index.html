@@ -408,16 +408,8 @@
             border-radius: 12px;
             box-shadow: 0 8px 40px rgba(0,0,0,0.8);
             object-fit: contain;
+            pointer-events: none;
         }
-        .lightbox .close {
-            position: absolute;
-            top: 20px; right: 28px;
-            color: #fff;
-            font-size: 2rem;
-            text-decoration: none;
-            opacity: 0.7;
-        }
-        .lightbox .close:hover { opacity: 1; }
 
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
@@ -624,20 +616,20 @@
             <p>&copy; 2026 Vibrdrome &nbsp;&bull;&nbsp; <a href="https://github.com/ddmoney420">ddmoney420</a> &nbsp;&bull;&nbsp; <a href="https://discord.gg/9q5uw3CfN">Discord</a> &nbsp;&bull;&nbsp; <a href="privacy-policy.html">Privacy Policy</a></p>
         </footer>
     </div>
-    <!-- Lightboxes -->
-    <div id="lb-ios-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/01-library.png" alt="iOS Library"></div>
-    <div id="lb-ios-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/02-now-playing.png" alt="iOS Now Playing"></div>
-    <div id="lb-ios-3" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/05-visualizer.png" alt="iOS Visualizer"></div>
-    <div id="lb-ios-4" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/06-lyrics.png" alt="iOS Lyrics"></div>
-    <div id="lb-ios-5" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/03-equalizer.png" alt="iOS Equalizer"></div>
-    <div id="lb-ios-6" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/07-search.png" alt="iOS Search"></div>
-    <div id="lb-and-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/now_playing.png" alt="Android Now Playing"></div>
-    <div id="lb-and-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/equalizer.png" alt="Android Equalizer"></div>
-    <div id="lb-and-3" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/visualizer.png" alt="Android Visualizer"></div>
-    <div id="lb-and-4" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/lyrics.png" alt="Android Lyrics"></div>
-    <div id="lb-and-5" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/search.png" alt="Android Search"></div>
-    <div id="lb-and-6" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/radio.png" alt="Android Radio"></div>
-    <div id="lb-web-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/web/screenshot.png" alt="Web Library"></div>
-    <div id="lb-web-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/web/screenshot-player.png" alt="Web Player"></div>
+    <!-- Lightboxes — click anywhere to close -->
+    <div id="lb-ios-1" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/01-library.png" alt="iOS Library"></div>
+    <div id="lb-ios-2" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/02-now-playing.png" alt="iOS Now Playing"></div>
+    <div id="lb-ios-3" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/05-visualizer.png" alt="iOS Visualizer"></div>
+    <div id="lb-ios-4" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/06-lyrics.png" alt="iOS Lyrics"></div>
+    <div id="lb-ios-5" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/03-equalizer.png" alt="iOS Equalizer"></div>
+    <div id="lb-ios-6" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/07-search.png" alt="iOS Search"></div>
+    <div id="lb-and-1" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/now_playing.png" alt="Android Now Playing"></div>
+    <div id="lb-and-2" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/equalizer.png" alt="Android Equalizer"></div>
+    <div id="lb-and-3" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/visualizer.png" alt="Android Visualizer"></div>
+    <div id="lb-and-4" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/lyrics.png" alt="Android Lyrics"></div>
+    <div id="lb-and-5" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/search.png" alt="Android Search"></div>
+    <div id="lb-and-6" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/radio.png" alt="Android Radio"></div>
+    <div id="lb-web-1" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/web/screenshot.png" alt="Web Library"></div>
+    <div id="lb-web-2" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/web/screenshot-player.png" alt="Web Player"></div>
 </body>
 </html>
