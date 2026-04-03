@@ -11,6 +11,18 @@ import AppKit
 #endif
 // swiftlint:disable file_length
 
+// Free function so the MPMediaItemArtwork closure doesn't inherit @MainActor isolation.
+// MPMediaItemArtwork calls its requestHandler on a background queue.
+#if os(iOS)
+private func makeRadioArtwork(from image: UIImage) -> MPMediaItemArtwork {
+    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+}
+#else
+private func makeRadioArtwork(from image: NSImage) -> MPMediaItemArtwork {
+    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+}
+#endif
+
 private let audioLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
 
 enum RepeatMode: Sendable {
@@ -419,11 +431,12 @@ final class AudioEngine {
                       self.currentRadioStation?.id == stationId else { return }
                 #if os(iOS)
                 guard let image = UIImage(data: data) else { return }
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                 #else
                 guard let image = NSImage(data: data) else { return }
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                 #endif
+                // Use NowPlayingManager's pattern to avoid @MainActor isolation
+                // on the MPMediaItemArtwork closure (called on background queue)
+                let artwork = makeRadioArtwork(from: image)
                 var nowInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                 nowInfo[MPMediaItemPropertyArtwork] = artwork
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nowInfo
