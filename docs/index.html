@@ -386,6 +386,39 @@
             .hero .tagline { font-size: 1.1rem; }
             .links { flex-direction: column; align-items: center; }
         }
+        .screenshot-link { cursor: zoom-in; }
+        .screenshot-link img { transition: transform 0.2s ease; }
+        .screenshot-link:hover img { transform: scale(1.05); }
+
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+            padding: 24px;
+        }
+        .lightbox:target { display: flex; }
+        .lightbox img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+            object-fit: contain;
+        }
+        .lightbox .close {
+            position: absolute;
+            top: 20px; right: 28px;
+            color: #fff;
+            font-size: 2rem;
+            text-decoration: none;
+            opacity: 0.7;
+        }
+        .lightbox .close:hover { opacity: 1; }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation: none !important;
@@ -512,24 +545,24 @@
                 <div>
                     <p style="color: #a78bfa; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">iOS</p>
                     <div style="display: grid; grid-template-columns: repeat(3, 100px); gap: 8px;">
-                        <img src="screenshots/01-library.png" alt="iOS Library" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/02-now-playing.png" alt="iOS Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/05-visualizer.png" alt="iOS Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/06-lyrics.png" alt="iOS Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/03-equalizer.png" alt="iOS Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/07-search.png" alt="iOS Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+                        <a href="#lb-ios-1" class="screenshot-link"><img src="screenshots/01-library.png" alt="iOS Library" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-ios-2" class="screenshot-link"><img src="screenshots/02-now-playing.png" alt="iOS Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-ios-3" class="screenshot-link"><img src="screenshots/05-visualizer.png" alt="iOS Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-ios-4" class="screenshot-link"><img src="screenshots/06-lyrics.png" alt="iOS Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-ios-5" class="screenshot-link"><img src="screenshots/03-equalizer.png" alt="iOS Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-ios-6" class="screenshot-link"><img src="screenshots/07-search.png" alt="iOS Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
                     </div>
                 </div>
                 <!-- Android column -->
                 <div>
                     <p style="color: #81c784; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">Android</p>
                     <div style="display: grid; grid-template-columns: repeat(3, 100px); gap: 8px;">
-                        <img src="screenshots/android/now_playing.png" alt="Android Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/android/equalizer.png" alt="Android Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/android/visualizer.png" alt="Android Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/android/lyrics.png" alt="Android Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/android/search.png" alt="Android Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                        <img src="screenshots/android/radio.png" alt="Android Radio" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+                        <a href="#lb-and-1" class="screenshot-link"><img src="screenshots/android/now_playing.png" alt="Android Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-and-2" class="screenshot-link"><img src="screenshots/android/equalizer.png" alt="Android Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-and-3" class="screenshot-link"><img src="screenshots/android/visualizer.png" alt="Android Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-and-4" class="screenshot-link"><img src="screenshots/android/lyrics.png" alt="Android Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-and-5" class="screenshot-link"><img src="screenshots/android/search.png" alt="Android Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                        <a href="#lb-and-6" class="screenshot-link"><img src="screenshots/android/radio.png" alt="Android Radio" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
                     </div>
                 </div>
             </div>
@@ -538,8 +571,8 @@
             <div>
                 <p style="color: #7dd3fc; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">Web</p>
                 <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                    <img src="screenshots/web/screenshot.png" alt="Web Library" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-                    <img src="screenshots/web/screenshot-player.png" alt="Web Player" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+                    <a href="#lb-web-1" class="screenshot-link"><img src="screenshots/web/screenshot.png" alt="Web Library" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                    <a href="#lb-web-2" class="screenshot-link"><img src="screenshots/web/screenshot-player.png" alt="Web Player" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
                 </div>
             </div>
         </div>
@@ -591,5 +624,20 @@
             <p>&copy; 2026 Vibrdrome &nbsp;&bull;&nbsp; <a href="https://github.com/ddmoney420">ddmoney420</a> &nbsp;&bull;&nbsp; <a href="https://discord.gg/9q5uw3CfN">Discord</a> &nbsp;&bull;&nbsp; <a href="privacy-policy.html">Privacy Policy</a></p>
         </footer>
     </div>
+    <!-- Lightboxes -->
+    <div id="lb-ios-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/01-library.png" alt="iOS Library"></div>
+    <div id="lb-ios-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/02-now-playing.png" alt="iOS Now Playing"></div>
+    <div id="lb-ios-3" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/05-visualizer.png" alt="iOS Visualizer"></div>
+    <div id="lb-ios-4" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/06-lyrics.png" alt="iOS Lyrics"></div>
+    <div id="lb-ios-5" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/03-equalizer.png" alt="iOS Equalizer"></div>
+    <div id="lb-ios-6" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/07-search.png" alt="iOS Search"></div>
+    <div id="lb-and-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/now_playing.png" alt="Android Now Playing"></div>
+    <div id="lb-and-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/equalizer.png" alt="Android Equalizer"></div>
+    <div id="lb-and-3" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/visualizer.png" alt="Android Visualizer"></div>
+    <div id="lb-and-4" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/lyrics.png" alt="Android Lyrics"></div>
+    <div id="lb-and-5" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/search.png" alt="Android Search"></div>
+    <div id="lb-and-6" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/android/radio.png" alt="Android Radio"></div>
+    <div id="lb-web-1" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/web/screenshot.png" alt="Web Library"></div>
+    <div id="lb-web-2" class="lightbox"><a href="#" class="close">&times;</a><img src="screenshots/web/screenshot-player.png" alt="Web Player"></div>
 </body>
 </html>
