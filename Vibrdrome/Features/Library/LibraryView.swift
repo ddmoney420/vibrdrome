@@ -34,6 +34,9 @@ struct LibraryView: View {
                 .padding(.bottom, 80)
                 #endif
             }
+            .refreshable {
+                await fetchSections(client: appState.subsonicClient, skipCache: true)
+            }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .automatic) {
@@ -406,20 +409,14 @@ struct LibraryView: View {
     }
 
     private func reloadSections() async {
-        isLoaded = false
-        recentAlbums = []
-        frequentAlbums = []
-        randomAlbums = []
-        starredSongs = []
-        await fetchSections(client: appState.subsonicClient)
-        isLoaded = true
+        await fetchSections(client: appState.subsonicClient, skipCache: true)
     }
 
-    private func fetchSections(client: SubsonicClient) async {
+    private func fetchSections(client: SubsonicClient, skipCache: Bool = false) async {
         let folder = folderId
 
         // Show cached data instantly (only for unfiltered/default)
-        if folder == nil {
+        if folder == nil, !skipCache {
             if let cached = await client.cachedResponse(
                 for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
                 recentAlbums = cached.albumList2?.album ?? []

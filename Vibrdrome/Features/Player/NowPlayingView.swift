@@ -388,19 +388,34 @@ struct NowPlayingView: View {
     private var playbackControls: some View {
         VStack(spacing: 6) {
             HStack(spacing: 40) {
-                Button { engine.previous() } label: {
+                Button {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    engine.previous()
+                } label: {
                     Image(systemName: "backward.fill")
                         .font(.title2)
                 }
                 .accessibilityLabel("Previous Track")
 
-                Button { engine.togglePlayPause() } label: {
+                Button {
+                    #if os(iOS)
+                    Haptics.medium()
+                    #endif
+                    engine.togglePlayPause()
+                } label: {
                     Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 52))
                 }
                 .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
-                Button { engine.next() } label: {
+                Button {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    engine.next()
+                } label: {
                     Image(systemName: "forward.fill")
                         .font(.title2)
                 }
@@ -519,6 +534,9 @@ struct NowPlayingView: View {
             // Row 2: Heart, Visualizer, AirPlay, Queue, Fullscreen
             HStack {
                 Button {
+                    #if os(iOS)
+                    Haptics.success()
+                    #endif
                     guard let song = engine.currentSong else { return }
                     let songId = song.id
                     let wasStarred = isStarred

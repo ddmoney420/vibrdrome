@@ -4,6 +4,7 @@ import NukeUI
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @State private var dominantColor: Color?
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -91,12 +92,24 @@ struct MiniPlayerView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .background(.ultraThinMaterial)
+        .background {
+            ZStack {
+                if let dominantColor {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(dominantColor.opacity(0.35))
+                }
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 8)
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
         .accessibilityIdentifier("MiniPlayer")
+        .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
+            await loadDominantColor()
+        }
         #if os(macOS)
         .sheet(isPresented: Bindable(appState).showNowPlaying) {
             NowPlayingView()
@@ -118,6 +131,12 @@ struct MiniPlayerView: View {
 
     private var displaySubtitle: String {
         if let song = engine.currentSong {
+            // Show "Up Next: [title]" if there's a next track, otherwise artist
+            if let nextIndex = engine.queue.indices.first(where: {
+                $0 == engine.currentIndex + 1
+            }) {
+                return "Next: \(engine.queue[nextIndex].title)"
+            }
             return song.artist ?? ""
         }
         if engine.currentRadioStation != nil {
@@ -125,6 +144,31 @@ struct MiniPlayerView: View {
         }
         return ""
     }
+
+    #if os(iOS)
+    private func loadDominantColor() async {
+        let coverArtId = engine.currentSong?.coverArt
+            ?? engine.currentRadioStation?.radioCoverArtId
+        guard let coverArtId else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        let url = appState.subsonicClient.coverArtURL(id: coverArtId, size: 80)
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let image = UIImage(data: data),
+              let avgColor = image.averageColor else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) {
+            dominantColor = Color(avgColor)
+        }
+    }
+    #else
+    private func loadDominantColor() async {
+        dominantColor = nil
+    }
+    #endif
 }
 
 // MARK: - macOS Player Bar

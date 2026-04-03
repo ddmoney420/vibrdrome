@@ -1,5 +1,8 @@
 import SwiftUI
 
+private let recentSearchesKey = "recentSearches"
+private let maxRecentSearches = 10
+
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @State private var query = ""
@@ -7,6 +10,7 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var searchTask: Task<Void, Never>?
+    @State private var recentSearches: [String] = UserDefaults.standard.stringArray(forKey: recentSearchesKey) ?? []
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     var body: some View {
@@ -24,6 +28,9 @@ struct SearchView: View {
         #endif
         .navigationTitle("Search")
         .searchable(text: $query, prompt: "Artists, albums, songs...")
+        .onSubmit(of: .search) {
+            saveRecentSearch(query)
+        }
         .onChange(of: query) { _, newValue in
             searchTask?.cancel()
 
@@ -217,13 +224,54 @@ struct SearchView: View {
 
     // MARK: - Empty & Error States
 
+    @ViewBuilder
     private var emptyContent: some View {
-        ContentUnavailableView {
-            Label("Search", systemImage: "magnifyingglass")
-        } description: {
-            Text("Search for artists, albums, and songs")
+        if recentSearches.isEmpty {
+            ContentUnavailableView {
+                Label("Search", systemImage: "magnifyingglass")
+            } description: {
+                Text("Search for artists, albums, and songs")
+            }
+            .padding(.top, 100)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Recent")
+                        .font(.headline)
+                    Spacer()
+                    Button("Clear") {
+                        withAnimation { clearRecentSearches() }
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(.accentColor)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+                ForEach(recentSearches, id: \.self) { recent in
+                    Button {
+                        query = recent
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundColor(.secondary)
+                                .frame(width: 24)
+                            Text(recent)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.left")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        .padding(.top, 100)
     }
 
     private func errorContent(_ error: String) -> some View {
@@ -298,6 +346,22 @@ struct SearchView: View {
             searchError = ErrorPresenter.userMessage(for: error)
             results = nil
         }
+    }
+
+    private func saveRecentSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 2 else { return }
+        var recents = recentSearches
+        recents.removeAll { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+        recents.insert(trimmed, at: 0)
+        if recents.count > maxRecentSearches { recents = Array(recents.prefix(maxRecentSearches)) }
+        recentSearches = recents
+        UserDefaults.standard.set(recents, forKey: recentSearchesKey)
+    }
+
+    private func clearRecentSearches() {
+        recentSearches = []
+        UserDefaults.standard.removeObject(forKey: recentSearchesKey)
     }
 
     private func resultCount(_ r: SearchResult3) -> Int {
