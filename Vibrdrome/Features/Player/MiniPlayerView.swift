@@ -33,7 +33,8 @@ struct MiniPlayerView: View {
                     HStack(spacing: 12) {
                         // Album art — rounded
                         AlbumArtView(
-                            coverArtId: engine.currentSong?.coverArt,
+                            coverArtId: engine.currentSong?.coverArt
+                                ?? engine.currentRadioStation?.radioCoverArtId,
                             size: 44,
                             cornerRadius: 10
                         )

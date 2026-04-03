@@ -505,9 +505,12 @@ final class CarPlayManager {
                 let client = AppState.shared.subsonicClient
                 let stations = try await client.getRadioStations()
                 guard !Task.isCancelled else { return }
-                let items = stations.map { station in
+                let items = stations.map { [weak self] station in
                     let item = CPListItem(text: station.name, detailText: nil,
                                           image: UIImage(systemName: "radio"))
+                    if let artId = station.radioCoverArtId {
+                        self?.loadImage(id: artId, size: 120, into: item)
+                    }
                     item.handler = { _, completion in
                         AudioEngine.shared.playRadio(station: station)
                         completion()
