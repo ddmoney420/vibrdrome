@@ -525,6 +525,9 @@ final class CarPlayManager {
                                           image: UIImage(systemName: "radio"))
                     if let artId = station.radioCoverArtId {
                         self?.loadImage(id: artId, size: 120, into: item)
+                    } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }) {
+                        // Favicon fallback for stations without server artwork
+                        self?.loadFavicon(host: host, into: item)
                     }
                     item.handler = { _, completion in
                         AudioEngine.shared.playRadio(station: station)
@@ -558,6 +561,16 @@ final class CarPlayManager {
 
     private func loadImage(id: String, size: Int, into item: CPListItem) {
         let url = AppState.shared.subsonicClient.coverArtURL(id: id, size: size)
+        trackTask {
+            if let (data, _) = try? await URLSession.shared.data(from: url),
+               let image = UIImage(data: data) {
+                item.setImage(image)
+            }
+        }
+    }
+
+    private func loadFavicon(host: String, into item: CPListItem) {
+        guard let url = URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico") else { return }
         trackTask {
             if let (data, _) = try? await URLSession.shared.data(from: url),
                let image = UIImage(data: data) {

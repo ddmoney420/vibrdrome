@@ -101,12 +101,13 @@ final class AppState {
         if attemptLoadCredentials() { return }
 
         // Keychain might be temporarily unavailable (device locked, CarPlay connect).
-        // Retry after a short delay.
+        // Retry with increasing delays.
         if activeServerId != nil || UserDefaults.standard.string(forKey: UserDefaultsKeys.serverURL) != nil {
             Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                if !self.isConfigured {
-                    _ = self.attemptLoadCredentials()
+                for delay in [1.0, 2.0, 5.0] {
+                    try? await Task.sleep(for: .seconds(delay))
+                    if self.isConfigured { break }
+                    if self.attemptLoadCredentials() { break }
                 }
             }
         }
