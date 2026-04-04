@@ -8,6 +8,9 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @State private var libraryNavPath = NavigationPath()
     @State private var isOffline = false
+    @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab = true
+    @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab = true
+    @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab = true
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -45,6 +48,9 @@ struct ContentView: View {
                 engine.restorePlayQueue(client: appState.subsonicClient)
                 engine.refreshPlaybackState()
                 handleWidgetCommand()
+                if !isOffline {
+                    autoSyncIfNeeded()
+                }
             default:
                 break
             }
@@ -86,15 +92,21 @@ struct ContentView: View {
             LibraryView(navPath: $libraryNavPath)
                 .tabItem { Label("Library", systemImage: "music.note.house") }
                 .tag(0)
-            NavigationStack { SearchView() }
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                .tag(1)
-            NavigationStack { PlaylistsView() }
-                .tabItem { Label("Playlists", systemImage: "music.note.list") }
-                .tag(2)
-            NavigationStack { RadioView() }
-                .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
-                .tag(3)
+            if showSearchTab {
+                NavigationStack { SearchView() }
+                    .tabItem { Label("Search", systemImage: "magnifyingglass") }
+                    .tag(1)
+            }
+            if showPlaylistsTab {
+                NavigationStack { PlaylistsView() }
+                    .tabItem { Label("Playlists", systemImage: "music.note.list") }
+                    .tag(2)
+            }
+            if showRadioTab {
+                NavigationStack { RadioView() }
+                    .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
+                    .tag(3)
+            }
             NavigationStack { SettingsView() }
                 .tabItem { Label("Settings", systemImage: "gear") }
                 .tag(4)
@@ -120,6 +132,36 @@ struct ContentView: View {
                 libraryNavPath.append(AlbumNavItem(id: id))
             case .genre(let name):
                 libraryNavPath.append(GenreNavItem(name: name))
+            }
+        }
+    }
+
+    private func autoSyncIfNeeded() {
+        guard appState.isConfigured else { return }
+        let client = appState.subsonicClient
+
+        // Auto-sync playlists
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoSyncPlaylists) {
+            Task {
+                guard let playlists = try? await client.getPlaylists() else { return }
+                for playlist in playlists {
+                    guard let detail = try? await client.getPlaylist(id: playlist.id),
+                          let songs = detail.entry else { continue }
+                    for song in songs {
+                        DownloadManager.shared.download(song: song, client: client)
+                    }
+                }
+            }
+        }
+
+        // Auto-sync favorites
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
+            Task {
+                guard let starred = try? await client.getStarred(),
+                      let songs = starred.song else { return }
+                for song in songs {
+                    DownloadManager.shared.download(song: song, client: client)
+                }
             }
         }
     }

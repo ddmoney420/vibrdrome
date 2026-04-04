@@ -62,12 +62,16 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.autoDownloadFavorites) private var autoDownloadFavorites: Bool = false
+    @AppStorage(UserDefaultsKeys.autoSyncPlaylists) private var autoSyncPlaylists: Bool = false
     @AppStorage(UserDefaultsKeys.downloadOverCellular) private var downloadOverCellular: Bool = false
     @AppStorage(UserDefaultsKeys.textSize) private var textSizePref: String = "default"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab: Bool = true
+    @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab: Bool = true
+    @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayRecentCount) private var carPlayRecentCount: Int = 25
     @AppStorage(UserDefaultsKeys.carPlayShowGenres) private var carPlayShowGenres: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayShowRadio) private var carPlayShowRadio: Bool = true
@@ -81,6 +85,7 @@ struct SettingsView: View {
             playbackSection
             downloadsSection
             appearanceSection
+            tabBarSection
             #if os(iOS)
             carPlaySection
             #endif
@@ -316,6 +321,12 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("autoDownloadFavoritesToggle")
 
+            Toggle(isOn: $autoSyncPlaylists) {
+                Label("Auto-Sync Playlists", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("autoSyncPlaylistsToggle")
+
             #if os(iOS)
             Toggle(isOn: $downloadOverCellular) {
                 Label("Download Over Cellular", systemImage: "cellularbars")
@@ -387,6 +398,29 @@ struct SettingsView: View {
             .accessibilityIdentifier("albumArtInListsToggle")
         } header: {
             settingSectionHeader("Appearance", icon: "paintbrush.fill", color: .orange)
+        }
+    }
+
+    // MARK: - Tab Bar Section
+
+    private var tabBarSection: some View {
+        Section {
+            Toggle(isOn: $showSearchTab) {
+                Label("Search", systemImage: "magnifyingglass")
+                    .foregroundColor(.primary)
+            }
+            Toggle(isOn: $showPlaylistsTab) {
+                Label("Playlists", systemImage: "music.note.list")
+                    .foregroundColor(.primary)
+            }
+            Toggle(isOn: $showRadioTab) {
+                Label("Radio", systemImage: "antenna.radiowaves.left.and.right")
+                    .foregroundColor(.primary)
+            }
+        } header: {
+            settingSectionHeader("Tab Bar", icon: "dock.rectangle", color: .teal)
+        } footer: {
+            Text("Library and Settings tabs are always shown.")
         }
     }
 

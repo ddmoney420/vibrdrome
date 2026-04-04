@@ -9,9 +9,28 @@ struct SongsView: View {
     @State private var searchResults: [Song] = []
     @State private var isSearching = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @State private var sortBy: SongSortOption = .title
+
+    enum SongSortOption: String, CaseIterable {
+        case title, artist, album, duration
+        var label: String {
+            switch self {
+            case .title: "Title"
+            case .artist: "Artist"
+            case .album: "Album"
+            case .duration: "Duration"
+            }
+        }
+    }
 
     private var displayedSongs: [Song] {
-        searchText.count >= 2 ? searchResults : songs
+        let base = searchText.count >= 2 ? searchResults : songs
+        switch sortBy {
+        case .title: return base.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .artist: return base.sorted { ($0.artist ?? "").localizedCaseInsensitiveCompare($1.artist ?? "") == .orderedAscending }
+        case .album: return base.sorted { ($0.album ?? "").localizedCaseInsensitiveCompare($1.album ?? "") == .orderedAscending }
+        case .duration: return base.sorted { ($0.duration ?? 0) < ($1.duration ?? 0) }
+        }
     }
 
     var body: some View {
@@ -59,10 +78,27 @@ struct SongsView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await loadSongs() }
+                Menu {
+                    ForEach(SongSortOption.allCases, id: \.self) { option in
+                        Button {
+                            sortBy = option
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                if sortBy == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        Task { await loadSongs() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Image(systemName: "arrow.up.arrow.down")
                 }
             }
         }
@@ -97,11 +133,25 @@ struct SongsView: View {
 
             Spacer()
 
-            if let duration = song.duration {
-                Text(formatDuration(TimeInterval(duration)))
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .monospacedDigit()
+            VStack(alignment: .trailing, spacing: 2) {
+                if let duration = song.duration {
+                    Text(formatDuration(TimeInterval(duration)))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                }
+                HStack(spacing: 4) {
+                    if let suffix = song.suffix {
+                        Text(suffix.uppercased())
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                    if let bitRate = song.bitRate {
+                        Text("\(bitRate)k")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
     }
