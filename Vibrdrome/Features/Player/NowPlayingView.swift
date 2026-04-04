@@ -353,7 +353,6 @@ struct NowPlayingView: View {
                         .font(.body)
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
-                        .underline(color: .white.opacity(0.3))
                 }
                 .buttonStyle(.plain)
             } else {
@@ -372,7 +371,6 @@ struct NowPlayingView: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
-                        .underline(color: .white.opacity(0.2))
                 }
                 .buttonStyle(.plain)
             } else {
