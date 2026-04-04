@@ -161,38 +161,30 @@ struct LibraryView: View {
     @ViewBuilder
     private func pillView(for pill: LibraryPill) -> some View {
         switch pill {
-        case .favorites:
-            quickAccessPill("Favorites", icon: "heart.fill", color: .pink) { FavoritesView() }
-        case .radio:
-            quickAccessPill("Radio", icon: "antenna.radiowaves.left.and.right", color: .mint) { RadioView() }
-        case .generations:
-            quickAccessPill("Generations", icon: "calendar", color: .red) { GenerationsView() }
-        case .playlists:
-            quickAccessPill("Playlists", icon: "music.note.list", color: .purple) { PlaylistsView() }
-        case .genres:
-            quickAccessPill("Genres", icon: "guitars.fill", color: .orange) { GenresView() }
-        case .downloads:
-            quickAccessPill("Downloads", icon: "arrow.down.circle.fill", color: .teal) { DownloadsView() }
-        case .artists:
-            quickAccessPill("Artists", icon: "music.mic", color: .purple) { ArtistsView() }
-        case .recentlyAdded:
-            quickAccessPill("Recently Added", icon: "sparkles", color: .yellow) { AlbumsView(listType: .newest, title: "Recently Added") }
-        case .albums:
-            quickAccessPill("Albums", icon: "square.stack.fill", color: .blue) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-        case .recentlyPlayed:
-            quickAccessPill("Recently Played", icon: "play.circle.fill", color: .cyan) { AlbumsView(listType: .recent, title: "Recently Played") }
-        case .songs:
-            quickAccessPill("Songs", icon: "music.note", color: .pink) { SongsView() }
-        case .randomAlbum:
-            randomAlbumPill
-        case .folders:
-            quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
-        case .randomMix:
-            randomMixPill
-        case .playHistory:
-            quickAccessPill("Play History", icon: "clock.arrow.circlepath", color: .purple) { PlayHistoryView() }
-        case .smartPlaylists:
-            quickAccessPill("Smart Playlists", icon: "sparkles", color: .pink) { SmartPlaylistView() }
+        case .randomAlbum: randomAlbumPill
+        case .randomMix: randomMixPill
+        default: pillNavLink(for: pill)
+        }
+    }
+
+    @ViewBuilder
+    private func pillNavLink(for pill: LibraryPill) -> some View {
+        switch pill {
+        case .favorites: quickAccessPill(pill) { FavoritesView() }
+        case .radio: quickAccessPill(pill) { RadioView() }
+        case .generations: quickAccessPill(pill) { GenerationsView() }
+        case .playlists: quickAccessPill(pill) { PlaylistsView() }
+        case .genres: quickAccessPill(pill) { GenresView() }
+        case .downloads: quickAccessPill(pill) { DownloadsView() }
+        case .artists: quickAccessPill(pill) { ArtistsView() }
+        case .recentlyAdded: quickAccessPill(pill) { AlbumsView(listType: .newest, title: "Recently Added") }
+        case .albums: quickAccessPill(pill) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+        case .recentlyPlayed: quickAccessPill(pill) { AlbumsView(listType: .recent, title: "Recently Played") }
+        case .songs: quickAccessPill(pill) { SongsView() }
+        case .folders: quickAccessPill(pill) { FolderBrowserView() }
+        case .playHistory: quickAccessPill(pill) { PlayHistoryView() }
+        case .smartPlaylists: quickAccessPill(pill) { SmartPlaylistView() }
+        default: EmptyView()
         }
     }
 
@@ -252,6 +244,30 @@ struct LibraryView: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoadingRandomAlbum)
+    }
+
+    private func quickAccessPill<D: View>(
+        _ pill: LibraryPill,
+        @ViewBuilder destination: @escaping () -> D
+    ) -> some View {
+        quickAccessPill(pill.title, icon: pill.icon, color: pillColor(pill.color), destination: destination)
+    }
+
+    private func pillColor(_ name: String) -> Color {
+        switch name {
+        case "pink": .pink
+        case "mint": .mint
+        case "red": .red
+        case "purple": .purple
+        case "orange": .orange
+        case "teal": .teal
+        case "yellow": .yellow
+        case "blue": .blue
+        case "cyan": .cyan
+        case "green": .green
+        case "indigo": .indigo
+        default: .primary
+        }
     }
 
     private func quickAccessPill<D: View>(
