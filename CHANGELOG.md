@@ -4,6 +4,24 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 19 — April 4, 2026
+- Dynamic Island Live Activity: now playing in Dynamic Island and lock screen banner
+- Smart queue suggestions: auto-continues with similar songs when queue ends
+- Queue sharing: save current queue as playlist from queue menu
+- Album detail: disc separators for multi-disc albums, Similar Albums carousel
+- Artist page: Top Songs section with expand/collapse before albums list
+- Download indicators: green arrow icon on downloaded tracks
+- Offline mode banner: orange indicator when server unreachable
+- Long-press album art: save to photos or share from Now Playing
+- Playlist view: grid/list toggle with toolbar button
+- Radio view: grid/list toggle with two-column card layout
+- Recently Played carousel: new customizable carousel option
+- Widget overhaul: album art blur background, large size with controls, interactive play/pause and skip
+- Widget command relay via App Group shared storage
+- Security: add NSPhotoLibraryAddUsageDescription, recursion guard on auto-suggest
+- Performance: cache download status in TrackRow, fix Live Activity cleanup on stop
+- 451 unit tests in 30 suites
+
 ### Build 18 — April 3, 2026
 - Now Playing redesign: controls toolbar moved above progress bar, actions below
 - 5-star ratings with Subsonic setRating API

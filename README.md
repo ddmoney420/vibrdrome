@@ -52,6 +52,8 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Playback speed** — 0.5x to 2.0x with pitch preservation
 - **Sleep timer** — 15m to 2h or end-of-track with countdown display and volume fade
 - **5-star ratings** — rate tracks from Now Playing, synced to your server
+- **Smart queue** — auto-continues with similar songs when the queue runs out
+- **Queue sharing** — save your current queue as a playlist
 - **Haptic feedback** — on play/pause, skip, and star actions
 
 ### Library &nbsp; ♬♩♪♩
@@ -60,6 +62,9 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Smart playlists** — 6 auto-generated playlist types
 - **Search** — full-text search with recent search history
 - **Synced lyrics** — scrolling lyrics with seek-to-line
+- **Artist top songs** — top tracks section on artist pages
+- **Similar albums** — discover related albums at the bottom of album detail
+- **Disc separators** — multi-disc albums show disc headers
 - **Genre artwork** — album art thumbnails in genre browser
 - **Decades view** — browse by era with album art cards
 - **Play history** — track stats: today, this week, top artists, top albums
@@ -70,10 +75,13 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Offline playlists** — batch download with full metadata preservation
 - **Cache management** — configurable size limits with LRU eviction (pinned playlists protected)
 - **Offline star/scrobble queue** — actions sync automatically on reconnect
+- **Offline indicator** — banner when server is unreachable
+- **Download badges** — green icon on downloaded tracks throughout the app
 
 ### Platform &nbsp; ᕦ(ò_óˇ)ᕤ
 - **CarPlay support** — browse, search, artist radio, and playback controls
-- **Home screen widget** — Now Playing with album art, title, play/pause state
+- **Home screen widget** — Now Playing with album art blur, interactive controls (small/medium/large)
+- **Dynamic Island** — Live Activity showing now playing in Dynamic Island and lock screen
 - **Siri Shortcuts** — "Play my favorites", "Play a random mix", and more
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
 - **Internet radio** — streaming with station artwork (Navidrome 0.61+)
