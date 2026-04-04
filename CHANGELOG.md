@@ -4,6 +4,30 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 20 — April 5, 2026
+- Mini player redesign: capsule shape with spinning album art and circular progress ring
+- Tappable genre badge on Now Playing navigates to genre albums
+- Inline download button on every track row
+- Smart Playlists pill added to Library
+- Playlist and Radio grid/list view toggle
+- Widget overhaul: album art blur background, large size, interactive controls
+- Dynamic Island Live Activity for now playing
+- Smart queue: auto-continues with similar songs when queue ends
+- Queue sharing: save current queue as playlist
+- Album detail: disc separators for multi-disc albums, Similar Albums carousel
+- Artist page: Top Songs section with expand/collapse
+- CarPlay artwork on all lists, radio stale art fix
+- Text Size picker (Small/Default/Large/Extra Large)
+- Offline mode banner when server unreachable
+- Long-press album art to save to photos or share
+- Toolbar spacing increased, underlines removed
+- 451 unit tests, security fixes, performance optimizations
+
+**TestFlight Notes:**
+> Mini player redesign with spinning vinyl and progress ring, tappable genre,
+> inline download button, Smart Playlists pill, text size picker, CarPlay art
+> fixes, toolbar polish. See full list above.
+
 ### Build 19 — April 4, 2026
 - Dynamic Island Live Activity: now playing in Dynamic Island and lock screen banner
 - Smart queue suggestions: auto-continues with similar songs when queue ends

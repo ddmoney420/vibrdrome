@@ -55,12 +55,15 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Smart queue** — auto-continues with similar songs when the queue runs out
 - **Queue sharing** — save your current queue as a playlist
 - **Haptic feedback** — on play/pause, skip, and star actions
+- **Mini player** — capsule shape with spinning album art and circular progress ring
 
 ### Library &nbsp; ♬♩♪♩
 - **Library browsing** — artists, albums, songs, genres, playlists, and folder hierarchy
 - **Artist radio** — continuous auto-play seeded from any artist or track
-- **Smart playlists** — 6 auto-generated playlist types
+- **Smart playlists** — 6 auto-generated playlist types with Smart Playlists pill in Library
 - **Search** — full-text search with recent search history
+- **Tappable genre** — tap genre badge on Now Playing to browse genre albums
+- **Inline download** — download button on every track row
 - **Synced lyrics** — scrolling lyrics with seek-to-line
 - **Artist top songs** — top tracks section on artist pages
 - **Similar albums** — discover related albums at the bottom of album detail
@@ -94,6 +97,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Customizable library** — reorder & show/hide pills and carousels
 - **Library folder switching** — filter by music folder on multi-library servers
 - **Tappable metadata** — tap artist or album name on Now Playing to navigate
+- **Text size picker** — Small, Default, Large, and Extra Large text options
 - **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
