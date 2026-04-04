@@ -47,6 +47,7 @@ enum UserDefaultsKeys {
     static let appColorScheme = "appColorScheme"
     static let accentColorTheme = "accentColorTheme"
     static let largerText = "largerText"
+    static let textSize = "textSize"
     static let boldText = "boldText"
     static let reduceMotion = "reduceMotion"
     static let disableVisualizer = "disableVisualizer"

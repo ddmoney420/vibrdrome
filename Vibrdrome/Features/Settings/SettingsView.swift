@@ -63,7 +63,7 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.autoDownloadFavorites) private var autoDownloadFavorites: Bool = false
     @AppStorage(UserDefaultsKeys.downloadOverCellular) private var downloadOverCellular: Bool = false
-    @AppStorage(UserDefaultsKeys.largerText) private var largerText: Bool = false
+    @AppStorage(UserDefaultsKeys.textSize) private var textSizePref: String = "default"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
@@ -426,11 +426,16 @@ struct SettingsView: View {
 
     private var accessibilitySection: some View {
         Section {
-            Toggle(isOn: $largerText) {
-                Label("Larger Text", systemImage: "textformat.size.larger")
+            Picker(selection: $textSizePref) {
+                Text("Small").tag("small")
+                Text("Default").tag("default")
+                Text("Large").tag("large")
+                Text("Extra Large").tag("xlarge")
+            } label: {
+                Label("Text Size", systemImage: "textformat.size")
                     .foregroundColor(.primary)
             }
-            .accessibilityIdentifier("largerTextToggle")
+            .accessibilityIdentifier("textSizePicker")
 
             Toggle(isOn: $boldText) {
                 Label("Bold Text", systemImage: "bold")

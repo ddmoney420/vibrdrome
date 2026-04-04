@@ -33,7 +33,7 @@ struct VibrdromeApp: App {
     @State private var appState = AppState.shared
     @AppStorage(UserDefaultsKeys.appColorScheme) private var appColorScheme: String = "system"
     @AppStorage(UserDefaultsKeys.accentColorTheme) private var accentColorTheme: String = "blue"
-    @AppStorage(UserDefaultsKeys.largerText) private var largerText: Bool = false
+    @AppStorage(UserDefaultsKeys.textSize) private var textSizePref: String = "default"
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     private let persistenceController = PersistenceController.shared
@@ -50,6 +50,15 @@ struct VibrdromeApp: App {
         (AccentColorTheme(rawValue: accentColorTheme) ?? .blue).color
     }
 
+    private var textSize: DynamicTypeSize {
+        switch textSizePref {
+        case "small": .medium
+        case "large": .xLarge
+        case "xlarge": .xxxLarge
+        default: .large
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             #if os(macOS)
@@ -59,7 +68,7 @@ struct VibrdromeApp: App {
                 .modelContainer(persistenceController.container)
                 .preferredColorScheme(colorScheme)
                 .tint(accentColor)
-                .dynamicTypeSize(largerText ? .xxxLarge : .large)
+                .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
@@ -72,7 +81,7 @@ struct VibrdromeApp: App {
                 .modelContainer(persistenceController.container)
                 .preferredColorScheme(colorScheme)
                 .tint(accentColor)
-                .dynamicTypeSize(largerText ? .xxxLarge : .large)
+                .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
