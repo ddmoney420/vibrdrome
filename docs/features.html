@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features — Vibrdrome</title>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes meshShift {
+            0% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+            25% { background-position: 100% 0%, 0% 100%, 80% 20%; }
+            50% { background-position: 100% 100%, 0% 0%, 20% 80%; }
+            75% { background-position: 0% 100%, 100% 0%, 50% 50%; }
+            100% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+        }
+
+        html { scroll-behavior: smooth; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            background: #06060c;
+            color: #e0e0e0;
+            line-height: 1.7;
+            overflow-x: hidden;
+            font-size: 16px;
+        }
+
+        /* Animated gradient mesh background */
+        .bg-mesh {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse 600px 600px at 20% 20%, rgba(138,92,246,0.12) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 500px at 80% 80%, rgba(99,70,210,0.10) 0%, transparent 70%),
+                radial-gradient(ellipse 700px 700px at 50% 50%, rgba(67,56,202,0.08) 0%, transparent 70%);
+            background-size: 200% 200%, 200% 200%, 200% 200%;
+            animation: meshShift 20s ease-in-out infinite;
+        }
+        .bg-mesh::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 900px;
+            height: 900px;
+            background: radial-gradient(circle, rgba(138,92,246,0.10) 0%, rgba(99,70,210,0.04) 40%, transparent 70%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+        .bg-mesh::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            left: 30%;
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, rgba(79,70,229,0.08) 0%, transparent 60%);
+            animation: pulse 10s ease-in-out infinite 3s;
+        }
+
+        /* Sticky navigation */
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(6,6,12,0.75);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            backdrop-filter: blur(20px) saturate(1.4);
+            border-bottom: 1px solid rgba(139,92,246,0.1);
+            transition: background 0.3s ease;
+        }
+        .navbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+        }
+        .navbar-logo {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+        .navbar-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            list-style: none;
+        }
+        .navbar-links a {
+            color: #999;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            transition: color 0.2s ease;
+        }
+        .navbar-links a:hover { color: #c4b5fd; }
+        .navbar-links a.nav-active { color: #c4b5fd; }
+        .navbar-links .nav-discord {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 14px;
+            background: rgba(88,101,242,0.15);
+            border: 1px solid rgba(88,101,242,0.25);
+            border-radius: 100px;
+            color: #8b9ff6;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+        .navbar-links .nav-discord:hover {
+            background: rgba(88,101,242,0.25);
+            color: #a8b4f8;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 120px 0 60px;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        .hero h1 {
+            font-size: 3.8rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            background: linear-gradient(135deg, #fff 0%, #c4b5fd 50%, #8b5cf6 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 6s ease infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+        .hero .tagline {
+            font-size: 1.35rem;
+            font-weight: 500;
+            color: #a78bfa;
+            margin-bottom: 0;
+            letter-spacing: 0.03em;
+        }
+
+        /* Section headers */
+        .section-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .section-header h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        .section-header .header-line {
+            display: inline-block;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #7c3aed, #a78bfa);
+            border-radius: 2px;
+        }
+
+        /* Feature sections — alternating layout */
+        .feature-section {
+            display: flex;
+            align-items: center;
+            gap: 60px;
+            padding: 60px 0;
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .feature-section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .feature-section:nth-child(even) {
+            flex-direction: row-reverse;
+        }
+        .feature-section + .feature-section {
+            border-top: 1px solid rgba(139,92,246,0.08);
+        }
+
+        .feature-text {
+            flex: 1;
+            min-width: 0;
+        }
+        .feature-text h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+        .feature-text ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px;
+        }
+        .feature-text ul li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 12px;
+            color: #aaa;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .feature-text ul li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+        }
+
+        /* Platform badges */
+        .platforms {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .platform-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(139,92,246,0.1);
+            border: 1px solid rgba(139,92,246,0.2);
+            border-radius: 100px;
+            color: #c4b5fd;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .platform-badge.android {
+            background: rgba(76,175,80,0.1);
+            border-color: rgba(76,175,80,0.2);
+            color: #81c784;
+        }
+        .platform-badge.web {
+            background: rgba(14,165,233,0.1);
+            border-color: rgba(14,165,233,0.2);
+            color: #7dd3fc;
+        }
+
+        .feature-media {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .feature-media img {
+            max-width: 280px;
+            width: 100%;
+            border-radius: 20px;
+            box-shadow:
+                0 8px 40px rgba(0,0,0,0.5),
+                0 0 60px rgba(139,92,246,0.08);
+        }
+        .feature-media img.web-screenshot {
+            max-width: 460px;
+            border-radius: 12px;
+        }
+        .feature-media .icon-placeholder {
+            width: 200px;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15,15,25,0.5);
+            border: 1px solid rgba(139,92,246,0.15);
+            border-radius: 24px;
+            color: #a78bfa;
+        }
+        .feature-media .icon-placeholder .icon-large {
+            font-size: 4rem;
+            margin-bottom: 8px;
+        }
+        .feature-media .icon-placeholder .icon-label {
+            font-size: 0.8rem;
+            color: #777;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 40px 0 60px;
+            color: #444;
+            font-size: 0.8rem;
+        }
+        footer a {
+            color: #666;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        footer a:hover { color: #a78bfa; }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero { padding: 80px 0 40px; }
+            .feature-section,
+            .feature-section:nth-child(even) {
+                flex-direction: column;
+                gap: 32px;
+                padding: 40px 0;
+            }
+            .feature-media { order: -1; }
+            .feature-media img { max-width: 220px; }
+            .feature-media img.web-screenshot { max-width: 100%; }
+            .feature-text h2 { font-size: 1.6rem; text-align: center; }
+            .feature-text ul li { font-size: 0.95rem; }
+            .platforms { justify-content: center; }
+            .navbar-links .nav-label { display: none; }
+        }
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 2rem; }
+            .hero .tagline { font-size: 1.1rem; }
+            .feature-media img { max-width: 180px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+            .feature-section {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-mesh"></div>
+
+    <!-- Sticky navbar -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="index.html" class="navbar-logo">Vibrdrome</a>
+            <ul class="navbar-links">
+                <li><a href="features.html" class="nav-active"><span class="nav-label">Features</span></a></li>
+                <li><a href="index.html#screenshots"><span class="nav-label">Screenshots</span></a></li>
+                <li><a href="index.html#download"><span class="nav-label">Download</span></a></li>
+                <li><a href="https://discord.gg/9q5uw3CfN" class="nav-discord">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                    Discord
+                </a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Features</h1>
+            <p class="tagline">Everything you need to enjoy your music library</p>
+        </div>
+
+        <!-- Playback -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Playback</h2>
+                <ul>
+                    <li>Gapless playback with crossfade for seamless album listening</li>
+                    <li>10-band equalizer with presets and ReplayGain for consistent volume</li>
+                    <li>5-star ratings synced to your Navidrome server</li>
+                    <li>Sleep timer with countdown display</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS &amp; macOS</span>
+                    <span class="platform-badge android">Android</span>
+                    <span class="platform-badge web">Web</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <img src="screenshots/02-now-playing.png" alt="Now Playing">
+            </div>
+        </div>
+
+        <!-- Audio Visualizers -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Audio Visualizers</h2>
+                <ul>
+                    <li>18 Metal shader presets on iOS</li>
+                    <li>Milkdrop engine on Android &amp; Web</li>
+                    <li>Audio-reactive GPU rendering</li>
+                    <li>Photosensitivity controls in Settings &gt; Accessibility</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS &amp; macOS</span>
+                    <span class="platform-badge android">Android</span>
+                    <span class="platform-badge web">Web</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <img src="screenshots/05-visualizer.png" alt="Audio Visualizer">
+            </div>
+        </div>
+
+        <!-- Library -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Library</h2>
+                <ul>
+                    <li>Customizable layout &mdash; reorder &amp; hide sections</li>
+                    <li>Genre artwork, decade cards, play history</li>
+                    <li>Library folder switching for multi-library servers</li>
+                    <li>Smart playlists and artist radio</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS &amp; macOS</span>
+                    <span class="platform-badge android">Android</span>
+                    <span class="platform-badge web">Web</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <img src="screenshots/01-library.png" alt="Library">
+            </div>
+        </div>
+
+        <!-- CarPlay & Android Auto -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>CarPlay &amp; Android Auto</h2>
+                <ul>
+                    <li>Browse your library from your car's dashboard</li>
+                    <li>Search, play, and skip from the car</li>
+                    <li>Station artwork in CarPlay</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS</span>
+                    <span class="platform-badge android">Android</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <div class="icon-placeholder">
+                    <span class="icon-large">&#128663;</span>
+                    <span class="icon-label">Dashboard Integration</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Synced Lyrics -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Synced Lyrics</h2>
+                <ul>
+                    <li>Time-synced scrolling lyrics</li>
+                    <li>Tap any line to seek to that position</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS &amp; macOS</span>
+                    <span class="platform-badge android">Android</span>
+                    <span class="platform-badge web">Web</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <img src="screenshots/06-lyrics.png" alt="Synced Lyrics">
+            </div>
+        </div>
+
+        <!-- Home Screen Widget & Siri -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Home Screen Widget &amp; Siri</h2>
+                <ul>
+                    <li>Now Playing widget with album art</li>
+                    <li>Siri Shortcuts: "Play my favorites"</li>
+                    <li>Toggle playback, skip tracks hands-free</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge">iOS</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <div class="icon-placeholder">
+                    <span class="icon-large">&#128290;</span>
+                    <span class="icon-label">Widget &amp; Voice Control</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Web App -->
+        <div class="feature-section" data-animate>
+            <div class="feature-text">
+                <h2>Web App</h2>
+                <ul>
+                    <li>Full library browsing in the browser</li>
+                    <li>Milkdrop visualizer with Butterchurn</li>
+                    <li>8 themes including Retro and Terminal</li>
+                    <li>Docker deployment support</li>
+                </ul>
+                <div class="platforms">
+                    <span class="platform-badge web">Web</span>
+                </div>
+            </div>
+            <div class="feature-media">
+                <img src="screenshots/web/screenshot.png" alt="Web App" class="web-screenshot">
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Vibrdrome &nbsp;&bull;&nbsp; <a href="https://github.com/ddmoney420">ddmoney420</a> &nbsp;&bull;&nbsp; <a href="https://discord.gg/9q5uw3CfN">Discord</a> &nbsp;&bull;&nbsp; <a href="privacy-policy.html">Privacy Policy</a></p>
+        </footer>
+    </div>
+
+    <!-- Minimal JS: Intersection Observer for scroll-triggered animations -->
+    <script>
+        (function() {
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15 });
+
+            document.querySelectorAll('.feature-section[data-animate]').forEach(function(el) {
+                observer.observe(el);
+            });
+        })();
+    </script>
+</body>
+</html>
