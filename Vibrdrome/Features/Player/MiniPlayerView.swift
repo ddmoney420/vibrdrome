@@ -11,36 +11,43 @@ struct MiniPlayerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Animated progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(.white.opacity(0.1))
-
-                    Rectangle()
-                        .fill(.white.opacity(0.8))
-                        .frame(width: engine.duration > 0
-                               ? geo.size.width * (engine.currentTime / engine.duration)
-                               : 0)
-                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
-                }
-            }
-            .frame(height: 2)
-
             HStack(spacing: 12) {
                 // Tappable area: album art + song info opens Now Playing
                 Button {
                     appState.showNowPlaying = true
                 } label: {
                     HStack(spacing: 12) {
-                        // Album art — rounded
-                        AlbumArtView(
-                            coverArtId: engine.currentSong?.coverArt
-                                ?? engine.currentRadioStation?.radioCoverArtId,
-                            size: 44,
-                            cornerRadius: 10
-                        )
-                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                        // Spinning album art with circular progress ring
+                        ZStack {
+                            // Progress ring background
+                            Circle()
+                                .stroke(.white.opacity(0.1), lineWidth: 2.5)
+                                .frame(width: 48, height: 48)
+
+                            // Progress ring
+                            Circle()
+                                .trim(from: 0, to: engine.duration > 0
+                                      ? engine.currentTime / engine.duration : 0)
+                                .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                .frame(width: 48, height: 48)
+                                .rotationEffect(.degrees(-90))
+                                .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
+
+                            // Album art — circular, spinning
+                            AlbumArtView(
+                                coverArtId: engine.currentSong?.coverArt
+                                    ?? engine.currentRadioStation?.radioCoverArtId,
+                                size: 40,
+                                cornerRadius: 20
+                            )
+                            .rotationEffect(.degrees(engine.isPlaying ? 360 : 0))
+                            .animation(
+                                engine.isPlaying
+                                    ? .linear(duration: 8).repeatForever(autoreverses: false)
+                                    : .default,
+                                value: engine.isPlaying
+                            )
+                        }
 
                         // Song info
                         VStack(alignment: .leading, spacing: 2) {
