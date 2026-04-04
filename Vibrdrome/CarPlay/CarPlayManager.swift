@@ -280,9 +280,12 @@ final class CarPlayManager {
                 ])
             }
 
-            let trackItems = songs.map { song in
+            let trackItems = songs.map { [weak self] song in
                 let item = CPListItem(text: song.title,
                                       detailText: song.artist ?? album.artist ?? "")
+                if let coverArtId = song.coverArt ?? album.coverArt {
+                    self?.loadImage(id: coverArtId, size: 120, into: item)
+                }
                 item.handler = { _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
@@ -356,9 +359,12 @@ final class CarPlayManager {
 
             if let songs = starred.song, !songs.isEmpty {
                 let visibleSongs = Array(songs.prefix(20))
-                let songItems = visibleSongs.map { song in
+                let songItems = visibleSongs.map { [weak self] song in
                     let item = CPListItem(text: song.title,
                                           detailText: song.artist ?? "")
+                    if let coverArtId = song.coverArt {
+                        self?.loadImage(id: coverArtId, size: 120, into: item)
+                    }
                     item.handler = { _, completion in
                         AudioEngine.shared.play(
                             song: song, from: visibleSongs,
@@ -372,9 +378,12 @@ final class CarPlayManager {
             }
 
             if let albums = starred.album, !albums.isEmpty {
-                let albumItems = albums.prefix(20).map { album in
+                let albumItems = albums.prefix(20).map { [weak self] album in
                     let item = CPListItem(text: album.name,
                                           detailText: album.artist ?? "")
+                    if let coverArtId = album.coverArt {
+                        self?.loadImage(id: coverArtId, size: 120, into: item)
+                    }
                     item.handler = { [weak self] _, completion in
                         self?.showAlbumDetail(id: album.id)
                         completion()
@@ -425,9 +434,12 @@ final class CarPlayManager {
                 let playlists = try await client.getPlaylists()
                 // C16: Check cancellation before updating template
                 guard !Task.isCancelled else { return }
-                let items = playlists.map { playlist in
+                let items = playlists.map { [weak self] playlist in
                     let item = CPListItem(text: playlist.name,
                                           detailText: "\(playlist.songCount ?? 0) songs")
+                    if let coverArtId = playlist.coverArt {
+                        self?.loadImage(id: coverArtId, size: 120, into: item)
+                    }
                     item.handler = { [weak self] _, completion in
                         self?.showPlaylistDetail(id: playlist.id)
                         completion()
@@ -456,9 +468,12 @@ final class CarPlayManager {
                 ])
             }
 
-            let trackItems = songs.map { song in
+            let trackItems = songs.map { [weak self] song in
                 let item = CPListItem(text: song.title,
                                       detailText: song.artist ?? "")
+                if let coverArtId = song.coverArt {
+                    self?.loadImage(id: coverArtId, size: 120, into: item)
+                }
                 item.handler = { _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
