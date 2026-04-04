@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changelog — Vibrdrome</title>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes meshShift {
+            0% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+            25% { background-position: 100% 0%, 0% 100%, 80% 20%; }
+            50% { background-position: 100% 100%, 0% 0%, 20% 80%; }
+            75% { background-position: 0% 100%, 100% 0%, 50% 50%; }
+            100% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+        }
+
+        html { scroll-behavior: smooth; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            background: #06060c;
+            color: #e0e0e0;
+            line-height: 1.7;
+            overflow-x: hidden;
+            font-size: 16px;
+        }
+
+        /* Animated gradient mesh background */
+        .bg-mesh {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse 600px 600px at 20% 20%, rgba(138,92,246,0.12) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 500px at 80% 80%, rgba(99,70,210,0.10) 0%, transparent 70%),
+                radial-gradient(ellipse 700px 700px at 50% 50%, rgba(67,56,202,0.08) 0%, transparent 70%);
+            background-size: 200% 200%, 200% 200%, 200% 200%;
+            animation: meshShift 20s ease-in-out infinite;
+        }
+        .bg-mesh::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 900px;
+            height: 900px;
+            background: radial-gradient(circle, rgba(138,92,246,0.10) 0%, rgba(99,70,210,0.04) 40%, transparent 70%);
+            animation: pulse 8s ease-in-out infinite;
+        }
+        .bg-mesh::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            left: 30%;
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, rgba(79,70,229,0.08) 0%, transparent 60%);
+            animation: pulse 10s ease-in-out infinite 3s;
+        }
+
+        /* Sticky navigation */
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(6,6,12,0.75);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            backdrop-filter: blur(20px) saturate(1.4);
+            border-bottom: 1px solid rgba(139,92,246,0.1);
+            transition: background 0.3s ease;
+        }
+        .navbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+        }
+        .navbar-logo {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+        .navbar-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            list-style: none;
+        }
+        .navbar-links a {
+            color: #999;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            transition: color 0.2s ease;
+        }
+        .navbar-links a:hover { color: #c4b5fd; }
+        .navbar-links a.nav-active { color: #c4b5fd; }
+        .navbar-links .nav-discord {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 14px;
+            background: rgba(88,101,242,0.15);
+            border: 1px solid rgba(88,101,242,0.25);
+            border-radius: 100px;
+            color: #8b9ff6;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+        .navbar-links .nav-discord:hover {
+            background: rgba(88,101,242,0.25);
+            color: #a8b4f8;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 120px 0 60px;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        .hero h1 {
+            font-size: 3.8rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            background: linear-gradient(135deg, #fff 0%, #c4b5fd 50%, #8b5cf6 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 6s ease infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+        }
+        .hero .tagline {
+            font-size: 1.35rem;
+            font-weight: 500;
+            color: #a78bfa;
+            margin-bottom: 0;
+            letter-spacing: 0.03em;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding: 20px 0 40px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 28px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, rgba(139,92,246,0.4) 0%, rgba(139,92,246,0.08) 100%);
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-left: 68px;
+            margin-bottom: 32px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .timeline-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Timeline dot */
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 22px;
+            top: 24px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #7c3aed;
+            border: 3px solid #06060c;
+            box-shadow: 0 0 12px rgba(139,92,246,0.4);
+            z-index: 2;
+        }
+
+        .build-card {
+            background: rgba(15,15,25,0.5);
+            border: 1px solid rgba(139,92,246,0.12);
+            border-radius: 16px;
+            padding: 24px 28px;
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .build-card:hover {
+            border-color: rgba(139,92,246,0.25);
+            box-shadow: 0 4px 30px rgba(139,92,246,0.06);
+        }
+
+        .build-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .build-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            background: rgba(124,58,237,0.2);
+            border: 1px solid rgba(124,58,237,0.35);
+            border-radius: 100px;
+            color: #c4b5fd;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+        .build-date {
+            color: #666;
+            font-size: 0.85rem;
+            font-weight: 400;
+        }
+
+        .build-card ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .build-card ul li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .build-card ul li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #7c3aed, #a78bfa);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 40px 0 60px;
+            color: #444;
+            font-size: 0.8rem;
+        }
+        footer a {
+            color: #666;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        footer a:hover { color: #a78bfa; }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .hero h1 { font-size: 2.5rem; }
+            .hero { padding: 80px 0 40px; }
+            .timeline::before { display: none; }
+            .timeline-item { padding-left: 0; }
+            .timeline-item::before { display: none; }
+            .build-card { padding: 20px; }
+            .navbar-links .nav-label { display: none; }
+        }
+        @media (max-width: 480px) {
+            .hero h1 { font-size: 2rem; }
+            .hero .tagline { font-size: 1.1rem; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+            }
+            .timeline-item {
+                opacity: 1 !important;
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-mesh"></div>
+
+    <!-- Sticky navbar -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="index.html" class="navbar-logo">Vibrdrome</a>
+            <ul class="navbar-links">
+                <li><a href="features.html"><span class="nav-label">Features</span></a></li>
+                <li><a href="changelog.html" class="nav-active"><span class="nav-label">Changelog</span></a></li>
+                <li><a href="index.html#screenshots"><span class="nav-label">Screenshots</span></a></li>
+                <li><a href="index.html#download"><span class="nav-label">Download</span></a></li>
+                <li><a href="https://discord.gg/9q5uw3CfN" class="nav-discord">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                    Discord
+                </a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Changelog</h1>
+            <p class="tagline">What's new in Vibrdrome</p>
+        </div>
+
+        <div class="timeline">
+
+            <!-- Build 18 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 18</span>
+                        <span class="build-date">April 3, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Now Playing redesign: controls toolbar moved above progress bar, actions below</li>
+                        <li>5-star ratings with Subsonic setRating API</li>
+                        <li>Sleep timer countdown visible next to moon icon</li>
+                        <li>Fade/scale animation on Now Playing open</li>
+                        <li>Genre artwork thumbnails in genres list</li>
+                        <li>Decades card layout with album art backgrounds</li>
+                        <li>Playlist artwork mosaic (2x2 grid for playlists without server artwork)</li>
+                        <li>Play History screen with today/week/all-time stats, top artists, top albums</li>
+                        <li>Accessibility audit: identifiers added to 17 views, star rating contrast improved</li>
+                        <li>Performance: stop unnecessary MPNowPlayingInfoCenter updates, use Nuke cache for dominant color</li>
+                        <li>442 unit tests in 27 suites</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 17 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 17</span>
+                        <span class="build-date">April 3, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Tappable artist/album names on Now Playing (dismiss and navigate to detail)</li>
+                        <li>Queue context menu on long-press (Play Now, Play Next, Remove)</li>
+                        <li>Queue swipe-left to remove</li>
+                        <li>CarPlay credential retry with 1s delay</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 16 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 16</span>
+                        <span class="build-date">April 3, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Home screen widget (Now Playing, small and medium sizes)</li>
+                        <li>Siri Shortcuts (Play Favorites, Play Random Mix, Toggle Playback, Skip Track, Artist Radio)</li>
+                        <li>Mini player background tints with album art dominant color</li>
+                        <li>Up Next subtitle on mini player</li>
+                        <li>Haptic feedback on playback controls and star</li>
+                        <li>Pull to refresh on Library</li>
+                        <li>Search history (saves on submit, shows recent searches)</li>
+                        <li>Radio station artwork in mini player and CarPlay</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 15 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 15</span>
+                        <span class="build-date">April 2, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Fix radio artwork crash (MPMediaItemArtwork closure isolation)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 14 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 14</span>
+                        <span class="build-date">April 2, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Navidrome 0.61 radio station artwork (coverArt with ra-{id} workaround)</li>
+                        <li>Security: switch favicon service from Google to DuckDuckGo</li>
+                        <li>Security: fix isLocalAddress for full RFC 1918 range</li>
+                        <li>392 unit tests, security audit, privacy policy updated</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 13 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 13</span>
+                        <span class="build-date">April 2, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Fix CarPlay logout when connecting (Keychain accessibility change)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 12 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 12</span>
+                        <span class="build-date">March 31, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Allow HTTP connections to non-local servers (DuckDNS, dynamic DNS)</li>
+                        <li>Security warning shown for HTTP URLs recommending HTTPS</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 11 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 11</span>
+                        <span class="build-date">March 31, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Fix lock screen showing 15-second skip buttons instead of previous/next track</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 10 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 10</span>
+                        <span class="build-date">March 31, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Library folder switching for multi-library Navidrome servers</li>
+                        <li>musicFolderId support added to album list, search, starred, and random songs API calls</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 9 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 9</span>
+                        <span class="build-date">March 31, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Fix CarPlay crash caused by CPSearchTemplate in tab bar</li>
+                        <li>Search moved to Library &gt; Search in CarPlay</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 8 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 8</span>
+                        <span class="build-date">March 30, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Radio station favicons from homepage domain and radio-browser.info</li>
+                        <li>CarPlay threading improvements (@MainActor on scene delegate and search handler)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 7 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 7</span>
+                        <span class="build-date">March 30, 2026</span>
+                    </div>
+                    <ul>
+                        <li>CarPlay audio entitlement enabled</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 6 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 6</span>
+                        <span class="build-date">March 29, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Customizable Library layout (show/hide/reorder pills and carousels)</li>
+                        <li>6 new visualizer presets: Lava Lamp, Starfield, Ripple, Fireflies, Prism, Ocean (18 total)</li>
+                        <li>Smoother visualizer audio reactivity (reduced FFT gain, lower smoothing factor, lerp interpolation)</li>
+                        <li>Photosensitivity warning on first visualizer launch with "Don't Show Again" option</li>
+                        <li>Disable Visualizer toggle in Settings &gt; Accessibility</li>
+                        <li>Epilepsy notice and prefers-reduced-motion CSS on website</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 5 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 5</span>
+                        <span class="build-date">March 28, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Fix device rotation dismissing player, visualizer, and lyrics views</li>
+                        <li>Move fullScreenCover for NowPlayingView to ContentView for rotation stability</li>
+                        <li>Lift showNowPlaying, showVisualizer, showLyrics state to AppState</li>
+                        <li>Remove unused Metal shader variable</li>
+                        <li>Rotation UI tests verifying player/visualizer/lyrics stay open</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 4 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 4</span>
+                        <span class="build-date">March 20, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Audio-reactive visualizer with FFT spectrum analysis</li>
+                        <li>12 Metal shader presets</li>
+                        <li>Library quick access pills and carousels</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 3 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 3</span>
+                        <span class="build-date">March 19, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Bug fixes and stability improvements</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 2 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 2</span>
+                        <span class="build-date">March 19, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Initial feature set</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Build 1 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 1</span>
+                        <span class="build-date">March 18, 2026</span>
+                    </div>
+                    <ul>
+                        <li>Initial TestFlight release</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Vibrdrome &nbsp;&bull;&nbsp; <a href="https://github.com/ddmoney420">ddmoney420</a> &nbsp;&bull;&nbsp; <a href="https://discord.gg/9q5uw3CfN">Discord</a> &nbsp;&bull;&nbsp; <a href="privacy-policy.html">Privacy Policy</a></p>
+        </footer>
+    </div>
+
+    <!-- Minimal JS: Intersection Observer for scroll-triggered animations -->
+    <script>
+        (function() {
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15 });
+
+            document.querySelectorAll('.timeline-item[data-animate]').forEach(function(el) {
+                observer.observe(el);
+            });
+        })();
+    </script>
+</body>
+</html>
