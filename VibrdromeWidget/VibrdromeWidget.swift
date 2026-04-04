@@ -341,7 +341,14 @@ struct NowPlayingWidgetEntryView: View {
 // MARK: - Widget Configuration
 
 @main
-struct VibrdromeWidget: Widget {
+struct VibrdromeWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        NowPlayingHomeWidget()
+        NowPlayingLiveActivity()
+    }
+}
+
+struct NowPlayingHomeWidget: Widget {
     let kind: String = "NowPlayingWidget"
 
     var body: some WidgetConfiguration {

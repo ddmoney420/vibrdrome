@@ -5,19 +5,53 @@ struct ArtistDetailView: View {
 
     @Environment(AppState.self) private var appState
     @State private var artist: Artist?
+    @State private var topSongs: [Song] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var showAllTopSongs = false
 
     var body: some View {
         List {
-            if let albums = artist?.album {
-                ForEach(albums) { album in
-                    NavigationLink {
-                        AlbumDetailView(albumId: album.id)
-                    } label: {
-                        AlbumCard(album: album)
+            // Top Songs section
+            if !topSongs.isEmpty {
+                Section {
+                    let displayed = showAllTopSongs ? topSongs : Array(topSongs.prefix(5))
+                    ForEach(Array(displayed.enumerated()), id: \.element.id) { index, song in
+                        TrackRow(song: song, showTrackNumber: false)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                AudioEngine.shared.play(song: song, from: topSongs, at: index)
+                            }
+                            .trackContextMenu(song: song, queue: topSongs, index: index)
                     }
-                    .accessibilityIdentifier("artistAlbumRow_\(album.id)")
+
+                    if topSongs.count > 5 {
+                        Button {
+                            withAnimation { showAllTopSongs.toggle() }
+                        } label: {
+                            Text(showAllTopSongs ? "Show Less" : "See All \(topSongs.count) Songs")
+                                .font(.caption)
+                                .foregroundColor(.accentColor)
+                        }
+                    }
+                } header: {
+                    Text("Top Songs")
+                }
+            }
+
+            // Albums section
+            if let albums = artist?.album, !albums.isEmpty {
+                Section {
+                    ForEach(albums) { album in
+                        NavigationLink {
+                            AlbumDetailView(albumId: album.id)
+                        } label: {
+                            AlbumCard(album: album)
+                        }
+                        .accessibilityIdentifier("artistAlbumRow_\(album.id)")
+                    }
+                } header: {
+                    Text("Albums (\(albums.count))")
                 }
             }
         }
@@ -38,7 +72,7 @@ struct ArtistDetailView: View {
                     Button("Retry") { Task { await loadArtist() } }
                         .buttonStyle(.bordered)
                 }
-            } else if artist != nil && (artist?.album?.isEmpty ?? true) {
+            } else if artist != nil && (artist?.album?.isEmpty ?? true) && topSongs.isEmpty {
                 ContentUnavailableView {
                     Label("No Albums", systemImage: "square.stack")
                 } description: {
@@ -67,7 +101,12 @@ struct ArtistDetailView: View {
         error = nil
         defer { isLoading = false }
         do {
-            artist = try await appState.subsonicClient.getArtist(id: artistId)
+            let loadedArtist = try await appState.subsonicClient.getArtist(id: artistId)
+            artist = loadedArtist
+            // Load top songs
+            topSongs = try await appState.subsonicClient.getTopSongs(
+                artist: loadedArtist.name, count: 20
+            )
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
         }

@@ -298,6 +298,26 @@ struct NowPlayingView: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
+        #if os(iOS)
+        .contextMenu {
+            if let albumImage {
+                Button {
+                    UIImageWriteToSavedPhotosAlbum(albumImage, nil, nil, nil)
+                    Haptics.success()
+                } label: {
+                    Label("Save to Photos", systemImage: "square.and.arrow.down")
+                }
+
+                ShareLink(
+                    item: Image(uiImage: albumImage),
+                    preview: SharePreview(
+                        engine.currentSong?.title ?? "Album Art",
+                        image: Image(uiImage: albumImage)
+                    )
+                )
+            }
+        }
+        #endif
     }
 
     // MARK: - Song Info

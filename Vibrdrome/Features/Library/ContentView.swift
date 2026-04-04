@@ -1,4 +1,5 @@
 import SwiftUI
+import Network
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
@@ -6,6 +7,7 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var selectedTab = 0
     @State private var libraryNavPath = NavigationPath()
+    @State private var isOffline = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -45,6 +47,31 @@ struct ContentView: View {
                 handleWidgetCommand()
             default:
                 break
+            }
+        }
+        .overlay(alignment: .top) {
+            if isOffline {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.slash")
+                        .font(.caption)
+                    Text("Offline — Playing downloaded music")
+                        .font(.caption)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.orange.gradient, in: Capsule())
+                .padding(.top, 60)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut, value: isOffline)
+            }
+        }
+        .task {
+            let monitor = NWPathMonitor()
+            for await path in monitor.paths() {
+                withAnimation {
+                    isOffline = path.status != .satisfied
+                }
             }
         }
         .sheet(isPresented: Bindable(appState).requiresReAuth) {
@@ -113,4 +140,20 @@ struct ArtistNavItem: Hashable {
 
 struct AlbumNavItem: Hashable {
     let id: String
+}
+
+// MARK: - NWPathMonitor AsyncStream
+
+extension NWPathMonitor {
+    func paths() -> AsyncStream<NWPath> {
+        AsyncStream { continuation in
+            pathUpdateHandler = { path in
+                continuation.yield(path)
+            }
+            start(queue: DispatchQueue(label: "com.vibrdrome.networkmonitor"))
+            continuation.onTermination = { @Sendable _ in
+                self.cancel()
+            }
+        }
+    }
 }

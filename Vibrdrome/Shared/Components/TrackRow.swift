@@ -1,8 +1,18 @@
 import SwiftUI
+import SwiftData
 
 struct TrackRow: View {
     let song: Song
     var showTrackNumber: Bool = true
+    @Environment(\.modelContext) private var modelContext
+
+    private var isDownloaded: Bool {
+        let songId = song.id
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+        )
+        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -33,6 +43,12 @@ struct TrackRow: View {
 
             Spacer()
 
+            if isDownloaded {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+
             if song.starred != nil {
                 Image(systemName: "heart.fill")
                     .font(.caption)
@@ -54,6 +70,9 @@ struct TrackRow: View {
         }
         if song.starred != nil {
             parts.append("Favorited")
+        }
+        if isDownloaded {
+            parts.append("Downloaded")
         }
         return parts.joined(separator: ", ")
     }

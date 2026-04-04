@@ -556,7 +556,8 @@ final class AudioEngine {
                 return false
             } else {
                 currentIndex = queue.count - 1
-                pause()
+                // Auto-continue with similar songs instead of stopping
+                autoSuggestMore()
                 return false
             }
         }
@@ -720,6 +721,35 @@ final class AudioEngine {
 
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
+    }
+
+    /// Auto-suggest similar songs when the queue runs out
+    private func autoSuggestMore() {
+        guard let lastSong = queue.last else {
+            pause()
+            return
+        }
+        Task { @MainActor in
+            do {
+                let client = AppState.shared.subsonicClient
+                let similar = try await client.getSimilarSongs(id: lastSong.id, count: 10)
+                let existingIds = Set(queue.map(\.id))
+                let newSongs = similar.filter { !existingIds.contains($0.id) }
+                guard !newSongs.isEmpty else {
+                    // Fallback to random songs
+                    let random = try await client.getRandomSongs(size: 10)
+                    let filtered = random.filter { !existingIds.contains($0.id) }
+                    guard let first = filtered.first else { pause(); return }
+                    for song in filtered { addToQueue(song) }
+                    next()
+                    return
+                }
+                for song in newSongs { addToQueue(song) }
+                next()
+            } catch {
+                pause()
+            }
+        }
     }
 
     func addToQueue(_ song: Song) {

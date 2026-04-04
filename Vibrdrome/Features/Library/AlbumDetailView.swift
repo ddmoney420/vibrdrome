@@ -8,6 +8,7 @@ struct AlbumDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var isStarred = false
+    @State private var similarAlbums: [Album] = []
 
     var body: some View {
         ScrollView {
@@ -19,10 +20,31 @@ struct AlbumDetailView: View {
                     // Action buttons
                     actionButtons(album)
 
-                    // Song list
+                    // Song list with disc separators
                     let songs = album.song ?? []
+                    let discs = Set(songs.compactMap(\.discNumber)).sorted()
+                    let hasMultipleDiscs = discs.count > 1
+
                     LazyVStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                            // Disc separator
+                            if hasMultipleDiscs, let disc = song.discNumber,
+                               index == songs.firstIndex(where: { $0.discNumber == disc }) {
+                                HStack {
+                                    Image(systemName: "opticaldisc")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text("Disc \(disc)")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial)
+                            }
+
                             TrackRow(song: song, showTrackNumber: true)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
@@ -39,6 +61,9 @@ struct AlbumDetailView: View {
 
                     // Album info footer
                     albumFooter(album)
+
+                    // Similar albums
+                    similarAlbumsSection
                 }
                 #if os(iOS)
                 .padding(.bottom, 80)
@@ -242,6 +267,47 @@ struct AlbumDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var similarAlbumsSection: some View {
+        if !similarAlbums.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Similar Albums")
+                    .font(.title3)
+                    .bold()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 14) {
+                        ForEach(similarAlbums) { similar in
+                            NavigationLink {
+                                AlbumDetailView(albumId: similar.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    AlbumArtView(coverArtId: similar.coverArt,
+                                                 size: Theme.albumCardSize, cornerRadius: 10)
+                                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                                    Text(similar.name)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+                                    Text(similar.artist ?? "")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(width: Theme.albumCardSize)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
     private func loadAlbum() async {
         isLoading = true
         error = nil
@@ -249,6 +315,23 @@ struct AlbumDetailView: View {
         do {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
             isStarred = album?.starred != nil
+            // Load similar albums from first song
+            if let firstSong = album?.song?.first {
+                let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)
+                let albumIds = Set(similar.compactMap(\.albumId)).subtracting([albumId])
+                var albums: [Album] = []
+                var seen = Set<String>()
+                for song in similar {
+                    if let aid = song.albumId, !seen.contains(aid), aid != albumId {
+                        seen.insert(aid)
+                        if let a = try? await appState.subsonicClient.getAlbum(id: aid) {
+                            albums.append(a)
+                            if albums.count >= 6 { break }
+                        }
+                    }
+                }
+                similarAlbums = albums
+            }
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
         }

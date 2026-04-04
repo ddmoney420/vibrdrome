@@ -3,6 +3,8 @@ import SwiftUI
 struct QueueView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @State private var showingSaveAlert = false
+    @State private var saveMessage = ""
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -145,11 +147,12 @@ struct QueueView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button(role: .destructive) {
-                            engine.clearQueue()
+                        Button {
+                            saveQueueAsPlaylist()
                         } label: {
-                            Label("Clear Queue", systemImage: "trash")
+                            Label("Save as Playlist", systemImage: "square.and.arrow.down")
                         }
+                        .disabled(engine.queue.isEmpty)
 
                         Button {
                             engine.toggleShuffle()
@@ -159,11 +162,40 @@ struct QueueView: View {
                                 systemImage: "shuffle"
                             )
                         }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            engine.clearQueue()
+                        } label: {
+                            Label("Clear Queue", systemImage: "trash")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                     .accessibilityLabel("Queue Options")
                 }
+            }
+            .alert(saveMessage, isPresented: $showingSaveAlert) {
+                Button("OK") { }
+            }
+        }
+    }
+
+    private func saveQueueAsPlaylist() {
+        let songs = engine.queue
+        guard !songs.isEmpty else { return }
+        let songIds = songs.map(\.id)
+        let dateStr = Date().formatted(date: .abbreviated, time: .shortened)
+        let name = "Queue — \(dateStr)"
+        Task {
+            do {
+                try await appState.subsonicClient.createPlaylist(name: name, songIds: songIds)
+                saveMessage = "Saved \"\(name)\" with \(songIds.count) songs"
+                showingSaveAlert = true
+            } catch {
+                saveMessage = "Failed to save: \(ErrorPresenter.userMessage(for: error))"
+                showingSaveAlert = true
             }
         }
     }
