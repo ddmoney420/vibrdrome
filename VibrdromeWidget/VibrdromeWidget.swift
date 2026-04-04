@@ -354,8 +354,6 @@ struct VibrdromeWidget: Widget {
             .systemSmall,
             .systemMedium,
             .systemLarge,
-            .accessoryCircular,
-            .accessoryRectangular,
         ])
     }
 }
