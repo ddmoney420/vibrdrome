@@ -29,6 +29,7 @@ struct FolderBrowserView: View {
                     NavigationLink(destination: FolderIndexView(folder: folder).environment(appState)) {
                         Label(folder.name ?? "Unknown Folder", systemImage: "folder.fill")
                     }
+                    .accessibilityIdentifier("folderRow_\(folder.id)")
                 }
             }
         }

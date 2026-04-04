@@ -42,6 +42,7 @@ struct LyricsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("lyricsDoneButton")
                 }
             }
             .task { await loadLyrics() }
@@ -107,6 +108,7 @@ private struct SyncedLyricsContent: View {
                             .padding(.horizontal, 24)
                             .padding(.vertical, 4)
                             .id(index)
+                            .accessibilityIdentifier("lyricsLine_\(index)")
                             .onTapGesture {
                                 if lyrics.synced, let start = line.start {
                                     engine.seek(to: Double(start) / 1000.0)

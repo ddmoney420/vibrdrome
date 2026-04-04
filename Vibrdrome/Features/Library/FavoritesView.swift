@@ -18,6 +18,7 @@ struct FavoritesView: View {
                             } label: {
                                 ArtistRow(artist: artist)
                             }
+                            .accessibilityIdentifier("favArtistRow_\(artist.id)")
                         }
                     }
                 }
@@ -31,6 +32,7 @@ struct FavoritesView: View {
                             } label: {
                                 AlbumCard(album: album)
                             }
+                            .accessibilityIdentifier("favAlbumRow_\(album.id)")
                         }
                     }
                 }
@@ -41,6 +43,7 @@ struct FavoritesView: View {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             TrackRow(song: song, showTrackNumber: false)
                                 .trackContextMenu(song: song, queue: songs, index: index)
+                                .accessibilityIdentifier("favSongRow_\(song.id)")
                                 .onTapGesture {
                                     AudioEngine.shared.play(song: song, from: songs, at: index)
                                 }

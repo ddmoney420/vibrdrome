@@ -29,6 +29,7 @@ struct ServerManagerView: View {
                             .foregroundColor(.accentColor)
                             .fontWeight(.medium)
                     }
+                    .accessibilityIdentifier("addServerButton")
                 }
             }
             .navigationTitle("Servers")
@@ -82,6 +83,7 @@ struct ServerManagerView: View {
             serverRowLabel(server, isActive: isActive)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("serverRow_\(server.id)")
         .swipeActions(edge: .trailing) {
             serverSwipeActions(server)
         }

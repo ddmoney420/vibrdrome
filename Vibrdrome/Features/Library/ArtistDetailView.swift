@@ -17,6 +17,7 @@ struct ArtistDetailView: View {
                     } label: {
                         AlbumCard(album: album)
                     }
+                    .accessibilityIdentifier("artistAlbumRow_\(album.id)")
                 }
             }
         }
@@ -53,6 +54,7 @@ struct ArtistDetailView: View {
                     } label: {
                         Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                     }
+                    .accessibilityIdentifier("startRadioButton")
                 }
             }
         }

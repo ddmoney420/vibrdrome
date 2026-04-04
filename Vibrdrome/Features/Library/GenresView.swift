@@ -29,6 +29,7 @@ struct GenresView: View {
                     Spacer()
                 }
             }
+            .accessibilityIdentifier("genreRow_\(genre.value)")
         }
         .listStyle(.plain)
         .navigationTitle("Genres")

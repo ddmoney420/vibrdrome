@@ -21,6 +21,7 @@ struct PlayHistoryView: View {
 
             recentSection
         }
+        .accessibilityIdentifier("playHistoryList")
         .listStyle(.plain)
         .navigationTitle("Play History")
         #if os(iOS)

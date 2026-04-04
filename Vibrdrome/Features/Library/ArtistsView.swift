@@ -16,6 +16,7 @@ struct ArtistsView: View {
                         } label: {
                             ArtistRow(artist: artist)
                         }
+                        .accessibilityIdentifier("artistRow_\(artist.id)")
                     }
                 }
             }

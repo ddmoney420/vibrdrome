@@ -140,6 +140,7 @@ struct StationSearchView: View {
                             .foregroundColor(browseTag == tag ? .accentColor : .primary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("stationGenreTag_\(tag)")
                 }
             }
             .padding(.horizontal, 16)
@@ -170,6 +171,7 @@ struct StationSearchView: View {
             stationAddButton(station)
         }
         .padding(.vertical, 10)
+        .accessibilityIdentifier("stationResult_\(station.id)")
     }
 
     private func stationIcon(favicon: String?) -> some View {
@@ -265,6 +267,7 @@ struct StationSearchView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("stationAddButton_\(station.id)")
         .disabled(addedIds.contains(station.id) || addingId == station.id)
     }
 

@@ -45,6 +45,7 @@ struct PlaylistDetailView: View {
                                 Label("Play", systemImage: "play.fill")
                             }
                             .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("playlistPlayButton")
                             .disabled(playlist.entry?.isEmpty ?? true)
 
                             Button {
@@ -56,6 +57,7 @@ struct PlaylistDetailView: View {
                                 Label("Shuffle", systemImage: "shuffle")
                             }
                             .buttonStyle(.bordered)
+                            .accessibilityIdentifier("playlistShuffleButton")
                             .disabled(playlist.entry?.isEmpty ?? true)
                         }
                     }

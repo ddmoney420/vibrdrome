@@ -23,6 +23,7 @@ struct AlbumsView: View {
                 } label: {
                     AlbumCard(album: album)
                 }
+                .accessibilityIdentifier("albumRow_\(album.id)")
                 .contextMenu {
                     Button {
                         Task {

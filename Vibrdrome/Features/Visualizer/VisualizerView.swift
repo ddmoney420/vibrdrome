@@ -201,6 +201,7 @@ struct VisualizerView: View {
                         .foregroundStyle(.white.opacity(0.8))
                         .shadow(radius: 4)
                 }
+                .accessibilityIdentifier("visualizerCloseButton")
 
                 Spacer()
 
@@ -216,6 +217,7 @@ struct VisualizerView: View {
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial, in: Capsule())
                 }
+                .accessibilityIdentifier("visualizerPresetPicker")
                 .popover(isPresented: $showPresetPicker) {
                     presetPickerContent
                 }
@@ -269,17 +271,20 @@ struct VisualizerView: View {
                         Image(systemName: "backward.fill")
                             .font(.title2)
                     }
+                    .accessibilityIdentifier("visualizerPreviousButton")
                     .disabled(engine.queue.isEmpty)
 
                     Button { engine.togglePlayPause() } label: {
                         Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 52))
                     }
+                    .accessibilityIdentifier("visualizerPlayPauseButton")
 
                     Button { engine.next() } label: {
                         Image(systemName: "forward.fill")
                             .font(.title2)
                     }
+                    .accessibilityIdentifier("visualizerNextButton")
                     .disabled(engine.queue.isEmpty)
                 }
                 .foregroundStyle(.white)

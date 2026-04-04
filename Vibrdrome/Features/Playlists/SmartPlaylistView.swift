@@ -140,6 +140,7 @@ struct SmartPlaylistView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("generatorCard_\(type.rawValue)")
     }
 
     // MARK: - Selection Views
@@ -173,6 +174,7 @@ struct SmartPlaylistView: View {
         VStack(spacing: 12) {
             TextField("Search for an artist...", text: $artistQuery)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("smartPlaylistArtistSearch")
                 .autocorrectionDisabled()
                 #if os(iOS)
                 .textInputAutocapitalization(.never)

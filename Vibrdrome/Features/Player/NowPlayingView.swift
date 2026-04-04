@@ -491,7 +491,7 @@ struct NowPlayingView: View {
             ForEach(1...5, id: \.self) { star in
                 Image(systemName: star <= currentRating ? "star.fill" : "star")
                     .font(.system(size: 16))
-                    .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.3))
+                    .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
                     .onTapGesture {
                         #if os(iOS)
                         Haptics.light()

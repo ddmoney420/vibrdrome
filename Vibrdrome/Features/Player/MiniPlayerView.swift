@@ -1,4 +1,5 @@
 import SwiftUI
+import Nuke
 import NukeUI
 
 struct MiniPlayerView: View {
@@ -154,8 +155,7 @@ struct MiniPlayerView: View {
             return
         }
         let url = appState.subsonicClient.coverArtURL(id: coverArtId, size: 80)
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let image = UIImage(data: data),
+        guard let image = try? await ImagePipeline.shared.image(for: url),
               let avgColor = image.averageColor else {
             withAnimation { dominantColor = nil }
             return

@@ -23,6 +23,7 @@ struct SongsView: View {
                     songRow(song)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("songRow_\(song.id)")
                 .trackContextMenu(song: song)
             }
 

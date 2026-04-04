@@ -38,7 +38,9 @@ struct BookmarksView: View {
                                 .font(.title2)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("bookmarkPlayButton_\(song.id)")
                     }
+                    .accessibilityIdentifier("bookmarkRow_\(song.id)")
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             deleteBookmark(id: song.id)

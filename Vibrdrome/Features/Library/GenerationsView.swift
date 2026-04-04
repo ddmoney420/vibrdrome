@@ -36,6 +36,7 @@ struct GenerationsView: View {
                         decadeCard(decade)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("decadeCard_\(decade.0)")
                 }
             }
             .padding(16)

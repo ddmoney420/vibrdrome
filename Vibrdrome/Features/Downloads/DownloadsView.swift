@@ -49,9 +49,11 @@ struct DownloadsView: View {
                     Button("Delete All Downloads", role: .destructive) {
                         showDeleteConfirmation = true
                     }
+                    .accessibilityIdentifier("deleteAllDownloadsButton")
                 }
             }
         }
+        .accessibilityIdentifier("downloadsList")
         .navigationTitle("Downloads")
         .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
