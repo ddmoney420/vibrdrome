@@ -42,6 +42,7 @@ struct ContentView: View {
             case .active:
                 engine.restorePlayQueue(client: appState.subsonicClient)
                 engine.refreshPlaybackState()
+                handleWidgetCommand()
             default:
                 break
             }
@@ -91,6 +92,16 @@ struct ContentView: View {
             case .album(let id):
                 libraryNavPath.append(AlbumNavItem(id: id))
             }
+        }
+    }
+
+    private func handleWidgetCommand() {
+        guard let command = WidgetCommand.consume() else { return }
+        switch command {
+        case .togglePlayback:
+            engine.togglePlayPause()
+        case .skipTrack:
+            engine.next()
         }
     }
 }

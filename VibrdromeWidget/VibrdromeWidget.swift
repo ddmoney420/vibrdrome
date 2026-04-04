@@ -1,6 +1,5 @@
 import WidgetKit
 import SwiftUI
-import AppIntents
 
 // MARK: - Timeline Provider
 
@@ -41,23 +40,7 @@ struct NowPlayingEntry: TimelineEntry {
 
 // MARK: - Interactive Intents
 
-struct WidgetTogglePlaybackIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "Toggle Playback"
-    static let openAppWhenRun = true
-
-    func perform() async throws -> some IntentResult {
-        return .result()
-    }
-}
-
-struct WidgetSkipTrackIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "Skip Track"
-    static let openAppWhenRun = true
-
-    func perform() async throws -> some IntentResult {
-        return .result()
-    }
-}
+// Widget intents defined in Shared/WidgetIntents.swift
 
 // MARK: - Widget Views
 
