@@ -96,14 +96,14 @@ struct MiniPlayerView: View {
         .background {
             ZStack {
                 if let dominantColor {
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 22)
                         .fill(dominantColor.opacity(0.35))
                 }
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 22)
                     .fill(.ultraThinMaterial)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
         .padding(.horizontal, 8)
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
