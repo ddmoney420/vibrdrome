@@ -627,7 +627,7 @@ struct NowPlayingView: View {
             .accessibilityLabel("Repeat")
             .accessibilityValue(repeatAccessibilityValue)
         }
-        .font(.callout)
+        .font(.body)
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.4))
     }
@@ -703,7 +703,7 @@ struct NowPlayingView: View {
             .accessibilityLabel("Toggle Full Screen")
             #endif
         }
-        .font(.callout)
+        .font(.body)
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.4))
     }
