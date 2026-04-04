@@ -32,46 +32,129 @@
             50% { transform: scale(1.05); opacity: 0.25; }
             100% { transform: scale(1); opacity: 0.15; }
         }
+        @keyframes meshShift {
+            0% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+            25% { background-position: 100% 0%, 0% 100%, 80% 20%; }
+            50% { background-position: 100% 100%, 0% 0%, 20% 80%; }
+            75% { background-position: 0% 100%, 100% 0%, 50% 50%; }
+            100% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+        }
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(20px) scale(0.8); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        html { scroll-behavior: smooth; }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
             background: #06060c;
             color: #e0e0e0;
-            line-height: 1.6;
+            line-height: 1.7;
             overflow-x: hidden;
+            font-size: 16px;
         }
 
-        .bg-glow {
+        /* Animated gradient mesh background */
+        .bg-mesh {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             pointer-events: none;
             z-index: 0;
+            background:
+                radial-gradient(ellipse 600px 600px at 20% 20%, rgba(138,92,246,0.12) 0%, transparent 70%),
+                radial-gradient(ellipse 500px 500px at 80% 80%, rgba(99,70,210,0.10) 0%, transparent 70%),
+                radial-gradient(ellipse 700px 700px at 50% 50%, rgba(67,56,202,0.08) 0%, transparent 70%);
+            background-size: 200% 200%, 200% 200%, 200% 200%;
+            animation: meshShift 20s ease-in-out infinite;
         }
-        .bg-glow::before {
+        .bg-mesh::before {
             content: '';
             position: absolute;
             top: -30%;
             left: 50%;
             transform: translateX(-50%);
-            width: 800px;
-            height: 800px;
-            background: radial-gradient(circle, rgba(138,92,246,0.12) 0%, rgba(99,70,210,0.05) 40%, transparent 70%);
-            animation: pulse 6s ease-in-out infinite;
+            width: 900px;
+            height: 900px;
+            background: radial-gradient(circle, rgba(138,92,246,0.10) 0%, rgba(99,70,210,0.04) 40%, transparent 70%);
+            animation: pulse 8s ease-in-out infinite;
         }
-        .bg-glow::after {
+        .bg-mesh::after {
             content: '';
             position: absolute;
             bottom: -20%;
             left: 30%;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 60%);
-            animation: pulse 8s ease-in-out infinite 2s;
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, rgba(79,70,229,0.08) 0%, transparent 60%);
+            animation: pulse 10s ease-in-out infinite 3s;
+        }
+
+        /* Sticky navigation */
+        .navbar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(6,6,12,0.75);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            backdrop-filter: blur(20px) saturate(1.4);
+            border-bottom: 1px solid rgba(139,92,246,0.1);
+            transition: background 0.3s ease;
+        }
+        .navbar-inner {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+        }
+        .navbar-logo {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+        .navbar-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            list-style: none;
+        }
+        .navbar-links a {
+            color: #999;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            transition: color 0.2s ease;
+        }
+        .navbar-links a:hover { color: #c4b5fd; }
+        .navbar-links .nav-discord {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 14px;
+            background: rgba(88,101,242,0.15);
+            border: 1px solid rgba(88,101,242,0.25);
+            border-radius: 100px;
+            color: #8b9ff6;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+        .navbar-links .nav-discord:hover {
+            background: rgba(88,101,242,0.25);
+            color: #a8b4f8;
         }
 
         .container {
-            max-width: 860px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 0 24px;
             position: relative;
@@ -80,7 +163,7 @@
 
         .hero {
             text-align: center;
-            padding: 100px 0 60px;
+            padding: 120px 0 60px;
             animation: fadeInUp 0.8s ease-out;
         }
 
@@ -122,9 +205,9 @@
         }
 
         .hero h1 {
-            font-size: 3.5rem;
+            font-size: 3.8rem;
             font-weight: 800;
-            letter-spacing: -0.03em;
+            letter-spacing: -0.04em;
             background: linear-gradient(135deg, #fff 0%, #c4b5fd 50%, #8b5cf6 100%);
             background-size: 200% 200%;
             animation: gradientShift 6s ease infinite;
@@ -152,18 +235,18 @@
             text-align: left;
         }
         .hero .tagline {
-            font-size: 1.3rem;
+            font-size: 1.35rem;
             font-weight: 500;
             color: #a78bfa;
             margin-bottom: 20px;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.03em;
         }
         .hero .desc {
-            color: #777;
-            font-size: 1.05rem;
-            max-width: 560px;
+            color: #888;
+            font-size: 1.1rem;
+            max-width: 600px;
             margin: 0 auto;
-            line-height: 1.7;
+            line-height: 1.8;
         }
 
         /* Platform badges */
@@ -214,33 +297,102 @@
         .waveform .bar:nth-child(12) { animation-delay: 0.15s; height: 10px; }
         .waveform .bar:nth-child(13) { animation-delay: 0.25s; height: 20px; }
 
+        /* Stats bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            max-width: 800px;
+            margin: 0 auto 60px;
+            padding: 32px 0;
+            border-top: 1px solid rgba(139,92,246,0.1);
+            border-bottom: 1px solid rgba(139,92,246,0.1);
+        }
+        .stat-item {
+            text-align: center;
+            opacity: 0;
+            transform: translateY(20px) scale(0.8);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .stat-item.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .stat-item:nth-child(1) { transition-delay: 0s; }
+        .stat-item:nth-child(2) { transition-delay: 0.1s; }
+        .stat-item:nth-child(3) { transition-delay: 0.2s; }
+        .stat-item:nth-child(4) { transition-delay: 0.3s; }
+        .stat-number {
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #c4b5fd, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: #777;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        /* Section headers */
+        .section-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .section-header h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+        .section-header .header-line {
+            display: inline-block;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #7c3aed, #a78bfa);
+            border-radius: 2px;
+        }
+
         .features {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
             gap: 16px;
-            margin: 20px 0 60px;
+            margin: 0 0 80px;
         }
         .feature {
-            background: linear-gradient(145deg, rgba(139,92,246,0.06) 0%, rgba(15,15,25,0.8) 100%);
+            background: rgba(15,15,25,0.5);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
             border: 1px solid rgba(139,92,246,0.1);
             border-radius: 16px;
             padding: 24px 20px;
-            transition: all 0.3s ease;
-            animation: fadeInUp 0.6s ease-out backwards;
+            transition: all 0.35s ease;
+            opacity: 0;
+            transform: translateY(30px);
         }
-        .feature:nth-child(1) { animation-delay: 0.1s; }
-        .feature:nth-child(2) { animation-delay: 0.15s; }
-        .feature:nth-child(3) { animation-delay: 0.2s; }
-        .feature:nth-child(4) { animation-delay: 0.25s; }
-        .feature:nth-child(5) { animation-delay: 0.3s; }
-        .feature:nth-child(6) { animation-delay: 0.35s; }
-        .feature:nth-child(7) { animation-delay: 0.4s; }
-        .feature:nth-child(8) { animation-delay: 0.45s; }
-        .feature:nth-child(9) { animation-delay: 0.5s; }
+        .feature.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
         .feature:hover {
-            border-color: rgba(139,92,246,0.3);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(139,92,246,0.1);
+            border-color: transparent;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(139,92,246,0.12);
+            background:
+                linear-gradient(145deg, rgba(15,15,25,0.8), rgba(15,15,25,0.6)) padding-box,
+                linear-gradient(135deg, rgba(139,92,246,0.4), rgba(79,70,229,0.2), rgba(139,92,246,0.1)) border-box;
+            border: 1px solid transparent;
+        }
+        .feature.visible:hover {
+            transform: translateY(-3px);
         }
         .feature .icon {
             font-size: 1.1rem;
@@ -253,11 +405,12 @@
             font-size: 0.95rem;
             font-weight: 600;
             margin-bottom: 6px;
+            letter-spacing: -0.01em;
         }
         .feature p {
-            color: #666;
-            font-size: 0.82rem;
-            line-height: 1.5;
+            color: #777;
+            font-size: 0.85rem;
+            line-height: 1.6;
         }
         .feature .platform-tag {
             display: inline-block;
@@ -273,40 +426,89 @@
         .tag-ios { background: rgba(33,150,243,0.15); color: #64b5f6; }
         .tag-web { background: rgba(14,165,233,0.15); color: #7dd3fc; }
 
+        /* Screenshots section */
+        .screenshots-section {
+            max-width: 960px;
+            margin: 0 auto 80px;
+            text-align: center;
+        }
+        .screenshots-grid {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 2.5rem;
+        }
+        .screenshot-platform-label {
+            color: #a78bfa;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        .screenshot-platform-label.android { color: #81c784; }
+        .screenshot-platform-label.web { color: #7dd3fc; }
+        .screenshot-grid-inner {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 8px;
+        }
+        .screenshot-link { cursor: zoom-in; }
+        .screenshot-link img { transition: transform 0.2s ease; }
+        .screenshot-link:hover img { transform: scale(1.05); }
+        .screenshot-thumb {
+            width: 100px;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .screenshot-web-thumb {
+            max-width: 400px;
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+
+        /* CTA section */
         .cta {
             text-align: center;
-            margin: 0 0 60px;
-            animation: fadeInUp 0.8s ease-out 0.4s backwards;
+            margin: 0 0 40px;
+            padding: 48px 24px;
+            background: linear-gradient(145deg, rgba(139,92,246,0.06) 0%, rgba(15,15,25,0.4) 100%);
+            border: 1px solid rgba(139,92,246,0.1);
+            border-radius: 24px;
         }
         .cta-badge {
             display: inline-block;
-            padding: 8px 20px;
-            background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(168,85,247,0.08));
-            border: 1px solid rgba(139,92,246,0.2);
+            padding: 8px 24px;
+            background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(168,85,247,0.1));
+            border: 1px solid rgba(139,92,246,0.25);
             border-radius: 100px;
             color: #a78bfa;
-            font-size: 0.85rem;
-            font-weight: 500;
-            letter-spacing: 0.03em;
-            margin-bottom: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            margin-bottom: 16px;
         }
         .cta-text {
-            color: #555;
-            font-size: 0.9rem;
+            color: #666;
+            font-size: 1rem;
+            margin-bottom: 32px;
         }
 
         .links {
             display: flex;
             justify-content: center;
-            gap: 8px;
-            margin: 40px 0;
+            gap: 10px;
+            margin: 0 0 16px;
             flex-wrap: wrap;
         }
         .links a {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 24px;
+            padding: 12px 28px;
             border-radius: 100px;
             text-decoration: none;
             font-size: 0.9rem;
@@ -319,8 +521,8 @@
             box-shadow: 0 4px 20px rgba(124,58,237,0.3);
         }
         .links a.primary:hover {
-            box-shadow: 0 6px 30px rgba(124,58,237,0.5);
-            transform: translateY(-1px);
+            box-shadow: 0 8px 35px rgba(124,58,237,0.5);
+            transform: translateY(-2px);
         }
         .links a.android {
             background: linear-gradient(135deg, #4CAF50, #2E7D32);
@@ -328,8 +530,8 @@
             box-shadow: 0 4px 20px rgba(76,175,80,0.3);
         }
         .links a.android:hover {
-            box-shadow: 0 6px 30px rgba(76,175,80,0.5);
-            transform: translateY(-1px);
+            box-shadow: 0 8px 35px rgba(76,175,80,0.5);
+            transform: translateY(-2px);
         }
         .links a.web {
             background: linear-gradient(135deg, #0ea5e9, #0284c7);
@@ -337,8 +539,8 @@
             box-shadow: 0 4px 20px rgba(14,165,233,0.3);
         }
         .links a.web:hover {
-            box-shadow: 0 6px 30px rgba(14,165,233,0.5);
-            transform: translateY(-1px);
+            box-shadow: 0 8px 35px rgba(14,165,233,0.5);
+            transform: translateY(-2px);
         }
         .links a.discord {
             background: linear-gradient(135deg, #5865F2, #4752C4);
@@ -346,8 +548,8 @@
             box-shadow: 0 4px 20px rgba(88,101,242,0.3);
         }
         .links a.discord:hover {
-            box-shadow: 0 6px 30px rgba(88,101,242,0.5);
-            transform: translateY(-1px);
+            box-shadow: 0 8px 35px rgba(88,101,242,0.5);
+            transform: translateY(-2px);
         }
         .links a.secondary {
             background: rgba(255,255,255,0.05);
@@ -359,36 +561,37 @@
             border-color: rgba(139,92,246,0.4);
         }
 
+        /* Epilepsy warning */
+        .epilepsy-warning {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem 1.5rem;
+            background: rgba(255,200,50,0.08);
+            border: 1px solid rgba(255,200,50,0.2);
+            border-radius: 12px;
+            text-align: center;
+        }
+        .epilepsy-warning p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #ccc;
+        }
+        .epilepsy-warning strong {
+            color: #f0c040;
+        }
+
         footer {
             text-align: center;
             padding: 40px 0 60px;
-            color: #333;
+            color: #444;
             font-size: 0.8rem;
         }
         footer a {
-            color: #555;
+            color: #666;
             text-decoration: none;
+            transition: color 0.2s ease;
         }
         footer a:hover { color: #a78bfa; }
-
-        @media (max-width: 700px) {
-            .features { grid-template-columns: 1fr 1fr; }
-            .hero h1 { font-size: 2.5rem; }
-            .ascii-banner { font-size: 0.38rem; }
-            .hero { padding: 70px 0 40px; }
-            .icon-ring:nth-child(4) { display: none; }
-            .platforms { flex-direction: column; align-items: center; }
-        }
-        @media (max-width: 480px) {
-            .features { grid-template-columns: 1fr; }
-            .hero h1 { font-size: 2rem; }
-            .ascii-banner { font-size: 0.28rem; }
-            .hero .tagline { font-size: 1.1rem; }
-            .links { flex-direction: column; align-items: center; }
-        }
-        .screenshot-link { cursor: zoom-in; }
-        .screenshot-link img { transition: transform 0.2s ease; }
-        .screenshot-link:hover img { transform: scale(1.05); }
 
         .lightbox {
             display: none;
@@ -411,16 +614,60 @@
             pointer-events: none;
         }
 
+        @media (max-width: 700px) {
+            .features { grid-template-columns: 1fr 1fr; }
+            .hero h1 { font-size: 2.5rem; }
+            .ascii-banner { font-size: 0.38rem; }
+            .hero { padding: 80px 0 40px; }
+            .icon-ring:nth-child(4) { display: none; }
+            .platforms { flex-direction: column; align-items: center; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+            .stat-number { font-size: 2.2rem; }
+            .navbar-links .nav-label { display: none; }
+        }
+        @media (max-width: 480px) {
+            .features { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 2rem; }
+            .ascii-banner { font-size: 0.28rem; }
+            .hero .tagline { font-size: 1.1rem; }
+            .links { flex-direction: column; align-items: center; }
+            .links a { width: 100%; max-width: 280px; justify-content: center; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 20px; padding: 24px 0; }
+            .stat-number { font-size: 1.8rem; }
+            .section-header h2 { font-size: 1.4rem; }
+            .cta { padding: 32px 16px; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation: none !important;
                 transition: none !important;
             }
+            .feature, .stat-item {
+                opacity: 1 !important;
+                transform: none !important;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="bg-glow"></div>
+    <div class="bg-mesh"></div>
+
+    <!-- Sticky navbar -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="#" class="navbar-logo">Vibrdrome</a>
+            <ul class="navbar-links">
+                <li><a href="#features"><span class="nav-label">Features</span></a></li>
+                <li><a href="#screenshots"><span class="nav-label">Screenshots</span></a></li>
+                <li><a href="#download"><span class="nav-label">Download</span></a></li>
+                <li><a href="https://discord.gg/9q5uw3CfN" class="nav-discord">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                    Discord
+                </a></li>
+            </ul>
+        </div>
+    </nav>
 
     <div class="container">
         <div class="hero">
@@ -454,172 +701,214 @@
             <div class="bar"></div>
         </div>
 
-        <div class="features">
-            <div class="feature">
-                <span class="icon">🎵 ♪(⌐■_■)♪</span>
-                <h3>Gapless Playback</h3>
-                <p>Seamless album listening with crossfade and adjustable playback speed.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+        <!-- Stats bar -->
+        <div class="stats-bar" data-animate>
+            <div class="stat-item">
+                <div class="stat-number">18</div>
+                <div class="stat-label">Visualizer Presets</div>
             </div>
-            <div class="feature">
-                <span class="icon">🎛️ ♪┏(・o・)┛♪</span>
-                <h3>10-Band Equalizer</h3>
-                <p>Built-in EQ with presets and ReplayGain for consistent volume.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+            <div class="stat-item">
+                <div class="stat-number">3</div>
+                <div class="stat-label">Platforms</div>
             </div>
-            <div class="feature">
-                <span class="icon">📥 ᕙ(⇀‸↼)ᕗ</span>
-                <h3>Offline Downloads</h3>
-                <p>Download albums and playlists. Auto-download favorites. Manage cache.</p>
-                <span class="platform-tag tag-both">iOS &amp; Android</span>
+            <div class="stat-item">
+                <div class="stat-number">442</div>
+                <div class="stat-label">Unit Tests</div>
             </div>
-            <div class="feature">
-                <span class="icon">📡 ヽ(°◇° )ノ～♪</span>
-                <h3>Internet Radio</h3>
-                <p>Browse and search thousands of stations. Add custom stream URLs. PLS/M3U support.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🎤 ♪( ´θ`)ノ</span>
-                <h3>Synced Lyrics</h3>
-                <p>Follow along with time-synced lyrics. Tap any line to seek.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🚗 ♪⛰️～⛐～♪</span>
-                <h3>CarPlay &amp; Android Auto</h3>
-                <p>Browse your library, control playback, and stream from your car's dashboard.</p>
-                <span class="platform-tag tag-both">iOS &amp; Android</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🌀 *.+:. o(≧▽≦)o .:+.*</span>
-                <h3>Audio Visualizers</h3>
-                <p>18 Metal shader presets on iOS. Milkdrop engine with 50+ presets on Android &amp; Web. All audio-reactive.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🎲 (☞ﾟ∀ﾟ)☞</span>
-                <h3>Smart Radio &amp; Playlists</h3>
-                <p>Artist and song radio with smart deduplication. Auto-generate mixes by genre, mood, or era.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🎨 ヽ(•‿•)ノ</span>
-                <h3>Customizable Library</h3>
-                <p>Reorder and show/hide sections. Switch between music folders on multi-library servers.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🎭 (⌐■_■)</span>
-                <h3>Themes</h3>
-                <p>Dark/light mode with accent colors. 8 built-in themes on web including Retro and Terminal.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🔌 ♪～(´ε｀ )</span>
-                <h3>HTTP &amp; HTTPS</h3>
-                <p>Connect to any server — local IP, DuckDNS, or custom domain. Works with or without SSL.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">📱 ♪(´▽`)</span>
-                <h3>Home Screen Widget</h3>
-                <p>Now Playing widget with album art, title, and play/pause state. Siri Shortcuts for hands-free control.</p>
-                <span class="platform-tag tag-ios">iOS</span>
-            </div>
-            <div class="feature">
-                <span class="icon">⭐ (*^▽^*)</span>
-                <h3>Ratings &amp; Play History</h3>
-                <p>5-star ratings synced to your server. Track your listening stats: top artists, albums, and play counts.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
-            </div>
-            <div class="feature">
-                <span class="icon">🔓 ╰(*°▽°*)╯</span>
-                <h3>Open Source</h3>
-                <p>Free, no ads, no tracking. Your music, your server, your data. MIT licensed.</p>
-                <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+            <div class="stat-item">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Open Source</div>
             </div>
         </div>
 
-        <div style="max-width: 960px; margin: 3rem auto; text-align: center;">
-            <h2 style="color: #fff; font-size: 1.5rem; margin-bottom: 2rem;">Screenshots</h2>
+        <!-- Features -->
+        <section id="features">
+            <div class="section-header">
+                <h2>Features</h2>
+                <div class="header-line"></div>
+            </div>
 
-            <div style="display: flex; gap: 32px; justify-content: center; align-items: flex-start; flex-wrap: wrap; margin-bottom: 2.5rem;">
-                <!-- iOS column -->
-                <div>
-                    <p style="color: #a78bfa; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">iOS</p>
-                    <div style="display: grid; grid-template-columns: repeat(3, 100px); gap: 8px;">
-                        <a href="#lb-ios-1" class="screenshot-link"><img src="screenshots/01-library.png" alt="iOS Library" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-ios-2" class="screenshot-link"><img src="screenshots/02-now-playing.png" alt="iOS Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-ios-3" class="screenshot-link"><img src="screenshots/05-visualizer.png" alt="iOS Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-ios-4" class="screenshot-link"><img src="screenshots/06-lyrics.png" alt="iOS Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-ios-5" class="screenshot-link"><img src="screenshots/03-equalizer.png" alt="iOS Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-ios-6" class="screenshot-link"><img src="screenshots/07-search.png" alt="iOS Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+            <div class="features">
+                <div class="feature" data-animate>
+                    <span class="icon">🎵 ♪(⌐■_■)♪</span>
+                    <h3>Gapless Playback</h3>
+                    <p>Seamless album listening with crossfade and adjustable playback speed.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🎛️ ♪┏(・o・)┛♪</span>
+                    <h3>10-Band Equalizer</h3>
+                    <p>Built-in EQ with presets and ReplayGain for consistent volume.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">📥 ᕙ(⇀‸↼)ᕗ</span>
+                    <h3>Offline Downloads</h3>
+                    <p>Download albums and playlists. Auto-download favorites. Manage cache.</p>
+                    <span class="platform-tag tag-both">iOS &amp; Android</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">📡 ヽ(°◇° )ノ～♪</span>
+                    <h3>Internet Radio</h3>
+                    <p>Browse and search thousands of stations. Add custom stream URLs. PLS/M3U support.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🎤 ♪( ´θ`)ノ</span>
+                    <h3>Synced Lyrics</h3>
+                    <p>Follow along with time-synced lyrics. Tap any line to seek.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🚗 ♪⛰️～⛐～♪</span>
+                    <h3>CarPlay &amp; Android Auto</h3>
+                    <p>Browse your library, control playback, and stream from your car's dashboard.</p>
+                    <span class="platform-tag tag-both">iOS &amp; Android</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🌀 *.+:. o(≧▽≦)o .:+.*</span>
+                    <h3>Audio Visualizers</h3>
+                    <p>18 Metal shader presets on iOS. Milkdrop engine with 50+ presets on Android &amp; Web. All audio-reactive.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🎲 (☞ﾟ∀ﾟ)☞</span>
+                    <h3>Smart Radio &amp; Playlists</h3>
+                    <p>Artist and song radio with smart deduplication. Auto-generate mixes by genre, mood, or era.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🎨 ヽ(•‿•)ノ</span>
+                    <h3>Customizable Library</h3>
+                    <p>Reorder and show/hide sections. Switch between music folders on multi-library servers.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🎭 (⌐■_■)</span>
+                    <h3>Themes</h3>
+                    <p>Dark/light mode with accent colors. 8 built-in themes on web including Retro and Terminal.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🔌 ♪～(´ε｀ )</span>
+                    <h3>HTTP &amp; HTTPS</h3>
+                    <p>Connect to any server — local IP, DuckDNS, or custom domain. Works with or without SSL.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">📱 ♪(´▽`)</span>
+                    <h3>Home Screen Widget</h3>
+                    <p>Now Playing widget with album art, title, and play/pause state. Siri Shortcuts for hands-free control.</p>
+                    <span class="platform-tag tag-ios">iOS</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">⭐ (*^▽^*)</span>
+                    <h3>Ratings &amp; Play History</h3>
+                    <p>5-star ratings synced to your server. Track your listening stats: top artists, albums, and play counts.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+                <div class="feature" data-animate>
+                    <span class="icon">🔓 ╰(*°▽°*)╯</span>
+                    <h3>Open Source</h3>
+                    <p>Free, no ads, no tracking. Your music, your server, your data. MIT licensed.</p>
+                    <span class="platform-tag tag-all">iOS, Android &amp; Web</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Screenshots -->
+        <section id="screenshots">
+            <div class="screenshots-section">
+                <div class="section-header">
+                    <h2>Screenshots</h2>
+                    <div class="header-line"></div>
+                </div>
+
+                <div class="screenshots-grid">
+                    <!-- iOS column -->
+                    <div>
+                        <p class="screenshot-platform-label">iOS</p>
+                        <div class="screenshot-grid-inner">
+                            <a href="#lb-ios-1" class="screenshot-link"><img src="screenshots/01-library.png" alt="iOS Library" class="screenshot-thumb"></a>
+                            <a href="#lb-ios-2" class="screenshot-link"><img src="screenshots/02-now-playing.png" alt="iOS Now Playing" class="screenshot-thumb"></a>
+                            <a href="#lb-ios-3" class="screenshot-link"><img src="screenshots/05-visualizer.png" alt="iOS Visualizer" class="screenshot-thumb"></a>
+                            <a href="#lb-ios-4" class="screenshot-link"><img src="screenshots/06-lyrics.png" alt="iOS Lyrics" class="screenshot-thumb"></a>
+                            <a href="#lb-ios-5" class="screenshot-link"><img src="screenshots/03-equalizer.png" alt="iOS Equalizer" class="screenshot-thumb"></a>
+                            <a href="#lb-ios-6" class="screenshot-link"><img src="screenshots/07-search.png" alt="iOS Search" class="screenshot-thumb"></a>
+                        </div>
+                    </div>
+                    <!-- Android column -->
+                    <div>
+                        <p class="screenshot-platform-label android">Android</p>
+                        <div class="screenshot-grid-inner">
+                            <a href="#lb-and-1" class="screenshot-link"><img src="screenshots/android/now_playing.png" alt="Android Now Playing" class="screenshot-thumb"></a>
+                            <a href="#lb-and-2" class="screenshot-link"><img src="screenshots/android/equalizer.png" alt="Android Equalizer" class="screenshot-thumb"></a>
+                            <a href="#lb-and-3" class="screenshot-link"><img src="screenshots/android/visualizer.png" alt="Android Visualizer" class="screenshot-thumb"></a>
+                            <a href="#lb-and-4" class="screenshot-link"><img src="screenshots/android/lyrics.png" alt="Android Lyrics" class="screenshot-thumb"></a>
+                            <a href="#lb-and-5" class="screenshot-link"><img src="screenshots/android/search.png" alt="Android Search" class="screenshot-thumb"></a>
+                            <a href="#lb-and-6" class="screenshot-link"><img src="screenshots/android/radio.png" alt="Android Radio" class="screenshot-thumb"></a>
+                        </div>
                     </div>
                 </div>
-                <!-- Android column -->
+
+                <!-- Web row -->
                 <div>
-                    <p style="color: #81c784; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">Android</p>
-                    <div style="display: grid; grid-template-columns: repeat(3, 100px); gap: 8px;">
-                        <a href="#lb-and-1" class="screenshot-link"><img src="screenshots/android/now_playing.png" alt="Android Now Playing" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-and-2" class="screenshot-link"><img src="screenshots/android/equalizer.png" alt="Android Equalizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-and-3" class="screenshot-link"><img src="screenshots/android/visualizer.png" alt="Android Visualizer" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-and-4" class="screenshot-link"><img src="screenshots/android/lyrics.png" alt="Android Lyrics" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-and-5" class="screenshot-link"><img src="screenshots/android/search.png" alt="Android Search" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                        <a href="#lb-and-6" class="screenshot-link"><img src="screenshots/android/radio.png" alt="Android Radio" style="width: 100px; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+                    <p class="screenshot-platform-label web">Web</p>
+                    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                        <a href="#lb-web-1" class="screenshot-link"><img src="screenshots/web/screenshot.png" alt="Web Library" class="screenshot-web-thumb"></a>
+                        <a href="#lb-web-2" class="screenshot-link"><img src="screenshots/web/screenshot-player.png" alt="Web Player" class="screenshot-web-thumb"></a>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <!-- Web row -->
-            <div>
-                <p style="color: #7dd3fc; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;">Web</p>
-                <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                    <a href="#lb-web-1" class="screenshot-link"><img src="screenshots/web/screenshot.png" alt="Web Library" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
-                    <a href="#lb-web-2" class="screenshot-link"><img src="screenshots/web/screenshot-player.png" alt="Web Player" style="max-width: 400px; width: 100%; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></a>
+        <!-- Download -->
+        <section id="download">
+            <div class="section-header">
+                <h2>Download</h2>
+                <div class="header-line"></div>
+            </div>
+
+            <div class="cta">
+                <div class="cta-badge">Available Now</div>
+                <p class="cta-text">Free &bull; No ads &bull; No tracking &bull; Open source</p>
+
+                <div class="links">
+                    <a href="https://testflight.apple.com/join/R6HaQkN5" class="primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                        iOS TestFlight
+                    </a>
+                    <a href="https://github.com/ddmoney420/vibrdrome-android/releases" class="android">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V7H6v11zM3.5 7C2.67 7 2 7.67 2 8.5v7c0 .83.67 1.5 1.5 1.5S5 16.33 5 15.5v-7C5 7.67 4.33 7 3.5 7zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48C13.85 1.23 12.95 1 12 1c-.96 0-1.86.23-2.66.63L7.85.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31C6.97 3.26 6 5.01 6 7h12c0-1.99-.97-3.75-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
+                        Android APK
+                    </a>
+                    <a href="https://web.vibrdrome.io/" class="web">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        Web App
+                    </a>
+                    <a href="https://discord.gg/9q5uw3CfN" class="discord">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+                        Discord
+                    </a>
+                </div>
+
+                <div class="links" style="margin-top: 4px;">
+                    <a href="https://github.com/ddmoney420/vibrdrome" class="secondary">
+                        GitHub (iOS)
+                    </a>
+                    <a href="https://github.com/ddmoney420/vibrdrome-android" class="secondary">
+                        GitHub (Android)
+                    </a>
+                    <a href="https://github.com/ddmoney420/vibrdrome-web" class="secondary">
+                        GitHub (Web)
+                    </a>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div class="cta">
-            <div class="cta-badge">Available Now</div>
-            <p class="cta-text">Free &bull; No ads &bull; No tracking &bull; Open source</p>
-        </div>
-
-        <div class="links">
-            <a href="https://testflight.apple.com/join/R6HaQkN5" class="primary">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                iOS TestFlight
-            </a>
-            <a href="https://github.com/ddmoney420/vibrdrome-android/releases" class="android">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V7H6v11zM3.5 7C2.67 7 2 7.67 2 8.5v7c0 .83.67 1.5 1.5 1.5S5 16.33 5 15.5v-7C5 7.67 4.33 7 3.5 7zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48C13.85 1.23 12.95 1 12 1c-.96 0-1.86.23-2.66.63L7.85.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31C6.97 3.26 6 5.01 6 7h12c0-1.99-.97-3.75-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
-                Android APK
-            </a>
-            <a href="https://web.vibrdrome.io/" class="web">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-                Web App
-            </a>
-            <a href="https://discord.gg/9q5uw3CfN" class="discord">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
-                Discord
-            </a>
-        </div>
-
-        <div class="links" style="margin-top: 12px;">
-            <a href="https://github.com/ddmoney420/vibrdrome" class="secondary">
-                GitHub (iOS)
-            </a>
-            <a href="https://github.com/ddmoney420/vibrdrome-android" class="secondary">
-                GitHub (Android)
-            </a>
-            <a href="https://github.com/ddmoney420/vibrdrome-web" class="secondary">
-                GitHub (Web)
-            </a>
-        </div>
-
-        <div style="max-width: 600px; margin: 2rem auto; padding: 1rem 1.5rem; background: rgba(255,200,50,0.08); border: 1px solid rgba(255,200,50,0.2); border-radius: 12px; text-align: center;">
-            <p style="margin: 0; font-size: 0.85rem; color: #ccc;">
-                <strong style="color: #f0c040;">Photosensitivity Warning:</strong>
+        <div class="epilepsy-warning">
+            <p>
+                <strong>Photosensitivity Warning:</strong>
                 The visualizer feature contains flashing lights and rapid color changes that may cause discomfort or trigger seizures in people with photosensitive epilepsy. You can disable the visualizer in Settings &gt; Accessibility.
             </p>
         </div>
@@ -628,6 +917,7 @@
             <p>&copy; 2026 Vibrdrome &nbsp;&bull;&nbsp; <a href="https://github.com/ddmoney420">ddmoney420</a> &nbsp;&bull;&nbsp; <a href="https://discord.gg/9q5uw3CfN">Discord</a> &nbsp;&bull;&nbsp; <a href="privacy-policy.html">Privacy Policy</a></p>
         </footer>
     </div>
+
     <!-- Lightboxes — click anywhere to close -->
     <div id="lb-ios-1" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/01-library.png" alt="iOS Library"></div>
     <div id="lb-ios-2" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/02-now-playing.png" alt="iOS Now Playing"></div>
@@ -643,5 +933,31 @@
     <div id="lb-and-6" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/android/radio.png" alt="Android Radio"></div>
     <div id="lb-web-1" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/web/screenshot.png" alt="Web Library"></div>
     <div id="lb-web-2" class="lightbox" onclick="this.style.display='none';history.replaceState(null,null,' ')"><img src="screenshots/web/screenshot-player.png" alt="Web Player"></div>
+
+    <!-- Minimal JS: Intersection Observer for scroll-triggered animations -->
+    <script>
+        (function() {
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        if (entry.target.classList.contains('stats-bar')) {
+                            var items = entry.target.querySelectorAll('.stat-item');
+                            items.forEach(function(item) { item.classList.add('visible'); });
+                        } else {
+                            entry.target.classList.add('visible');
+                        }
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.15 });
+
+            document.querySelectorAll('.feature[data-animate]').forEach(function(el) {
+                observer.observe(el);
+            });
+            document.querySelectorAll('.stats-bar[data-animate]').forEach(function(el) {
+                observer.observe(el);
+            });
+        })();
+    </script>
 </body>
 </html>
