@@ -8,6 +8,7 @@ struct PlaylistsView: View {
     @State private var error: String?
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
+    @AppStorage("playlistViewStyle") private var showAsList = false
 
     var body: some View {
         ScrollView {
@@ -19,9 +20,13 @@ struct PlaylistsView: View {
                     .padding(.top, 4)
                 #endif
 
-                // Playlists grid
+                // Playlists grid or list
                 if !playlists.isEmpty {
-                    playlistGrid
+                    if showAsList {
+                        playlistList
+                    } else {
+                        playlistGrid
+                    }
                 }
             }
             #if os(iOS)
@@ -29,6 +34,20 @@ struct PlaylistsView: View {
             #endif
         }
         .navigationTitle("Playlists")
+        #if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+            }
+        }
+        #endif
         #if os(macOS)
         .toolbar {
             ToolbarItem {
@@ -186,6 +205,47 @@ struct PlaylistsView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    // MARK: - Playlist List
+
+    private var playlistList: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(playlists) { playlist in
+                NavigationLink {
+                    PlaylistDetailView(playlistId: playlist.id)
+                } label: {
+                    HStack(spacing: 14) {
+                        PlaylistMosaicView(playlist: playlist, size: 56, cornerRadius: 8)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(playlist.name)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if playlist.id != playlists.last?.id {
+                    Divider().padding(.leading, 86)
+                }
+            }
+        }
     }
 
     private func playlistCard(_ playlist: Playlist) -> some View {

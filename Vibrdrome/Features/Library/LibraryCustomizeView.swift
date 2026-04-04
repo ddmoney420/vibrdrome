@@ -162,6 +162,7 @@ struct LibraryCustomizeView: View {
         case .mostPlayed: "star"
         case .rediscover: "heart"
         case .randomPicks: "shuffle"
+        case .recentlyPlayed: "play.circle"
         }
     }
 

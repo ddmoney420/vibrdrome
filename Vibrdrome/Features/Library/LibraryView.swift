@@ -7,6 +7,7 @@ struct LibraryView: View {
     @State private var recentAlbums: [Album] = []
     @State private var frequentAlbums: [Album] = []
     @State private var randomAlbums: [Album] = []
+    @State private var recentlyPlayedAlbums: [Album] = []
     @State private var starredSongs: [Song] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
@@ -124,6 +125,12 @@ struct LibraryView: View {
             if !randomAlbums.isEmpty {
                 albumSection("Random Picks", albums: randomAlbums) {
                     AlbumsView(listType: .random, title: "Random")
+                }
+            }
+        case .recentlyPlayed:
+            if !recentlyPlayedAlbums.isEmpty {
+                albumSection("Recently Played", albums: recentlyPlayedAlbums) {
+                    AlbumsView(listType: .recent, title: "Recently Played")
                 }
             }
         }
@@ -450,11 +457,13 @@ struct LibraryView: View {
         async let recent = client.getAlbumList(type: .newest, size: 10, musicFolderId: folder)
         async let frequent = client.getAlbumList(type: .frequent, size: 10, musicFolderId: folder)
         async let random = client.getAlbumList(type: .random, size: 10, musicFolderId: folder)
+        async let recentlyPlayed = client.getAlbumList(type: .recent, size: 10, musicFolderId: folder)
         async let starred = client.getStarred(musicFolderId: folder)
 
         recentAlbums = (try? await recent) ?? recentAlbums
         frequentAlbums = (try? await frequent) ?? frequentAlbums
         randomAlbums = (try? await random) ?? randomAlbums
+        recentlyPlayedAlbums = (try? await recentlyPlayed) ?? recentlyPlayedAlbums
 
         if let result = try? await starred, var songs = result.song, !songs.isEmpty {
             songs.shuffle()

@@ -89,6 +89,7 @@ enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
     case mostPlayed
     case rediscover
     case randomPicks
+    case recentlyPlayed
 
     var id: String { rawValue }
 
@@ -98,6 +99,7 @@ enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
         case .mostPlayed: "Most Played"
         case .rediscover: "Rediscover"
         case .randomPicks: "Random Picks"
+        case .recentlyPlayed: "Recently Played"
         }
     }
 }

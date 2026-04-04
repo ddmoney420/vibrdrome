@@ -16,7 +16,7 @@ struct LibraryPillTests {
     }
 
     @Test func allCarouselsCount() {
-        #expect(LibraryCarousel.allCases.count == 4)
+        #expect(LibraryCarousel.allCases.count == 5)
     }
 
     @Test func defaultConfigIncludesAllPills() {
