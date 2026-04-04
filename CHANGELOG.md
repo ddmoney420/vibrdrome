@@ -22,6 +22,11 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 - Performance: cache download status in TrackRow, fix Live Activity cleanup on stop
 - 451 unit tests in 30 suites
 
+**TestFlight Notes:**
+> Dynamic Island, smart queue, queue sharing, album/artist polish, download
+> indicators, offline banner, playlist/radio grid toggle, widget overhaul.
+> See full list above.
+
 ### Build 18 — April 3, 2026
 - Now Playing redesign: controls toolbar moved above progress bar, actions below
 - 5-star ratings with Subsonic setRating API
