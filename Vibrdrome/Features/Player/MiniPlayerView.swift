@@ -105,7 +105,7 @@ struct MiniPlayerView: View {
         }
         .clipShape(Capsule())
         .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .accessibilityIdentifier("MiniPlayer")
         .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {

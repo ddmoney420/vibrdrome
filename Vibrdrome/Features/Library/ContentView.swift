@@ -102,7 +102,7 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
-                    .padding(.bottom, 68)
+                    .padding(.bottom, 54)
             }
         }
     }
