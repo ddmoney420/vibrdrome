@@ -191,6 +191,8 @@ struct LibraryView: View {
             randomMixPill
         case .playHistory:
             quickAccessPill("Play History", icon: "clock.arrow.circlepath", color: .purple) { PlayHistoryView() }
+        case .smartPlaylists:
+            quickAccessPill("Smart Playlists", icon: "sparkles", color: .pink) { SmartPlaylistView() }
         }
     }
 
