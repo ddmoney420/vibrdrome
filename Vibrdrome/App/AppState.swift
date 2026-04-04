@@ -38,6 +38,7 @@ final class AppState {
     enum PendingNavigation: Equatable {
         case artist(id: String)
         case album(id: String)
+        case genre(name: String)
     }
     var pendingNavigation: PendingNavigation?
     var serverURL: String = ""

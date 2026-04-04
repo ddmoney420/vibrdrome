@@ -389,30 +389,38 @@ struct NowPlayingView: View {
     @ViewBuilder
     private var metadataBadges: some View {
         let song = engine.currentSong
-        let badges = buildBadges(song)
-        if !badges.isEmpty {
+        if song != nil {
             HStack(spacing: 6) {
-                ForEach(badges, id: \.self) { badge in
-                    Text(badge)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.15), in: Capsule())
-                        .foregroundColor(.white.opacity(0.8))
+                if let year = song?.year {
+                    badgeText(String(year))
+                }
+                if let genre = song?.genre {
+                    Button {
+                        appState.pendingNavigation = .genre(name: genre)
+                        appState.showNowPlaying = false
+                    } label: {
+                        badgeText(genre)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let bitRate = song?.bitRate {
+                    badgeText("\(bitRate) kbps")
+                }
+                if let suffix = song?.suffix {
+                    badgeText(suffix.uppercased())
                 }
             }
         }
     }
 
-    private func buildBadges(_ song: Song?) -> [String] {
-        guard let song else { return [] }
-        var result = [String]()
-        if let year = song.year { result.append(String(year)) }
-        if let genre = song.genre { result.append(genre) }
-        if let bitRate = song.bitRate { result.append("\(bitRate) kbps") }
-        if let suffix = song.suffix { result.append(suffix.uppercased()) }
-        return result
+    private func badgeText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(.white.opacity(0.15), in: Capsule())
+            .foregroundColor(.white.opacity(0.8))
     }
 
     // MARK: - Progress

@@ -40,6 +40,21 @@ struct TrackRow: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.caption2)
                     .foregroundStyle(.green)
+            } else {
+                Button {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    DownloadManager.shared.download(
+                        song: song, client: AppState.shared.subsonicClient
+                    )
+                    isDownloaded = true
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
 
             if song.starred != nil {

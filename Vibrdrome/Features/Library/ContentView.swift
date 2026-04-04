@@ -118,6 +118,8 @@ struct ContentView: View {
                 libraryNavPath.append(ArtistNavItem(id: id))
             case .album(let id):
                 libraryNavPath.append(AlbumNavItem(id: id))
+            case .genre(let name):
+                libraryNavPath.append(GenreNavItem(name: name))
             }
         }
     }
@@ -140,6 +142,10 @@ struct ArtistNavItem: Hashable {
 
 struct AlbumNavItem: Hashable {
     let id: String
+}
+
+struct GenreNavItem: Hashable {
+    let name: String
 }
 
 // MARK: - NWPathMonitor AsyncStream
