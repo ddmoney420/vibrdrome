@@ -1,7 +1,6 @@
 import Foundation
 import MediaPlayer
 import WidgetKit
-import ActivityKit
 #if os(macOS)
 import AppKit
 #endif
@@ -24,9 +23,6 @@ final class NowPlayingManager {
     static let shared = NowPlayingManager()
     private let infoCenter = MPNowPlayingInfoCenter.default()
     private var currentInfo = [String: Any]()
-    #if os(iOS)
-    private var liveActivity: Activity<NowPlayingAttributes>?
-    #endif
 
     func update(song: Song, isPlaying: Bool) {
         currentInfo = [String: Any]()
@@ -43,12 +39,6 @@ final class NowPlayingManager {
         }
 
         infoCenter.nowPlayingInfo = currentInfo
-
-        // Update Live Activity
-        #if os(iOS)
-        updateLiveActivity(title: song.title, artist: song.artist ?? "",
-                           album: song.album ?? "", isPlaying: isPlaying)
-        #endif
 
         // Update widget
         updateWidget(title: song.title, artist: song.artist ?? "",
@@ -117,47 +107,7 @@ final class NowPlayingManager {
         infoCenter.nowPlayingInfo = nil
         NowPlayingState.clear()
         WidgetCenter.shared.reloadAllTimelines()
-        #if os(iOS)
-        endLiveActivity()
-        #endif
     }
-
-    #if os(iOS)
-    private func updateLiveActivity(title: String, artist: String, album: String, isPlaying: Bool) {
-        let contentState = NowPlayingAttributes.ContentState(
-            title: title, artist: artist, isPlaying: isPlaying
-        )
-        let attributes = NowPlayingAttributes(albumName: album)
-
-        if let activity = liveActivity {
-            let content = ActivityContent(state: contentState, staleDate: nil)
-            nonisolated(unsafe) let act = activity
-            Task.detached {
-                await act.update(content)
-            }
-        } else {
-            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-            do {
-                liveActivity = try Activity.request(
-                    attributes: attributes,
-                    content: ActivityContent(state: contentState, staleDate: nil),
-                    pushType: nil
-                )
-            } catch {
-                // Live Activities not available on this device
-            }
-        }
-    }
-
-    private func endLiveActivity() {
-        guard let activity = liveActivity else { return }
-        nonisolated(unsafe) let act = activity
-        Task.detached {
-            await act.end(nil, dismissalPolicy: .immediate)
-        }
-        liveActivity = nil
-    }
-    #endif
 
     private func updateWidget(title: String, artist: String, album: String,
                               isPlaying: Bool, coverArtId: String?) {

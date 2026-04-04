@@ -61,8 +61,6 @@
     <array>
         <string>audio</string>
     </array>
-    <key>NSSupportsLiveActivities</key>
-    <true/>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Save album artwork to your photo library</string>
     <key>NSAppTransportSecurity</key>
