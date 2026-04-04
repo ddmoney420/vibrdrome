@@ -4,6 +4,44 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 18 — April 3, 2026
+- Now Playing redesign: controls toolbar moved above progress bar, actions below
+- 5-star ratings with Subsonic setRating API
+- Sleep timer countdown visible next to moon icon
+- Fade/scale animation on Now Playing open
+- Genre artwork thumbnails in genres list
+- Decades card layout with album art backgrounds
+- Playlist artwork mosaic (2x2 grid for playlists without server artwork)
+- Play History screen with today/week/all-time stats, top artists, top albums
+- Accessibility audit: identifiers added to 17 views, star rating contrast improved
+- Performance: stop unnecessary MPNowPlayingInfoCenter updates, use Nuke cache for dominant color
+- 442 unit tests in 27 suites
+
+### Build 17 — April 3, 2026
+- Tappable artist/album names on Now Playing (dismiss and navigate to detail)
+- Queue context menu on long-press (Play Now, Play Next, Remove)
+- Queue swipe-left to remove
+- CarPlay credential retry with 1s delay
+
+### Build 16 — April 3, 2026
+- Home screen widget (Now Playing, small and medium sizes)
+- Siri Shortcuts (Play Favorites, Play Random Mix, Toggle Playback, Skip Track, Artist Radio)
+- Mini player background tints with album art dominant color
+- Up Next subtitle on mini player
+- Haptic feedback on playback controls and star
+- Pull to refresh on Library
+- Search history (saves on submit, shows recent searches)
+- Radio station artwork in mini player and CarPlay
+
+### Build 15 — April 2, 2026
+- Fix radio artwork crash (MPMediaItemArtwork closure isolation)
+
+### Build 14 — April 2, 2026
+- Navidrome 0.61 radio station artwork (coverArt with ra-{id} workaround)
+- Security: switch favicon service from Google to DuckDuckGo
+- Security: fix isLocalAddress for full RFC 1918 range
+- 392 unit tests, security audit, privacy policy updated
+
 ### Build 13 — April 2, 2026
 - Fix CarPlay logout when connecting (Keychain accessibility change)
 

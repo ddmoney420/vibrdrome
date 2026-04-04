@@ -50,14 +50,20 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **10-band equalizer** — parametric EQ with presets for all tracks (AVAudioEngine)
 - **ReplayGain** — track/album volume normalization from server metadata
 - **Playback speed** — 0.5x to 2.0x with pitch preservation
-- **Sleep timer** — 15m to 2h or end-of-track with volume fade
+- **Sleep timer** — 15m to 2h or end-of-track with countdown display and volume fade
+- **5-star ratings** — rate tracks from Now Playing, synced to your server
+- **Haptic feedback** — on play/pause, skip, and star actions
 
 ### Library &nbsp; ♬♩♪♩
 - **Library browsing** — artists, albums, songs, genres, playlists, and folder hierarchy
 - **Artist radio** — continuous auto-play seeded from any artist or track
 - **Smart playlists** — 6 auto-generated playlist types
-- **Search** — full-text search across artists, albums, and songs
+- **Search** — full-text search with recent search history
 - **Synced lyrics** — scrolling lyrics with seek-to-line
+- **Genre artwork** — album art thumbnails in genre browser
+- **Decades view** — browse by era with album art cards
+- **Play history** — track stats: today, this week, top artists, top albums
+- **Playlist mosaic** — 2x2 album art grid for playlists without server artwork
 
 ### Offline & Downloads &nbsp; (⌐■_■)
 - **Offline mode** — download songs, albums, and entire playlists
@@ -67,8 +73,10 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 
 ### Platform &nbsp; ᕦ(ò_óˇ)ᕤ
 - **CarPlay support** — browse, search, artist radio, and playback controls
+- **Home screen widget** — Now Playing with album art, title, play/pause state
+- **Siri Shortcuts** — "Play my favorites", "Play a random mix", and more
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
-- **Internet radio** — streaming radio stations with HTTP media support
+- **Internet radio** — streaming with station artwork (Navidrome 0.61+)
 - **Multi-server support** — per-server Keychain credentials with server switching
 - **Audio visualizer** — 18 audio-reactive Metal shader presets
 - **Bookmarks** — save and resume positions in long tracks
@@ -77,6 +85,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Customizable library** — reorder & show/hide pills and carousels
 - **Library folder switching** — filter by music folder on multi-library servers
+- **Tappable metadata** — tap artist or album name on Now Playing to navigate
 - **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
 - **Scrobbling** — automatic scrobble submission with offline queuing
 
