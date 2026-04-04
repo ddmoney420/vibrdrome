@@ -17,6 +17,7 @@ enum LibraryPill: String, CaseIterable, Codable, Identifiable {
     case randomAlbum
     case folders
     case randomMix
+    case playHistory
 
     var id: String { rawValue }
 
@@ -36,6 +37,7 @@ enum LibraryPill: String, CaseIterable, Codable, Identifiable {
         case .randomAlbum: "Random Album"
         case .folders: "Folders"
         case .randomMix: "Random Mix"
+        case .playHistory: "Play History"
         }
     }
 
@@ -55,6 +57,7 @@ enum LibraryPill: String, CaseIterable, Codable, Identifiable {
         case .randomAlbum: "opticaldisc.fill"
         case .folders: "folder.fill"
         case .randomMix: "dice.fill"
+        case .playHistory: "clock.arrow.circlepath"
         }
     }
 
@@ -74,6 +77,7 @@ enum LibraryPill: String, CaseIterable, Codable, Identifiable {
         case .randomAlbum: "orange"
         case .folders: "green"
         case .randomMix: "indigo"
+        case .playHistory: "purple"
         }
     }
 }

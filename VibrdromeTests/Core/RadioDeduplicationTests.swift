@@ -175,7 +175,7 @@ struct RadioDeduplicationTests {
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: 200,
             bitRate: nil, path: nil, discNumber: nil, created: nil,
-            starred: nil, bpm: nil, replayGain: nil, musicBrainzId: nil
+            starred: nil, userRating: nil, bpm: nil, replayGain: nil, musicBrainzId: nil
         )
     }
 }

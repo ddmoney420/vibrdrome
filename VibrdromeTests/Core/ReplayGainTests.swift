@@ -94,7 +94,7 @@ struct ReplayGainTests {
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: 300,
             bitRate: nil, path: nil, discNumber: nil, created: nil,
-            starred: nil, bpm: nil, replayGain: replayGain, musicBrainzId: nil
+            starred: nil, userRating: nil, bpm: nil, replayGain: replayGain, musicBrainzId: nil
         )
     }
 }

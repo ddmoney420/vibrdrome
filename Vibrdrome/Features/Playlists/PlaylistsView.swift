@@ -190,7 +190,7 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            AlbumArtView(coverArtId: playlist.coverArt, size: Theme.playlistCardSize, cornerRadius: 12)
+            PlaylistMosaicView(playlist: playlist, size: Theme.playlistCardSize, cornerRadius: 12)
                 .frame(maxWidth: .infinity)
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 

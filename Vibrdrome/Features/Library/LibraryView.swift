@@ -179,6 +179,8 @@ struct LibraryView: View {
             quickAccessPill("Folders", icon: "folder.fill", color: .green) { FolderBrowserView() }
         case .randomMix:
             randomMixPill
+        case .playHistory:
+            quickAccessPill("Play History", icon: "clock.arrow.circlepath", color: .purple) { PlayHistoryView() }
         }
     }
 

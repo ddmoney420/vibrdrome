@@ -71,6 +71,7 @@ final class CachedSong {
             discNumber: discNumber,
             created: nil,
             starred: isStarred ? "true" : nil,
+            userRating: rating,
             bpm: nil,
             replayGain: nil,
             musicBrainzId: nil

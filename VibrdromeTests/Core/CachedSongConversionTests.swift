@@ -132,7 +132,7 @@ struct CachedSongConversionTests {
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: nil,
             bitRate: nil, path: nil, discNumber: nil, created: nil,
-            starred: nil, bpm: nil, replayGain: nil, musicBrainzId: nil
+            starred: nil, userRating: nil, bpm: nil, replayGain: nil, musicBrainzId: nil
         )
         let cached = CachedSong(from: song)
         let restored = cached.toSong()
@@ -177,7 +177,7 @@ struct CachedSongConversionTests {
             track: track, year: year, genre: genre, coverArt: nil,
             size: size, contentType: contentType, suffix: suffix,
             duration: duration, bitRate: bitRate, path: nil,
-            discNumber: discNumber, created: nil, starred: starred,
+            discNumber: discNumber, created: nil, starred: starred, userRating: nil,
             bpm: nil, replayGain: nil, musicBrainzId: nil
         )
     }

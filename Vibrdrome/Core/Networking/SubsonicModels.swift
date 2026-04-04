@@ -164,6 +164,7 @@ struct Song: Decodable, Identifiable, Sendable {
     let discNumber: Int?
     let created: String?
     let starred: String?
+    let userRating: Int?
     let bpm: Int?
     let replayGain: ReplayGain?
     let musicBrainzId: String?

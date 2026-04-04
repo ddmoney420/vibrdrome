@@ -204,6 +204,7 @@ extension DirectoryChild {
             discNumber: nil,
             created: created,
             starred: starred,
+            userRating: nil,
             bpm: nil,
             replayGain: nil,
             musicBrainzId: nil

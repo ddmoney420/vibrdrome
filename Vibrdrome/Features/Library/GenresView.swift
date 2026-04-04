@@ -5,13 +5,20 @@ struct GenresView: View {
     @State private var genres: [Genre] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var genreArt: [String: String] = [:] // genre → coverArtId
 
     var body: some View {
         List(genres) { genre in
             NavigationLink {
                 AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
             } label: {
-                HStack {
+                HStack(spacing: 12) {
+                    AlbumArtView(
+                        coverArtId: genreArt[genre.value],
+                        size: 48,
+                        cornerRadius: 8
+                    )
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(genre.value)
                             .font(.body)
@@ -72,9 +79,19 @@ struct GenresView: View {
         do {
             genres = try await client.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            await loadGenreArt(client: client)
         } catch {
             if genres.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
+            }
+        }
+    }
+
+    private func loadGenreArt(client: SubsonicClient) async {
+        for genre in genres.prefix(30) where genreArt[genre.value] == nil {
+            if let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
+               let coverArt = albums.first?.coverArt {
+                genreArt[genre.value] = coverArt
             }
         }
     }
