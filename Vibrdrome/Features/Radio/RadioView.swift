@@ -9,6 +9,7 @@ struct RadioView: View {
     @State private var searchText = ""
     @State private var showAddSheet = false
     @State private var showSearchSheet = false
+    @AppStorage("radioViewStyle") private var showAsList = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -77,9 +78,13 @@ struct RadioView: View {
                         .padding(.horizontal, 16)
                 }
 
-                // Station grid
+                // Stations
                 if !filteredStations.isEmpty {
-                    stationGrid
+                    if showAsList {
+                        stationList
+                    } else {
+                        stationGrid
+                    }
                 } else if !searchText.isEmpty {
                     ContentUnavailableView.search(text: searchText)
                         .padding(.top, 40)
@@ -91,6 +96,20 @@ struct RadioView: View {
         }
         .navigationTitle("Radio")
         .searchable(text: $searchText, prompt: "Filter stations...")
+        #if os(iOS)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+            }
+        }
+        #endif
         #if os(macOS)
         .toolbar {
             ToolbarItem {
@@ -195,7 +214,7 @@ struct RadioView: View {
 
     // MARK: - Station Grid
 
-    private var stationGrid: some View {
+    private var stationList: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(filteredStations.enumerated()), id: \.element.id) { index, station in
                 stationRow(station, colorIndex: index)
@@ -206,6 +225,54 @@ struct RadioView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    private var stationGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12),
+        ], spacing: 12) {
+            ForEach(Array(filteredStations.enumerated()), id: \.element.id) { index, station in
+                stationCardView(station, colorIndex: index)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func stationCardView(_ station: InternetRadioStation, colorIndex: Int) -> some View {
+        let color = Self.stationColors[colorIndex % Self.stationColors.count]
+        let isPlaying = isCurrentStation(station)
+
+        return Button {
+            engine.playRadio(station: station)
+        } label: {
+            VStack(spacing: 8) {
+                stationIcon(station, color: color, isPlaying: isPlaying)
+
+                Text(station.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+
+                if isPlaying {
+                    Image(systemName: "waveform")
+                        .font(.caption2)
+                        .foregroundColor(color)
+                        .symbolEffect(.variableColor)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isPlaying ? color.opacity(0.5) : .clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool) -> some View {
