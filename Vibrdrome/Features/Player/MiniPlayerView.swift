@@ -96,17 +96,17 @@ struct MiniPlayerView: View {
         .background {
             ZStack {
                 if let dominantColor {
-                    RoundedRectangle(cornerRadius: 22)
+                    Capsule()
                         .fill(dominantColor.opacity(0.35))
                 }
-                RoundedRectangle(cornerRadius: 22)
+                Capsule()
                     .fill(.ultraThinMaterial)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .padding(.horizontal, 8)
-        .padding(.bottom, 2)
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .clipShape(Capsule())
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .accessibilityIdentifier("MiniPlayer")
         .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
             await loadDominantColor()
