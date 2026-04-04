@@ -420,6 +420,8 @@ final class AudioEngine {
         info[MPMediaItemPropertyArtist] = "Internet Radio"
         info[MPNowPlayingInfoPropertyIsLiveStream] = true
         info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
+        // Clear previous artwork immediately to prevent stale album art
+        info[MPMediaItemPropertyArtwork] = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
         // Load radio station artwork for lock screen
