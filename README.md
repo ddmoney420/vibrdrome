@@ -84,7 +84,6 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 ### Platform &nbsp; ᕦ(ò_óˇ)ᕤ
 - **CarPlay support** — browse, search, artist radio, and playback controls
 - **Home screen widget** — Now Playing with album art blur, interactive controls (small/medium/large)
-- **Dynamic Island** — Live Activity showing now playing in Dynamic Island and lock screen
 - **Siri Shortcuts** — "Play my favorites", "Play a random mix", and more
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
 - **Internet radio** — streaming with station artwork (Navidrome 0.61+)

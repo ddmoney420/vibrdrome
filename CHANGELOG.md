@@ -4,6 +4,17 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 21 — March 28, 2026
+- Remove Dynamic Island Live Activity (duplicate of system Now Playing, caused double lock screen and zombie notifications)
+- CarPlay login: improved Keychain retry with 3 attempts at increasing delays (1s, 2s, 5s)
+- CarPlay radio: add DuckDuckGo favicon fallback for stations without Navidrome 0.61 server artwork
+- 448 unit tests in 29 suites
+
+**TestFlight Notes:**
+> Removed Dynamic Island Live Activity (duplicated system Now Playing),
+> improved CarPlay Keychain retry with graduated delays, added DuckDuckGo
+> favicon fallback for radio stations. See full list above.
+
 ### Build 20 — April 5, 2026
 - Mini player redesign: capsule shape with spinning album art and circular progress ring
 - Tappable genre badge on Now Playing navigates to genre albums
