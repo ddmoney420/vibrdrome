@@ -5,14 +5,7 @@ struct TrackRow: View {
     let song: Song
     var showTrackNumber: Bool = true
     @Environment(\.modelContext) private var modelContext
-
-    private var isDownloaded: Bool {
-        let songId = song.id
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-        )
-        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
-    }
+    @State private var isDownloaded = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -58,6 +51,13 @@ struct TrackRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
+        .onAppear {
+            let songId = song.id
+            let descriptor = FetchDescriptor<DownloadedSong>(
+                predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+            )
+            isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+        }
     }
 
     private var trackAccessibilityLabel: String {

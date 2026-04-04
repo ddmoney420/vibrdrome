@@ -50,7 +50,6 @@ enum UserDefaultsKeys {
     static let boldText = "boldText"
     static let reduceMotion = "reduceMotion"
     static let disableVisualizer = "disableVisualizer"
-    static let shakeToShuffle = "shakeToShuffle"
     static let visualizerWarningShown = "visualizerWarningShown"
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"

@@ -67,7 +67,6 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
-    @AppStorage(UserDefaultsKeys.shakeToShuffle) private var shakeToShuffle: Bool = true
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayRecentCount) private var carPlayRecentCount: Int = 25
     @AppStorage(UserDefaultsKeys.carPlayShowGenres) private var carPlayShowGenres: Bool = true
@@ -451,11 +450,6 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("disableVisualizerToggle")
 
-            Toggle(isOn: $shakeToShuffle) {
-                Label("Shake to Shuffle", systemImage: "iphone.radiowaves.left.and.right")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("shakeToShuffleToggle")
         } header: {
             settingSectionHeader("Accessibility", icon: "accessibility", color: .indigo)
         } footer: {

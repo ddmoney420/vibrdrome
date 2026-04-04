@@ -665,7 +665,7 @@ final class AudioEngine {
         currentRadioStation = nil
         currentTime = 0
         duration = 0
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        NowPlayingManager.shared.clear()
     }
 
     // MARK: - Volume
@@ -724,11 +724,14 @@ final class AudioEngine {
     }
 
     /// Auto-suggest similar songs when the queue runs out
+    private var isAutoSuggesting = false
     private func autoSuggestMore() {
+        guard !isAutoSuggesting else { return }
         guard let lastSong = queue.last else {
             pause()
             return
         }
+        isAutoSuggesting = true
         Task { @MainActor in
             do {
                 let client = AppState.shared.subsonicClient
@@ -749,6 +752,7 @@ final class AudioEngine {
             } catch {
                 pause()
             }
+            self.isAutoSuggesting = false
         }
     }
 
