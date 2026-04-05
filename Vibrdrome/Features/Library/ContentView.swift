@@ -58,16 +58,24 @@ struct ContentView: View {
         }
         .overlay(alignment: .top) {
             if isOffline {
-                HStack(spacing: 8) {
-                    Image(systemName: "wifi.slash")
-                        .font(.caption)
-                    Text("Offline — Playing downloaded music")
-                        .font(.caption)
+                Button {
+                    selectedTab = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        libraryNavPath.append(OfflineNavItem())
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.slash")
+                            .font(.caption)
+                        Text("Offline — Tap to browse downloads")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.orange.gradient, in: Capsule())
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.orange.gradient, in: Capsule())
+                .buttonStyle(.plain)
                 .padding(.top, 60)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .animation(.easeInOut, value: isOffline)
@@ -189,6 +197,9 @@ struct AlbumNavItem: Hashable {
 
 struct GenreNavItem: Hashable {
     let name: String
+}
+
+struct OfflineNavItem: Hashable {
 }
 
 // MARK: - NWPathMonitor AsyncStream
