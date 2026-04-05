@@ -120,6 +120,7 @@ struct PlaylistEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("playlistEditorCancelButton")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isCreating ? "Create" : "Save") {
@@ -127,6 +128,7 @@ struct PlaylistEditorView: View {
                     }
                     .bold()
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
+                    .accessibilityIdentifier("playlistEditorSaveButton")
                 }
             }
         }

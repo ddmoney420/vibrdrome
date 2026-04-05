@@ -128,6 +128,19 @@ struct TrackContextMenuModifier: ViewModifier {
                 Label("Go to Artist", systemImage: "music.mic")
             }
         }
+
+        Divider()
+
+        let shareText: String = {
+            var text = "🎵 \(song.title) — \(song.artist ?? "Unknown Artist")"
+            if let album = song.album {
+                text += "\nAlbum: \(album)"
+            }
+            return text
+        }()
+        ShareLink(item: shareText) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
     }
 }
 

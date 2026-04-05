@@ -66,6 +66,7 @@ struct LibraryCustomizeView: View {
                         config.save()
                         dismiss()
                     }
+                    .accessibilityIdentifier("customizeDoneButton")
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Menu {
@@ -75,6 +76,7 @@ struct LibraryCustomizeView: View {
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
                     }
+                    .accessibilityIdentifier("customizeResetMenu")
                 }
             }
         }

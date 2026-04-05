@@ -45,6 +45,7 @@ struct PlaylistsView: View {
                     Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
                 }
                 .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("playlistViewToggle")
             }
         }
         #endif

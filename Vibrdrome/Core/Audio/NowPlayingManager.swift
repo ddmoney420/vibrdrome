@@ -45,6 +45,33 @@ final class NowPlayingManager {
                      album: song.album ?? "", isPlaying: isPlaying,
                      coverArtId: song.coverArt)
 
+        // Update watch companion app
+        #if os(iOS)
+        WatchSessionManager.shared.sendNowPlayingUpdate(
+            title: song.title,
+            artist: song.artist ?? "Unknown Artist",
+            album: song.album ?? "",
+            isPlaying: isPlaying
+        )
+        #endif
+
+        // Update Discord Rich Presence
+        #if os(macOS)
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discordRPCEnabled) {
+            let presenceInfo = DiscordPresenceInfo(
+                title: song.title,
+                artist: song.artist ?? "Unknown Artist",
+                album: song.album,
+                isPlaying: isPlaying,
+                elapsed: 0,
+                duration: song.duration.map { TimeInterval($0) }
+            )
+            Task {
+                await DiscordRPCClient.shared.updatePresence(presenceInfo)
+            }
+        }
+        #endif
+
         // Load cover art asynchronously
         if let coverArtId = song.coverArt {
             let songId = song.id
@@ -84,6 +111,11 @@ final class NowPlayingManager {
         currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
         infoCenter.nowPlayingInfo = currentInfo
 
+        // Update watch companion app
+        #if os(iOS)
+        WatchSessionManager.shared.sendPlaybackStateUpdate(isPlaying: isPlaying)
+        #endif
+
         // Update widget play/pause state
         if let state = NowPlayingState.load() {
             let updated = NowPlayingState(
@@ -107,6 +139,15 @@ final class NowPlayingManager {
         infoCenter.nowPlayingInfo = nil
         NowPlayingState.clear()
         WidgetCenter.shared.reloadAllTimelines()
+
+        // Clear Discord Rich Presence
+        #if os(macOS)
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discordRPCEnabled) {
+            Task {
+                await DiscordRPCClient.shared.clearPresence()
+            }
+        }
+        #endif
     }
 
     private func updateWidget(title: String, artist: String, album: String,

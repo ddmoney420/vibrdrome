@@ -47,6 +47,7 @@ struct AddToPlaylistView: View {
                             }
                         }
                         .tint(.primary)
+                        .accessibilityIdentifier("playlist_\(playlist.id)")
                     }
                 }
             }
@@ -57,6 +58,7 @@ struct AddToPlaylistView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("addToPlaylistCancelButton")
                 }
             }
             .task { await loadPlaylists() }

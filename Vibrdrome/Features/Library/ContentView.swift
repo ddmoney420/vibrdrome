@@ -35,6 +35,7 @@ struct ContentView: View {
         }) {
             NowPlayingView()
                 .environment(appState)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
         }
         #endif
         .onChange(of: scenePhase) { _, newPhase in

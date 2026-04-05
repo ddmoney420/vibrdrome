@@ -12,7 +12,7 @@ struct ReplayGainTests {
     /// Computes linear gain factor from dB value (same algorithm as AudioEngine)
     private func linearFactor(fromDb db: Double) -> Float {
         let linear = Float(pow(10, db / 20))
-        return max(0.0, min(2.0, linear))
+        return max(0.0, min(1.5, linear))
     }
 
     // MARK: - dB to Linear Conversion
@@ -23,9 +23,9 @@ struct ReplayGainTests {
     }
 
     @Test func positiveSixDb() {
-        // +6dB ≈ 2.0x linear
+        // +6dB ≈ 2.0x linear → capped to 1.5
         let factor = linearFactor(fromDb: 6)
-        #expect(abs(factor - 1.995) < 0.01)
+        #expect(factor == 1.5)
     }
 
     @Test func negativeSixDb() {
@@ -41,9 +41,16 @@ struct ReplayGainTests {
     }
 
     @Test func plusTwentyDbClamped() {
-        // +20dB = 10.0 linear → clamped to 2.0
+        // +20dB = 10.0 linear → clamped to 1.5
         let factor = linearFactor(fromDb: 20)
-        #expect(factor == 2.0)
+        #expect(factor == 1.5)
+    }
+
+    @Test func plusThreeDbUnderCap() {
+        // +3dB ≈ 1.41x linear → under 1.5 cap, passes through
+        let factor = linearFactor(fromDb: 3)
+        #expect(factor > 1.4)
+        #expect(factor < 1.5)
     }
 
     @Test func veryNegativeDbNearZero() {

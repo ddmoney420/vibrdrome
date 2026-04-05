@@ -4,6 +4,32 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 22 — April 5, 2026
+- ListenBrainz scrobbling: full integration with settings toggle and token input
+- Discord Rich Presence (macOS): shows song/artist/album in Discord status
+- watchOS companion app: Now Playing with progress, Queue browser, Library access (favorites, playlists, albums), sleep timer, star/shuffle/repeat controls
+- Similar Artists section on Artist Detail with horizontal scroll bubbles
+- Artist biography display from Last.fm/MusicBrainz (expandable "About" section)
+- Mini player swipe gestures: swipe left/right for next/previous with haptics
+- Favorites Play All / Shuffle buttons
+- Downloads Play All / Shuffle buttons + tap-to-play
+- Songs view: infinite scroll (loads all songs), Play All / Shuffle, song count in title
+- Queue: total duration in "Up Next" header
+- Album Detail: Start Radio, Share, and Download action buttons
+- Song sharing in context menus ("🎵 Title — Artist / Album")
+- Search API pagination with offset support
+- Now Playing fade/scale transition on present
+- Accessibility: 35+ identifiers, contrast improved (0.4→0.5), WCAG AA compliant
+- Audio clipping fix: EQ pre-gain attenuation prevents boost overflow, ReplayGain cap 2.0→1.5
+- AirPlay 2 multi-room verified working (native AVPlayer + AVRoutePickerView)
+- 482 unit tests in 33 suites, 0 SwiftLint violations
+
+**TestFlight Notes:**
+> ListenBrainz scrobbling, Discord Rich Presence (macOS), watchOS companion app
+> with library browsing and playback controls. Similar Artists, artist biography,
+> mini player swipe gestures, favorites/downloads play buttons, infinite songs
+> scroll, audio clipping fix for AirPlay casting. 482 tests passing.
+
 ### Build 21 — March 28, 2026
 - Remove Dynamic Island Live Activity (duplicate of system Now Playing, caused double lock screen and zombie notifications)
 - CarPlay login: improved Keychain retry with 3 attempts at increasing delays (1s, 2s, 5s)

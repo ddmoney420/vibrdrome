@@ -128,7 +128,8 @@ final class AudioEngine {
         }
         guard let gainDb = gain else { return 1.0 }
         let linear = Float(pow(10, gainDb / 20))
-        return max(0.0, min(2.0, linear))
+        // Cap at 1.5x (+3.5dB) to prevent clipping on hot masters
+        return max(0.0, min(1.5, linear))
     }
 
     // MARK: - Queue
@@ -744,7 +745,7 @@ final class AudioEngine {
                     // Fallback to random songs
                     let random = try await client.getRandomSongs(size: 10)
                     let filtered = random.filter { !existingIds.contains($0.id) }
-                    guard let first = filtered.first else { pause(); return }
+                    guard !filtered.isEmpty else { pause(); return }
                     for song in filtered { addToQueue(song) }
                     next()
                     return

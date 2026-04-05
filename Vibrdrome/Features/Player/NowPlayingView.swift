@@ -266,11 +266,12 @@ struct NowPlayingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
+            .accessibilityIdentifier("dismissButton")
 
             Spacer()
 
             Capsule()
-                .fill(.white.opacity(0.4))
+                .fill(.white.opacity(0.5))
                 .frame(width: 36, height: 5)
 
             Spacer()
@@ -472,6 +473,7 @@ struct NowPlayingView: View {
                         .font(.title2)
                 }
                 .accessibilityLabel("Previous Track")
+                .accessibilityIdentifier("previousButton")
 
                 Button {
                     #if os(iOS)
@@ -483,6 +485,7 @@ struct NowPlayingView: View {
                         .font(.system(size: 52))
                 }
                 .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
+                .accessibilityIdentifier("playPauseButton")
 
                 Button {
                     #if os(iOS)
@@ -494,6 +497,7 @@ struct NowPlayingView: View {
                         .font(.title2)
                 }
                 .accessibilityLabel("Next Track")
+                .accessibilityIdentifier("nextButton")
             }
         }
         .foregroundColor(.white)
@@ -539,10 +543,11 @@ struct NowPlayingView: View {
         HStack(spacing: 0) {
             Button { engine.toggleShuffle() } label: {
                 Image(systemName: "shuffle")
-                    .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.4))
+                    .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.5))
             }
             .accessibilityLabel("Shuffle")
             .accessibilityValue(engine.shuffleEnabled ? "On" : "Off")
+            .accessibilityIdentifier("shuffleButton")
 
             Spacer()
 
@@ -570,7 +575,7 @@ struct NowPlayingView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
-                        .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.4))
+                        .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.5))
                     if SleepTimer.shared.isActive {
                         Text(formatSleepTime(SleepTimer.shared.remainingSeconds))
                             .font(.caption2)
@@ -580,6 +585,7 @@ struct NowPlayingView: View {
                 }
             }
             .accessibilityLabel("Sleep Timer")
+            .accessibilityIdentifier("sleepTimerMenu")
 
             Spacer()
 
@@ -600,9 +606,10 @@ struct NowPlayingView: View {
                 Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.4))
+                    .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.5))
             }
             .accessibilityLabel("Playback Speed")
+            .accessibilityIdentifier("playbackSpeedMenu")
 
             Spacer()
 
@@ -612,32 +619,35 @@ struct NowPlayingView: View {
                         engine.eqEnabled
                             ? .white
                             : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.4)
+                                ? .white.opacity(0.7) : .white.opacity(0.5)
                     )
             }
             .accessibilityLabel("Equalizer")
             .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
+            .accessibilityIdentifier("eqButton")
 
             Spacer()
 
             Button { appState.showLyrics = true } label: {
                 Image(systemName: "quote.bubble")
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.white.opacity(0.5))
             }
             .accessibilityLabel("Lyrics")
+            .accessibilityIdentifier("lyricsButton")
 
             Spacer()
 
             Button { engine.cycleRepeatMode() } label: {
                 Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
-                    .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.4))
+                    .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.5))
             }
             .accessibilityLabel("Repeat")
             .accessibilityValue(repeatAccessibilityValue)
+            .accessibilityIdentifier("repeatButton")
         }
         .font(.body)
         .buttonStyle(.plain)
-        .foregroundColor(.white.opacity(0.4))
+        .foregroundColor(.white.opacity(0.5))
     }
 
     // MARK: - Actions Toolbar (below playback controls)
@@ -671,9 +681,10 @@ struct NowPlayingView: View {
                 }
             } label: {
                 Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .foregroundColor(isStarred ? .pink : .white.opacity(0.4))
+                    .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
             }
             .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
+            .accessibilityIdentifier("favoriteButton")
 
             Spacer()
 
@@ -681,15 +692,17 @@ struct NowPlayingView: View {
             if !disableVisualizer {
                 Button { appState.showVisualizer = true } label: {
                     Image(systemName: "waveform.path")
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.white.opacity(0.5))
                 }
                 .accessibilityLabel("Visualizer")
+                .accessibilityIdentifier("visualizerButton")
 
                 Spacer()
             }
 
             AirPlayButton()
                 .frame(width: 24, height: 24)
+                .accessibilityIdentifier("airPlayButton")
 
             Spacer()
             #endif
@@ -698,6 +711,7 @@ struct NowPlayingView: View {
                 Image(systemName: "list.bullet")
             }
             .accessibilityLabel("Show Queue")
+            .accessibilityIdentifier("queueButton")
 
             #if os(macOS)
             Spacer()
@@ -713,7 +727,7 @@ struct NowPlayingView: View {
         }
         .font(.body)
         .buttonStyle(.plain)
-        .foregroundColor(.white.opacity(0.4))
+        .foregroundColor(.white.opacity(0.5))
     }
 
     private func formatSleepTime(_ seconds: Int) -> String {

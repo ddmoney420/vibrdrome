@@ -55,6 +55,7 @@ struct QueueView: View {
                             }
                             .font(.caption)
                             .buttonStyle(.bordered)
+                            .accessibilityIdentifier("stopRadioButton")
                         }
                     }
                 }
@@ -62,7 +63,8 @@ struct QueueView: View {
                 // Up next
                 let upNext = engine.upNext
                 if !upNext.isEmpty {
-                    Section("Up Next — \(upNext.count) songs") {
+                    let totalSeconds = upNext.compactMap(\.duration).reduce(0, +)
+                    Section("Up Next — \(upNext.count) songs · \(formatDuration(totalSeconds))") {
                         ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
                             HStack(spacing: 12) {
                                 AlbumArtView(coverArtId: song.coverArt, size: 40)
@@ -144,6 +146,7 @@ struct QueueView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("queueDoneButton")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -174,6 +177,7 @@ struct QueueView: View {
                         Image(systemName: "ellipsis.circle")
                     }
                     .accessibilityLabel("Queue Options")
+                    .accessibilityIdentifier("queueOptionsMenu")
                 }
             }
             .alert(saveMessage, isPresented: $showingSaveAlert) {

@@ -48,6 +48,10 @@ struct SubsonicEndpointsTests {
         #expect(SubsonicEndpoint.getPlaylists.path == "/rest/getPlaylists")
     }
 
+    @Test func getArtistInfo2Path() {
+        #expect(SubsonicEndpoint.getArtistInfo2(id: "ar-1").path == "/rest/getArtistInfo2")
+    }
+
     @Test func getSimilarSongs2Path() {
         #expect(SubsonicEndpoint.getSimilarSongs2(id: "1").path == "/rest/getSimilarSongs2")
     }
@@ -97,6 +101,7 @@ struct SubsonicEndpointsTests {
             .getBookmarks,
             .createBookmark(id: "1", position: 0),
             .deleteBookmark(id: "1"),
+            .getArtistInfo2(id: "1"),
             .getSimilarSongs2(id: "1"),
             .getTopSongs(artist: "a"),
             .getMusicFolders,
@@ -411,6 +416,20 @@ struct SubsonicEndpointsTests {
         #expect(findQueryItem(items, name: "artist") == "Radiohead")
         #expect(findQueryItem(items, name: "count") == "25")
         #expect(items.count == 2)
+    }
+
+    // MARK: - Query Item Tests: getArtistInfo2
+
+    @Test func getArtistInfo2QueryItems() {
+        let items = SubsonicEndpoint.getArtistInfo2(id: "ar-1", count: 15).queryItems
+        #expect(findQueryItem(items, name: "id") == "ar-1")
+        #expect(findQueryItem(items, name: "count") == "15")
+        #expect(items.count == 2)
+    }
+
+    @Test func getArtistInfo2DefaultCount() {
+        let items = SubsonicEndpoint.getArtistInfo2(id: "ar-2").queryItems
+        #expect(findQueryItem(items, name: "count") == "20")
     }
 
     // MARK: - Query Item Tests: setRating

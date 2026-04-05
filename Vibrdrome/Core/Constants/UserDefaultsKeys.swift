@@ -59,6 +59,15 @@ enum UserDefaultsKeys {
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"
 
+    // MARK: - Discord
+
+    static let discordRPCEnabled = "discordRPCEnabled"
+
+    // MARK: - ListenBrainz
+
+    static let listenBrainzEnabled = "listenBrainzEnabled"
+    static let listenBrainzToken = "listenBrainzToken"
+
     // MARK: - Library Layout
 
     static let libraryLayout = "libraryLayout"

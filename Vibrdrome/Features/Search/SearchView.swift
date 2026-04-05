@@ -244,6 +244,7 @@ struct SearchView: View {
                     }
                     .font(.subheadline)
                     .foregroundColor(.accentColor)
+                    .accessibilityIdentifier("clearRecentButton")
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)

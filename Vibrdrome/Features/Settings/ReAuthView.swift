@@ -157,6 +157,7 @@ struct ReAuthView: View {
         .controlSize(.large)
         #endif
         .disabled(password.isEmpty || isTesting)
+        .accessibilityIdentifier("signInButton")
     }
 
     private var signOutButton: some View {
@@ -174,6 +175,7 @@ struct ReAuthView: View {
         .buttonStyle(.bordered)
         .controlSize(.regular)
         #endif
+        .accessibilityIdentifier("signOutButton")
     }
 
     // MARK: - Actions

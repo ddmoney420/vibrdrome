@@ -26,11 +26,13 @@ struct EQView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("eqDoneButton")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Reset") {
                         eqEngine.applyPreset(EQPresets.flat)
                     }
+                    .accessibilityIdentifier("eqResetButton")
                 }
             }
             .alert("Save Preset", isPresented: $showSaveAlert) {
@@ -174,6 +176,7 @@ struct EQView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+            .accessibilityIdentifier("savePresetButton")
         }
     }
 

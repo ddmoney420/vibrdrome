@@ -115,6 +115,23 @@ struct MiniPlayerView: View {
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .accessibilityIdentifier("MiniPlayer")
+        #if os(iOS)
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 40, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    guard abs(horizontal) > abs(vertical) * 1.5 else { return }
+                    if horizontal < -40 {
+                        Haptics.light()
+                        engine.next()
+                    } else if horizontal > 40 {
+                        Haptics.light()
+                        engine.previous()
+                    }
+                }
+        )
+        #endif
         .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
             await loadDominantColor()
         }

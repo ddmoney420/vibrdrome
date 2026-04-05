@@ -55,6 +55,11 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
+    @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
+    #if os(macOS)
+    @AppStorage(UserDefaultsKeys.discordRPCEnabled) private var discordRPCEnabled: Bool = false
+    #endif
+    @AppStorage(UserDefaultsKeys.listenBrainzToken) private var listenBrainzToken: String = ""
     @AppStorage(UserDefaultsKeys.appColorScheme) private var appColorScheme: String = "system"
     @AppStorage(UserDefaultsKeys.accentColorTheme) private var accentColorTheme: String = "blue"
     @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
@@ -238,6 +243,38 @@ struct SettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("scrobblingToggle")
+
+            Toggle(isOn: $listenBrainzEnabled) {
+                Label("ListenBrainz", systemImage: "dot.radiowaves.right")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("listenBrainzToggle")
+
+            #if os(macOS)
+            Toggle(isOn: $discordRPCEnabled) {
+                Label("Discord Rich Presence", systemImage: "gamecontroller.fill")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("discordRPCToggle")
+            .onChange(of: discordRPCEnabled) { _, newValue in
+                Task {
+                    if !newValue {
+                        await DiscordRPCClient.shared.clearPresence()
+                        await DiscordRPCClient.shared.disconnect()
+                    }
+                }
+            }
+            #endif
+
+            if listenBrainzEnabled {
+                SecureField("User Token", text: $listenBrainzToken)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("listenBrainzTokenField")
+            }
 
             Toggle(isOn: $gaplessPlayback) {
                 Label("Gapless Playback", systemImage: "waveform.path")

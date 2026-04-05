@@ -39,4 +39,19 @@ final class DownloadedSong {
             localFilePath: localFilePath
         )
     }
+
+    func toSong() -> Song {
+        Song(
+            id: songId, parent: nil, title: songTitle,
+            album: albumName, artist: artistName,
+            albumId: nil, artistId: nil,
+            track: nil, year: nil, genre: nil,
+            coverArt: coverArtId, size: nil,
+            contentType: nil, suffix: nil,
+            duration: duration, bitRate: nil,
+            path: nil, discNumber: nil, created: nil,
+            starred: nil, userRating: nil, bpm: nil,
+            replayGain: nil, musicBrainzId: nil
+        )
+    }
 }

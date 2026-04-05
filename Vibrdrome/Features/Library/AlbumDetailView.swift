@@ -216,7 +216,7 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func secondaryActionsRow(_ album: Album) -> some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 0) {
             Button {
                 if let songs = album.song {
                     DownloadManager.shared.downloadAlbum(
@@ -229,6 +229,28 @@ struct AlbumDetailView: View {
                     .font(.title3)
             }
             .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumDownloadButton")
+
+            Spacer()
+
+            if let artist = album.artist {
+                Button {
+                    AudioEngine.shared.startRadio(artistName: artist)
+                } label: {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.title3)
+                }
+                .accessibilityIdentifier("albumStartRadioButton")
+
+                Spacer()
+            }
+
+            let shareText = "🎶 \(album.name) — \(album.artist ?? "Unknown Artist")\n\(album.songCount ?? 0) songs"
+            ShareLink(item: shareText) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.title3)
+            }
+            .accessibilityIdentifier("albumShareButton")
 
             Spacer()
 
@@ -251,6 +273,7 @@ struct AlbumDetailView: View {
                     .font(.title3)
                     .foregroundStyle(isStarred ? .pink : .secondary)
             }
+            .accessibilityIdentifier("albumFavoriteButton")
         }
     }
 
@@ -318,7 +341,6 @@ struct AlbumDetailView: View {
             // Load similar albums from first song
             if let firstSong = album?.song?.first {
                 let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)
-                let albumIds = Set(similar.compactMap(\.albumId)).subtracting([albumId])
                 var albums: [Album] = []
                 var seen = Set<String>()
                 for song in similar {

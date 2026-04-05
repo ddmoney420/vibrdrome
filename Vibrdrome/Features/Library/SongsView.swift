@@ -5,11 +5,14 @@ struct SongsView: View {
     @Environment(AppState.self) private var appState
     @State private var songs: [Song] = []
     @State private var isLoading = true
+    @State private var hasMore = true
     @State private var searchText = ""
     @State private var searchResults: [Song] = []
     @State private var isSearching = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @State private var sortBy: SongSortOption = .title
+
+    private let albumPageSize = 50
 
     enum SongSortOption: String, CaseIterable {
         case title, artist, album, duration
@@ -35,6 +38,37 @@ struct SongsView: View {
 
     var body: some View {
         List {
+            if !displayedSongs.isEmpty {
+                HStack(spacing: 12) {
+                    Button {
+                        let songs = displayedSongs
+                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    } label: {
+                        Label("Play All", systemImage: "play.fill")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.accentColor)
+                    .accessibilityIdentifier("songsPlayAllButton")
+
+                    Button {
+                        let shuffled = displayedSongs.shuffled()
+                        AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                    } label: {
+                        Label("Shuffle", systemImage: "shuffle")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.accentColor)
+                    .accessibilityIdentifier("songsShuffleButton")
+                }
+                .listRowSeparator(.hidden)
+            }
+
             ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
                 Button {
                     AudioEngine.shared.play(song: song, from: displayedSongs, at: index)
@@ -44,6 +78,11 @@ struct SongsView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("songRow_\(song.id)")
                 .trackContextMenu(song: song)
+                .onAppear {
+                    if searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
+                        Task { await loadMore() }
+                    }
+                }
             }
 
             if isLoading {
@@ -54,7 +93,7 @@ struct SongsView: View {
                 }
             }
         }
-        .navigationTitle("Songs")
+        .navigationTitle(songs.isEmpty ? "Songs" : "Songs (\(songs.count))")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -162,11 +201,43 @@ struct SongsView: View {
         return "\(mins):\(String(format: "%02d", secs))"
     }
 
+    @State private var albumOffset = 0
+
     private func loadSongs() async {
         isLoading = true
+        hasMore = true
+        albumOffset = 0
+        songs = []
         defer { isLoading = false }
+        await loadNextBatch()
+    }
+
+    private func loadMore() async {
+        guard hasMore, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        await loadNextBatch()
+    }
+
+    private func loadNextBatch() async {
         do {
-            songs = try await appState.subsonicClient.getRandomSongs(size: 100)
+            let albums = try await appState.subsonicClient.getAlbumList(
+                type: .alphabeticalByName, size: albumPageSize, offset: albumOffset
+            )
+            guard !albums.isEmpty else {
+                hasMore = false
+                return
+            }
+            var newSongs: [Song] = []
+            for album in albums {
+                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                if let albumSongs = detail.song {
+                    newSongs.append(contentsOf: albumSongs)
+                }
+            }
+            songs.append(contentsOf: newSongs)
+            albumOffset += albums.count
+            hasMore = albums.count >= albumPageSize
         } catch {}
     }
 }

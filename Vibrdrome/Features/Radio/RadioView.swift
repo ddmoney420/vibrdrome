@@ -47,6 +47,7 @@ struct RadioView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Find Stations")
+                    .accessibilityIdentifier("findStationsButton")
 
                     Button { showAddSheet = true } label: {
                         HStack(spacing: 8) {
@@ -66,6 +67,7 @@ struct RadioView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Add URL")
+                    .accessibilityIdentifier("addURLButton")
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
@@ -107,6 +109,7 @@ struct RadioView: View {
                     Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
                 }
                 .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("viewToggleButton")
             }
         }
         #endif

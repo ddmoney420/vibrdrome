@@ -28,8 +28,46 @@ struct DownloadsView: View {
                         Text("Downloaded songs will appear here")
                     }
                 } else {
+                    let songs = completedDownloads.map { $0.toSong() }
+                    if !songs.isEmpty {
+                        HStack(spacing: 12) {
+                            Button {
+                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                            } label: {
+                                Label("Play All", systemImage: "play.fill")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.accentColor)
+                            .accessibilityIdentifier("downloadsPlayAllButton")
+
+                            Button {
+                                let shuffled = songs.shuffled()
+                                AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                            } label: {
+                                Label("Shuffle", systemImage: "shuffle")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.accentColor)
+                            .accessibilityIdentifier("downloadsShuffleButton")
+                        }
+                        .listRowSeparator(.hidden)
+                    }
+
                     ForEach(completedDownloads) { download in
                         DownloadedSongRow(download: download)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                let allSongs = completedDownloads.map { $0.toSong() }
+                                let song = download.toSong()
+                                let playIndex = allSongs.firstIndex(where: { $0.id == song.id }) ?? 0
+                                AudioEngine.shared.play(song: song, from: allSongs, at: playIndex)
+                            }
                     }
                     .onDelete { offsets in
                         deleteDownloads(completedDownloads, at: offsets)

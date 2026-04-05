@@ -40,6 +40,34 @@ struct FavoritesView: View {
                 // Starred Songs
                 if let songs = starred.song, !songs.isEmpty {
                     Section("Songs") {
+                        HStack(spacing: 12) {
+                            Button {
+                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                            } label: {
+                                Label("Play All", systemImage: "play.fill")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.accentColor)
+                            .accessibilityIdentifier("favPlayAllButton")
+
+                            Button {
+                                let shuffled = songs.shuffled()
+                                AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                            } label: {
+                                Label("Shuffle", systemImage: "shuffle")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.accentColor)
+                            .accessibilityIdentifier("favShuffleButton")
+                        }
+                        .listRowSeparator(.hidden)
+
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             TrackRow(song: song, showTrackNumber: false)
                                 .trackContextMenu(song: song, queue: songs, index: index)

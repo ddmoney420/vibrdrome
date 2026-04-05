@@ -62,6 +62,7 @@ struct StarButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(starred ? "Remove from Favorites" : "Add to Favorites")
+        .accessibilityIdentifier("starButton_\(id)")
     }
 
     private func autoDownloadIfEnabled() {

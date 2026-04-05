@@ -92,6 +92,9 @@ final class AppState {
         subsonicClient.updateCredentials(baseURL: serverURL, username: username, password: password)
         isConfigured = true
         errorMessage = nil
+        #if os(iOS)
+        SubsonicClientProvider.shared.client = subsonicClient
+        #endif
     }
 
     func loadSavedCredentials() {

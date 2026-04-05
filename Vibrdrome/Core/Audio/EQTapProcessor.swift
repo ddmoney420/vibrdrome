@@ -207,6 +207,11 @@ enum EQTapProcessor {
         let coeffs = ctx.coefficients
         guard !coeffs.isEmpty else { return }
 
+        // Compute pre-gain attenuation to prevent clipping from EQ boost.
+        // Find the maximum positive gain across all bands and reduce input by that amount.
+        let maxBoostDB = gains.max() ?? 0
+        let preGain: Float = maxBoostDB > 0.5 ? powf(10, -maxBoostDB / 20) : 1.0
+
         let bufferList = UnsafeMutableAudioBufferListPointer(bufferListInOut)
         let frameCount = Int(numberFrames)
 
@@ -216,6 +221,13 @@ enum EQTapProcessor {
         for ch in 0..<bufferList.count where ch < ctx.delays.count {
             guard let data = bufferList[ch].mData else { continue }
             let buffer = data.assumingMemoryBound(to: Float.self)
+
+            // Apply pre-gain to prevent clipping from EQ boost
+            if preGain < 1.0 {
+                for i in 0..<frameCount {
+                    buffer[i] *= preGain
+                }
+            }
 
             for band in 0..<min(coeffs.count, ctx.delays[ch].count) {
                 let c = coeffs[band]
@@ -235,7 +247,8 @@ enum EQTapProcessor {
                 ctx.delays[ch][band] = (xn1, xn2, yn1, yn2)
             }
 
-            // Clamp output to prevent cascaded gain overflow
+            // Hard clamp — the pre-gain above should prevent this from triggering,
+            // but this is a safety net against any remaining overflow
             for i in 0..<frameCount {
                 buffer[i] = min(max(buffer[i], -1.0), 1.0)
             }

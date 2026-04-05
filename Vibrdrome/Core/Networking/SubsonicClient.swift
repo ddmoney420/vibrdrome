@@ -231,9 +231,12 @@ final class SubsonicClient {
     }
 
     func search(query: String, artistCount: Int = 20, albumCount: Int = 20,
-                songCount: Int = 40, musicFolderId: String? = nil) async throws -> SearchResult3 {
+                songCount: Int = 40, artistOffset: Int = 0, albumOffset: Int = 0,
+                songOffset: Int = 0, musicFolderId: String? = nil) async throws -> SearchResult3 {
         let body = try await request(.search3(query: query, artistCount: artistCount,
                                               albumCount: albumCount, songCount: songCount,
+                                              artistOffset: artistOffset, albumOffset: albumOffset,
+                                              songOffset: songOffset,
                                               musicFolderId: musicFolderId))
         return body.searchResult3 ?? SearchResult3(artist: nil, album: nil, song: nil)
     }
@@ -353,6 +356,14 @@ final class SubsonicClient {
 
     func deleteBookmark(id: String) async throws {
         try await performAction(.deleteBookmark(id: id))
+    }
+
+    func getArtistInfo(id: String, count: Int = 20) async throws -> ArtistInfo2 {
+        let body = try await request(.getArtistInfo2(id: id, count: count))
+        return body.artistInfo2 ?? ArtistInfo2(
+            similarArtist: nil, biography: nil, musicBrainzId: nil,
+            lastFmUrl: nil, smallImageUrl: nil, mediumImageUrl: nil, largeImageUrl: nil
+        )
     }
 
     func getSimilarSongs(id: String, count: Int = 50) async throws -> [Song] {

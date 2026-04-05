@@ -154,6 +154,7 @@ extension AudioEngine {
                 }
             }
         }
+        Task { await ListenBrainzClient.shared.submitListen(song: song) }
     }
 
     func submitScrobbleIfNeeded() {
@@ -174,6 +175,7 @@ extension AudioEngine {
                     }
                 }
             }
+            Task { await ListenBrainzClient.shared.submitListen(song: song) }
         }
     }
 
@@ -189,6 +191,9 @@ extension AudioEngine {
                     observerLog.error("Failed to scrobble now-playing: \(error)")
                 }
             }
+        }
+        if let song = currentSong {
+            Task { await ListenBrainzClient.shared.submitNowPlaying(song: song) }
         }
     }
 }
