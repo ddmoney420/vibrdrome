@@ -126,9 +126,11 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Download a song
 - [ ] Downloaded song shows green arrow indicator
 - [ ] Offline banner appears when network disconnected
+- [ ] Tap offline banner navigates to Downloads view
 - [ ] Downloaded songs play while offline
 - [ ] Downloads view Play All / Shuffle buttons work
 - [ ] Tap a downloaded song to play from that point
+- [ ] Search works offline (finds downloaded songs by title/artist/album)
 
 ## Scrobbling
 

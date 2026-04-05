@@ -91,6 +91,9 @@ struct AlbumsView: View {
             }
         }
         .listStyle(.plain)
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle(title)
         .overlay {
             if isLoading && albums.isEmpty {

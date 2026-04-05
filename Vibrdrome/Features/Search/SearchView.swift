@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 private let recentSearchesKey = "recentSearches"
@@ -5,6 +6,7 @@ private let maxRecentSearches = 10
 
 struct SearchView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var query = ""
     @State private var results: SearchResult3?
     @State private var isSearching = false
@@ -344,9 +346,31 @@ struct SearchView: View {
             results = searchResults
         } catch {
             guard !Task.isCancelled else { return }
-            searchError = ErrorPresenter.userMessage(for: error)
-            results = nil
+            // Offline fallback: search downloaded songs locally
+            let offlineResults = searchDownloadsLocally(query: query)
+            if let songs = offlineResults, !songs.isEmpty {
+                searchError = nil
+                results = SearchResult3(artist: nil, album: nil, song: songs)
+            } else {
+                searchError = ErrorPresenter.userMessage(for: error)
+                results = nil
+            }
         }
+    }
+
+    private func searchDownloadsLocally(query: String) -> [Song]? {
+        let lowered = query.lowercased()
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.isComplete == true }
+        )
+        guard let downloads = try? modelContext.fetch(descriptor) else { return nil }
+        let matched = downloads.filter {
+            $0.songTitle.localizedCaseInsensitiveContains(lowered)
+                || ($0.artistName?.localizedCaseInsensitiveContains(lowered) ?? false)
+                || ($0.albumName?.localizedCaseInsensitiveContains(lowered) ?? false)
+        }
+        guard !matched.isEmpty else { return nil }
+        return matched.map { $0.toSong() }
     }
 
     private func saveRecentSearch(_ query: String) {

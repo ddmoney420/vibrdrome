@@ -23,6 +23,9 @@ struct PlayHistoryView: View {
         }
         .accessibilityIdentifier("playHistoryList")
         .listStyle(.plain)
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle("Play History")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

@@ -81,6 +81,9 @@ struct FavoritesView: View {
             }
         }
         .listStyle(.plain)
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle("Favorites")
         .overlay {
             if isLoading && starred == nil {

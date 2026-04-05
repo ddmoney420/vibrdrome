@@ -4,6 +4,17 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 24 — April 5, 2026
+- Offline mode fix: downloaded songs now playable and discoverable when offline
+- Offline banner tappable — navigates directly to Downloads
+- Offline search — searches downloaded songs locally when server unreachable
+- Bottom padding fix on 7 views (mini player no longer covers content)
+
+**TestFlight Notes:**
+> Offline playback fully fixed — tap the offline banner to browse downloads,
+> search works offline against downloaded songs, mini player no longer covers
+> list content on any screen.
+
 ### Build 22 — April 5, 2026
 - ListenBrainz scrobbling: full integration with settings toggle and token input
 - Discord Rich Presence (macOS): shows song/artist/album in Discord status

@@ -32,6 +32,9 @@ struct GenresView: View {
             .accessibilityIdentifier("genreRow_\(genre.value)")
         }
         .listStyle(.plain)
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle("Genres")
         .overlay {
             if isLoading && genres.isEmpty {

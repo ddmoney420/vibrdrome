@@ -85,6 +85,9 @@ struct PlaylistDetailView: View {
             }
         }
         .listStyle(.plain)
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle(playlist?.name ?? "Playlist")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)

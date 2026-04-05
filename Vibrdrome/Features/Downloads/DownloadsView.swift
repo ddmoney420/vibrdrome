@@ -92,6 +92,9 @@ struct DownloadsView: View {
             }
         }
         .accessibilityIdentifier("downloadsList")
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle("Downloads")
         .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
