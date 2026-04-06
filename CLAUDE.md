@@ -63,7 +63,9 @@ Run in order before every TestFlight build:
 9. Update CHANGELOG.md with build number and TestFlight notes
 10. Update docs/changelog.html with new build entry
 11. Update docs/features.html if new features were added
-12. Increment CURRENT_PROJECT_VERSION in project.yml (all 3 targets)
+12. Update docs/index.html feature grid if new features were added
+13. Update TESTING.md with test items for new features
+14. Increment CURRENT_PROJECT_VERSION in project.yml (all 3 targets)
 13. Regenerate xcodegen and restore entitlements
 
 ## Post-XcodeGen Entitlements Restore
