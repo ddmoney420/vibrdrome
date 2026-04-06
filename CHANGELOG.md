@@ -4,6 +4,20 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 25 — April 5, 2026
+- Now Playing redesign: heart/stars/sleep on one row, shuffle/repeat flank transport controls, visible volume slider, streaming info (bitrate/format), simplified bottom toolbar with More menu
+- Album Detail redesign: full-bleed parallax album art header with shrink/fade on scroll, circular frosted glass action buttons (heart/play/shuffle/more)
+- Watch app: album artwork now displayed, auto-reconnect when watch app installs
+- Songs view performance: 1 API call instead of 51 per page
+- Playlist share button added
+- TrackRow download button accessibility identifier
+
+**TestFlight Notes:**
+> Major Now Playing and Album Detail UI redesign based on user feedback.
+> Now Playing: shuffle/repeat alongside transport, visible volume slider,
+> streaming info, simplified toolbar. Album Detail: parallax art header,
+> circular action buttons. Watch app now shows album artwork.
+
 ### Build 24 — April 5, 2026
 - Offline mode fix: downloaded songs now playable and discoverable when offline
 - Offline banner tappable — navigates directly to Downloads

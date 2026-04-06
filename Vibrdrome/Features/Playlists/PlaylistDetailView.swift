@@ -112,6 +112,13 @@ struct PlaylistDetailView: View {
                             Label("Add All to Queue", systemImage: "text.append")
                         }
 
+                        if let playlist {
+                            let shareText = "🎶 \(playlist.name) — \(playlist.songCount ?? 0) songs"
+                            ShareLink(item: shareText) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                        }
+
                         Divider()
 
                         if let playlist, let songs = playlist.entry, !songs.isEmpty {

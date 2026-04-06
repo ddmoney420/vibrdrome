@@ -89,6 +89,9 @@ final class NowPlayingManager {
                     let artwork = makeArtwork(from: image)
                     self.currentInfo[MPMediaItemPropertyArtwork] = artwork
                     self.infoCenter.nowPlayingInfo = self.currentInfo
+                    #if os(iOS)
+                    self.sendArtworkToWatch(image: image, song: song)
+                    #endif
                 } catch {
                     // Cover art loading failed, not critical
                 }
@@ -149,6 +152,20 @@ final class NowPlayingManager {
         }
         #endif
     }
+
+    #if os(iOS)
+    private func sendArtworkToWatch(image: UIImage, song: Song) {
+        guard let small = image.preparingThumbnail(of: CGSize(width: 120, height: 120)),
+              let jpegData = small.jpegData(compressionQuality: 0.6) else { return }
+        WatchSessionManager.shared.sendNowPlayingUpdate(
+            title: song.title,
+            artist: song.artist ?? "Unknown Artist",
+            album: song.album ?? "",
+            isPlaying: AudioEngine.shared.isPlaying,
+            coverArtData: jpegData
+        )
+    }
+    #endif
 
     private func updateWidget(title: String, artist: String, album: String,
                               isPlaying: Bool, coverArtId: String?) {

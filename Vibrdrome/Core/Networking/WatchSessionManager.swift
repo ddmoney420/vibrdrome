@@ -76,6 +76,18 @@ final class WatchSessionManager: NSObject, ObservableObject {
         ], replyHandler: nil)
     }
 
+    /// Re-send current now playing state (e.g. after watch app installs or session activates)
+    private func sendCurrentStateIfPlaying() {
+        let engine = AudioEngine.shared
+        guard let song = engine.currentSong else { return }
+        sendNowPlayingUpdate(
+            title: song.title,
+            artist: song.artist ?? "Unknown Artist",
+            album: song.album ?? "",
+            isPlaying: engine.isPlaying
+        )
+    }
+
     /// Send library data (playlists, recent albums) — call periodically or on watch request
     func sendLibraryData(recentAlbums: [[String: String]], playlists: [[String: String]]) {
         guard isReady else { return }
@@ -95,7 +107,17 @@ extension WatchSessionManager: WCSessionDelegate {
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
-    ) {}
+    ) {
+        if activationState == .activated {
+            Task { @MainActor in sendCurrentStateIfPlaying() }
+        }
+    }
+
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        if session.isWatchAppInstalled {
+            Task { @MainActor in sendCurrentStateIfPlaying() }
+        }
+    }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
 

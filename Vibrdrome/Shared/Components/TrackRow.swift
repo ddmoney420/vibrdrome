@@ -55,6 +55,7 @@ struct TrackRow: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("trackDownloadButton_\(song.id)")
             }
 
             if song.starred != nil {

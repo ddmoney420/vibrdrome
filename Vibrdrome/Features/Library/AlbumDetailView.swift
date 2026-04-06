@@ -70,6 +70,7 @@ struct AlbumDetailView: View {
                 #endif
             }
         }
+        .coordinateSpace(name: "albumScroll")
         .navigationTitle(album?.name ?? "Album")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -129,11 +130,38 @@ struct AlbumDetailView: View {
     #else
     @ViewBuilder
     private func albumHeaderIOS(_ album: Album) -> some View {
-        VStack(spacing: 12) {
-            AlbumArtView(coverArtId: album.coverArt, size: 240, cornerRadius: 12)
-                .shadow(radius: 8)
-                .padding(.top, 20)
+        GeometryReader { geo in
+            let minY = geo.frame(in: .named("albumScroll")).minY
+            let height: CGFloat = 320
+            let parallaxOffset = minY > 0 ? -minY / 2 : 0
+            let scale = minY > 0 ? 1 + minY / 500 : 1
+            let opacity = minY < -100 ? max(0, 1 + (minY + 100) / 150) : 1.0
 
+            ZStack {
+                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0)
+                    .frame(width: geo.size.width, height: height)
+                    .clipped()
+                    .scaleEffect(scale)
+                    .offset(y: parallaxOffset)
+                    .opacity(opacity)
+
+                // Gradient fade at bottom
+                VStack {
+                    Spacer()
+                    LinearGradient(
+                        colors: [.clear, Color(.systemBackground)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 100)
+                }
+            }
+            .frame(width: geo.size.width, height: height)
+        }
+        .frame(height: 320)
+
+        // Album info below art
+        VStack(spacing: 6) {
             Text(album.name)
                 .font(.title2)
                 .bold()
@@ -148,6 +176,7 @@ struct AlbumDetailView: View {
             albumMetadataRow(album)
         }
         .padding(.horizontal, 20)
+        .padding(.top, 4)
     }
     #endif
 
@@ -176,24 +205,115 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func actionButtons(_ album: Album) -> some View {
-        VStack(spacing: 12) {
-            playShuffleRow(album)
-            secondaryActionsRow(album)
+        #if os(iOS)
+        circularActionButtons(album)
+        #else
+        macOSActionButtons(album)
+        #endif
+    }
+
+    #if os(iOS)
+    @ViewBuilder
+    private func circularActionButtons(_ album: Album) -> some View {
+        HStack(spacing: 24) {
+            // Heart
+            circularButton(
+                icon: isStarred ? "heart.fill" : "heart",
+                tint: isStarred ? .pink : .secondary
+            ) {
+                let wasStarred = isStarred
+                isStarred = !wasStarred
+                Haptics.light()
+                Task {
+                    do {
+                        if wasStarred {
+                            try await appState.subsonicClient.unstar(albumId: albumId)
+                        } else {
+                            try await appState.subsonicClient.star(albumId: albumId)
+                        }
+                    } catch { isStarred = wasStarred }
+                }
+            }
+            .accessibilityIdentifier("albumFavoriteButton")
+
+            // Play
+            circularButton(icon: "play.fill", tint: .primary) {
+                if let songs = album.song, let first = songs.first {
+                    Haptics.medium()
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                }
+            }
+            .accessibilityIdentifier("albumPlayButton")
+
+            // Shuffle
+            circularButton(icon: "shuffle", tint: .primary) {
+                if var songs = album.song, !songs.isEmpty {
+                    Haptics.medium()
+                    songs.shuffle()
+                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                }
+            }
+            .accessibilityIdentifier("albumShuffleButton")
+
+            albumMoreMenu(album)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
     }
 
     @ViewBuilder
-    private func playShuffleRow(_ album: Album) -> some View {
+    private func albumMoreMenu(_ album: Album) -> some View {
+        Menu {
+            Button {
+                if let songs = album.song {
+                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
+                }
+            } label: {
+                Label("Download Album", systemImage: "arrow.down.circle")
+            }
+            if let artist = album.artist {
+                Button {
+                    AudioEngine.shared.startRadio(artistName: artist)
+                } label: {
+                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                }
+            }
+            let shareText = "\(album.name) — \(album.artist ?? "Unknown Artist")\n\(album.songCount ?? 0) songs"
+            ShareLink(item: shareText) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.body)
+                .fontWeight(.semibold)
+                .frame(width: 48, height: 48)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityIdentifier("albumMoreMenu")
+    }
+
+    private func circularButton(icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.body)
+                .fontWeight(.semibold)
+                .foregroundStyle(tint)
+                .frame(width: 48, height: 48)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+    #endif
+
+    #if os(macOS)
+    @ViewBuilder
+    private func macOSActionButtons(_ album: Album) -> some View {
         HStack(spacing: 12) {
             Button {
                 if let songs = album.song, let first = songs.first {
                     AudioEngine.shared.play(song: first, from: songs, at: 0)
                 }
             } label: {
-                Label("Play", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
+                Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -205,77 +325,16 @@ struct AlbumDetailView: View {
                     AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
                 }
             } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .frame(maxWidth: .infinity)
+                Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .controlSize(.large)
             .disabled(album.song?.isEmpty ?? true)
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
-
-    @ViewBuilder
-    private func secondaryActionsRow(_ album: Album) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                if let songs = album.song {
-                    DownloadManager.shared.downloadAlbum(
-                        songs: songs,
-                        client: appState.subsonicClient
-                    )
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.title3)
-            }
-            .disabled(album.song?.isEmpty ?? true)
-            .accessibilityIdentifier("albumDownloadButton")
-
-            Spacer()
-
-            if let artist = album.artist {
-                Button {
-                    AudioEngine.shared.startRadio(artistName: artist)
-                } label: {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.title3)
-                }
-                .accessibilityIdentifier("albumStartRadioButton")
-
-                Spacer()
-            }
-
-            let shareText = "🎶 \(album.name) — \(album.artist ?? "Unknown Artist")\n\(album.songCount ?? 0) songs"
-            ShareLink(item: shareText) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.title3)
-            }
-            .accessibilityIdentifier("albumShareButton")
-
-            Spacer()
-
-            Button {
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Task {
-                    do {
-                        if wasStarred {
-                            try await appState.subsonicClient.unstar(albumId: albumId)
-                        } else {
-                            try await appState.subsonicClient.star(albumId: albumId)
-                        }
-                    } catch {
-                        isStarred = wasStarred
-                    }
-                }
-            } label: {
-                Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .font(.title3)
-                    .foregroundStyle(isStarred ? .pink : .secondary)
-            }
-            .accessibilityIdentifier("albumFavoriteButton")
-        }
-    }
+    #endif
 
     @ViewBuilder
     private func albumFooter(_ album: Album) -> some View {

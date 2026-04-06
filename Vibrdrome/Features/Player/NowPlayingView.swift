@@ -1,28 +1,29 @@
 import SwiftUI
+import SwiftData
 import Nuke
 #if os(iOS)
 import AVKit
 #endif
 
 struct NowPlayingView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(AppState.self) var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var showQueue = false
-    @State private var showEQ = false
-    @State private var isStarred = false
-    @State private var currentRating: Int = 0
+    @State var showQueue = false
+    @State var showEQ = false
+    @State var isStarred = false
+    @State var currentRating: Int = 0
     @State private var sliderValue: Double = 0
     @State private var isDragging = false
     @State private var albumImage: PlatformImage?
     @State private var loadedCoverArtId: String?
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
-    @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer = false
+    @AppStorage(UserDefaultsKeys.disableVisualizer) var disableVisualizer = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @State private var nsWindow: NSWindow?
     #endif
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    var engine: AudioEngine { AudioEngine.shared }
 
     private var artWidth: CGFloat {
         340 // Used by macOS path; iOS uses GeometryReader
@@ -147,7 +148,7 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 380
+            let controlsNeeded: CGFloat = 420
             let maxArtFromWidth = geo.size.width - 80
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
@@ -159,27 +160,25 @@ struct NowPlayingView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 8)
 
-                songInfo
-                    .padding(.bottom, 2)
-
-                metadataBadges
-                    .padding(.bottom, 2)
-
-                starRating
+                iOSSongInfo
                     .padding(.bottom, 4)
 
-                controlsToolbar
-                    .padding(.bottom, 4)
-
-                Spacer(minLength: 0)
-
-                progressSlider
+                heartRow
                     .padding(.bottom, 6)
 
-                playbackControls
+                progressSlider
+                    .padding(.bottom, 2)
+
+                streamingInfo
                     .padding(.bottom, 8)
 
-                actionsToolbar
+                iOSPlaybackRow
+                    .padding(.bottom, 8)
+
+                volumeSlider
+                    .padding(.bottom, 10)
+
+                bottomToolbar
                     .padding(.bottom, 8)
             }
             .padding(.horizontal, 30)
@@ -506,7 +505,7 @@ struct NowPlayingView: View {
 
     // MARK: - Bottom Toolbar
 
-    private var repeatAccessibilityValue: String {
+    var repeatAccessibilityValue: String {
         switch engine.repeatMode {
         case .off: return "Off"
         case .all: return "All"
@@ -516,7 +515,7 @@ struct NowPlayingView: View {
 
     // MARK: - Star Rating
 
-    private var starRating: some View {
+    var starRating: some View {
         HStack(spacing: 8) {
             ForEach(1...5, id: \.self) { star in
                 Image(systemName: star <= currentRating ? "star.fill" : "star")
@@ -537,8 +536,9 @@ struct NowPlayingView: View {
         }
     }
 
-    // MARK: - Controls Toolbar (above progress bar)
+    // MARK: - Controls Toolbar (above progress bar, macOS only)
 
+    #if os(macOS)
     private var controlsToolbar: some View {
         HStack(spacing: 0) {
             Button { engine.toggleShuffle() } label: {
@@ -650,14 +650,11 @@ struct NowPlayingView: View {
         .foregroundColor(.white.opacity(0.5))
     }
 
-    // MARK: - Actions Toolbar (below playback controls)
+    // MARK: - Actions Toolbar (below playback controls, macOS only)
 
     private var actionsToolbar: some View {
         HStack(spacing: 0) {
             Button {
-                #if os(iOS)
-                Haptics.success()
-                #endif
                 guard let song = engine.currentSong else { return }
                 let songId = song.id
                 let wasStarred = isStarred
@@ -688,32 +685,12 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            #if os(iOS)
-            if !disableVisualizer {
-                Button { appState.showVisualizer = true } label: {
-                    Image(systemName: "waveform.path")
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .accessibilityLabel("Visualizer")
-                .accessibilityIdentifier("visualizerButton")
-
-                Spacer()
-            }
-
-            AirPlayButton()
-                .frame(width: 24, height: 24)
-                .accessibilityIdentifier("airPlayButton")
-
-            Spacer()
-            #endif
-
             Button { showQueue = true } label: {
                 Image(systemName: "list.bullet")
             }
             .accessibilityLabel("Show Queue")
             .accessibilityIdentifier("queueButton")
 
-            #if os(macOS)
             Spacer()
 
             Button {
@@ -723,14 +700,14 @@ struct NowPlayingView: View {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
             .accessibilityLabel("Toggle Full Screen")
-            #endif
         }
         .font(.body)
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.5))
     }
+    #endif
 
-    private func formatSleepTime(_ seconds: Int) -> String {
+    func formatSleepTime(_ seconds: Int) -> String {
         let m = seconds / 60
         let s = seconds % 60
         return "\(m):\(String(format: "%02d", s))"

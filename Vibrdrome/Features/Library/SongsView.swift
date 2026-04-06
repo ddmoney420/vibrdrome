@@ -5,14 +5,14 @@ struct SongsView: View {
     @Environment(AppState.self) private var appState
     @State private var songs: [Song] = []
     @State private var isLoading = true
-    @State private var hasMore = true
+    @State private var hasMore = false
     @State private var searchText = ""
     @State private var searchResults: [Song] = []
     @State private var isSearching = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @State private var sortBy: SongSortOption = .title
 
-    private let albumPageSize = 50
+    private let pageSize = 500
 
     enum SongSortOption: String, CaseIterable {
         case title, artist, album, duration
@@ -201,43 +201,31 @@ struct SongsView: View {
         return "\(mins):\(String(format: "%02d", secs))"
     }
 
-    @State private var albumOffset = 0
-
     private func loadSongs() async {
         isLoading = true
-        hasMore = true
-        albumOffset = 0
         songs = []
         defer { isLoading = false }
-        await loadNextBatch()
+        do {
+            let result = try await appState.subsonicClient.search(
+                query: "", artistCount: 0, albumCount: 0, songCount: pageSize
+            )
+            songs = result.song ?? []
+            hasMore = (result.song?.count ?? 0) >= pageSize
+        } catch {}
     }
 
     private func loadMore() async {
         guard hasMore, !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
-        await loadNextBatch()
-    }
-
-    private func loadNextBatch() async {
         do {
-            let albums = try await appState.subsonicClient.getAlbumList(
-                type: .alphabeticalByName, size: albumPageSize, offset: albumOffset
+            let result = try await appState.subsonicClient.search(
+                query: "", artistCount: 0, albumCount: 0,
+                songCount: pageSize, songOffset: songs.count
             )
-            guard !albums.isEmpty else {
-                hasMore = false
-                return
-            }
-            var newSongs: [Song] = []
-            for album in albums {
-                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                if let albumSongs = detail.song {
-                    newSongs.append(contentsOf: albumSongs)
-                }
-            }
+            let newSongs = result.song ?? []
             songs.append(contentsOf: newSongs)
-            albumOffset += albums.count
-            hasMore = albums.count >= albumPageSize
+            hasMore = newSongs.count >= pageSize
         } catch {}
     }
 }
