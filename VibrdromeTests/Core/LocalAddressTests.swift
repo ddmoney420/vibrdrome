@@ -36,7 +36,7 @@ struct LocalAddressTests {
 
     // MARK: - Non-local addresses
 
-    @Test func publicIP() { #expect(!isLocal("http://73.95.255.208:4533")) }
+    @Test func publicIP() { #expect(!isLocal("http://203.0.113.42:4533")) }
     @Test func duckDNS() { #expect(!isLocal("http://example.duckdns.org:4533")) }
     @Test func httpsPublic() { #expect(!isLocal("https://music.example.com")) }
     @Test func private172_15() { #expect(!isLocal("http://172.15.0.1:4533")) }

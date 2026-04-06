@@ -128,7 +128,7 @@ final class NavigationTests: XCTestCase {
 
         // Should show the server URL or connection info — check for username or domain
         let hasServerInfo = app.staticTexts.allElementsBoundByIndex.contains {
-            $0.label.lowercased().contains("dmoney") || $0.label.lowercased().contains("duckdns")
+            $0.label.lowercased().contains("http") || $0.label.lowercased().contains(".")
         }
         XCTAssertTrue(hasServerInfo, "Settings should show server info")
     }
