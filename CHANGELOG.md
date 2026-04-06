@@ -4,6 +4,12 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 26 — April 5, 2026
+- Tap album art in Now Playing to navigate to album detail page (long-press still saves/shares)
+
+**TestFlight Notes:**
+> Tap album art to jump to the album page. Long-press still saves or shares artwork.
+
 ### Build 25 — April 5, 2026
 - Now Playing redesign: heart/stars/sleep on one row, shuffle/repeat flank transport controls, visible volume slider, streaming info (bitrate/format), simplified bottom toolbar with More menu
 - Album Detail redesign: full-bleed parallax album art header with shrink/fade on scroll, circular frosted glass action buttons (heart/play/shuffle/more)

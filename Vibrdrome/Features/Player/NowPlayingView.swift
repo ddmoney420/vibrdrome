@@ -299,6 +299,11 @@ struct NowPlayingView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
         #if os(iOS)
+        .onTapGesture {
+            guard let albumId = engine.currentSong?.albumId else { return }
+            appState.pendingNavigation = .album(id: albumId)
+            appState.showNowPlaying = false
+        }
         .contextMenu {
             if let albumImage {
                 Button {
