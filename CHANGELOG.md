@@ -11,6 +11,7 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 - Playlist Play button: fixed icon blending with background
 - Now Playing spacing: redistributed with Spacers for even breathing room
 - Album art tap: navigates to album detail page
+- 495 unit tests in 34 suites
 
 **TestFlight Notes:**
 > Jukebox mode — play music through your Navidrome server's speakers.
