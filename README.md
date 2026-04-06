@@ -55,7 +55,9 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Smart queue** — auto-continues with similar songs when the queue runs out
 - **Queue sharing** — save your current queue as a playlist
 - **Haptic feedback** — on play/pause, skip, and star actions
-- **Mini player** — capsule shape with spinning album art and circular progress ring
+- **Mini player** — capsule shape with spinning album art, progress ring, swipe left/right to skip
+- **Jukebox mode** — play music through your server's speakers as a remote control
+- **Volume slider** — visible on-screen volume control in Now Playing
 
 ### Library &nbsp; ♬♩♪♩
 - **Library browsing** — artists, albums, songs, genres, playlists, and folder hierarchy
@@ -66,7 +68,10 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Inline download** — download button on every track row
 - **Synced lyrics** — scrolling lyrics with seek-to-line
 - **Artist top songs** — top tracks section on artist pages
+- **Artist biography** — expandable About section from Last.fm/MusicBrainz
+- **Similar artists** — horizontal scroll carousel on artist pages
 - **Similar albums** — discover related albums at the bottom of album detail
+- **Parallax album header** — full-bleed album art that shrinks/fades on scroll
 - **Disc separators** — multi-disc albums show disc headers
 - **Genre artwork** — album art thumbnails in genre browser
 - **Decades view** — browse by era with album art cards
@@ -99,6 +104,10 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Text size picker** — Small, Default, Large, and Extra Large text options
 - **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
 - **Scrobbling** — automatic scrobble submission with offline queuing
+- **ListenBrainz** — scrobble to ListenBrainz with token authentication
+- **Discord Rich Presence** — show what you're listening to on Discord (macOS)
+- **Apple Watch** — companion app with playback controls, queue, library, sleep timer
+- **AirPlay 2** — multi-room streaming via native AVPlayer integration
 
 ---
 
@@ -121,7 +130,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 ## Requirements
 
 - Xcode 16+ (Swift 6.0)
-- iOS 17.0+ / macOS 14.0+
+- iOS 17.0+ / macOS 14.0+ / watchOS 11.0+
 - A Navidrome server (or any Subsonic API-compatible server)
 
 ## Tech Stack
