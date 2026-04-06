@@ -48,11 +48,15 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Album art displays
 - [ ] Fade/scale transition on present
 - [ ] Artist name tappable (navigates to artist)
-- [ ] Album name tappable (navigates to album)
-- [ ] 5-star rating works (tap to rate, tap same to clear)
+- [ ] Heart / 5-star rating / sleep timer on one row
+- [ ] Star rating works (tap to rate, tap same to clear)
 - [ ] Sleep timer countdown shows next to moon icon
-- [ ] Shuffle / repeat toggles work
-- [ ] EQ sheet opens
+- [ ] Streaming info shows below progress (bitrate, format, WiFi/Downloaded)
+- [ ] Shuffle / repeat flank transport controls (prev/play/next)
+- [ ] Volume slider adjusts playback volume
+- [ ] Bottom toolbar: Queue, EQ, Visualizer, Lyrics, More(...)
+- [ ] More menu: Speed, AirPlay, Share, Download all work
+- [ ] EQ sheet opens from toolbar
 - [ ] Lyrics sheet opens (synced lyrics auto-scroll and tap-to-seek)
 - [ ] Visualizer opens (if not disabled)
 - [ ] Queue opens
@@ -89,11 +93,10 @@ Run through this checklist before every TestFlight build. Each item should be ve
 
 ## Album Detail
 
-- [ ] Play All / Shuffle buttons
-- [ ] Download album button
-- [ ] Start Radio button
-- [ ] Share button
-- [ ] Heart/favorite button
+- [ ] Parallax album art header (shrinks/fades on scroll)
+- [ ] Circular action buttons: Heart, Play, Shuffle, More(...)
+- [ ] More menu: Download, Start Radio, Share
+- [ ] Heart/favorite toggles correctly
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
 
