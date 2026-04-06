@@ -40,6 +40,8 @@ struct SubsonicResponseBody: Decodable {
     let musicFolders: MusicFoldersWrapper?
     let directory: MusicDirectory?
     let indexes: IndexesResponse?
+    let jukeboxStatus: JukeboxStatus?
+    let jukeboxPlaylist: JukeboxPlaylist?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
@@ -48,6 +50,7 @@ struct SubsonicResponseBody: Decodable {
         case internetRadioStations, lyricsList, playQueue, bookmarks
         case artistInfo2, similarSongs2, topSongs
         case musicFolders, directory, indexes
+        case jukeboxStatus, jukeboxPlaylist
     }
 
     init(from decoder: Decoder) throws {
@@ -79,6 +82,8 @@ struct SubsonicResponseBody: Decodable {
         musicFolders = try container.decodeIfPresent(MusicFoldersWrapper.self, forKey: .musicFolders)
         directory = try container.decodeIfPresent(MusicDirectory.self, forKey: .directory)
         indexes = try container.decodeIfPresent(IndexesResponse.self, forKey: .indexes)
+        jukeboxStatus = try container.decodeIfPresent(JukeboxStatus.self, forKey: .jukeboxStatus)
+        jukeboxPlaylist = try container.decodeIfPresent(JukeboxPlaylist.self, forKey: .jukeboxPlaylist)
     }
 }
 
@@ -376,6 +381,23 @@ struct DirectoryChild: Decodable, Identifiable, Sendable {
     let parent: String?
     let starred: String?
     let created: String?
+}
+
+// MARK: - Jukebox
+
+struct JukeboxStatus: Decodable, Sendable {
+    let currentIndex: Int?
+    let playing: Bool?
+    let gain: Float?
+    let position: Int?
+}
+
+struct JukeboxPlaylist: Decodable, Sendable {
+    let currentIndex: Int?
+    let playing: Bool?
+    let gain: Float?
+    let position: Int?
+    let entry: [Song]?
 }
 
 // MARK: - Bookmarks

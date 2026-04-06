@@ -172,21 +172,34 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func pillNavLink(for pill: LibraryPill) -> some View {
+        quickAccessPill(pill) { pillDestination(for: pill) }
+    }
+
+    @ViewBuilder
+    private func pillDestination(for pill: LibraryPill) -> some View {
         switch pill {
-        case .favorites: quickAccessPill(pill) { FavoritesView() }
-        case .radio: quickAccessPill(pill) { RadioView() }
-        case .generations: quickAccessPill(pill) { GenerationsView() }
-        case .playlists: quickAccessPill(pill) { PlaylistsView() }
-        case .genres: quickAccessPill(pill) { GenresView() }
-        case .downloads: quickAccessPill(pill) { DownloadsView() }
-        case .artists: quickAccessPill(pill) { ArtistsView() }
-        case .recentlyAdded: quickAccessPill(pill) { AlbumsView(listType: .newest, title: "Recently Added") }
-        case .albums: quickAccessPill(pill) { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-        case .recentlyPlayed: quickAccessPill(pill) { AlbumsView(listType: .recent, title: "Recently Played") }
-        case .songs: quickAccessPill(pill) { SongsView() }
-        case .folders: quickAccessPill(pill) { FolderBrowserView() }
-        case .playHistory: quickAccessPill(pill) { PlayHistoryView() }
-        case .smartPlaylists: quickAccessPill(pill) { SmartPlaylistView() }
+        case .favorites: FavoritesView()
+        case .radio: RadioView()
+        case .generations: GenerationsView()
+        case .playlists: PlaylistsView()
+        case .genres: GenresView()
+        case .downloads: DownloadsView()
+        case .artists: ArtistsView()
+        case .recentlyAdded: AlbumsView(listType: .newest, title: "Recently Added")
+        case .albums: AlbumsView(listType: .alphabeticalByName, title: "Albums")
+        case .recentlyPlayed: AlbumsView(listType: .recent, title: "Recently Played")
+        default: pillDestinationExtended(for: pill)
+        }
+    }
+
+    @ViewBuilder
+    private func pillDestinationExtended(for pill: LibraryPill) -> some View {
+        switch pill {
+        case .songs: SongsView()
+        case .folders: FolderBrowserView()
+        case .playHistory: PlayHistoryView()
+        case .smartPlaylists: SmartPlaylistView()
+        case .jukebox: JukeboxView()
         default: EmptyView()
         }
     }

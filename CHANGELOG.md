@@ -4,6 +4,19 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 27 — April 6, 2026
+- Jukebox mode: remote control for server-side audio playback (play/stop/skip/shuffle/volume)
+- Jukebox pill in Library and "Play on Jukebox" in song context menus
+- Visualizer sync: asymmetric smoothing (fast attack, slow decay) and increased gain for better beat reactivity
+- Playlist Play button: fixed icon blending with background
+- Now Playing spacing: redistributed with Spacers for even breathing room
+- Album art tap: navigates to album detail page
+
+**TestFlight Notes:**
+> Jukebox mode — play music through your Navidrome server's speakers.
+> Add the Jukebox pill to your Library or long-press any song > Play on Jukebox.
+> Visualizer is now much more reactive to beats. Now Playing spacing improved.
+
 ### Build 26 — April 5, 2026
 - Tap album art in Now Playing to navigate to album detail page (long-press still saves/shares)
 

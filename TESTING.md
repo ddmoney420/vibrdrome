@@ -108,6 +108,17 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Widget updates on track change
 - [ ] Widget updates on pause/resume
 
+## Jukebox
+
+- [ ] Jukebox pill appears in Library (add via Customize)
+- [ ] JukeboxView loads and shows error if jukebox not enabled on server
+- [ ] Play/Stop controls work (audio plays from server speakers)
+- [ ] Skip next/previous works
+- [ ] Gain slider adjusts server volume
+- [ ] Shuffle and Clear queue work
+- [ ] Tap song in queue skips to it
+- [ ] Long-press any song > "Play on Jukebox" adds and starts
+
 ## CarPlay
 
 - [ ] App appears on CarPlay dashboard

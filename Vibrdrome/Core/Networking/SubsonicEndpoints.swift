@@ -52,6 +52,8 @@ enum SubsonicEndpoint: Sendable {
     case getMusicFolders
     case getIndexes(musicFolderId: String? = nil)
     case getMusicDirectory(id: String)
+    case jukeboxControl(action: String, index: Int? = nil, offset: Int? = nil,
+                        ids: [String]? = nil, gain: Float? = nil)
 
     var path: String {
         switch self {
@@ -92,6 +94,7 @@ enum SubsonicEndpoint: Sendable {
         case .getMusicFolders: "/rest/getMusicFolders"
         case .getIndexes: "/rest/getIndexes"
         case .getMusicDirectory: "/rest/getMusicDirectory"
+        case .jukeboxControl: "/rest/jukeboxControl"
         }
     }
 
@@ -284,6 +287,18 @@ enum SubsonicEndpoint: Sendable {
 
         case .getMusicDirectory(let id):
             return [URLQueryItem(name: "id", value: id)]
+
+        case .jukeboxControl(let action, let index, let offset, let ids, let gain):
+            var items = [URLQueryItem(name: "action", value: action)]
+            if let index { items.append(URLQueryItem(name: "index", value: "\(index)")) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: "\(offset)")) }
+            if let ids {
+                for id in ids {
+                    items.append(URLQueryItem(name: "id", value: id))
+                }
+            }
+            if let gain { items.append(URLQueryItem(name: "gain", value: "\(gain)")) }
+            return items
         }
     }
 }

@@ -397,6 +397,52 @@ final class SubsonicClient {
         return directory
     }
 
+    // MARK: - Jukebox
+
+    func jukeboxGet() async throws -> JukeboxPlaylist {
+        let body = try await request(.jukeboxControl(action: "get"))
+        guard let playlist = body.jukeboxPlaylist else {
+            throw SubsonicError.apiError(code: 0, message: "Jukebox not available")
+        }
+        return playlist
+    }
+
+    func jukeboxStart() async throws {
+        try await performAction(.jukeboxControl(action: "start"))
+    }
+
+    func jukeboxStop() async throws {
+        try await performAction(.jukeboxControl(action: "stop"))
+    }
+
+    func jukeboxSkip(index: Int, offset: Int = 0) async throws {
+        try await performAction(.jukeboxControl(action: "skip", index: index, offset: offset))
+    }
+
+    func jukeboxAdd(ids: [String]) async throws {
+        try await performAction(.jukeboxControl(action: "add", ids: ids))
+    }
+
+    func jukeboxClear() async throws {
+        try await performAction(.jukeboxControl(action: "clear"))
+    }
+
+    func jukeboxRemove(index: Int) async throws {
+        try await performAction(.jukeboxControl(action: "remove", index: index))
+    }
+
+    func jukeboxShuffle() async throws {
+        try await performAction(.jukeboxControl(action: "shuffle"))
+    }
+
+    func jukeboxSetGain(_ gain: Float) async throws {
+        try await performAction(.jukeboxControl(action: "setGain", gain: gain))
+    }
+
+    func jukeboxSet(ids: [String]) async throws {
+        try await performAction(.jukeboxControl(action: "set", ids: ids))
+    }
+
     // MARK: - Reconfigure
 
     func updateCredentials(baseURL: URL, username: String, password: String) {

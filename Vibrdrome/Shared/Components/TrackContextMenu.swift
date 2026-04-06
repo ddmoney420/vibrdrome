@@ -39,6 +39,8 @@ struct TrackContextMenuModifier: ViewModifier {
         Divider()
         libraryActions
         Divider()
+        jukeboxActions
+        Divider()
         navigationActions
     }
 
@@ -108,6 +110,23 @@ struct TrackContextMenuModifier: ViewModifier {
             } else {
                 Label("Favorite", systemImage: "heart")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var jukeboxActions: some View {
+        Button {
+            Task {
+                do {
+                    try await appState.subsonicClient.jukeboxAdd(ids: [song.id])
+                    try await appState.subsonicClient.jukeboxStart()
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Jukebox")
+                        .error("Failed to play on jukebox: \(error)")
+                }
+            }
+        } label: {
+            Label("Play on Jukebox", systemImage: "hifispeaker")
         }
     }
 

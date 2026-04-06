@@ -11,8 +11,8 @@ struct LibraryPillTests {
     }
 
     @Test func allPillsCount() {
-        // 14 original + 1 playHistory = 15
-        #expect(LibraryPill.allCases.count == 16)
+        // 14 original + 1 playHistory + 1 smartPlaylists + 1 jukebox = 17
+        #expect(LibraryPill.allCases.count == 17)
     }
 
     @Test func allCarouselsCount() {
