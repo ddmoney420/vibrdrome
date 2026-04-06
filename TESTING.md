@@ -46,12 +46,17 @@ Run through this checklist before every TestFlight build. Each item should be ve
 ## Now Playing
 
 - [ ] Album art displays
+- [ ] Tap album art navigates to album detail
 - [ ] Fade/scale transition on present
+- [ ] Song title tappable (navigates to album)
 - [ ] Artist name tappable (navigates to artist)
-- [ ] Heart / 5-star rating / sleep timer on one row
+- [ ] Album name tappable (navigates to album)
+- [ ] Heart / 5-star rating / more menu (...) on one row
 - [ ] Star rating works (tap to rate, tap same to clear)
-- [ ] Sleep timer countdown shows next to moon icon
-- [ ] Streaming info shows below progress (bitrate, format, WiFi/Downloaded)
+- [ ] More menu contains: sleep timer, speed, AirPlay, share, download
+- [ ] Streaming info shows below progress (WiFi icon + bitrate + format)
+- [ ] Progress slider has small dot thumb (not blob)
+- [ ] Volume slider has no thumb (thin bar)
 - [ ] Shuffle / repeat flank transport controls (prev/play/next)
 - [ ] Volume slider adjusts playback volume
 - [ ] Bottom toolbar: Queue, EQ, Visualizer, Lyrics, More(...)

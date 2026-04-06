@@ -100,7 +100,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Customizable library** — reorder & show/hide pills and carousels
 - **Library folder switching** — filter by music folder on multi-library servers
-- **Tappable metadata** — tap artist or album name on Now Playing to navigate
+- **Tappable metadata** — tap song title, artist, album name, or album art on Now Playing to navigate
 - **Text size picker** — Small, Default, Large, and Extra Large text options
 - **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
 - **Scrobbling** — automatic scrobble submission with offline queuing

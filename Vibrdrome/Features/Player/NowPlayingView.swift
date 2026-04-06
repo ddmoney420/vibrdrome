@@ -160,7 +160,7 @@ struct NowPlayingView: View {
 
                 albumArt(size: artSize)
 
-                Spacer(minLength: 12)
+                Spacer(minLength: 6)
 
                 iOSSongInfo
                     .padding(.bottom, 8)
@@ -436,22 +436,60 @@ struct NowPlayingView: View {
     private var progressSlider: some View {
         let songDuration = engine.duration > 0 ? engine.duration : Double(engine.currentSong?.duration ?? 1)
         return VStack(spacing: 4) {
+            #if os(iOS)
+            GeometryReader { geo in
+                let fraction = songDuration > 0 ? sliderValue / songDuration : 0
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.2))
+                        .frame(height: 4)
+
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: geo.size.width * fraction, height: 4)
+
+                    // Small dot thumb
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 10, height: 10)
+                        .offset(x: geo.size.width * fraction - 5)
+                }
+                .frame(height: geo.size.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            let frac = max(0, min(1, value.location.x / geo.size.width))
+                            sliderValue = songDuration * frac
+                        }
+                        .onEnded { value in
+                            let frac = max(0, min(1, value.location.x / geo.size.width))
+                            sliderValue = songDuration * frac
+                            engine.seek(to: sliderValue)
+                            isDragging = false
+                        }
+                )
+            }
+            .frame(height: 20)
+            .accessibilityLabel("Track Progress")
+            .onChange(of: engine.currentTime) { _, newTime in
+                if !isDragging { sliderValue = newTime }
+            }
+            #else
             Slider(
                 value: $sliderValue,
                 in: 0...max(songDuration, 1)
             ) { editing in
                 isDragging = editing
-                if !editing {
-                    engine.seek(to: sliderValue)
-                }
+                if !editing { engine.seek(to: sliderValue) }
             }
             .tint(.white)
             .accessibilityLabel("Track Progress")
             .onChange(of: engine.currentTime) { _, newTime in
-                if !isDragging {
-                    sliderValue = newTime
-                }
+                if !isDragging { sliderValue = newTime }
             }
+            #endif
 
             HStack {
                 Text(formatDuration(sliderValue))

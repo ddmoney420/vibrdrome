@@ -4,6 +4,24 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 28 — April 6, 2026
+- Now Playing polish: all titles tappable (song→album, artist→artist, album→album)
+- Album name restored below artist in Now Playing
+- Bigger heart and star icons
+- Sleep timer moved into "..." more menu (with speed, AirPlay, share, download)
+- Progress slider: small dot thumb instead of system blob
+- Volume slider: thin bar without thumb knob
+- WiFi/download icon in streaming info
+- Bottom toolbar tighter spacing
+- Playlist Play button matches Shuffle style
+- Reduced gap between album art and song title
+- 495 unit tests in 34 suites
+
+**TestFlight Notes:**
+> Now Playing UI polish based on user feedback. All titles tappable,
+> bigger icons, smaller slider thumbs, sleep timer in more menu,
+> tighter spacing throughout.
+
 ### Build 27 — April 6, 2026
 - Jukebox mode: remote control for server-side audio playback (play/stop/skip/shuffle/volume)
 - Jukebox pill in Library and "Play on Jukebox" in song context menus

@@ -43,9 +43,8 @@ struct PlaylistDetailView: View {
                                 }
                             } label: {
                                 Label("Play", systemImage: "play.fill")
-                                    .foregroundStyle(.white)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.bordered)
                             .accessibilityIdentifier("playlistPlayButton")
                             .disabled(playlist.entry?.isEmpty ?? true)
 

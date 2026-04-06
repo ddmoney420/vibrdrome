@@ -6,7 +6,7 @@ import SwiftData
 
 extension NowPlayingView {
 
-    // MARK: - iOS Song Info (title + artist only)
+    // MARK: - iOS Song Info (title + artist + album)
 
     var iOSSongInfo: some View {
         VStack(spacing: 4) {
@@ -24,11 +24,25 @@ extension NowPlayingView {
                 .foregroundColor(.white.opacity(0.8))
             }
 
-            Text(engine.currentSong?.title ?? "Not Playing")
-                .font(.title3)
-                .bold()
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+            if let albumId = engine.currentSong?.albumId {
+                Button {
+                    appState.pendingNavigation = .album(id: albumId)
+                    appState.showNowPlaying = false
+                } label: {
+                    Text(engine.currentSong?.title ?? "Not Playing")
+                        .font(.title3)
+                        .bold()
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(engine.currentSong?.title ?? "Not Playing")
+                    .font(.title3)
+                    .bold()
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
 
             if let artistId = engine.currentSong?.artistId {
                 Button {
@@ -47,12 +61,30 @@ extension NowPlayingView {
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
             }
+
+            if let albumId = engine.currentSong?.albumId {
+                Button {
+                    appState.pendingNavigation = .album(id: albumId)
+                    appState.showNowPlaying = false
+                } label: {
+                    Text(engine.currentSong?.album ?? "")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+            } else if let album = engine.currentSong?.album {
+                Text(album)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Heart Row (heart + stars + sleep timer)
+    // MARK: - Heart Row (heart + stars + more menu)
 
     var heartRow: some View {
         HStack {
@@ -82,7 +114,7 @@ extension NowPlayingView {
                 }
             } label: {
                 Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
             }
             .buttonStyle(.plain)
@@ -91,12 +123,36 @@ extension NowPlayingView {
 
             Spacer()
 
-            // Star rating
-            starRating
+            // Star rating (larger)
+            HStack(spacing: 10) {
+                ForEach(1...5, id: \.self) { star in
+                    Image(systemName: star <= currentRating ? "star.fill" : "star")
+                        .font(.title3)
+                        .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
+                        .onTapGesture {
+                            Haptics.light()
+                            let newRating = star == currentRating ? 0 : star
+                            currentRating = newRating
+                            guard let songId = engine.currentSong?.id else { return }
+                            Task {
+                                try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                            }
+                        }
+                }
+            }
 
             Spacer()
 
-            // Sleep timer menu
+            // More menu (replaces sleep timer)
+            heartRowMoreMenu
+        }
+    }
+
+    // MARK: - Heart Row More Menu
+
+    var heartRowMoreMenu: some View {
+        Menu {
+            // Sleep Timer
             Menu {
                 if SleepTimer.shared.isActive {
                     Button {
@@ -119,21 +175,67 @@ extension NowPlayingView {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
-                        .font(.body)
-                        .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.5))
-                    if SleepTimer.shared.isActive {
-                        Text(formatSleepTime(SleepTimer.shared.remainingSeconds))
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.7))
-                            .monospacedDigit()
-                    }
+                if SleepTimer.shared.isActive {
+                    Label("Sleep Timer (\(formatSleepTime(SleepTimer.shared.remainingSeconds)))",
+                          systemImage: "moon.fill")
+                } else {
+                    Label("Sleep Timer", systemImage: "moon")
                 }
             }
-            .accessibilityLabel("Sleep Timer")
-            .accessibilityIdentifier("sleepTimerMenu")
+
+            // Playback Speed
+            Menu {
+                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+                    Button {
+                        engine.playbackRate = Float(rate)
+                    } label: {
+                        HStack {
+                            Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
+                            if engine.playbackRate == Float(rate) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label("Playback Speed", systemImage: "gauge.with.dots.needle.33percent")
+            }
+
+            Divider()
+
+            // AirPlay
+            Button {
+                NotificationCenter.default.post(name: .init("ShowAirPlayPicker"), object: nil)
+            } label: {
+                Label("AirPlay", systemImage: "airplayaudio")
+            }
+
+            // Share
+            if let song = engine.currentSong {
+                ShareLink(
+                    item: "\(song.title) — \(song.artist ?? "")",
+                    preview: SharePreview(song.title)
+                ) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+
+            // Download
+            if let song = engine.currentSong {
+                Button {
+                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                    Haptics.success()
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.title3)
+                .foregroundColor(.white.opacity(0.5))
         }
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("heartRowMoreMenu")
     }
 
     // MARK: - Streaming Info
@@ -144,10 +246,18 @@ extension NowPlayingView {
                 let downloaded = isCurrentSongDownloaded
                 let suffix = song.suffix?.uppercased() ?? "—"
                 if downloaded {
-                    Text("Downloaded · \(suffix)")
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 9))
+                        Text("Downloaded · \(suffix)")
+                    }
                 } else {
                     let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
-                    Text("WiFi · \(bitRate) · \(suffix)")
+                    HStack(spacing: 4) {
+                        Image(systemName: "wifi")
+                            .font(.system(size: 9))
+                        Text("\(bitRate) · \(suffix)")
+                    }
                 }
             }
         }
@@ -229,40 +339,51 @@ extension NowPlayingView {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Volume Slider
+    // MARK: - Volume Slider (no thumb)
 
     var volumeSlider: some View {
         HStack(spacing: 8) {
             Image(systemName: "speaker.fill")
                 .font(.caption)
-                .foregroundStyle(.white.secondary)
+                .foregroundStyle(.white.opacity(0.5))
 
-            Slider(
-                value: Binding(
-                    get: { Double(engine.userVolume) },
-                    set: { engine.userVolume = Float($0) }
-                ),
-                in: 0...1
-            )
-            .tint(.white)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.2))
+                        .frame(height: 4)
+
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: geo.size.width * CGFloat(engine.userVolume), height: 4)
+                }
+                .frame(height: geo.size.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let fraction = Float(value.location.x / geo.size.width)
+                            engine.userVolume = max(0, min(1, fraction))
+                        }
+                )
+            }
+            .frame(height: 20)
 
             Image(systemName: "speaker.wave.3.fill")
                 .font(.caption)
-                .foregroundStyle(.white.secondary)
+                .foregroundStyle(.white.opacity(0.5))
         }
     }
 
-    // MARK: - Bottom Toolbar
+    // MARK: - Bottom Toolbar (tighter spacing)
 
     var bottomToolbar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 20) {
             Button { showQueue = true } label: {
                 Image(systemName: "list.bullet")
             }
             .accessibilityLabel("Show Queue")
             .accessibilityIdentifier("queueButton")
-
-            Spacer()
 
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
@@ -277,8 +398,6 @@ extension NowPlayingView {
             .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
             .accessibilityIdentifier("eqButton")
 
-            Spacer()
-
             if !disableVisualizer {
                 Button { appState.showVisualizer = true } label: {
                     Image(systemName: "waveform.path")
@@ -286,8 +405,6 @@ extension NowPlayingView {
                 }
                 .accessibilityLabel("Visualizer")
                 .accessibilityIdentifier("visualizerButton")
-
-                Spacer()
             }
 
             Button { appState.showLyrics = true } label: {
@@ -296,61 +413,6 @@ extension NowPlayingView {
             }
             .accessibilityLabel("Lyrics")
             .accessibilityIdentifier("lyricsButton")
-
-            Spacer()
-
-            Menu {
-                // Playback Speed submenu
-                Menu {
-                    ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-                        Button {
-                            engine.playbackRate = Float(rate)
-                        } label: {
-                            HStack {
-                                Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
-                                if engine.playbackRate == Float(rate) {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Playback Speed", systemImage: "gauge.with.dots.needle.33percent")
-                }
-
-                // AirPlay
-                Button {
-                    NotificationCenter.default.post(name: .init("ShowAirPlayPicker"), object: nil)
-                } label: {
-                    Label("AirPlay", systemImage: "airplayaudio")
-                }
-                .accessibilityIdentifier("airPlayButton")
-
-                // Share
-                if let song = engine.currentSong {
-                    ShareLink(
-                        item: "\(song.title) — \(song.artist ?? "")",
-                        preview: SharePreview(song.title)
-                    ) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                }
-
-                // Download
-                if let song = engine.currentSong {
-                    Button {
-                        DownloadManager.shared.download(song: song, client: appState.subsonicClient)
-                        Haptics.success()
-                    } label: {
-                        Label("Download", systemImage: "arrow.down.circle")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .accessibilityLabel("More")
-            .accessibilityIdentifier("moreMenu")
         }
         .font(.body)
         .buttonStyle(.plain)
