@@ -107,7 +107,7 @@ final class AudioSpectrum: @unchecked Sendable {
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
-            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 5.0)
+            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
         }
         return bands
     }
@@ -118,16 +118,22 @@ final class AudioSpectrum: @unchecked Sendable {
         let newMid = newBands[third..<(2 * third)].reduce(0, +) / Float(third)
         let newTreble = newBands[(2 * third)..<Self.bandCount].reduce(0, +) / Float(Self.bandCount - 2 * third)
         let newEnergy = (newBass + newMid + newTreble) / 3.0
-        let smoothing: Float = 0.15
 
+        // Asymmetric smoothing: fast attack (0.4), slow decay (0.12)
+        // Makes the visualizer snap to beats but fade smoothly
         lock.withLock {
-            _bass += (newBass - _bass) * smoothing
-            _mid += (newMid - _mid) * smoothing
-            _treble += (newTreble - _treble) * smoothing
-            _energy += (newEnergy - _energy) * smoothing
+            _bass = smooth(old: _bass, new: newBass)
+            _mid = smooth(old: _mid, new: newMid)
+            _treble = smooth(old: _treble, new: newTreble)
+            _energy = smooth(old: _energy, new: newEnergy)
             for i in 0..<Self.bandCount {
-                _bands[i] += (newBands[i] - _bands[i]) * smoothing
+                _bands[i] = smooth(old: _bands[i], new: newBands[i])
             }
         }
+    }
+
+    private func smooth(old: Float, new: Float) -> Float {
+        let factor: Float = new > old ? 0.4 : 0.12
+        return old + (new - old) * factor
     }
 }

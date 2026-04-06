@@ -148,40 +148,43 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 420
-            let maxArtFromWidth = geo.size.width - 80
+            let controlsNeeded: CGFloat = 440
+            let maxArtFromWidth = geo.size.width - 60
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
 
             VStack(spacing: 0) {
                 dismissHandle
 
+                Spacer(minLength: 4)
+
                 albumArt(size: artSize)
-                    .padding(.top, 4)
-                    .padding(.bottom, 8)
+
+                Spacer(minLength: 12)
 
                 iOSSongInfo
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 8)
 
                 heartRow
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 12)
 
                 progressSlider
                     .padding(.bottom, 2)
 
                 streamingInfo
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 14)
 
                 iOSPlaybackRow
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 14)
 
                 volumeSlider
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 12)
 
                 bottomToolbar
-                    .padding(.bottom, 8)
+
+                Spacer(minLength: 4)
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 28)
             .frame(width: geo.size.width, height: geo.size.height)
             .background {
                 ZStack {

@@ -43,6 +43,7 @@ struct PlaylistDetailView: View {
                                 }
                             } label: {
                                 Label("Play", systemImage: "play.fill")
+                                    .foregroundStyle(.white)
                             }
                             .buttonStyle(.borderedProminent)
                             .accessibilityIdentifier("playlistPlayButton")
