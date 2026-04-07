@@ -1,0 +1,83 @@
+name: Bug Report
+description: Report a bug or crash
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: Describe the issue...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Go to '...'
+        2. Tap on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iOS
+        - macOS
+        - CarPlay
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: e.g. iPhone 16 Pro, MacBook Air M3
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: e.g. iOS 18.3, macOS 15.2
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: Vibrdrome build
+      placeholder: e.g. Build 13
+    validations:
+      required: true
+
+  - type: input
+    id: server
+    attributes:
+      label: Navidrome version
+      placeholder: e.g. 0.53.3
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Screenshots / Crash logs
+      description: "Crash logs: Settings > Privacy & Security > Analytics & Improvements > Analytics Data > search \"Vibrdrome\""
+    validations:
+      required: false
