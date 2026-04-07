@@ -87,10 +87,10 @@ For integration testing beyond unit tests:
 
 | Sprint | Tests | Coverage |
 |--------|-------|----------|
-| Current (Sprint 3) | 96 | Models, Auth, Utilities, ErrorPresenter |
-| Next | +40 | AudioEngine queue, SubsonicClient with mocks |
-| Future | +25 | AppState, DownloadManager |
-| Future | +UI | XCUITest for critical flows (login, play, search) |
+| Sprint 3 | 96 | Models, Auth, Utilities, ErrorPresenter |
+| Sprint 4-8 | +399 | Audio, queue, cache, EQ, replay gain, endpoints, widgets, ratings, biography, ListenBrainz |
+| Sprint 9+ | +185 | XCUITest for iOS (95) and macOS (90): playback, navigation, settings, rotation, playlists, radio |
+| **Current** | **680** | **Full cross-platform: 924 total (iOS 680 + Android 124 + Web 120)** |
 
 ## Coverage Goals
 

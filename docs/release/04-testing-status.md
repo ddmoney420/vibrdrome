@@ -1,106 +1,196 @@
 # 04 — Testing Status
 
-## Current State
+## Current State (April 2026)
 
 | Metric | Value |
 |--------|-------|
-| Test target | VibrdromeTests (added Sprint 3) |
-| Test framework | Swift Testing (`@Test`, `#expect`) |
-| Total tests | 96 |
-| Passing | 96 |
-| Failing | 0 |
-| Test suites | 5 |
-| Build verification | iOS + macOS pass clean |
+| Total tests (all platforms) | 924 |
+| Total test files | 80 |
+| Platforms tested | iOS, macOS, watchOS, Android, Web |
+| All passing | Yes |
+| CI | GitHub Actions (iOS/macOS), local (Android/Web) |
 
-## Test Suites
+---
 
-### SubsonicModelsTests — 55 tests
-Tests JSON decoding for all Subsonic API model types.
+## iOS/macOS — 680 tests across 55 files
 
-**Coverage:**
-- Song: minimal, full, empty strings, identifiable
-- Album: with/without songs, minimal, omitted arrays
-- Artist: with/without albums
-- Playlist: `isPublic` CodingKey mapping, with/without entries
-- SearchResult3: all present, all omitted, mixed
-- Genre: basic, minimal
-- InternetRadioStation: with/without homepage
-- PlayQueue: with entries, empty
-- Bookmark: with/without comment and entry
-- LyricsList: synced, unsynced, empty, identifiable lines
-- SubsonicResponse: hyphenated key, ok/error status, empty payload, payload variants
-- Wrapper types: all tested for presence and omission
-- Edge cases: large integers, Unicode, API error object, ReplayGain
+### Core Unit Tests — 495 tests, 32 files
 
-### SubsonicAuthTests — 10 tests
-Tests authentication parameter generation.
+Uses Swift Testing framework (`@Test`, `#expect`).
 
-**Coverage:**
-- Required query parameters present (u, t, s, v, c, f)
-- Username, format, client name, API version values
-- MD5 token format (32 hex chars)
-- Salt randomization between calls
-- Salt alphanumeric character set
-- Different passwords produce different tokens
-- Password never appears in raw parameters
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| SubsonicEndpointsTests | 65 | All endpoint paths, query items, pagination offsets |
+| SubsonicModelsTests | 55 | JSON decoding for all API model types |
+| UtilityTests | 42 | Format helpers, string sanitization, error presenter |
+| VolumeFactorTests | 26 | Volume computation, ReplayGain, sleep fade |
+| QueueManagementTests | 23 | Add, remove, move, next, previous, shuffle |
+| CacheEvictionTests | 20 | LRU eviction, pinned downloads, size limits |
+| RadioDeduplicationTests | 19 | Radio song dedup, similar song filtering |
+| SavedQueueTests | 18 | Queue persistence, round-trip encode/decode |
+| SleepTimerTests | 17 | Timer modes, countdown, fade, end-of-track |
+| CachedSongConversionTests | 17 | CachedSong to Song conversion |
+| ReAuthTests | 16 | Re-authentication flows |
+| LocalAddressTests | 16 | RFC 1918 detection, IPv6, link-local |
+| EQPresetsTests | 14 | Preset definitions, band frequencies |
+| UserDefaultsKeysTests | 13 | Key uniqueness, count, values |
+| NowPlayingLayoutTests | 13 | Sleep timer formatting, duration, repeat mode |
+| ReplayGainTests | 12 | dB-to-linear conversion, 1.5x cap, clamping |
+| PlaybackModeTests | 12 | Gapless/crossfade mode selection |
+| SubsonicAuthTests | 10 | Auth params, MD5 token, salt, password safety |
+| QueueEdgeCaseTests | 10 | Empty queue, boundary conditions |
+| LibraryLayoutConfigTests | 9 | Config encoding, pill/carousel management |
+| SleepTimerFormattingTests | 8 | Time format edge cases |
+| BiographyCleanerTests | 8 | HTML tag stripping, Last.fm format |
+| EQPreGainTests | 7 | Pre-gain attenuation math, threshold |
+| AudioSpectrumTests | 7 | FFT processing, spectrum bands |
+| RatingEndpointTests | 6 | setRating API parameters |
+| ListenBrainzTests | 6 | isEnabled logic, token/toggle state |
+| LibraryPillTests | 6 | Pill count, config, reorder |
+| DownloadedSongTests | 6 | toSong() conversion, nil handling |
+| WidgetStateTests | 4 | NowPlayingState encode/decode |
+| WidgetCommandTests | 4 | Command relay, TTL expiry |
+| RadioCoverArtTests | 4 | Navidrome ra- prefix handling |
+| AutoSuggestTests | 2 | Auto-suggest guard logic |
 
-### FormatDurationTests — 9 tests
-Tests the `formatDuration()` utility functions.
+### iOS UI Tests — 95 tests, 11 files
 
-**Coverage:**
-- Zero, single digits, minutes, hours
-- Hour boundary (3599 → 59:59, 3600 → 1:00:00)
-- Large values, TimeInterval decimals
-- Negative input behavior documented
+Uses XCUITest framework.
 
-### StringSanitizedTests — 9 tests
-Tests `String.sanitizedFileName` extension.
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| NowPlayingFeatureTests | 23 | Player controls, rating, queue, EQ, lyrics |
+| RotationTests | 12 | Device rotation stability |
+| DownloadsAndSettingsTests | 12 | Download flow, settings toggles |
+| RadioTests | 9 | Radio playback, station search |
+| PlaylistTests | 9 | Playlist browsing, create, edit |
+| NavigationTests | 9 | Tab navigation, artist/album drill-down |
+| ReAuthAndEQAccessibilityTests | 7 | Re-auth flow, EQ accessibility |
+| PlaybackTests | 7 | Play, pause, skip, seek |
+| LaunchTests | 4 | App launch, initial state |
+| LoginTests | 3 | Server config, authentication |
+| TestHelpers | 0 | Shared utilities (no tests) |
 
-**Coverage:**
-- Normal strings, all illegal characters
-- Forward/back slashes, colons, asterisks, etc.
-- Leading/trailing whitespace trimming
-- Unicode preservation, empty string, mixed content
+### macOS UI Tests — 90 tests, 12 files
 
-### ErrorPresenterTests — 11 tests
-Tests `ErrorPresenter.userMessage(for:)` mapping.
+Uses XCUITest framework.
 
-**Coverage:**
-- SubsonicError cases: auth (code 40), not found (70), permission (50), HTTP 401, HTTP 500
-- Network errors: no server, unavailable, invalid URL
-- URLError: timeout, no internet
-- Unknown error fallback
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| MacNowPlayingFeatureTests | 25 | Player controls, rating, queue |
+| MacSettingsTests | 11 | Settings, preferences |
+| MacNavigationTests | 10 | Sidebar navigation |
+| MacRadioTests | 9 | Radio playback |
+| MacPlaylistTests | 8 | Playlist management |
+| MacWindowAndKeyboardTests | 6 | Window management, keyboard shortcuts |
+| MacReAuthAndEQTests | 6 | Re-auth, EQ |
+| MacPlaybackTests | 6 | Playback controls |
+| MacFavoritesAndDownloadsTests | 4 | Favorites, downloads |
+| MacLoginTests | 3 | Server login |
+| MacLaunchTests | 2 | App launch |
+| MacTestHelpers | 0 | Shared utilities (no tests) |
 
-## What's NOT Tested
+---
 
-### No Unit Tests Yet
-- **AudioEngine queue logic** — Complex queue management (add, remove, move, next, previous, shuffle, repeat modes). These are pure logic methods that don't require AVPlayer, making them ideal candidates for testing.
-- **SubsonicClient** — Network layer. Requires mock URLSession or protocol abstraction.
-- **DownloadManager** — Requires mock URLSession delegate, SwiftData context.
-- **AppState** — Credential loading, server management. Requires mock Keychain.
-- **CarPlayManager** — Requires CPTemplate mocking (Apple framework).
-- **NowPlayingManager** — MPNowPlayingInfoCenter integration.
+## Android — 124 tests across 14 files
 
-### No Integration/UI Tests
-- No XCUITest target
-- No snapshot tests
-- No CarPlay simulator automation
+Uses JUnit 5 with Kotlin.
+
+### Audio Module — 9 files, 82 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| ReplayGainTest | 12 | dB conversion, clamping |
+| CrossfadeEngineTest | 11 | Crossfade curves, transitions |
+| SmartTransitionsTest | 11 | Auto gapless/crossfade detection |
+| AutoEQImporterTest | 11 | AutoEQ/APO file import |
+| AdaptiveBitrateTest | 8 | Network-based quality adjustment |
+| EQPresetsTest | 8 | Preset definitions |
+| AudioNormalizerTest | 7 | Volume normalization |
+| EQCoefficientsTest | 7 | Biquad coefficient computation |
+| HapticEngineTest | 7 | Bass-synced haptic intensity |
+
+### Network Module — 4 files, 38 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| SubsonicErrorTest | 11 | Error code mapping |
+| SubsonicEndpointsTest | 10 | Endpoint URL construction |
+| SubsonicModelsTest | 10 | JSON model decoding |
+| SubsonicAuthTest | 7 | Auth parameter generation |
+
+### Utility Module — 1 file, 4 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| FormatTest | 4 | Duration formatting |
+
+---
+
+## Web — 120 tests across 11 files
+
+Uses Vitest with TypeScript.
+
+### API Clients — 2 files, 27 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| SubsonicClient.test.ts | 16 | API calls, auth, error handling |
+| LastFmClient.test.ts | 11 | Last.fm scrobbling, artist info |
+
+### Stores — 5 files, 64 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| playerStore.test.ts | 27 | Playback state, queue, volume |
+| uiStore.test.ts | 17 | Theme, layout, preferences |
+| libraryStore.test.ts | 12 | Library browsing, caching |
+| smartPlaylistStore.test.ts | 4 | Smart playlist generation |
+| musicFolderStore.test.ts | 4 | Folder switching |
+
+### Hooks — 1 file, 6 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| useMultiSelect.test.ts | 6 | Multi-select state management |
+
+### Utilities — 3 files, 23 tests
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| color.test.ts | 10 | Color extraction, contrast |
+| fuzzySearch.test.ts | 10 | Fuzzy/acronym search matching |
+| share.test.ts | 3 | Share text generation |
+
+---
+
+## Test Coverage Gaps
+
+### Android
+- No UI/instrumented tests (iOS has 185 UI tests)
+- No ViewModel/Store tests (presentation layer untested)
+
+### Web
+- No component/rendering tests (all tests are logic-only)
+- No E2E tests (no Playwright/Cypress)
+
+### iOS
+- Core unit tests are the most comprehensive across all platforms
+- Good model for expanding Android and Web test suites
+
+---
 
 ## Running Tests
 
 ```bash
-make test                # Run via Makefile
-# Or directly:
-xcodebuild test \
-  -project Vibrdrome.xcodeproj \
-  -scheme Vibrdrome \
+# iOS/macOS
+xcodebuild test -project Vibrdrome.xcodeproj -scheme Vibrdrome \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  CODE_SIGNING_ALLOWED=NO
+  -only-testing:VibrdromeTests
+
+# Android
+cd vibrdrome-android && ./gradlew test
+
+# Web
+cd vibrdrome-web && npm test
 ```
-
-## Test Configuration
-
-- **project.yml**: `VibrdromeTests` target with `bundle.unit-test` type
-- **Scheme**: Vibrdrome scheme includes VibrdromeTests in test action
-- **Dependencies**: Tests link against main Vibrdrome target via `@testable import`
-- **Framework**: Swift Testing (modern `@Test` + `#expect`, not XCTest)

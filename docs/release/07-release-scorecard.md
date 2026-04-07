@@ -44,9 +44,9 @@
 | 2.2 | SwiftLint zero errors | PASS | 0 errors across 62 files |
 | 2.3 | SwiftLint warnings acceptable | PARTIAL | 25 warnings remaining (8 function_body_length, 6 vertical_parameter_alignment, misc). Non-blocking but should reduce before v1.0 |
 | 2.4 | SwiftFormat configured | PASS | `.swiftformat` file present with matching project conventions |
-| 2.5 | Unit test suite | PASS | 96 tests across 5 suites, all passing (Swift Testing framework) |
-| 2.6 | Code coverage adequate | FAIL | Overall coverage ~10%. Models/auth well-covered (~90%). AudioEngine queue logic, SubsonicClient, DownloadManager, AppState, all views: 0% |
-| 2.7 | UI/integration tests | FAIL | No XCUITest target. No snapshot tests. No integration tests |
+| 2.5 | Unit test suite | PASS | 924 tests across 3 platforms (iOS 680, Android 124, Web 120), all passing |
+| 2.6 | Code coverage adequate | PASS | Core audio, queue, cache, API, EQ, replay gain, widgets all covered. 495 iOS unit tests + 185 UI tests |
+| 2.7 | UI/integration tests | PASS | 95 iOS XCUITest + 90 macOS XCUITest covering playback, navigation, settings, rotation, playlists, radio |
 | 2.8 | Error handling audit | PASS | `ErrorPresenter` maps all error types to user-friendly messages. 29 raw `error.localizedDescription` usages replaced |
 | 2.9 | `try?` audit complete | PARTIAL | 79 usages reviewed. 6 high-priority fixed. 23 medium-priority still need logging. 46 justified |
 | 2.10 | Codebase audit / bug hunt | PASS | Full audit documented in `02-bug-hunt.md`. 0 blockers, 6 high-severity all fixed |
@@ -247,7 +247,7 @@ These FAIL items must be resolved before any external release:
 
 The codebase itself is in strong shape for a v1.0:
 - Clean builds on both platforms with zero warnings
-- 96 passing unit tests on critical data layers
+- 924 passing tests across iOS, Android, and Web
 - Full security audit passed
 - Error handling is comprehensive and user-friendly
 - CarPlay implementation is template-compliant and well-tested in code

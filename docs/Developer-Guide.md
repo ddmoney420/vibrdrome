@@ -22,10 +22,21 @@ make generate && make build-macos
 ## Test
 
 ```bash
+# iOS/macOS unit tests (495 tests)
 make test
+
+# iOS UI tests (95 tests)
+xcodebuild test -project Vibrdrome.xcodeproj -scheme Vibrdrome \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:VibrdromeUITests
+
+# macOS UI tests (90 tests)
+xcodebuild test -project Vibrdrome.xcodeproj -scheme VibrdromeMac \
+  -destination 'platform=macOS' \
+  -only-testing:VibrdromeUITestsMac
 ```
 
-Runs 96 unit tests using the Swift Testing framework.
+Runs 680 tests across iOS/macOS using Swift Testing (`@Test`, `#expect`) for unit tests and XCUITest for UI tests. See `docs/release/04-testing-status.md` for the full cross-platform breakdown (924 tests total across iOS, Android, and Web).
 
 ## Lint
 
@@ -129,4 +140,4 @@ GitHub Actions runs on every push and pull request:
 1. **Lint** -- SwiftLint check.
 2. **Build iOS** -- `make build-ios`.
 3. **Build macOS** -- `make build-macos`.
-4. **Test** -- `make test` (96 unit tests).
+4. **Test** -- `make test` (495 unit tests + 185 UI tests).
