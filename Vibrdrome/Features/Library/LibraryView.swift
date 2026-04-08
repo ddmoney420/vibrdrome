@@ -44,7 +44,57 @@ struct LibraryView: View {
                 await fetchSections(client: appState.subsonicClient, skipCache: true)
             }
             .navigationTitle("Library")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
+                ToolbarItem(placement: .topBarLeading) {
+                    if musicFolders.count > 1 {
+                        Menu {
+                            Button {
+                                activeFolderId = ""
+                                Task { await reloadSections() }
+                            } label: {
+                                HStack {
+                                    Text("All Libraries")
+                                    if activeFolderId.isEmpty { Image(systemName: "checkmark") }
+                                }
+                            }
+                            ForEach(musicFolders) { folder in
+                                Button {
+                                    activeFolderId = folder.id
+                                    Task { await reloadSections() }
+                                } label: {
+                                    HStack {
+                                        Text(folder.name ?? folder.id)
+                                        if activeFolderId == folder.id { Image(systemName: "checkmark") }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "building.2")
+                        }
+                        .accessibilityLabel("Switch Library")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCustomize = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("Customize Library")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+                #else
                 ToolbarItem(placement: .automatic) {
                     if musicFolders.count > 1 {
                         Menu {
@@ -82,6 +132,7 @@ struct LibraryView: View {
                     }
                     .accessibilityLabel("Customize Library")
                 }
+                #endif
             }
             .sheet(isPresented: $showCustomize) {
                 LibraryCustomizeView(config: $layoutConfig)

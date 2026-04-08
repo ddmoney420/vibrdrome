@@ -13,11 +13,20 @@ struct AlbumsView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var hasMore = true
+    @State private var searchText = ""
     private let pageSize = 40
+
+    private var filteredAlbums: [Album] {
+        if searchText.isEmpty { return albums }
+        return albums.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         List {
-            ForEach(albums) { album in
+            ForEach(filteredAlbums) { album in
                 NavigationLink {
                     AlbumDetailView(albumId: album.id)
                 } label: {
@@ -95,6 +104,10 @@ struct AlbumsView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle(title)
+        .searchable(text: $searchText, prompt: "Search in Albums")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .overlay {
             if isLoading && albums.isEmpty {
                 ProgressView("Loading albums...")

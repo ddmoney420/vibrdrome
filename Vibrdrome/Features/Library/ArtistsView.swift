@@ -5,12 +5,26 @@ struct ArtistsView: View {
     @State private var indexes: [ArtistIndex] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var searchText = ""
+
+    private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
+        if searchText.isEmpty {
+            return indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
+        }
+        return indexes.compactMap { index in
+            let filtered = (index.artist ?? []).filter {
+                $0.name.localizedCaseInsensitiveContains(searchText)
+            }
+            guard !filtered.isEmpty else { return nil }
+            return (id: index.id, name: index.name, artists: filtered)
+        }
+    }
 
     var body: some View {
         List {
-            ForEach(indexes) { index in
+            ForEach(filteredIndexes, id: \.id) { index in
                 Section(header: Text(index.name)) {
-                    ForEach(index.artist ?? []) { artist in
+                    ForEach(index.artists) { artist in
                         NavigationLink {
                             ArtistDetailView(artistId: artist.id)
                         } label: {
@@ -23,6 +37,10 @@ struct ArtistsView: View {
         }
         .listStyle(.plain)
         .navigationTitle("Artists")
+        .searchable(text: $searchText, prompt: "Search Artists")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .overlay {
             if isLoading && indexes.isEmpty {
                 ProgressView("Loading artists...")

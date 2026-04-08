@@ -10,7 +10,17 @@ struct PlaylistDetailView: View {
     @State private var error: String?
     @State private var showEditSheet = false
     @State private var isDownloading = false
+    @State private var searchText = ""
     @Query private var downloadedSongs: [DownloadedSong]
+
+    private var filteredSongs: [Song] {
+        guard let songs = playlist?.entry else { return [] }
+        if searchText.isEmpty { return songs }
+        return songs.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         List {
@@ -68,18 +78,17 @@ struct PlaylistDetailView: View {
                 }
 
                 // Songs
-                let songs = playlist.entry ?? []
                 Section {
-                    ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                    ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: songs, at: index)
+                                AudioEngine.shared.play(song: song, from: filteredSongs, at: index)
                             }
-                            .trackContextMenu(song: song, queue: songs, index: index)
+                            .trackContextMenu(song: song, queue: filteredSongs, index: index)
                     }
                     .onDelete { offsets in
-                        removeFromPlaylist(at: offsets, songs: songs)
+                        removeFromPlaylist(at: offsets, songs: playlist.entry ?? [])
                     }
                 }
             }
@@ -89,6 +98,7 @@ struct PlaylistDetailView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle(playlist?.name ?? "Playlist")
+        .searchable(text: $searchText, prompt: "Search in Playlist")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

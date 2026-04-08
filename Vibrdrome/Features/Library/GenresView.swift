@@ -6,9 +6,17 @@ struct GenresView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var genreArt: [String: String] = [:] // genre → coverArtId
+    @State private var searchText = ""
+
+    private var filteredGenres: [Genre] {
+        if searchText.isEmpty { return genres }
+        return genres.filter {
+            $0.value.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
-        List(genres) { genre in
+        List(filteredGenres) { genre in
             NavigationLink {
                 AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
             } label: {
@@ -36,6 +44,10 @@ struct GenresView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Genres")
+        .searchable(text: $searchText, prompt: "Search Genres")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .overlay {
             if isLoading && genres.isEmpty {
                 ProgressView("Loading genres...")

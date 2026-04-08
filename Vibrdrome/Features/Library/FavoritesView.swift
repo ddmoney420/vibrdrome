@@ -5,14 +5,36 @@ struct FavoritesView: View {
     @State private var starred: Starred2?
     @State private var isLoading = true
     @State private var error: String?
+    @State private var searchText = ""
+
+    private var filteredArtists: [Artist] {
+        guard let artists = starred?.artist else { return [] }
+        if searchText.isEmpty { return artists }
+        return artists.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var filteredAlbums: [Album] {
+        guard let albums = starred?.album else { return [] }
+        if searchText.isEmpty { return albums }
+        return albums.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var filteredSongs: [Song] {
+        guard let songs = starred?.song else { return [] }
+        if searchText.isEmpty { return songs }
+        return songs.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         List {
-            if let starred {
+            if starred != nil {
                 // Starred Artists
-                if let artists = starred.artist, !artists.isEmpty {
+                if !filteredArtists.isEmpty {
                     Section("Artists") {
-                        ForEach(artists) { artist in
+                        ForEach(filteredArtists) { artist in
                             NavigationLink {
                                 ArtistDetailView(artistId: artist.id)
                             } label: {
@@ -24,9 +46,9 @@ struct FavoritesView: View {
                 }
 
                 // Starred Albums
-                if let albums = starred.album, !albums.isEmpty {
+                if !filteredAlbums.isEmpty {
                     Section("Albums") {
-                        ForEach(albums) { album in
+                        ForEach(filteredAlbums) { album in
                             NavigationLink {
                                 AlbumDetailView(albumId: album.id)
                             } label: {
@@ -38,11 +60,11 @@ struct FavoritesView: View {
                 }
 
                 // Starred Songs
-                if let songs = starred.song, !songs.isEmpty {
+                if !filteredSongs.isEmpty {
                     Section("Songs") {
                         HStack(spacing: 12) {
                             Button {
-                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                                AudioEngine.shared.play(song: filteredSongs[0], from: filteredSongs, at: 0)
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
                                     .font(.subheadline)
@@ -54,7 +76,7 @@ struct FavoritesView: View {
                             .accessibilityIdentifier("favPlayAllButton")
 
                             Button {
-                                let shuffled = songs.shuffled()
+                                let shuffled = filteredSongs.shuffled()
                                 AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
                             } label: {
                                 Label("Shuffle", systemImage: "shuffle")
@@ -68,12 +90,12 @@ struct FavoritesView: View {
                         }
                         .listRowSeparator(.hidden)
 
-                        ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                        ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
                             TrackRow(song: song, showTrackNumber: false)
-                                .trackContextMenu(song: song, queue: songs, index: index)
+                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
                                 .accessibilityIdentifier("favSongRow_\(song.id)")
                                 .onTapGesture {
-                                    AudioEngine.shared.play(song: song, from: songs, at: index)
+                                    AudioEngine.shared.play(song: song, from: filteredSongs, at: index)
                                 }
                         }
                     }
@@ -85,6 +107,10 @@ struct FavoritesView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Favorites")
+        .searchable(text: $searchText, prompt: "Search Favorites")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .overlay {
             if isLoading && starred == nil {
                 ProgressView("Loading favorites...")

@@ -9,6 +9,14 @@ struct PlaylistsView: View {
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
+    @State private var searchText = ""
+
+    private var filteredPlaylists: [Playlist] {
+        if searchText.isEmpty { return playlists }
+        return playlists.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -21,7 +29,7 @@ struct PlaylistsView: View {
                 #endif
 
                 // Playlists grid or list
-                if !playlists.isEmpty {
+                if !filteredPlaylists.isEmpty {
                     if showAsList {
                         playlistList
                     } else {
@@ -34,6 +42,10 @@ struct PlaylistsView: View {
             #endif
         }
         .navigationTitle("Playlists")
+        .searchable(text: $searchText, prompt: "Search Playlists")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -157,7 +169,7 @@ struct PlaylistsView: View {
         LazyVGrid(columns: [
             GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
         ], spacing: 20) {
-            ForEach(playlists) { playlist in
+            ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)
                 } label: {
@@ -212,7 +224,7 @@ struct PlaylistsView: View {
 
     private var playlistList: some View {
         LazyVStack(spacing: 0) {
-            ForEach(playlists) { playlist in
+            ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)
                 } label: {
@@ -242,7 +254,7 @@ struct PlaylistsView: View {
                 }
                 .buttonStyle(.plain)
 
-                if playlist.id != playlists.last?.id {
+                if playlist.id != filteredPlaylists.last?.id {
                     Divider().padding(.leading, 86)
                 }
             }
