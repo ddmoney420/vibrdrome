@@ -4,6 +4,21 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 31 — April 8, 2026
+- Now Playing toolbar: bold white icons, reordered (Visualizer, EQ, AirPlay, Lyrics, Settings), 44pt touch targets
+- Customizable Now Playing toolbar in Settings (show/hide each icon)
+- Mini player tint reduced (0.35→0.15 opacity) to match system tab bar
+- Album detail: Apple Music style action buttons (Shuffle circle, Play pill, Download circle)
+- Lossless badge in album metadata for FLAC/ALAC/WAV albums
+- Track row: always-visible tappable heart, bigger download icon, inline "..." menu
+- Text contrast improved (.tertiary→.secondary) for light mode readability
+- 495 unit tests in 34 suites
+
+**TestFlight Notes:**
+> Now Playing toolbar redesigned with bold white icons and customizable layout.
+> Album detail reworked: Apple Music style buttons, lossless badge, per-track
+> hearts and menus. Mini player tint reduced. Text contrast improved.
+
 ### Build 30 — April 7, 2026
 - Smart shuffle: avoids consecutive same-artist tracks when shuffling
 - Recently Played section in Queue view (last 20 played songs)

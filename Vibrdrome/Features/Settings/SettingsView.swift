@@ -74,6 +74,11 @@ struct SettingsView: View {
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) private var showVisualizerInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showEQInToolbar) private var showEQInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) private var showAirPlayInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showLyricsInToolbar) private var showLyricsInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showSettingsInToolbar) private var showSettingsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab: Bool = true
     @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab: Bool = true
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab: Bool = true
@@ -92,6 +97,7 @@ struct SettingsView: View {
             appearanceSection
             tabBarSection
             #if os(iOS)
+            nowPlayingToolbarSection
             carPlaySection
             #endif
             accessibilitySection
@@ -435,6 +441,46 @@ struct SettingsView: View {
             .accessibilityIdentifier("albumArtInListsToggle")
         } header: {
             settingSectionHeader("Appearance", icon: "paintbrush.fill", color: .orange)
+        }
+    }
+
+    // MARK: - Now Playing Toolbar Section
+
+    private var nowPlayingToolbarSection: some View {
+        Section {
+            Toggle(isOn: $showVisualizerInToolbar) {
+                Label("Visualizer", systemImage: "waveform.path")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showVisualizerInToolbarToggle")
+
+            Toggle(isOn: $showEQInToolbar) {
+                Label("Equalizer", systemImage: "slider.vertical.3")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showEQInToolbarToggle")
+
+            Toggle(isOn: $showAirPlayInToolbar) {
+                Label("AirPlay", systemImage: "airplayaudio")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showAirPlayInToolbarToggle")
+
+            Toggle(isOn: $showLyricsInToolbar) {
+                Label("Lyrics", systemImage: "quote.bubble")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showLyricsInToolbarToggle")
+
+            Toggle(isOn: $showSettingsInToolbar) {
+                Label("Quick Settings", systemImage: "gearshape")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showSettingsInToolbarToggle")
+        } header: {
+            settingSectionHeader("Now Playing Toolbar", icon: "rectangle.dock.bottom", color: .purple)
+        } footer: {
+            Text("Choose which icons appear in the Now Playing bottom toolbar.")
         }
     }
 

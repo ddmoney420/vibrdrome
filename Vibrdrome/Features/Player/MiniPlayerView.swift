@@ -104,7 +104,7 @@ struct MiniPlayerView: View {
             ZStack {
                 if let dominantColor {
                     Capsule()
-                        .fill(dominantColor.opacity(0.35))
+                        .fill(dominantColor.opacity(0.15))
                 }
                 Capsule()
                     .fill(.ultraThinMaterial)

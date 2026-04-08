@@ -19,6 +19,11 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) var disableVisualizer = false
     @AppStorage(UserDefaultsKeys.crossfadeDuration) var crossfadeDuration: Int = 0
+    @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) var showVisualizerInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showEQInToolbar) var showEQInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) var showAirPlayInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showLyricsInToolbar) var showLyricsInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showSettingsInToolbar) var showSettingsInToolbar: Bool = true
     @State var showQuickSettings = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow

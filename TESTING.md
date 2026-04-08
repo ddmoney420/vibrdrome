@@ -104,9 +104,12 @@ Run through this checklist before every TestFlight build. Each item should be ve
 ## Album Detail
 
 - [ ] Parallax album art header (shrinks/fades on scroll)
-- [ ] Circular action buttons: Heart, Play, Shuffle, More(...)
-- [ ] More menu: Download, Start Radio, Share
-- [ ] Heart/favorite toggles correctly
+- [ ] Apple Music style buttons: Shuffle (circle), Play (white pill), Download (circle)
+- [ ] Lossless badge shows for FLAC/ALAC/WAV albums
+- [ ] Per-track tappable heart (empty when not starred, pink when starred)
+- [ ] Per-track download icon (bigger, .callout size)
+- [ ] Per-track inline "..." menu (Play Next, Add to Queue, Start Radio, Share)
+- [ ] Text contrast readable in light mode
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
 
@@ -173,6 +176,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Multi-server: add/switch/delete servers
 - [ ] ListenBrainz toggle and token field
 - [ ] Auto-sync playlists toggle
+- [ ] Now Playing Toolbar customization (toggle Visualizer/EQ/AirPlay/Lyrics/Settings)
 
 ## macOS Specific
 

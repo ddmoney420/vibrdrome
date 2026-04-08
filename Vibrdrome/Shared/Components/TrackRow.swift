@@ -4,8 +4,11 @@ import SwiftData
 struct TrackRow: View {
     let song: Song
     var showTrackNumber: Bool = true
+    var queue: [Song]?
+    var index: Int?
     @Environment(\.modelContext) private var modelContext
     @State private var isDownloaded = false
+    @State private var isStarred = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -36,9 +39,39 @@ struct TrackRow: View {
 
             Spacer()
 
+            // Heart toggle
+            Button {
+                let wasStarred = isStarred
+                isStarred = !wasStarred
+                #if os(iOS)
+                Haptics.light()
+                #endif
+                Task {
+                    do {
+                        if wasStarred {
+                            try await OfflineActionQueue.shared.unstar(id: song.id)
+                        } else {
+                            try await OfflineActionQueue.shared.star(id: song.id)
+                            if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
+                                DownloadManager.shared.download(song: song, client: AppState.shared.subsonicClient)
+                            }
+                        }
+                    } catch {
+                        isStarred = wasStarred
+                    }
+                }
+            } label: {
+                Image(systemName: isStarred ? "heart.fill" : "heart")
+                    .font(.caption)
+                    .foregroundStyle(isStarred ? .pink : .secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("trackHeartButton_\(song.id)")
+
+            // Download button
             if isDownloaded {
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.caption2)
+                    .font(.callout)
                     .foregroundStyle(.green)
             } else {
                 Button {
@@ -51,23 +84,48 @@ struct TrackRow: View {
                     isDownloaded = true
                 } label: {
                     Image(systemName: "arrow.down.circle")
-                        .font(.caption2)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("trackDownloadButton_\(song.id)")
             }
 
-            if song.starred != nil {
-                Image(systemName: "heart.fill")
+            // Inline menu
+            Menu {
+                Button {
+                    AudioEngine.shared.addToQueueNext(song)
+                } label: {
+                    Label("Play Next", systemImage: "text.insert")
+                }
+                Button {
+                    AudioEngine.shared.addToQueue(song)
+                } label: {
+                    Label("Add to Queue", systemImage: "text.append")
+                }
+                Button {
+                    AudioEngine.shared.startRadioFromSong(song)
+                } label: {
+                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                }
+                let shareText = "🎵 \(song.title) — \(song.artist ?? "Unknown Artist")"
+                ShareLink(item: shareText) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
                     .font(.caption)
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("trackMenuButton_\(song.id)")
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
         .onAppear {
+            isStarred = song.starred != nil
             let songId = song.id
             let descriptor = FetchDescriptor<DownloadedSong>(
                 predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
@@ -84,7 +142,7 @@ struct TrackRow: View {
         if let duration = song.duration {
             parts.append(formatDuration(duration))
         }
-        if song.starred != nil {
+        if isStarred {
             parts.append("Favorited")
         }
         if isDownloaded {

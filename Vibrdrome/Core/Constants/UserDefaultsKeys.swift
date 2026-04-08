@@ -59,6 +59,14 @@ enum UserDefaultsKeys {
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"
 
+    // MARK: - Now Playing Toolbar
+
+    static let showVisualizerInToolbar = "showVisualizerInToolbar"
+    static let showEQInToolbar = "showEQInToolbar"
+    static let showAirPlayInToolbar = "showAirPlayInToolbar"
+    static let showLyricsInToolbar = "showLyricsInToolbar"
+    static let showSettingsInToolbar = "showSettingsInToolbar"
+
     // MARK: - Discord
 
     static let discordRPCEnabled = "discordRPCEnabled"

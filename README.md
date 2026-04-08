@@ -99,6 +99,9 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 ### Customization &nbsp; ─=≡Σ((( つ◕ل͜◕)つ
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Customizable library** — reorder & show/hide pills and carousels
+- **Customizable Now Playing toolbar** — show/hide Visualizer, EQ, AirPlay, Lyrics, Settings
+- **Lossless badge** — shows in album detail for FLAC/ALAC/WAV albums
+- **Per-track actions** — tappable heart, download icon, and inline "..." menu on every track
 - **Library folder switching** — filter by music folder on multi-library servers
 - **Tappable metadata** — tap song title, artist, album name, or album art on Now Playing to navigate
 - **Text size picker** — Small, Default, Large, and Extra Large text options

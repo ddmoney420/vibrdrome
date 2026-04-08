@@ -7,7 +7,6 @@ struct AlbumDetailView: View {
     @State private var album: Album?
     @State private var isLoading = true
     @State private var error: String?
-    @State private var isStarred = false
     @State private var similarAlbums: [Album] = []
 
     var body: some View {
@@ -198,9 +197,22 @@ struct AlbumDetailView: View {
                 Text("·")
                 Text(formatDuration(duration))
             }
+            if albumHasLossless(album) {
+                Text("·")
+                Image(systemName: "waveform")
+                Text("Lossless")
+            }
         }
         .font(.caption)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(.secondary)
+    }
+
+    private func albumHasLossless(_ album: Album) -> Bool {
+        let losslessFormats: Set<String> = ["flac", "alac", "wav", "aiff"]
+        return album.song?.contains { song in
+            guard let suffix = song.suffix else { return false }
+            return losslessFormats.contains(suffix.lowercased())
+        } ?? false
     }
 
     @ViewBuilder
@@ -215,92 +227,65 @@ struct AlbumDetailView: View {
     #if os(iOS)
     @ViewBuilder
     private func circularActionButtons(_ album: Album) -> some View {
-        HStack(spacing: 24) {
-            // Heart
-            circularButton(
-                icon: isStarred ? "heart.fill" : "heart",
-                tint: isStarred ? .pink : .secondary
-            ) {
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Haptics.light()
-                Task {
-                    do {
-                        if wasStarred {
-                            try await appState.subsonicClient.unstar(albumId: albumId)
-                        } else {
-                            try await appState.subsonicClient.star(albumId: albumId)
-                        }
-                    } catch { isStarred = wasStarred }
-                }
-            }
-            .accessibilityIdentifier("albumFavoriteButton")
-
-            // Play
-            circularButton(icon: "play.fill", tint: .primary) {
-                if let songs = album.song, let first = songs.first {
-                    Haptics.medium()
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                }
-            }
-            .accessibilityIdentifier("albumPlayButton")
-
+        HStack(spacing: 16) {
             // Shuffle
-            circularButton(icon: "shuffle", tint: .primary) {
+            Button {
                 if var songs = album.song, !songs.isEmpty {
                     Haptics.medium()
                     songs.shuffle()
                     AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
                 }
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("albumShuffleButton")
 
-            albumMoreMenu(album)
-        }
-        .padding(.vertical, 16)
-    }
+            // Play pill
+            Button {
+                if let songs = album.song, let first = songs.first {
+                    Haptics.medium()
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                    Text("Play")
+                        .fontWeight(.semibold)
+                }
+                .font(.body)
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(.white, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("albumPlayButton")
 
-    @ViewBuilder
-    private func albumMoreMenu(_ album: Album) -> some View {
-        Menu {
+            // Download
             Button {
                 if let songs = album.song {
+                    Haptics.light()
                     DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
                 }
             } label: {
-                Label("Download Album", systemImage: "arrow.down.circle")
+                Image(systemName: "arrow.down.circle")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
             }
-            if let artist = album.artist {
-                Button {
-                    AudioEngine.shared.startRadio(artistName: artist)
-                } label: {
-                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
-                }
-            }
-            let shareText = "\(album.name) — \(album.artist ?? "Unknown Artist")\n\(album.songCount ?? 0) songs"
-            ShareLink(item: shareText) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.body)
-                .fontWeight(.semibold)
-                .frame(width: 48, height: 48)
-                .background(.ultraThinMaterial, in: Circle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("albumDownloadButton")
         }
-        .accessibilityIdentifier("albumMoreMenu")
-    }
-
-    private func circularButton(icon: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.body)
-                .fontWeight(.semibold)
-                .foregroundStyle(tint)
-                .frame(width: 48, height: 48)
-                .background(.ultraThinMaterial, in: Circle())
-        }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
     }
     #endif
 
@@ -343,7 +328,7 @@ struct AlbumDetailView: View {
                 Divider()
                 Text(verbatim: "\(album.songCount ?? 0) songs, \(formatDuration(duration))")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 12)
             }
         }
@@ -396,7 +381,6 @@ struct AlbumDetailView: View {
         defer { isLoading = false }
         do {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
-            isStarred = album?.starred != nil
             // Load similar albums from first song
             if let firstSong = album?.song?.first {
                 let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)

@@ -295,31 +295,10 @@ extension NowPlayingView {
 
     var bottomToolbar: some View {
         HStack(spacing: 0) {
-            AirPlayButton(tintColor: UIColor.white.withAlphaComponent(0.5))
-                .frame(width: 24, height: 24)
-                .accessibilityIdentifier("airPlayButton")
-
-            Spacer()
-
-            Button { showEQ = true } label: {
-                Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.eqEnabled
-                            ? .white
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.5)
-                    )
-            }
-            .accessibilityLabel("Equalizer")
-            .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
-            .accessibilityIdentifier("eqButton")
-
-            Spacer()
-
-            if !disableVisualizer {
+            if showVisualizerInToolbar && !disableVisualizer {
                 Button { appState.showVisualizer = true } label: {
                     Image(systemName: "waveform.path")
-                        .foregroundColor(.white.opacity(0.5))
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel("Visualizer")
                 .accessibilityIdentifier("visualizerButton")
@@ -327,25 +306,57 @@ extension NowPlayingView {
                 Spacer()
             }
 
-            Button { appState.showLyrics = true } label: {
-                Image(systemName: "quote.bubble")
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .accessibilityLabel("Lyrics")
-            .accessibilityIdentifier("lyricsButton")
+            if showEQInToolbar {
+                Button { showEQ = true } label: {
+                    Image(systemName: "slider.vertical.3")
+                        .foregroundColor(
+                            engine.eqEnabled
+                                ? .accentColor
+                                : EQEngine.shared.currentPresetId != "flat"
+                                    ? .accentColor : nil
+                        )
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Equalizer")
+                .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
+                .accessibilityIdentifier("eqButton")
 
-            Spacer()
-
-            Button { showQuickSettings = true } label: {
-                Image(systemName: "gearshape")
-                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
             }
-            .accessibilityLabel("Quick Settings")
-            .accessibilityIdentifier("quickSettingsButton")
+
+            if showAirPlayInToolbar {
+                AirPlayButton(tintColor: .white)
+                    .frame(width: 24, height: 24)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityIdentifier("airPlayButton")
+
+                Spacer()
+            }
+
+            if showLyricsInToolbar {
+                Button { appState.showLyrics = true } label: {
+                    Image(systemName: "quote.bubble")
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Lyrics")
+                .accessibilityIdentifier("lyricsButton")
+
+                Spacer()
+            }
+
+            if showSettingsInToolbar {
+                Button { showQuickSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Quick Settings")
+                .accessibilityIdentifier("quickSettingsButton")
+            }
         }
         .font(.title3)
+        .fontWeight(.semibold)
         .buttonStyle(.plain)
-        .foregroundColor(.white.opacity(0.5))
+        .foregroundColor(.white)
     }
 
     // MARK: - Quick Settings Sheet
