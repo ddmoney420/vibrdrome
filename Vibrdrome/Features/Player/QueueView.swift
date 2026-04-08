@@ -40,6 +40,29 @@ struct QueueView: View {
                     }
                 }
 
+                // Recently played
+                let history = engine.recentlyPlayed
+                if !history.isEmpty {
+                    Section("Recently Played") {
+                        ForEach(Array(history.enumerated()), id: \.element.id) { _, song in
+                            HStack(spacing: 12) {
+                                AlbumArtView(coverArtId: song.coverArt, size: 36)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(song.title)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                    Text(song.artist ?? "")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .opacity(0.6)
+                        }
+                    }
+                }
+
                 // Radio mode badge
                 if engine.isRadioMode {
                     Section {
@@ -90,6 +113,9 @@ struct QueueView: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                #if os(iOS)
+                                Haptics.light()
+                                #endif
                                 let absoluteIndex = engine.currentIndex + 1 + index
                                 engine.play(song: song, from: engine.queue, at: absoluteIndex)
                             }

@@ -586,10 +586,37 @@ final class AudioEngine {
                 return false
             }
         }
-        var newIndex = Int.random(in: 0..<(queue.count - 1))
-        if newIndex >= currentIndex { newIndex += 1 }
-        currentIndex = newIndex
+        currentIndex = smartShuffleNextIndex()
         return true
+    }
+
+    /// Pick a random next index, preferring a different artist than the current track.
+    private func smartShuffleNextIndex() -> Int {
+        let currentArtist = queue[currentIndex].artist
+        // Build list of candidate indices (all except current)
+        var candidates = Array(0..<queue.count)
+        candidates.remove(at: currentIndex)
+        // Prefer candidates with a different artist
+        let differentArtist = candidates.filter { queue[$0].artist != currentArtist }
+        if !differentArtist.isEmpty {
+            return differentArtist.randomElement()!
+        }
+        // All tracks are by the same artist — just pick any other track
+        return candidates.randomElement()!
+    }
+
+    /// Rearrange shuffled queue to avoid consecutive tracks by the same artist.
+    /// Used by radio and other features that pre-shuffle song arrays.
+    func smartShuffle(_ songs: [Song]) -> [Song] {
+        guard songs.count > 1 else { return songs }
+        var result = songs.shuffled()
+        for idx in 1..<result.count where result[idx].artist == result[idx - 1].artist {
+            if let swapIndex = ((idx + 1)..<result.count)
+                .first(where: { result[$0].artist != result[idx].artist }) {
+                result.swapAt(idx, swapIndex)
+            }
+        }
+        return result
     }
 
     func previous() {
@@ -701,6 +728,13 @@ final class AudioEngine {
     var upNext: [Song] {
         guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
         return Array(queue[(currentIndex + 1)...])
+    }
+
+    /// Songs played before the current track (most recent first, max 20)
+    var recentlyPlayed: [Song] {
+        guard currentIndex > 0 else { return [] }
+        let history = Array(queue[0..<currentIndex].reversed().prefix(20))
+        return history
     }
 
     /// Jump to a specific index in the existing queue without replacing it.
@@ -886,9 +920,7 @@ final class AudioEngine {
             guard queue.count > 1 else {
                 return repeatMode == .all ? currentIndex : nil
             }
-            var candidate = Int.random(in: 0..<(queue.count - 1))
-            if candidate >= currentIndex { candidate += 1 }
-            return candidate
+            return smartShuffleNextIndex()
         } else {
             let next = currentIndex + 1
             if next < queue.count {

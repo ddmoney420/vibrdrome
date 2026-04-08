@@ -142,8 +142,15 @@ extension NowPlayingView {
 
             Spacer()
 
-            // Symmetry spacer
-            Color.clear.frame(width: 28, height: 28)
+            // Queue button (symmetry with heart)
+            Button { showQueue = true } label: {
+                Image(systemName: "list.bullet")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show Queue")
+            .accessibilityIdentifier("queueButton")
         }
     }
 
@@ -288,11 +295,9 @@ extension NowPlayingView {
 
     var bottomToolbar: some View {
         HStack(spacing: 0) {
-            Button { showQueue = true } label: {
-                Image(systemName: "list.bullet")
-            }
-            .accessibilityLabel("Show Queue")
-            .accessibilityIdentifier("queueButton")
+            AirPlayButton(tintColor: UIColor.white.withAlphaComponent(0.5))
+                .frame(width: 24, height: 24)
+                .accessibilityIdentifier("airPlayButton")
 
             Spacer()
 
@@ -308,12 +313,6 @@ extension NowPlayingView {
             .accessibilityLabel("Equalizer")
             .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
             .accessibilityIdentifier("eqButton")
-
-            Spacer()
-
-            AirPlayButton(tintColor: UIColor.white.withAlphaComponent(0.5))
-                .frame(width: 24, height: 24)
-                .accessibilityIdentifier("airPlayButton")
 
             Spacer()
 

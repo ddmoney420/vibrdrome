@@ -116,6 +116,34 @@ struct MiniPlayerView: View {
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .accessibilityIdentifier("MiniPlayer")
         #if os(iOS)
+        .contextMenu {
+            if let song = engine.currentSong {
+                if let albumId = song.albumId {
+                    Button {
+                        appState.pendingNavigation = .album(id: albumId)
+                    } label: {
+                        Label("Go to Album", systemImage: "square.stack")
+                    }
+                }
+                if let artistId = song.artistId {
+                    Button {
+                        appState.pendingNavigation = .artist(id: artistId)
+                    } label: {
+                        Label("Go to Artist", systemImage: "music.mic")
+                    }
+                }
+                Button {
+                    AudioEngine.shared.addToQueueNext(song)
+                } label: {
+                    Label("Play Next", systemImage: "text.insert")
+                }
+                Button {
+                    AudioEngine.shared.startRadioFromSong(song)
+                } label: {
+                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                }
+            }
+        }
         .highPriorityGesture(
             DragGesture(minimumDistance: 40, coordinateSpace: .local)
                 .onEnded { value in

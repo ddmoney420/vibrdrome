@@ -172,6 +172,9 @@ struct RadioView: View {
 
     private func nowPlayingCard(_ station: InternetRadioStation) -> some View {
         Button {
+            #if os(iOS)
+            Haptics.light()
+            #endif
             engine.playRadio(station: station)
         } label: {
             HStack(spacing: 16) {
@@ -247,6 +250,9 @@ struct RadioView: View {
         let isPlaying = isCurrentStation(station)
 
         return Button {
+            #if os(iOS)
+            Haptics.light()
+            #endif
             engine.playRadio(station: station)
         } label: {
             VStack(spacing: 8) {
@@ -319,6 +325,9 @@ struct RadioView: View {
         let isPlaying = isCurrentStation(station)
 
         return Button {
+            #if os(iOS)
+            Haptics.light()
+            #endif
             engine.playRadio(station: station)
         } label: {
             HStack(spacing: 14) {

@@ -74,7 +74,7 @@ struct SearchView: View {
     @ViewBuilder
     private func artistsSection(_ artists: [Artist]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Artists")
+            Text("Artists (\(artists.count))")
                 .font(.title3).bold()
                 .padding(.horizontal, 16)
 
@@ -97,7 +97,7 @@ struct SearchView: View {
     @ViewBuilder
     private func albumsSection(_ albums: [Album]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Albums")
+            Text("Albums (\(albums.count))")
                 .font(.title3).bold()
                 .padding(.horizontal, 16)
 
@@ -120,7 +120,7 @@ struct SearchView: View {
     @ViewBuilder
     private func songsSection(_ songs: [Song]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Songs")
+            Text("Songs (\(songs.count))")
                 .font(.title3).bold()
                 .padding(.horizontal, 16)
 
@@ -219,6 +219,9 @@ struct SearchView: View {
         .padding(.vertical, 8)
         .contentShape(Rectangle())
         .onTapGesture {
+            #if os(iOS)
+            Haptics.light()
+            #endif
             AudioEngine.shared.play(song: song, from: songs, at: index)
         }
         .trackContextMenu(song: song, queue: songs, index: index)
