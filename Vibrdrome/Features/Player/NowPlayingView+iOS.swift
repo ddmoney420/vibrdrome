@@ -84,11 +84,10 @@ extension NowPlayingView {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Heart Row (heart + stars + more menu)
+    // MARK: - Heart Row (heart + stars)
 
     var heartRow: some View {
         HStack {
-            // Heart button
             Button {
                 Haptics.success()
                 guard let song = engine.currentSong else { return }
@@ -123,7 +122,7 @@ extension NowPlayingView {
 
             Spacer()
 
-            // Star rating (larger)
+            // Star rating
             HStack(spacing: 10) {
                 ForEach(1...5, id: \.self) { star in
                     Image(systemName: star <= currentRating ? "star.fill" : "star")
@@ -143,99 +142,9 @@ extension NowPlayingView {
 
             Spacer()
 
-            // More menu (replaces sleep timer)
-            heartRowMoreMenu
+            // Symmetry spacer
+            Color.clear.frame(width: 28, height: 28)
         }
-    }
-
-    // MARK: - Heart Row More Menu
-
-    var heartRowMoreMenu: some View {
-        Menu {
-            // Sleep Timer
-            Menu {
-                if SleepTimer.shared.isActive {
-                    Button {
-                        SleepTimer.shared.stop()
-                    } label: {
-                        Label("Cancel Timer", systemImage: "xmark")
-                    }
-                } else {
-                    ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
-                        Button {
-                            SleepTimer.shared.start(mode: .minutes(minutes))
-                        } label: {
-                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
-                        }
-                    }
-                    Button {
-                        SleepTimer.shared.start(mode: .endOfTrack)
-                    } label: {
-                        Text("End of Track")
-                    }
-                }
-            } label: {
-                if SleepTimer.shared.isActive {
-                    Label("Sleep Timer (\(formatSleepTime(SleepTimer.shared.remainingSeconds)))",
-                          systemImage: "moon.fill")
-                } else {
-                    Label("Sleep Timer", systemImage: "moon")
-                }
-            }
-
-            // Playback Speed
-            Menu {
-                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-                    Button {
-                        engine.playbackRate = Float(rate)
-                    } label: {
-                        HStack {
-                            Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
-                            if engine.playbackRate == Float(rate) {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Label("Playback Speed", systemImage: "gauge.with.dots.needle.33percent")
-            }
-
-            Divider()
-
-            // AirPlay
-            Button {
-                NotificationCenter.default.post(name: .init("ShowAirPlayPicker"), object: nil)
-            } label: {
-                Label("AirPlay", systemImage: "airplayaudio")
-            }
-
-            // Share
-            if let song = engine.currentSong {
-                ShareLink(
-                    item: "\(song.title) — \(song.artist ?? "")",
-                    preview: SharePreview(song.title)
-                ) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-
-            // Download
-            if let song = engine.currentSong {
-                Button {
-                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
-                    Haptics.success()
-                } label: {
-                    Label("Download", systemImage: "arrow.down.circle")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.title3)
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .accessibilityLabel("More")
-        .accessibilityIdentifier("heartRowMoreMenu")
     }
 
     // MARK: - Streaming Info
@@ -275,7 +184,7 @@ extension NowPlayingView {
         return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
-    // MARK: - iOS Playback Row (shuffle + transport + repeat)
+    // MARK: - iOS Playback Row
 
     var iOSPlaybackRow: some View {
         HStack {
@@ -375,15 +284,17 @@ extension NowPlayingView {
         }
     }
 
-    // MARK: - Bottom Toolbar (tighter spacing)
+    // MARK: - Bottom Toolbar (6 icons)
 
     var bottomToolbar: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 0) {
             Button { showQueue = true } label: {
                 Image(systemName: "list.bullet")
             }
             .accessibilityLabel("Show Queue")
             .accessibilityIdentifier("queueButton")
+
+            Spacer()
 
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
@@ -398,6 +309,14 @@ extension NowPlayingView {
             .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
             .accessibilityIdentifier("eqButton")
 
+            Spacer()
+
+            AirPlayButton(tintColor: UIColor.white.withAlphaComponent(0.5))
+                .frame(width: 24, height: 24)
+                .accessibilityIdentifier("airPlayButton")
+
+            Spacer()
+
             if !disableVisualizer {
                 Button { appState.showVisualizer = true } label: {
                     Image(systemName: "waveform.path")
@@ -405,6 +324,8 @@ extension NowPlayingView {
                 }
                 .accessibilityLabel("Visualizer")
                 .accessibilityIdentifier("visualizerButton")
+
+                Spacer()
             }
 
             Button { appState.showLyrics = true } label: {
@@ -413,10 +334,143 @@ extension NowPlayingView {
             }
             .accessibilityLabel("Lyrics")
             .accessibilityIdentifier("lyricsButton")
+
+            Spacer()
+
+            Button { showQuickSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .accessibilityLabel("Quick Settings")
+            .accessibilityIdentifier("quickSettingsButton")
         }
-        .font(.body)
+        .font(.title3)
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.5))
+    }
+
+    // MARK: - Quick Settings Sheet
+
+    var quickSettingsSheet: some View {
+        NavigationStack {
+            List {
+                // Sleep Timer
+                Section {
+                    sleepTimerSection
+                }
+
+                // Playback Speed
+                Section {
+                    playbackSpeedSection
+                }
+
+                // Crossfade
+                Section {
+                    Picker("Crossfade", selection: $crossfadeDuration) {
+                        Text("Off").tag(0)
+                        Text("2s").tag(2)
+                        Text("5s").tag(5)
+                        Text("8s").tag(8)
+                        Text("12s").tag(12)
+                    }
+                    .accessibilityIdentifier("crossfadePicker")
+                }
+
+                // Actions
+                Section {
+                    if let song = engine.currentSong {
+                        Button {
+                            DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                            Haptics.success()
+                        } label: {
+                            Label("Download", systemImage: "arrow.down.circle")
+                        }
+                        .accessibilityIdentifier("quickSettingsDownload")
+
+                        ShareLink(
+                            item: "\(song.title) — \(song.artist ?? "")",
+                            preview: SharePreview(song.title)
+                        ) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityIdentifier("quickSettingsShare")
+                    }
+                }
+            }
+            .navigationTitle("Quick Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showQuickSettings = false }
+                        .accessibilityIdentifier("quickSettingsDone")
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Quick Settings Sections
+
+    @ViewBuilder
+    private var sleepTimerSection: some View {
+        if SleepTimer.shared.isActive {
+            HStack {
+                Label("Sleep Timer", systemImage: "moon.fill")
+                Spacer()
+                Text(formatSleepTime(SleepTimer.shared.remainingSeconds))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Button(role: .destructive) {
+                SleepTimer.shared.stop()
+            } label: {
+                Label("Cancel Timer", systemImage: "xmark")
+            }
+        } else {
+            Menu {
+                ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
+                    Button {
+                        SleepTimer.shared.start(mode: .minutes(minutes))
+                    } label: {
+                        Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
+                    }
+                }
+                Button {
+                    SleepTimer.shared.start(mode: .endOfTrack)
+                } label: {
+                    Text("End of Track")
+                }
+            } label: {
+                Label("Sleep Timer", systemImage: "moon")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var playbackSpeedSection: some View {
+        Menu {
+            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
+                Button {
+                    engine.playbackRate = Float(rate)
+                } label: {
+                    HStack {
+                        Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
+                        if engine.playbackRate == Float(rate) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Label("Playback Speed", systemImage: "gauge.with.dots.needle.33percent")
+                Spacer()
+                Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("playbackSpeedMenu")
     }
 }
 #endif

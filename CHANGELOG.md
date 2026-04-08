@@ -4,6 +4,19 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 29 — April 7, 2026
+- Now Playing: back button removed (pull-down to dismiss only)
+- Bottom toolbar: 6 bigger icons — Queue, EQ, AirPlay, Visualizer, Lyrics, Settings
+- AirPlay button uses native route picker directly in toolbar
+- Quick Settings sheet: sleep timer, playback speed, crossfade, download, share
+- Three-dot more menu removed from heart row (all actions in Quick Settings)
+- Spacing redistributed for better visual balance
+- 495 unit tests in 34 suites
+
+**TestFlight Notes:**
+> Now Playing toolbar redesigned with 6 larger icons including native AirPlay
+> and a new Quick Settings sheet. Back button removed — swipe down to dismiss.
+
 ### Build 28 — April 6, 2026
 - Now Playing polish: all titles tappable (song→album, artist→artist, album→album)
 - Album name restored below artist in Now Playing

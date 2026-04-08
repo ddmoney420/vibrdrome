@@ -51,16 +51,18 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Song title tappable (navigates to album)
 - [ ] Artist name tappable (navigates to artist)
 - [ ] Album name tappable (navigates to album)
-- [ ] Heart / 5-star rating / more menu (...) on one row
+- [ ] Heart / 5-star rating on one row (no more menu)
 - [ ] Star rating works (tap to rate, tap same to clear)
-- [ ] More menu contains: sleep timer, speed, AirPlay, share, download
+- [ ] No back button (pull-down to dismiss only)
 - [ ] Streaming info shows below progress (WiFi icon + bitrate + format)
 - [ ] Progress slider has small dot thumb (not blob)
 - [ ] Volume slider has no thumb (thin bar)
 - [ ] Shuffle / repeat flank transport controls (prev/play/next)
 - [ ] Volume slider adjusts playback volume
-- [ ] Bottom toolbar: Queue, EQ, Visualizer, Lyrics, More(...)
-- [ ] More menu: Speed, AirPlay, Share, Download all work
+- [ ] Bottom toolbar: Queue, EQ, AirPlay, Visualizer, Lyrics, Settings (6 icons)
+- [ ] AirPlay button opens system route picker
+- [ ] Settings gear opens Quick Settings sheet
+- [ ] Quick Settings: sleep timer, speed, crossfade, download, share all work
 - [ ] EQ sheet opens from toolbar
 - [ ] Lyrics sheet opens (synced lyrics auto-scroll and tap-to-seek)
 - [ ] Visualizer opens (if not disabled)

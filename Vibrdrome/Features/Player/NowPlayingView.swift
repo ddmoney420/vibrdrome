@@ -18,6 +18,8 @@ struct NowPlayingView: View {
     @State private var loadedCoverArtId: String?
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) var disableVisualizer = false
+    @AppStorage(UserDefaultsKeys.crossfadeDuration) var crossfadeDuration: Int = 0
+    @State var showQuickSettings = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @State private var nsWindow: NSWindow?
@@ -72,6 +74,10 @@ struct NowPlayingView: View {
                 EQView()
             }
             #if os(iOS)
+            .sheet(isPresented: $showQuickSettings) {
+                quickSettingsSheet
+                    .environment(appState)
+            }
             .fullScreenCover(isPresented: Bindable(appState).showVisualizer) {
                 VisualizerView()
             }
@@ -148,7 +154,7 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 440
+            let controlsNeeded: CGFloat = 420
             let maxArtFromWidth = geo.size.width - 60
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
@@ -160,29 +166,29 @@ struct NowPlayingView: View {
 
                 albumArt(size: artSize)
 
-                Spacer(minLength: 6)
+                Spacer(minLength: 8)
 
                 iOSSongInfo
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 10)
 
                 heartRow
                     .padding(.bottom, 12)
 
                 progressSlider
-                    .padding(.bottom, 2)
+                    .padding(.bottom, 4)
 
                 streamingInfo
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 16)
 
                 iOSPlaybackRow
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 16)
 
                 volumeSlider
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 14)
 
                 bottomToolbar
 
-                Spacer(minLength: 4)
+                Spacer(minLength: 6)
             }
             .padding(.horizontal, 28)
             .frame(width: geo.size.width, height: geo.size.height)
@@ -258,31 +264,11 @@ struct NowPlayingView: View {
     // MARK: - Dismiss Handle
 
     private var dismissHandle: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .accessibilityIdentifier("dismissButton")
-
-            Spacer()
-
-            Capsule()
-                .fill(.white.opacity(0.5))
-                .frame(width: 36, height: 5)
-
-            Spacer()
-
-            Color.clear.frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
+        Capsule()
+            .fill(.white.opacity(0.5))
+            .frame(width: 36, height: 5)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
     }
 
     // MARK: - Album Art
