@@ -78,6 +78,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Swipe left to skip next
 - [ ] Swipe right to go previous
 - [ ] Tap opens full Now Playing
+- [ ] Long-press shows context menu (Go to Album, Go to Artist, Play Next, Start Radio)
 
 ## Queue
 
@@ -87,6 +88,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Long-press context menu works
 - [ ] Save as Playlist from menu
 - [ ] Total duration shows in "Up Next" header
+- [ ] Recently Played section shows previous songs (dimmed)
+- [ ] Smart shuffle avoids consecutive same-artist tracks
 
 ## Context Menus
 

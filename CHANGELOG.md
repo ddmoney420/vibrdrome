@@ -4,6 +4,20 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 30 — April 7, 2026
+- Smart shuffle: avoids consecutive same-artist tracks when shuffling
+- Recently Played section in Queue view (last 20 played songs)
+- Mini player long-press context menu (Go to Album, Go to Artist, Play Next, Start Radio)
+- Queue icon moved to heart row for symmetry (heart | stars | queue)
+- Bottom toolbar reordered: AirPlay, EQ, Visualizer, Lyrics, Settings
+- Search result counts in section headers
+- Haptics added to radio, queue, and search taps
+- 495 unit tests in 34 suites
+
+**TestFlight Notes:**
+> Smart shuffle avoids same-artist repeats. Queue shows recently played history.
+> Long-press mini player for quick actions. Haptics throughout.
+
 ### Build 29 — April 7, 2026
 - Now Playing: back button removed (pull-down to dismiss only)
 - Bottom toolbar: 6 bigger icons — Queue, EQ, AirPlay, Visualizer, Lyrics, Settings
