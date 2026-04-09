@@ -91,6 +91,12 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Recently Played section shows previous songs (dimmed)
 - [ ] Smart shuffle avoids consecutive same-artist tracks
 
+## Swipe Actions
+
+- [ ] Swipe right on track = Play Next (blue)
+- [ ] Swipe left on track = Add to Queue (orange)
+- [ ] Haptic feedback on both swipe actions
+
 ## Context Menus
 
 - [ ] Play / Play Next / Add to Queue
@@ -176,9 +182,18 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Multi-server: add/switch/delete servers
 - [ ] ListenBrainz toggle and token field
 - [ ] Auto-sync playlists toggle
-- [ ] Now Playing Toolbar customization (toggle Visualizer/EQ/AirPlay/Lyrics/Settings)
+- [ ] Now Playing Toolbar customization (toggle + drag-to-reorder)
+- [ ] Always-visible search bars on Albums, Artists, Genres, Playlists, Favorites, Songs
+
+## Playlist Sharing
+
+- [ ] Make Public / Make Private toggle in playlist menu
+- [ ] Globe icon shows on public playlists in list
 
 ## macOS Specific
+
+- [ ] Keyboard shortcuts: Space (play/pause), Cmd+arrows (skip), Cmd+P
+- [ ] Single instance prevention (second launch activates existing)
 
 - [ ] Discord Rich Presence (enable toggle, verify Discord shows "Listening to...")
 - [ ] Sidebar navigation works

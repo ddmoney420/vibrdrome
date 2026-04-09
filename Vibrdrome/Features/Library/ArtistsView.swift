@@ -37,7 +37,11 @@ struct ArtistsView: View {
         }
         .listStyle(.plain)
         .navigationTitle("Artists")
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Artists")
+        #else
         .searchable(text: $searchText, prompt: "Search Artists")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

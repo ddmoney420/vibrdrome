@@ -22,7 +22,7 @@ actor DiscordRPCClient {
     static let shared = DiscordRPCClient()
 
     // Replace with your Discord Application ID from https://discord.com/developers/applications
-    private let applicationId = "DISCORD_APP_ID"
+    private let applicationId = "1491666224378019911"
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.vibrdrome", category: "DiscordRPC")
 
@@ -45,8 +45,12 @@ actor DiscordRPCClient {
     func connect() {
         guard !isConnected else { return }
 
+        // macOS uses $TMPDIR (user-specific), not /tmp
+        let tmpDir = NSTemporaryDirectory()
+        logger.info("Attempting Discord IPC connection, tmpDir: \(tmpDir)")
+
         for pipeIndex in 0...9 {
-            let path = "/tmp/discord-ipc-\(pipeIndex)"
+            let path = "\(tmpDir)discord-ipc-\(pipeIndex)"
 
             let fd = socket(AF_UNIX, SOCK_STREAM, 0)
             guard fd >= 0 else { continue }

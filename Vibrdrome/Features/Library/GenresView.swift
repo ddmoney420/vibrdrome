@@ -44,7 +44,11 @@ struct GenresView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Genres")
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Genres")
+        #else
         .searchable(text: $searchText, prompt: "Search Genres")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

@@ -99,7 +99,13 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 ### Customization &nbsp; ─=≡Σ((( つ◕ل͜◕)つ
 - **Theming** — dark/light/system mode with 10 accent color themes
 - **Customizable library** — reorder & show/hide pills and carousels
-- **Customizable Now Playing toolbar** — show/hide Visualizer, EQ, AirPlay, Lyrics, Settings
+- **Customizable Now Playing toolbar** — drag-to-reorder and show/hide Visualizer, EQ, AirPlay, Lyrics, Settings
+- **Always-visible search** — search bars on all browse views (Albums, Artists, Genres, Playlists, Favorites)
+- **Swipe actions** — swipe right to Play Next, swipe left to Add to Queue
+- **Now playing indicator** — animated waveform on currently playing track in any list
+- **Playlist sharing** — toggle public/private visibility for multi-user servers
+- **iOS 26 Liquid Glass** — frosted glass effects on mini player, album buttons, toolbar
+- **iOS 26 floating tab bar** — adaptive dock with iPad sidebar morph
 - **Lossless badge** — shows in album detail for FLAC/ALAC/WAV albums
 - **Per-track actions** — tappable heart, download icon, and inline "..." menu on every track
 - **Library folder switching** — filter by music folder on multi-library servers

@@ -4,6 +4,29 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 32 — April 9, 2026
+- Library: compact inline header with settings gear, folder switcher, and customize in top bar
+- Always-visible search bars on Albums, Artists, Genres, Playlists, Favorites, Songs
+- Now playing indicator: animated waveform + accent color on currently playing track
+- "Playing from" context label: shows Playlist name or Shuffle (not album)
+- Swipe actions on tracks: right = Play Next (blue), left = Add to Queue (orange)
+- Toolbar drag-to-reorder in Settings (plus show/hide toggles)
+- Crossfade audible preview: volume dip when changing crossfade duration
+- Playlist public/private toggle with globe icon on shared playlists
+- iOS 26 Liquid Glass on mini player, album buttons, Now Playing toolbar
+- iOS 26 floating tab bar (.sidebarAdaptable) with iPad sidebar morph
+- macOS: keyboard shortcuts (Space, Cmd+arrows, Cmd+P), single-instance prevention
+- Discord Rich Presence with real Application ID
+- Smart shuffle: avoids consecutive same-artist tracks
+- Recently Played section in Queue view
+- Mini player long-press context menu
+- 15 new tests — 510 unit tests in 37 suites
+
+**TestFlight Notes:**
+> Massive feature build: always-visible search, now playing indicator, swipe
+> actions, toolbar reorder, iOS 26 glass + floating tab bar, playlist sharing,
+> crossfade preview, macOS keyboard shortcuts, Discord RPC. 510 tests.
+
 ### Build 31 — April 8, 2026
 - Now Playing toolbar: bold white icons, reordered (Visualizer, EQ, AirPlay, Lyrics, Settings), 44pt touch targets
 - Customizable Now Playing toolbar in Settings (show/hide each icon)

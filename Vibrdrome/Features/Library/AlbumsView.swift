@@ -104,7 +104,11 @@ struct AlbumsView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle(title)
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search in Albums")
+        #else
         .searchable(text: $searchText, prompt: "Search in Albums")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

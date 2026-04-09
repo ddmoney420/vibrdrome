@@ -96,7 +96,50 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
     private var mainTabView: some View {
+        if #available(iOS 18.0, macOS 15.0, *) {
+            modernTabView
+        } else {
+            legacyTabView
+        }
+    }
+
+    @available(iOS 18.0, macOS 15.0, *)
+    private var modernTabView: some View {
+        TabView(selection: $selectedTab) {
+            Tab("Library", systemImage: "music.note.house", value: 0) {
+                LibraryView(navPath: $libraryNavPath)
+            }
+            if showSearchTab {
+                Tab("Search", systemImage: "magnifyingglass", value: 1) {
+                    NavigationStack { SearchView() }
+                }
+            }
+            if showPlaylistsTab {
+                Tab("Playlists", systemImage: "music.note.list", value: 2) {
+                    NavigationStack { PlaylistsView() }
+                }
+            }
+            if showRadioTab {
+                Tab("Radio", systemImage: "antenna.radiowaves.left.and.right", value: 3) {
+                    NavigationStack { RadioView() }
+                }
+            }
+            Tab("Settings", systemImage: "gear", value: 4) {
+                NavigationStack { SettingsView() }
+            }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        .overlay(alignment: .bottom) {
+            if engine.currentSong != nil || engine.currentRadioStation != nil {
+                MiniPlayerView()
+                    .padding(.bottom, 54)
+            }
+        }
+    }
+
+    private var legacyTabView: some View {
         TabView(selection: $selectedTab) {
             LibraryView(navPath: $libraryNavPath)
                 .tabItem { Label("Library", systemImage: "music.note.house") }

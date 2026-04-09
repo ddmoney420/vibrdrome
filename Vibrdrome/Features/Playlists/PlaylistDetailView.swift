@@ -50,6 +50,7 @@ struct PlaylistDetailView: View {
                             Button {
                                 if let songs = playlist.entry, let first = songs.first {
                                     AudioEngine.shared.play(song: first, from: songs, at: 0)
+                                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
                                 }
                             } label: {
                                 Label("Play", systemImage: "play.fill")
@@ -62,6 +63,7 @@ struct PlaylistDetailView: View {
                                 if var songs = playlist.entry, !songs.isEmpty {
                                     songs.shuffle()
                                     AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
                                 }
                             } label: {
                                 Label("Shuffle", systemImage: "shuffle")
@@ -83,7 +85,7 @@ struct PlaylistDetailView: View {
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: filteredSongs, at: index)
+                                playFromPlaylist(song: song, songs: filteredSongs, index: index)
                             }
                             .trackContextMenu(song: song, queue: filteredSongs, index: index)
                     }
@@ -126,6 +128,26 @@ struct PlaylistDetailView: View {
                             let shareText = "🎶 \(playlist.name) — \(playlist.songCount ?? 0) songs"
                             ShareLink(item: shareText) {
                                 Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                        }
+
+                        Button {
+                            guard let playlist else { return }
+                            let newPublic = !(playlist.isPublic ?? false)
+                            Task {
+                                do {
+                                    try await appState.subsonicClient.updatePlaylist(
+                                        id: playlist.id, isPublic: newPublic)
+                                    await loadPlaylist()
+                                } catch {
+                                    self.error = ErrorPresenter.userMessage(for: error)
+                                }
+                            }
+                        } label: {
+                            if playlist?.isPublic == true {
+                                Label("Make Private", systemImage: "lock")
+                            } else {
+                                Label("Make Public", systemImage: "globe")
                             }
                         }
 
@@ -195,6 +217,11 @@ struct PlaylistDetailView: View {
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
         }
+    }
+
+    private func playFromPlaylist(song: Song, songs: [Song], index: Int) {
+        AudioEngine.shared.play(song: song, from: songs, at: index)
+        AudioEngine.shared.playingFromContext = "Playlist: \(playlist?.name ?? "")"
     }
 
     private func removeFromPlaylist(at offsets: IndexSet, songs: [Song]) {

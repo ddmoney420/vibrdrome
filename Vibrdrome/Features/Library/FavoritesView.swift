@@ -107,7 +107,11 @@ struct FavoritesView: View {
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Favorites")
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Favorites")
+        #else
         .searchable(text: $searchText, prompt: "Search Favorites")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

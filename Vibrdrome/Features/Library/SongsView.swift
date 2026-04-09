@@ -97,7 +97,11 @@ struct SongsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search songs")
+        #else
         .searchable(text: $searchText, prompt: "Search songs")
+        #endif
         .onChange(of: searchText) { _, query in
             guard query.count >= 2 else {
                 searchResults = []

@@ -20,6 +20,22 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        true
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Prevent multiple instances
+        let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+        if runningApps.count > 1 {
+            // Another instance is already running — activate it and quit this one
+            for app in runningApps where app != NSRunningApplication.current {
+                app.activate()
+            }
+            NSApp.terminate(nil)
+        }
+    }
 }
 #endif
 
@@ -98,6 +114,11 @@ struct VibrdromeApp: App {
                     AudioEngine.shared.togglePlayPause()
                 }
                 .keyboardShortcut("p", modifiers: .command)
+
+                Button("Play/Pause") {
+                    AudioEngine.shared.togglePlayPause()
+                }
+                .keyboardShortcut(.space, modifiers: [])
 
                 Divider()
 

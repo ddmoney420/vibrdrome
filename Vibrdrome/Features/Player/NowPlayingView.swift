@@ -24,6 +24,7 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) var showAirPlayInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showLyricsInToolbar) var showLyricsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSettingsInToolbar) var showSettingsInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) var toolbarOrderJSON: String = "[]"
     @State var showQuickSettings = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
@@ -748,6 +749,43 @@ struct NowPlayingView: View {
         let m = seconds / 60
         let s = seconds % 60
         return "\(m):\(String(format: "%02d", s))"
+    }
+}
+
+// MARK: - Toolbar Item Identifiers
+
+enum NowPlayingToolbarItem: String, CaseIterable, Identifiable {
+    case visualizer
+    case eq
+    case airplay
+    case lyrics
+    case settings
+
+    var id: String { rawValue }
+
+    static let defaultOrder: [NowPlayingToolbarItem] = [.visualizer, .eq, .airplay, .lyrics, .settings]
+
+    static func decodeOrder(from json: String) -> [NowPlayingToolbarItem] {
+        guard let data = json.data(using: .utf8),
+              let ids = try? JSONDecoder().decode([String].self, from: data),
+              !ids.isEmpty
+        else {
+            return defaultOrder
+        }
+        let mapped = ids.compactMap { NowPlayingToolbarItem(rawValue: $0) }
+        // Append any missing items at the end
+        let missing = defaultOrder.filter { item in !mapped.contains(item) }
+        return mapped + missing
+    }
+
+    static func encodeOrder(_ items: [NowPlayingToolbarItem]) -> String {
+        let ids = items.map(\.rawValue)
+        guard let data = try? JSONEncoder().encode(ids),
+              let json = String(data: data, encoding: .utf8)
+        else {
+            return "[]"
+        }
+        return json
     }
 }
 

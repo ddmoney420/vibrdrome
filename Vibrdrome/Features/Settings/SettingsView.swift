@@ -446,41 +446,57 @@ struct SettingsView: View {
 
     // MARK: - Now Playing Toolbar Section
 
+    @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) private var toolbarOrderJSON: String = "[]"
+
     private var nowPlayingToolbarSection: some View {
-        Section {
-            Toggle(isOn: $showVisualizerInToolbar) {
-                Label("Visualizer", systemImage: "waveform.path")
-                    .foregroundColor(.primary)
+        let order = NowPlayingToolbarItem.decodeOrder(from: toolbarOrderJSON)
+        return Section {
+            ForEach(order) { item in
+                Toggle(isOn: toolbarBinding(for: item)) {
+                    Label(toolbarItemLabel(for: item), systemImage: toolbarItemIcon(for: item))
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("showToolbar_\(item.rawValue)")
             }
-            .accessibilityIdentifier("showVisualizerInToolbarToggle")
-
-            Toggle(isOn: $showEQInToolbar) {
-                Label("Equalizer", systemImage: "slider.vertical.3")
-                    .foregroundColor(.primary)
+            .onMove { source, destination in
+                var mutable = order
+                mutable.move(fromOffsets: source, toOffset: destination)
+                toolbarOrderJSON = NowPlayingToolbarItem.encodeOrder(mutable)
             }
-            .accessibilityIdentifier("showEQInToolbarToggle")
-
-            Toggle(isOn: $showAirPlayInToolbar) {
-                Label("AirPlay", systemImage: "airplayaudio")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("showAirPlayInToolbarToggle")
-
-            Toggle(isOn: $showLyricsInToolbar) {
-                Label("Lyrics", systemImage: "quote.bubble")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("showLyricsInToolbarToggle")
-
-            Toggle(isOn: $showSettingsInToolbar) {
-                Label("Quick Settings", systemImage: "gearshape")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("showSettingsInToolbarToggle")
         } header: {
             settingSectionHeader("Now Playing Toolbar", icon: "rectangle.dock.bottom", color: .purple)
         } footer: {
-            Text("Choose which icons appear in the Now Playing bottom toolbar.")
+            Text("Toggle visibility and drag to reorder toolbar icons.")
+        }
+    }
+
+    private func toolbarBinding(for item: NowPlayingToolbarItem) -> Binding<Bool> {
+        switch item {
+        case .visualizer: return $showVisualizerInToolbar
+        case .eq: return $showEQInToolbar
+        case .airplay: return $showAirPlayInToolbar
+        case .lyrics: return $showLyricsInToolbar
+        case .settings: return $showSettingsInToolbar
+        }
+    }
+
+    private func toolbarItemLabel(for item: NowPlayingToolbarItem) -> String {
+        switch item {
+        case .visualizer: return "Visualizer"
+        case .eq: return "Equalizer"
+        case .airplay: return "AirPlay"
+        case .lyrics: return "Lyrics"
+        case .settings: return "Quick Settings"
+        }
+    }
+
+    private func toolbarItemIcon(for item: NowPlayingToolbarItem) -> String {
+        switch item {
+        case .visualizer: return "waveform.path"
+        case .eq: return "slider.vertical.3"
+        case .airplay: return "airplayaudio"
+        case .lyrics: return "quote.bubble"
+        case .settings: return "gearshape"
         }
     }
 

@@ -111,6 +111,9 @@ struct MiniPlayerView: View {
             }
         }
         .clipShape(Capsule())
+        #if os(iOS)
+        .modifier(GlassEffectModifier())
+        #endif
         .padding(.horizontal, 16)
         .padding(.bottom, 2)
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)

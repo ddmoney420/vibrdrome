@@ -10,6 +10,15 @@ extension NowPlayingView {
 
     var iOSSongInfo: some View {
         VStack(spacing: 4) {
+            // Source context — only shows when non-obvious
+            if let sourceLabel = playingSourceLabel {
+                Text(sourceLabel)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
+
             if engine.isRadioMode {
                 HStack(spacing: 4) {
                     Image(systemName: "dot.radiowaves.left.and.right")
@@ -294,69 +303,82 @@ extension NowPlayingView {
     // MARK: - Bottom Toolbar (6 icons)
 
     var bottomToolbar: some View {
-        HStack(spacing: 0) {
-            if showVisualizerInToolbar && !disableVisualizer {
-                Button { appState.showVisualizer = true } label: {
-                    Image(systemName: "waveform.path")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel("Visualizer")
-                .accessibilityIdentifier("visualizerButton")
-
-                Spacer()
+        let orderedItems = NowPlayingToolbarItem.decodeOrder(from: toolbarOrderJSON)
+        let visibleItems = orderedItems.filter { item in
+            switch item {
+            case .visualizer: return showVisualizerInToolbar && !disableVisualizer
+            case .eq: return showEQInToolbar
+            case .airplay: return showAirPlayInToolbar
+            case .lyrics: return showLyricsInToolbar
+            case .settings: return showSettingsInToolbar
             }
-
-            if showEQInToolbar {
-                Button { showEQ = true } label: {
-                    Image(systemName: "slider.vertical.3")
-                        .foregroundColor(
-                            engine.eqEnabled
-                                ? .accentColor
-                                : EQEngine.shared.currentPresetId != "flat"
-                                    ? .accentColor : nil
-                        )
-                        .frame(minWidth: 44, minHeight: 44)
+        }
+        return HStack(spacing: 0) {
+            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                toolbarButton(for: item)
+                if index < visibleItems.count - 1 {
+                    Spacer()
                 }
-                .accessibilityLabel("Equalizer")
-                .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
-                .accessibilityIdentifier("eqButton")
-
-                Spacer()
-            }
-
-            if showAirPlayInToolbar {
-                AirPlayButton(tintColor: .white)
-                    .frame(width: 24, height: 24)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .accessibilityIdentifier("airPlayButton")
-
-                Spacer()
-            }
-
-            if showLyricsInToolbar {
-                Button { appState.showLyrics = true } label: {
-                    Image(systemName: "quote.bubble")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel("Lyrics")
-                .accessibilityIdentifier("lyricsButton")
-
-                Spacer()
-            }
-
-            if showSettingsInToolbar {
-                Button { showQuickSettings = true } label: {
-                    Image(systemName: "gearshape")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .accessibilityLabel("Quick Settings")
-                .accessibilityIdentifier("quickSettingsButton")
             }
         }
         .font(.title3)
         .fontWeight(.semibold)
         .buttonStyle(.plain)
         .foregroundColor(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .modifier(GlassEffectToolbarModifier())
+    }
+
+    @ViewBuilder
+    private func toolbarButton(for item: NowPlayingToolbarItem) -> some View {
+        switch item {
+        case .visualizer:
+            Button { appState.showVisualizer = true } label: {
+                Image(systemName: "waveform.path")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Visualizer")
+            .accessibilityIdentifier("visualizerButton")
+
+        case .eq:
+            Button { showEQ = true } label: {
+                Image(systemName: "slider.vertical.3")
+                    .foregroundColor(
+                        engine.eqEnabled
+                            ? .accentColor
+                            : EQEngine.shared.currentPresetId != "flat"
+                                ? .accentColor : nil
+                    )
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Equalizer")
+            .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
+            .accessibilityIdentifier("eqButton")
+
+        case .airplay:
+            AirPlayButton(tintColor: .white)
+                .frame(width: 24, height: 24)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityIdentifier("airPlayButton")
+
+        case .lyrics:
+            Button { appState.showLyrics = true } label: {
+                Image(systemName: "quote.bubble")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Lyrics")
+            .accessibilityIdentifier("lyricsButton")
+
+        case .settings:
+            Button { showQuickSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityLabel("Quick Settings")
+            .accessibilityIdentifier("quickSettingsButton")
+        }
     }
 
     // MARK: - Quick Settings Sheet
@@ -384,6 +406,15 @@ extension NowPlayingView {
                         Text("12s").tag(12)
                     }
                     .accessibilityIdentifier("crossfadePicker")
+                    .onChange(of: crossfadeDuration) { _, newValue in
+                        guard newValue > 0, engine.isPlaying else { return }
+                        Haptics.light()
+                        let originalVolume = engine.userVolume
+                        engine.userVolume = originalVolume * 0.3
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                            engine.userVolume = originalVolume
+                        }
+                    }
                 }
 
                 // Actions
@@ -481,6 +512,22 @@ extension NowPlayingView {
             }
         }
         .accessibilityIdentifier("playbackSpeedMenu")
+    }
+
+    // MARK: - Playing Source Context
+
+    /// Only shows context when it's non-obvious (playlist, radio, shuffle — NOT album)
+    private var playingSourceLabel: String? {
+        if engine.isRadioMode {
+            return nil // Radio badge handles this separately
+        }
+        if let context = engine.playingFromContext {
+            return context
+        }
+        if engine.shuffleEnabled && engine.queue.count > 1 {
+            return "Shuffle"
+        }
+        return nil
     }
 }
 #endif

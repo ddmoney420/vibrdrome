@@ -10,9 +10,19 @@ struct TrackRow: View {
     @State private var isDownloaded = false
     @State private var isStarred = false
 
+    private var isCurrentlyPlaying: Bool {
+        AudioEngine.shared.currentSong?.id == song.id
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            if showTrackNumber, let track = song.track {
+            if isCurrentlyPlaying {
+                Image(systemName: "waveform")
+                    .symbolEffect(.variableColor)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 28, alignment: .trailing)
+            } else if showTrackNumber, let track = song.track {
                 Text("\(track)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -22,6 +32,7 @@ struct TrackRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
                     .font(.body)
+                    .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
                     .lineLimit(1)
                 HStack(spacing: 4) {
                     if let artist = song.artist {
@@ -122,6 +133,28 @@ struct TrackRow: View {
             .accessibilityIdentifier("trackMenuButton_\(song.id)")
         }
         .contentShape(Rectangle())
+        .swipeActions(edge: .leading) {
+            Button {
+                AudioEngine.shared.addToQueueNext(song)
+                #if os(iOS)
+                Haptics.light()
+                #endif
+            } label: {
+                Label("Play Next", systemImage: "text.insert")
+            }
+            .tint(.blue)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button {
+                AudioEngine.shared.addToQueue(song)
+                #if os(iOS)
+                Haptics.light()
+                #endif
+            } label: {
+                Label("Add to Queue", systemImage: "text.append")
+            }
+            .tint(.orange)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
         .onAppear {

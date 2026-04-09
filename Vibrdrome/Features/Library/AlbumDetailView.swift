@@ -242,6 +242,7 @@ struct AlbumDetailView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
+                    .modifier(GlassEffectCircleModifier())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumShuffleButton")
@@ -280,6 +281,7 @@ struct AlbumDetailView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
+                    .modifier(GlassEffectCircleModifier())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumDownloadButton")

@@ -150,6 +150,8 @@ final class AudioEngine {
 
     var isRadioMode = false
     var radioSeedArtistName: String?
+    /// Context label for what's playing (e.g. "Playlist: Metal Mix"). Nil for normal album playback.
+    var playingFromContext: String?
     private var radioSkippedIds: Set<String> = []
     private var radioRefillTask: Task<Void, Never>?
 
@@ -353,6 +355,11 @@ final class AudioEngine {
         let isNewTrack = currentSong?.id != song.id
         currentSong = song
         currentRadioStation = nil
+        // Only clear playingFromContext when a NEW queue is loaded,
+        // not when advancing within the same queue (next/previous)
+        if newQueue != nil {
+            playingFromContext = nil
+        }
         scrobbleSubmitted = false
         if isNewTrack { repeatOneUsed = false }
         trackStartTime = Date()

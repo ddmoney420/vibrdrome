@@ -1,5 +1,44 @@
 import SwiftUI
 
+// MARK: - Glass Effect Modifiers (iOS 26+)
+
+#if os(iOS)
+/// Applies `.glassEffect()` on iOS 26+, no-op on older versions.
+struct GlassEffectModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            content
+        }
+    }
+}
+
+/// Applies `.glassEffect()` with a circular shape on iOS 26+, no-op on older versions.
+struct GlassEffectCircleModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: .circle)
+        } else {
+            content
+        }
+    }
+}
+
+/// Applies `.glassEffect()` with a rounded rectangle for toolbar bars on iOS 26+.
+struct GlassEffectToolbarModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: .rect(cornerRadius: 16))
+        } else {
+            content
+        }
+    }
+}
+#endif
+
+// MARK: - Theme
+
 enum Theme {
     static let cornerRadius: CGFloat = 12
     static let albumArtShadow: CGFloat = 8

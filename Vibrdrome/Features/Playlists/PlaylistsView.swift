@@ -42,7 +42,11 @@ struct PlaylistsView: View {
             #endif
         }
         .navigationTitle("Playlists")
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Playlists")
+        #else
         .searchable(text: $searchText, prompt: "Search Playlists")
+        #endif
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -237,9 +241,16 @@ struct PlaylistsView: View {
                                 .fontWeight(.medium)
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
-                            Text(verbatim: "\(playlist.songCount ?? 0) songs")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                if playlist.isPublic == true {
+                                    Image(systemName: "globe")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
 
                         Spacer()
@@ -273,9 +284,16 @@ struct PlaylistsView: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
-            Text(verbatim: "\(playlist.songCount ?? 0) songs")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                if playlist.isPublic == true {
+                    Image(systemName: "globe")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
