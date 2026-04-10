@@ -6,6 +6,7 @@ final class CachedSong {
     @Attribute(.unique) var id: String
     var title: String
     var artist: String?
+    var albumArtist: String?
     var albumName: String?
     var albumId: String?
     var artistId: String?
@@ -32,6 +33,7 @@ final class CachedSong {
         self.id = song.id
         self.title = song.title
         self.artist = song.artist
+        self.albumArtist = song.albumArtist
         self.albumName = song.album
         self.albumId = song.albumId
         self.artistId = song.artistId
@@ -56,6 +58,7 @@ final class CachedSong {
             title: title,
             album: albumName,
             artist: artist,
+            albumArtist: albumArtist,
             albumId: albumId,
             artistId: artistId,
             track: track,

@@ -44,7 +44,7 @@ final class DownloadedSong {
         Song(
             id: songId, parent: nil, title: songTitle,
             album: albumName, artist: artistName,
-            albumId: nil, artistId: nil,
+            albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil,
             coverArt: coverArtId, size: nil,
             contentType: nil, suffix: nil,

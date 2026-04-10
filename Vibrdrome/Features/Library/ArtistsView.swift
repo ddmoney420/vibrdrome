@@ -6,18 +6,37 @@ struct ArtistsView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var sortReversed = false
+
+    enum ArtistSortOption: String, CaseIterable {
+        case nameAZ, nameZA
+        var label: String {
+            switch self {
+            case .nameAZ: "Name (A-Z)"
+            case .nameZA: "Name (Z-A)"
+            }
+        }
+    }
 
     private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
+        let base: [(id: String, name: String, artists: [Artist])]
         if searchText.isEmpty {
-            return indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
-        }
-        return indexes.compactMap { index in
-            let filtered = (index.artist ?? []).filter {
-                $0.name.localizedCaseInsensitiveContains(searchText)
+            base = indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
+        } else {
+            base = indexes.compactMap { index in
+                let filtered = (index.artist ?? []).filter {
+                    $0.name.localizedCaseInsensitiveContains(searchText)
+                }
+                guard !filtered.isEmpty else { return nil }
+                return (id: index.id, name: index.name, artists: filtered)
             }
-            guard !filtered.isEmpty else { return nil }
-            return (id: index.id, name: index.name, artists: filtered)
         }
+        if sortReversed {
+            return base.reversed().map { section in
+                (id: section.id, name: section.name, artists: section.artists.reversed())
+            }
+        }
+        return base
     }
 
     var body: some View {
@@ -59,15 +78,40 @@ struct ArtistsView: View {
                 }
             }
         }
-        #if os(macOS)
         .toolbar {
-            ToolbarItem {
-                Button { Task { await loadArtists() } } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        sortReversed = false
+                    } label: {
+                        HStack {
+                            Text("Name (A-Z)")
+                            if !sortReversed {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    Button {
+                        sortReversed = true
+                    } label: {
+                        HStack {
+                            Text("Name (Z-A)")
+                            if sortReversed {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        Task { await loadArtists() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
                 }
             }
         }
-        #endif
         .task { await loadArtists() }
         .refreshable { await loadArtists() }
     }

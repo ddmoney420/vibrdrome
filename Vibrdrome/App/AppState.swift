@@ -39,6 +39,7 @@ final class AppState {
         case artist(id: String)
         case album(id: String)
         case genre(name: String)
+        case playlist(id: String)
     }
     var pendingNavigation: PendingNavigation?
     var serverURL: String = ""

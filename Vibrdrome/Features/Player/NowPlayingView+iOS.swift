@@ -354,7 +354,15 @@ extension NowPlayingView {
     private func toolbarButton(for item: NowPlayingToolbarItem) -> some View {
         switch item {
         case .visualizer:
-            Button { appState.showVisualizer = true } label: {
+            Button {
+                // Pre-activate audio tap before animation to prevent audio stutter
+                let eng = AudioEngine.shared
+                eng.visualizerActive = true
+                if !eng.eqEnabled, let item = eng.activePlayer?.currentItem {
+                    eng.applyEQTapIfNeeded(to: item)
+                }
+                appState.showVisualizer = true
+            } label: {
                 Image(systemName: "waveform.path")
                     .frame(minWidth: 44, minHeight: 44)
             }

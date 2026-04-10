@@ -70,14 +70,22 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
         }
     }
 
-    // swiftlint:disable:next function_parameter_count
-    func shader(size: CGSize, time: Float, energy: Float,
-                bass: Float, mid: Float, treble: Float) -> Shader {
+    func shader(size: CGSize, input: ShaderInput) -> Shader {
         shaderFunction(
             .float2(Float(size.width), Float(size.height)),
-            .float(time), .float(energy), .float(bass), .float(mid), .float(treble)
+            .float(input.time), .float(input.energy),
+            .float(input.bass), .float(input.mid), .float(input.treble)
         )
     }
+}
+
+/// Grouped audio-reactive parameters for shader rendering
+struct ShaderInput {
+    let time: Float
+    let energy: Float
+    let bass: Float
+    let mid: Float
+    let treble: Float
 }
 
 // MARK: - Visualizer View
@@ -117,8 +125,10 @@ struct VisualizerView: View {
                 TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
                     Rectangle()
                         .colorEffect(preset.shader(
-                            size: geo.size, time: time, energy: energy,
-                            bass: bass, mid: mid, treble: treble))
+                            size: geo.size,
+                            input: ShaderInput(
+                                time: time, energy: energy,
+                                bass: bass, mid: mid, treble: treble)))
                 }
                 .ignoresSafeArea()
                 #if os(macOS)
@@ -141,10 +151,15 @@ struct VisualizerView: View {
             updateSpectrum()
         }
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation(.easeInOut(duration: 0.5)) {
                 showControls.toggle()
             }
-            scheduleHideControls()
+            // Only auto-hide when showing controls; tapping to hide is instant (user intent)
+            if showControls {
+                scheduleHideControls()
+            } else {
+                hideControlsTask?.cancel()
+            }
         }
         .gesture(
             DragGesture(minimumDistance: 50)
@@ -157,10 +172,13 @@ struct VisualizerView: View {
                 }
         )
         .onAppear {
-            engine.visualizerActive = true
-            // Reapply tap if EQ is off but we need FFT data
-            if !engine.eqEnabled, let item = engine.activePlayer?.currentItem {
-                engine.applyEQTapIfNeeded(to: item)
+            // Tap is pre-activated from the toolbar button to avoid audio stutter.
+            // Only apply here as a fallback (e.g. opened via other paths).
+            if !engine.visualizerActive {
+                engine.visualizerActive = true
+                if !engine.eqEnabled, let item = engine.activePlayer?.currentItem {
+                    engine.applyEQTapIfNeeded(to: item)
+                }
             }
             scheduleHideControls()
             if !warningShown {
@@ -182,6 +200,13 @@ struct VisualizerView: View {
             photosensitive epilepsy. You can disable the visualizer in \
             Settings > Accessibility.
             """)
+        }
+        .onChange(of: showPresetPicker) { _, isOpen in
+            if isOpen {
+                hideControlsTask?.cancel()
+            } else if showControls {
+                scheduleHideControls()
+            }
         }
         .onDisappear {
             engine.visualizerActive = false
@@ -267,20 +292,20 @@ struct VisualizerView: View {
                 }
 
                 HStack(spacing: 40) {
-                    Button { engine.previous() } label: {
+                    Button { engine.previous(); scheduleHideControls() } label: {
                         Image(systemName: "backward.fill")
                             .font(.title2)
                     }
                     .accessibilityIdentifier("visualizerPreviousButton")
                     .disabled(engine.queue.isEmpty)
 
-                    Button { engine.togglePlayPause() } label: {
+                    Button { engine.togglePlayPause(); scheduleHideControls() } label: {
                         Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 52))
                     }
                     .accessibilityIdentifier("visualizerPlayPauseButton")
 
-                    Button { engine.next() } label: {
+                    Button { engine.next(); scheduleHideControls() } label: {
                         Image(systemName: "forward.fill")
                             .font(.title2)
                     }
@@ -385,9 +410,11 @@ struct VisualizerView: View {
     private func scheduleHideControls() {
         hideControlsTask?.cancel()
         hideControlsTask = Task {
-            try? await Task.sleep(for: .seconds(4))
+            try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.3)) {
+            // Don't auto-hide while a popover or menu is open
+            guard !showPresetPicker else { return }
+            withAnimation(.easeInOut(duration: 0.5)) {
                 showControls = false
             }
         }

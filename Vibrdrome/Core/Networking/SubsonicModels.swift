@@ -166,6 +166,7 @@ struct Song: Decodable, Identifiable, Sendable {
     let title: String
     let album: String?
     let artist: String?
+    let albumArtist: String?
     let albumId: String?
     let artistId: String?
     let track: Int?

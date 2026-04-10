@@ -199,12 +199,6 @@ struct SongsView: View {
         }
     }
 
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return "\(mins):\(String(format: "%02d", secs))"
-    }
-
     private func loadSongs() async {
         isLoading = true
         songs = []

@@ -11,6 +11,11 @@ struct PlaylistDetailView: View {
     @State private var showEditSheet = false
     @State private var isDownloading = false
     @State private var searchText = ""
+    @State private var m3uFileURL: URL?
+    @State private var showShareSheet = false
+    @State private var selectedSongs = Set<String>()
+    @State private var isSelecting = false
+    @State private var showBatchAddToPlaylist = false
     @Query private var downloadedSongs: [DownloadedSong]
 
     private var filteredSongs: [Song] {
@@ -82,15 +87,42 @@ struct PlaylistDetailView: View {
                 // Songs
                 Section {
                     ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
-                        TrackRow(song: song, showTrackNumber: false)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                playFromPlaylist(song: song, songs: filteredSongs, index: index)
+                        HStack(spacing: 0) {
+                            if isSelecting {
+                                Button {
+                                    toggleSelection(song.id)
+                                } label: {
+                                    Image(systemName: selectedSongs.contains(song.id)
+                                          ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedSongs.contains(song.id)
+                                                         ? Color.accentColor : .secondary)
+                                        .font(.title3)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, 8)
                             }
-                            .trackContextMenu(song: song, queue: filteredSongs, index: index)
+
+                            TrackRow(song: song, showTrackNumber: false)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if isSelecting {
+                                        toggleSelection(song.id)
+                                    } else {
+                                        playFromPlaylist(song: song, songs: filteredSongs, index: index)
+                                    }
+                                }
+                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
+                        }
                     }
                     .onDelete { offsets in
                         removeFromPlaylist(at: offsets, songs: playlist.entry ?? [])
+                    }
+                }
+
+                // Batch action bar
+                if isSelecting && !selectedSongs.isEmpty {
+                    Section {
+                        playlistBatchActionBar(songs: filteredSongs)
                     }
                 }
             }
@@ -106,6 +138,18 @@ struct PlaylistDetailView: View {
         #endif
         .toolbar {
             if playlist != nil {
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSelecting.toggle()
+                            if !isSelecting { selectedSongs.removeAll() }
+                        }
+                    } label: {
+                        Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                    }
+                    .accessibilityLabel(isSelecting ? "Done Selecting" : "Select Songs")
+                    .accessibilityIdentifier("playlistSelectButton")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
@@ -125,11 +169,18 @@ struct PlaylistDetailView: View {
                         }
 
                         if let playlist {
-                            let shareText = "🎶 \(playlist.name) — \(playlist.songCount ?? 0) songs"
+                            let shareText = "🎶 \(playlist.name) — \(playlist.songCount ?? 0) songs\nvibrdrome://playlist/\(playlist.id)"
                             ShareLink(item: shareText) {
                                 Label("Share", systemImage: "square.and.arrow.up")
                             }
                         }
+
+                        Button {
+                            exportM3U()
+                        } label: {
+                            Label("Export as M3U", systemImage: "doc.text")
+                        }
+                        .disabled(playlist?.entry?.isEmpty ?? true)
 
                         Button {
                             guard let playlist else { return }
@@ -180,6 +231,10 @@ struct PlaylistDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showBatchAddToPlaylist) {
+            AddToPlaylistView(songIds: Array(selectedSongs))
+                .environment(appState)
+        }
         .sheet(isPresented: $showEditSheet) {
             if let playlist {
                 PlaylistEditorView(
@@ -190,6 +245,13 @@ struct PlaylistDetailView: View {
                 .environment(appState)
             }
         }
+        #if os(iOS)
+        .sheet(isPresented: $showShareSheet) {
+            if let m3uFileURL {
+                PlaylistShareSheet(activityItems: [m3uFileURL])
+            }
+        }
+        #endif
         .overlay {
             if isLoading && playlist == nil {
                 ProgressView()
@@ -219,6 +281,25 @@ struct PlaylistDetailView: View {
         }
     }
 
+    private func toggleSelection(_ songId: String) {
+        if selectedSongs.contains(songId) {
+            selectedSongs.remove(songId)
+        } else {
+            selectedSongs.insert(songId)
+        }
+    }
+
+    @ViewBuilder
+    private func playlistBatchActionBar(songs: [Song]) -> some View {
+        BatchActionBar(
+            selectedSongIds: selectedSongs,
+            songs: songs,
+            onAddToPlaylist: { showBatchAddToPlaylist = true }
+        )
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+    }
+
     private func playFromPlaylist(song: Song, songs: [Song], index: Int) {
         AudioEngine.shared.play(song: song, from: songs, at: index)
         AudioEngine.shared.playingFromContext = "Playlist: \(playlist?.name ?? "")"
@@ -238,4 +319,46 @@ struct PlaylistDetailView: View {
             await loadPlaylist()
         }
     }
+
+    // MARK: - M3U Export
+
+    private func exportM3U() {
+        guard let songs = playlist?.entry, !songs.isEmpty else { return }
+        var m3u = "#EXTM3U\n"
+        for song in songs {
+            let duration = song.duration ?? 0
+            let artist = song.artist ?? "Unknown"
+            m3u += "#EXTINF:\(duration),\(artist) - \(song.title)\n"
+            let url = appState.subsonicClient.streamURL(id: song.id)
+            m3u += "\(url.absoluteString)\n"
+        }
+        let fileName = (playlist?.name ?? "playlist")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(fileName).m3u")
+        do {
+            try m3u.write(to: tempURL, atomically: true, encoding: .utf8)
+            m3uFileURL = tempURL
+            showShareSheet = true
+        } catch {
+            self.error = "Failed to export M3U: \(error.localizedDescription)"
+        }
+    }
 }
+
+// MARK: - Share Sheet (iOS)
+
+#if os(iOS)
+import UIKit
+
+private struct PlaylistShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif

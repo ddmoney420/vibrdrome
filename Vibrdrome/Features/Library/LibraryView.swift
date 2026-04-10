@@ -157,6 +157,9 @@ struct LibraryView: View {
             .navigationDestination(for: GenreNavItem.self) { item in
                 AlbumsView(listType: .byGenre, title: item.name, genre: item.name)
             }
+            .navigationDestination(for: PlaylistNavItem.self) { item in
+                PlaylistDetailView(playlistId: item.id)
+            }
             .navigationDestination(for: OfflineNavItem.self) { _ in
                 DownloadsView()
             }

@@ -160,6 +160,7 @@ extension AudioEngine {
             }
         }
         Task { await ListenBrainzClient.shared.submitListen(song: song) }
+        Task { await LastFmClient.shared.scrobble(song: song) }
     }
 
     func submitScrobbleIfNeeded() {
@@ -181,6 +182,7 @@ extension AudioEngine {
                 }
             }
             Task { await ListenBrainzClient.shared.submitListen(song: song) }
+            Task { await LastFmClient.shared.scrobble(song: song) }
         }
     }
 
@@ -199,6 +201,7 @@ extension AudioEngine {
         }
         if let song = currentSong {
             Task { await ListenBrainzClient.shared.submitNowPlaying(song: song) }
+            Task { await LastFmClient.shared.updateNowPlaying(song: song) }
         }
     }
 }

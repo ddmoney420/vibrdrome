@@ -6,22 +6,6 @@ import Network
 import Observation
 import SwiftData
 import os.log
-#if os(macOS)
-import AppKit
-#endif
-// swiftlint:disable file_length type_body_length
-
-// Free function so the MPMediaItemArtwork closure doesn't inherit @MainActor isolation.
-// MPMediaItemArtwork calls its requestHandler on a background queue.
-#if os(iOS)
-private func makeRadioArtwork(from image: UIImage) -> MPMediaItemArtwork {
-    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-}
-#else
-private func makeRadioArtwork(from image: NSImage) -> MPMediaItemArtwork {
-    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-}
-#endif
 
 private let audioLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
 
@@ -55,7 +39,7 @@ final class AudioEngine {
     // MARK: - Playback Mode
 
     /// The currently active playback topology
-    private(set) var activeMode: PlaybackMode = .gapless
+    var activeMode: PlaybackMode = .gapless
 
     /// Whether EQ processing is enabled (user setting, stored for @Observable reactivity)
     var eqEnabled: Bool = UserDefaults.standard.bool(forKey: UserDefaultsKeys.eqEnabled)
@@ -87,7 +71,7 @@ final class AudioEngine {
     var userVolume: Float = 1.0 { didSet { applyEffectiveVolume() } }
 
     /// Per-track ReplayGain factor (computed from song metadata)
-    private(set) var currentReplayGainFactor: Float = 1.0
+    var currentReplayGainFactor: Float = 1.0
 
     func setReplayGainFactor(_ factor: Float) { currentReplayGainFactor = factor }
 
@@ -102,49 +86,19 @@ final class AudioEngine {
         ) ?? .off
     }
 
-    /// Compute and apply the effective volume from all factors
-    func applyEffectiveVolume() {
-        let sleepFade = SleepTimer.shared.fadeFactor
-        let base = userVolume * currentReplayGainFactor * sleepFade
-
-        switch activeMode {
-        case .gapless:
-            gaplessPlayer?.volume = max(0, min(1, base))
-        case .crossfade:
-            let cc = crossfadeController
-            cc.activePlayer?.volume = max(0, min(1, base * cc.outFactor))
-            cc.inactivePlayer?.volume = max(0, min(1, base * cc.inFactor))
-        }
-    }
-
-    /// Compute ReplayGain factor for a song
-    func computeReplayGainFactor(for song: Song) -> Float {
-        guard let rg = song.replayGain else { return 1.0 }
-        let gain: Double?
-        switch replayGainMode {
-        case .off: return 1.0
-        case .track: gain = rg.trackGain
-        case .album: gain = rg.albumGain ?? rg.trackGain
-        }
-        guard let gainDb = gain else { return 1.0 }
-        let linear = Float(pow(10, gainDb / 20))
-        // Cap at 1.5x (+3.5dB) to prevent clipping on hot masters
-        return max(0.0, min(1.5, linear))
-    }
-
     // MARK: - Queue
 
     var queue: [Song] = []
     var currentIndex: Int = 0
     var shuffleEnabled = false
     var repeatMode: RepeatMode = .off
-    private var shufflePlayCount = 0
+    var shufflePlayCount = 0
 
     // MARK: - Repeat-One Tracking
 
     /// Tracks whether repeat-one has already replayed the current track.
     /// When true, the next track-end advances instead of replaying.
-    private var repeatOneUsed = false
+    var repeatOneUsed = false
 
     // MARK: - Artist Radio (methods in AudioEngine+Radio.swift)
 
@@ -171,9 +125,9 @@ final class AudioEngine {
     private(set) var gaplessPlayer: AVQueuePlayer?
 
     /// Lookahead state for gapless mode
-    private var lookaheadItem: AVPlayerItem?
-    private var lookaheadSongId: String?
-    private var lookaheadIndex: Int?
+    var lookaheadItem: AVPlayerItem?
+    var lookaheadSongId: String?
+    var lookaheadIndex: Int?
 
     /// Observer tokens — accessed by +Observers and +Crossfade extensions
     private var timeObserver: Any?
@@ -185,10 +139,10 @@ final class AudioEngine {
     private var statusObserver: AnyCancellable?
 
     /// Scrobble tracking
-    private(set) var scrobbleSubmitted = false
-    private var trackStartTime: Date?
-    private(set) var lastScrobbleTime: Date?
-    private(set) var generation: Int = 0
+    var scrobbleSubmitted = false
+    var trackStartTime: Date?
+    var lastScrobbleTime: Date?
+    var generation: Int = 0
 
     func incrementGeneration() { generation += 1 }
     var generationValue: Int { generation }
@@ -234,10 +188,11 @@ final class AudioEngine {
         statusObserver?.cancel(); statusObserver = nil
     }
 
-    private let networkMonitor = NWPathMonitor()
-    private var isOnCellular = false
+    let networkMonitor = NWPathMonitor()
+    var isOnCellular = false
+    var isNetworkConstrained = false
 
-    private var gaplessEnabled: Bool {
+    var gaplessEnabled: Bool {
         UserDefaults.standard.bool(forKey: UserDefaultsKeys.gaplessPlayback)
     }
 
@@ -261,6 +216,9 @@ final class AudioEngine {
     /// observable state so the UI renders correctly for XCUITest.
     let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
 
+    /// Auto-suggest guard flag
+    var isAutoSuggesting = false
+
     private init() {
         guard !isUITesting else { return }
         AudioSessionManager.shared.configure()
@@ -269,30 +227,14 @@ final class AudioEngine {
         EQEngine.shared.syncCoefficients()
     }
 
-    private func startNetworkMonitor() {
-        networkMonitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                self?.isOnCellular = path.usesInterfaceType(.cellular)
-            }
-        }
-        networkMonitor.start(queue: DispatchQueue(label: "com.vibrdrome.network"))
-    }
-
-    private var currentMaxBitRate: Int? {
-        let defaults = UserDefaults.standard
-        let key = isOnCellular ? UserDefaultsKeys.cellularMaxBitRate : UserDefaultsKeys.wifiMaxBitRate
-        let value = defaults.integer(forKey: key)
-        return value > 0 ? value : nil
-    }
-
     // MARK: - Mode Selection
 
-    private func selectMode(for song: Song) -> PlaybackMode {
+    func selectMode(for song: Song) -> PlaybackMode {
         if crossfadeDuration > 0 { return .crossfade }
         return .gapless
     }
 
-    private func tearDownCurrentMode() {
+    func tearDownCurrentMode() {
         // Invalidate any in-flight async EQ Tasks before destroying items
         incrementGeneration()
         switch activeMode {
@@ -309,407 +251,41 @@ final class AudioEngine {
         }
     }
 
-    // MARK: - Playback Control
-
-    // swiftlint:disable:next function_body_length
-    func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
-        // UI testing: update observable state only, skip AVPlayer operations
-        if isUITesting {
-            if let newQueue {
-                queue = newQueue
-                currentIndex = newQueue.isEmpty ? 0 : min(index, newQueue.count - 1)
-            } else {
-                queue = [song]
-                currentIndex = 0
-            }
-            currentSong = song
-            currentRadioStation = nil
-            isPlaying = true
-            duration = Double(song.duration ?? 180)
-            currentTime = 0
-            return
-        }
-
-        submitScrobbleIfNeeded()
-
-        if isCrossfading {
-            incrementGeneration()
-            crossfadeController.forceComplete()
-            isCrossfading = false
-        }
-
-        if let newQueue {
-            queue = newQueue
-            currentIndex = newQueue.isEmpty ? 0 : min(index, newQueue.count - 1)
-            shufflePlayCount = 0
-        } else if queue.isEmpty {
-            queue = [song]
-            currentIndex = 0
-        } else if let existingIndex = queue.firstIndex(where: { $0.id == song.id }) {
-            currentIndex = existingIndex
-        } else {
-            queue = [song]
-            currentIndex = 0
-        }
-
-        let isNewTrack = currentSong?.id != song.id
-        currentSong = song
-        currentRadioStation = nil
-        // Only clear playingFromContext when a NEW queue is loaded,
-        // not when advancing within the same queue (next/previous)
-        if newQueue != nil {
-            playingFromContext = nil
-        }
-        scrobbleSubmitted = false
-        if isNewTrack { repeatOneUsed = false }
-        trackStartTime = Date()
-        currentTime = 0
-        duration = 0
-        isSeeking = false
-
-        let newMode = selectMode(for: song)
-        if newMode != activeMode {
-            tearDownCurrentMode()
-            activeMode = newMode
-        }
-
-        let url = resolveURL(for: song)
-        currentReplayGainFactor = computeReplayGainFactor(for: song)
-
-        switch activeMode {
-        case .gapless:
-            replacePlayerItem(with: url)
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            prepareLookahead()
-        case .crossfade:
-            startCrossfadePlayback(url: url)
-            applyEffectiveVolume()
-        }
-
-        isPlaying = true
-        NowPlayingManager.shared.update(song: song, isPlaying: true)
-        scrobbleNowPlaying(songId: song.id)
-    }
-
-    func playRadio(station: InternetRadioStation) {
-        if isUITesting {
-            currentSong = nil
-            currentRadioStation = station
-            queue.removeAll()
-            currentIndex = 0
-            isPlaying = true
-            return
-        }
-
-        submitScrobbleIfNeeded()
-        guard let url = URL(string: station.streamUrl) else { return }
-
-        if activeMode != .gapless {
-            tearDownCurrentMode()
-            activeMode = .gapless
-        }
-
-        currentSong = nil
-        currentRadioStation = station
-        queue.removeAll()
-        currentIndex = 0
-        scrobbleSubmitted = false
-        currentTime = 0
-        duration = 0
-        clearLookahead()
-
-        replacePlayerItem(with: url)
-        gaplessPlayer?.play()
-        isPlaying = true
-
-        var info = [String: Any]()
-        info[MPMediaItemPropertyTitle] = station.name
-        info[MPMediaItemPropertyArtist] = "Internet Radio"
-        info[MPNowPlayingInfoPropertyIsLiveStream] = true
-        info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-        // Clear previous artwork immediately to prevent stale album art
-        info[MPMediaItemPropertyArtwork] = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-
-        // Load radio station artwork for lock screen
-        if let artId = station.radioCoverArtId {
-            let stationId = station.id
-            let artURL = AppState.shared.subsonicClient.coverArtURL(id: artId, size: 600)
-            Task {
-                guard let (data, _) = try? await URLSession.shared.data(from: artURL),
-                      self.currentRadioStation?.id == stationId else { return }
-                #if os(iOS)
-                guard let image = UIImage(data: data) else { return }
-                #else
-                guard let image = NSImage(data: data) else { return }
-                #endif
-                // Use NowPlayingManager's pattern to avoid @MainActor isolation
-                // on the MPMediaItemArtwork closure (called on background queue)
-                let artwork = makeRadioArtwork(from: image)
-                var nowInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                nowInfo[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowInfo
-            }
-        }
-    }
-
-    func pause() {
-        if isUITesting { isPlaying = false; return }
-        activePlayer?.pause()
-        isPlaying = false
-        NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
-    }
-
-    func resume() {
-        if isUITesting { isPlaying = true; return }
-
-        // Reactivate audio session (may have been deactivated by phone call or other interruption)
-        #if os(iOS)
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            audioLog.error("Failed to reactivate audio session: \(error)")
-        }
-        #endif
-
-        // Cold start: no player loaded (e.g. restored from saved queue).
-        // Route through play()/playRadio() for full setup.
-        if gaplessPlayer == nil {
-            if let station = currentRadioStation {
-                playRadio(station: station)
-                return
-            }
-            if let song = currentSong {
-                let savedTime = currentTime
-                play(song: song)
-                if savedTime > 1 { seek(to: savedTime) }
-                return
-            }
-        }
-
-        switch activeMode {
-        case .gapless:
-            let itemNeedsReload = gaplessPlayer?.currentItem == nil
-                || gaplessPlayer?.currentItem?.status == .failed
-            if let song = currentSong, itemNeedsReload {
-                let savedTime = currentTime
-                let url = resolveURL(for: song)
-                replacePlayerItem(with: url)
-                if savedTime > 0 { seek(to: savedTime) }
-                prepareLookahead()
-            } else if eqEnabled, let item = gaplessPlayer?.currentItem {
-                // Reapply EQ tap after interruption to reset stale delay buffers
-                applyEQTapIfNeeded(to: item)
-            }
-            gaplessPlayer?.rate = playbackRate
-        case .crossfade:
-            let itemNeedsReload = crossfadeController.activePlayer?.currentItem == nil
-                || crossfadeController.activePlayer?.currentItem?.status == .failed
-            if let song = currentSong, itemNeedsReload {
-                let savedTime = currentTime
-                let url = resolveURL(for: song)
-                crossfadeController.loadOnActive(url: url)
-                if let item = crossfadeController.activePlayer?.currentItem {
-                    applyEQTapIfNeeded(to: item)
-                }
-                if savedTime > 0 {
-                    let cmTime = CMTime(seconds: savedTime, preferredTimescale: 1000)
-                    crossfadeController.activePlayer?.seek(to: cmTime)
-                }
-            } else if eqEnabled, let item = crossfadeController.activePlayer?.currentItem {
-                // Reapply EQ tap after interruption to reset stale delay buffers
-                applyEQTapIfNeeded(to: item)
-            }
-            crossfadeController.activePlayer?.rate = playbackRate
-        }
-        isPlaying = true
-        NowPlayingManager.shared.updatePlaybackState(isPlaying: true, elapsed: currentTime)
-    }
-
-    func togglePlayPause() {
-        if isPlaying { pause() } else { resume() }
-    }
-
-    func next() {
-        guard !queue.isEmpty else { return }
-        submitScrobbleIfNeeded()
-
-        if isCrossfading {
-            incrementGeneration()
-            crossfadeController.forceComplete()
-            isCrossfading = false
-        }
-
-        // Manual next always advances — reset repeat-one state
-        repeatOneUsed = false
-        guard advanceIndex() else { return }
-        play(song: queue[currentIndex])
-        refillRadioIfNeeded()
-    }
-
-    private func restartCurrentTrack() {
-        trackStartTime = Date()
-        seekInternal(to: 0) { [weak self] in
-            self?.scrobbleSubmitted = false
-            self?.activePlayer?.play()
-        }
-    }
-
-    private func advanceIndex() -> Bool {
-        if shuffleEnabled { return advanceShuffleIndex() }
-        currentIndex += 1
-        if currentIndex >= queue.count {
-            if isRadioMode {
-                currentIndex = queue.count - 1
-                refillRadioIfNeeded()
-                return false
-            } else {
-                currentIndex = queue.count - 1
-                // Auto-continue with similar songs instead of stopping
-                autoSuggestMore()
-                return false
-            }
-        }
-        return true
-    }
-
-    private func advanceShuffleIndex() -> Bool {
-        if queue.count <= 1 {
-            if repeatMode == .all {
-                seekInternal(to: 0) { [weak self] in self?.scrobbleSubmitted = false }
-                trackStartTime = Date()
-                activePlayer?.play()
-            } else {
-                pause()
-            }
-            return false
-        }
-        if repeatMode == .off {
-            shufflePlayCount += 1
-            if shufflePlayCount >= queue.count {
-                shufflePlayCount = 0
-                pause()
-                return false
-            }
-        }
-        currentIndex = smartShuffleNextIndex()
-        return true
-    }
-
-    /// Pick a random next index, preferring a different artist than the current track.
-    private func smartShuffleNextIndex() -> Int {
-        let currentArtist = queue[currentIndex].artist
-        // Build list of candidate indices (all except current)
-        var candidates = Array(0..<queue.count)
-        candidates.remove(at: currentIndex)
-        // Prefer candidates with a different artist
-        let differentArtist = candidates.filter { queue[$0].artist != currentArtist }
-        if !differentArtist.isEmpty {
-            return differentArtist.randomElement()!
-        }
-        // All tracks are by the same artist — just pick any other track
-        return candidates.randomElement()!
-    }
-
-    /// Rearrange shuffled queue to avoid consecutive tracks by the same artist.
-    /// Used by radio and other features that pre-shuffle song arrays.
-    func smartShuffle(_ songs: [Song]) -> [Song] {
-        guard songs.count > 1 else { return songs }
-        var result = songs.shuffled()
-        for idx in 1..<result.count where result[idx].artist == result[idx - 1].artist {
-            if let swapIndex = ((idx + 1)..<result.count)
-                .first(where: { result[$0].artist != result[idx].artist }) {
-                result.swapAt(idx, swapIndex)
-            }
-        }
-        return result
-    }
-
-    func previous() {
-        if !isPlaying && currentTime > 0 && duration > 0 && currentTime >= duration - 1 {
-            // Paused at end of track — go to previous track
-        } else if currentTime > 3 {
-            seek(to: 0)
-            return
-        }
-        guard !queue.isEmpty else { return }
-        if currentIndex == 0 {
-            seek(to: 0)
-            return
-        } else {
-            currentIndex -= 1
-        }
-        play(song: queue[currentIndex])
-    }
-
-    func seek(to time: TimeInterval) {
-        // Use song metadata duration as fallback when AVPlayer hasn't reported yet
-        let effectiveDuration = duration > 0 ? duration : Double(currentSong?.duration ?? 0)
-        guard effectiveDuration > 0 || time == 0 else { return }
-        let clampedTime = max(0, min(time, effectiveDuration))
-
-        // Cancel any in-progress crossfade ramp on seek
-        if isCrossfading {
-            crossfadeController.forceComplete()
-            isCrossfading = false
-            tearDownObservers()
-            generation += 1
-            setupCrossfadeTimeObserver()
-            if let item = crossfadeController.activePlayer?.currentItem {
-                setupPropertyObservers(for: item, generation: generation)
-                setupCrossfadeTrackEndObserver(for: item)
-            }
-        }
-
-        guard let player = activePlayer else { return }
-        let wasPlaying = isPlaying
-        let rate = playbackRate
-        let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 1000)
-        player.seek(
-            to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.currentTime = clampedTime
-                NowPlayingManager.shared.updateElapsedTime(clampedTime)
-                // Restore playback rate — AVPlayer can reset rate after seek
-                if wasPlaying && player.rate == 0 {
-                    player.rate = rate
-                }
-            }
-        }
-        // Update time immediately so UI doesn't show stale value
-        currentTime = clampedTime
-    }
-
-    func stop() {
-        if isUITesting {
-            isPlaying = false
-            currentSong = nil
-            currentRadioStation = nil
-            currentTime = 0
-            duration = 0
-            return
-        }
-        submitScrobbleIfNeeded()
-        tearDownCurrentMode()
-        activeMode = .gapless
-        stopRadioMode()
-        isCrossfading = false
-        isPlaying = false
-        currentSong = nil
-        currentRadioStation = nil
-        currentTime = 0
-        duration = 0
-        NowPlayingManager.shared.clear()
-    }
-
     // MARK: - Volume
 
     var volume: Float {
         get { userVolume }
         set { userVolume = max(0, min(1, newValue)) }
+    }
+
+    /// Compute and apply the effective volume from all factors
+    func applyEffectiveVolume() {
+        let sleepFade = SleepTimer.shared.fadeFactor
+        let base = userVolume * currentReplayGainFactor * sleepFade
+
+        switch activeMode {
+        case .gapless:
+            gaplessPlayer?.volume = max(0, min(1, base))
+        case .crossfade:
+            let cc = crossfadeController
+            cc.activePlayer?.volume = max(0, min(1, base * cc.outFactor))
+            cc.inactivePlayer?.volume = max(0, min(1, base * cc.inFactor))
+        }
+    }
+
+    /// Compute ReplayGain factor for a song
+    func computeReplayGainFactor(for song: Song) -> Float {
+        guard let rg = song.replayGain else { return 1.0 }
+        let gain: Double?
+        switch replayGainMode {
+        case .off: return 1.0
+        case .track: gain = rg.trackGain
+        case .album: gain = rg.albumGain ?? rg.trackGain
+        }
+        guard let gainDb = gain else { return 1.0 }
+        let linear = Float(pow(10, gainDb / 20))
+        // Cap at 1.5x (+3.5dB) to prevent clipping on hot masters
+        return max(0.0, min(1.5, linear))
     }
 
     // MARK: - Shuffle / Repeat
@@ -728,116 +304,6 @@ final class AudioEngine {
         }
         repeatOneUsed = false
         if activeMode == .gapless { prepareLookahead() }
-    }
-
-    // MARK: - Queue Management
-
-    var upNext: [Song] {
-        guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
-        return Array(queue[(currentIndex + 1)...])
-    }
-
-    /// Songs played before the current track (most recent first, max 20)
-    var recentlyPlayed: [Song] {
-        guard currentIndex > 0 else { return [] }
-        let history = Array(queue[0..<currentIndex].reversed().prefix(20))
-        return history
-    }
-
-    /// Jump to a specific index in the existing queue without replacing it.
-    /// Unlike play(song:from:at:), this preserves the full queue intact.
-    func skipToIndex(_ index: Int) {
-        guard index >= 0, index < queue.count else { return }
-        let song = queue[index]
-        currentIndex = index
-        currentSong = song
-        currentRadioStation = nil
-        scrobbleSubmitted = false
-        repeatOneUsed = false
-        trackStartTime = Date()
-        currentTime = 0
-        duration = 0
-
-        let url = resolveURL(for: song)
-        replacePlayerItem(with: url)
-        activePlayer?.play()
-        isPlaying = true
-
-        NowPlayingManager.shared.update(song: song, isPlaying: true)
-        scrobbleNowPlaying(songId: song.id)
-    }
-
-    /// Auto-suggest similar songs when the queue runs out
-    private var isAutoSuggesting = false
-    private func autoSuggestMore() {
-        guard !isAutoSuggesting else { return }
-        guard let lastSong = queue.last else {
-            pause()
-            return
-        }
-        isAutoSuggesting = true
-        Task { @MainActor in
-            do {
-                let client = AppState.shared.subsonicClient
-                let similar = try await client.getSimilarSongs(id: lastSong.id, count: 10)
-                let existingIds = Set(queue.map(\.id))
-                let newSongs = similar.filter { !existingIds.contains($0.id) }
-                guard !newSongs.isEmpty else {
-                    // Fallback to random songs
-                    let random = try await client.getRandomSongs(size: 10)
-                    let filtered = random.filter { !existingIds.contains($0.id) }
-                    guard !filtered.isEmpty else { pause(); return }
-                    for song in filtered { addToQueue(song) }
-                    next()
-                    return
-                }
-                for song in newSongs { addToQueue(song) }
-                next()
-            } catch {
-                pause()
-            }
-            self.isAutoSuggesting = false
-        }
-    }
-
-    func addToQueue(_ song: Song) {
-        queue.append(song)
-        if queue.count == currentIndex + 2 && activeMode == .gapless {
-            prepareLookahead()
-        }
-    }
-
-    func addToQueueNext(_ song: Song) {
-        queue.insert(song, at: min(currentIndex + 1, queue.count))
-        if activeMode == .gapless { prepareLookahead() }
-    }
-
-    func removeFromQueue(at index: Int) {
-        let absoluteIndex = currentIndex + 1 + index
-        guard absoluteIndex > currentIndex, absoluteIndex < queue.count else { return }
-        queue.remove(at: absoluteIndex)
-        if index == 0 && activeMode == .gapless { prepareLookahead() }
-    }
-
-    func moveInQueue(from source: IndexSet, to destination: Int) {
-        guard currentIndex + 1 < queue.count else { return }
-        var upNextSlice = Array(queue[(currentIndex + 1)...])
-        upNextSlice.move(fromOffsets: source, toOffset: destination)
-        queue.replaceSubrange((currentIndex + 1)..., with: upNextSlice)
-        if activeMode == .gapless { prepareLookahead() }
-    }
-
-    func clearQueue() {
-        let current = currentIndex < queue.count ? queue[currentIndex] : nil
-        queue.removeAll()
-        if activeMode == .gapless { clearLookahead() }
-        stopRadioMode()
-        if let current {
-            queue.append(current)
-            currentIndex = 0
-        } else {
-            stop()
-        }
     }
 
     // MARK: - EQ Tap
@@ -954,7 +420,7 @@ final class AudioEngine {
         clearLookahead()
 
         let url = resolveURL(for: nextSong)
-        let item = AVPlayerItem(url: url)
+        let item = Self.makePlayerItem(url: url)
         lookaheadItem = item
         lookaheadSongId = nextSong.id
         lookaheadIndex = nextIdx
@@ -982,95 +448,17 @@ final class AudioEngine {
         lookaheadIndex = nil
     }
 
-    func handleAutoAdvance() {
-        submitScrobbleIfNeeded()
+    // MARK: - Player Item Management
 
-        guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
-            audioLog.warning("Auto-advance but no valid lookahead index")
-            return
-        }
-
-        currentIndex = nextIndex
-        let nextSong = queue[currentIndex]
-        currentSong = nextSong
-        scrobbleSubmitted = false
-        trackStartTime = Date()
-        currentTime = 0
-        duration = 0
-        isSeeking = false
-
-        removeLookaheadEndObserver()
-        lookaheadItem = nil
-        lookaheadSongId = nil
-        lookaheadIndex = nil
-
-        tearDownPropertyObservers()
-        tearDownItemEndObserver()
-        if let item = gaplessPlayer?.currentItem {
-            setupPropertyObservers(for: item, generation: generation)
-            setupTrackEndObserver(for: item, generation: generation)
-        }
-
-        currentReplayGainFactor = computeReplayGainFactor(for: nextSong)
-        applyEffectiveVolume()
-
-        NowPlayingManager.shared.update(song: nextSong, isPlaying: true)
-        prepareLookahead()
-        scrobbleNowPlaying(songId: nextSong.id)
-        refillRadioIfNeeded()
-        audioLog.info("Gapless auto-advance to: \(nextSong.title) (index \(nextIndex))")
-    }
-
-    // MARK: - Private Helpers
-
-    func resolveURL(for song: Song) -> URL {
-        let modelContext = PersistenceController.shared.container.mainContext
-        let songId = song.id
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-        )
-        if let download = try? modelContext.fetch(descriptor).first {
-            let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                CacheManager.shared.touchAccess(songId: songId)
-                return fileURL
-            }
-            modelContext.delete(download)
-            do {
-                try modelContext.save()
-            } catch {
-                audioLog.error(
-                    "Failed to save after cleaning stale download: \(error)"
-                )
-            }
-        }
-        return AppState.shared.subsonicClient.streamURL(
-            id: song.id, maxBitRate: currentMaxBitRate
-        )
-    }
-
-    func seekInternal(
-        to time: TimeInterval, completion: (() -> Void)? = nil
-    ) {
-        guard let player = activePlayer else { completion?(); return }
-        let rate = playbackRate
-        let wasPlaying = isPlaying
-        let cmTime = CMTime(seconds: time, preferredTimescale: 1000)
-        nonisolated(unsafe) let safeCompletion = completion
-        currentTime = time
-        player.seek(
-            to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.currentTime = time
-                NowPlayingManager.shared.updateElapsedTime(time)
-                if wasPlaying && player.rate == 0 {
-                    player.rate = rate
-                }
-                safeCompletion?()
-            }
-        }
+    /// Create an AVPlayerItem with HTTP headers that improve reverse proxy compatibility.
+    /// Prevents proxies from gzip-compressing audio streams, which corrupts transcoded audio.
+    static func makePlayerItem(url: URL) -> AVPlayerItem {
+        let asset = AVURLAsset(url: url, options: [
+            "AVURLAssetHTTPHeaderFieldsKey": ["Accept-Encoding": "identity"],
+        ])
+        let item = AVPlayerItem(asset: asset)
+        item.preferredForwardBufferDuration = 30
+        return item
     }
 
     func replacePlayerItem(with url: URL) {
@@ -1078,7 +466,7 @@ final class AudioEngine {
         clearLookahead()
         generation += 1
 
-        let item = AVPlayerItem(url: url)
+        let item = Self.makePlayerItem(url: url)
         applyEQTapIfNeeded(to: item)
 
         if gaplessPlayer == nil {
@@ -1091,42 +479,4 @@ final class AudioEngine {
 
         setupObservers(for: item)
     }
-
-    func handleTrackEnd() {
-        SleepTimer.shared.trackDidEnd()
-        if !isPlaying { return }
-
-        switch repeatMode {
-        case .all:
-            // Loop entire queue — advance to next, wrap to beginning if at end
-            if currentIndex + 1 >= queue.count {
-                currentIndex = 0
-                guard let song = queue.first else { return }
-                play(song: song)
-            } else {
-                next()
-            }
-        case .one:
-            // Repeat once then advance
-            if !repeatOneUsed {
-                guard let song = currentSong else { return }
-                repeatOneUsed = true
-                play(song: song)
-            } else {
-                repeatOneUsed = false
-                if isCrossfading {
-                    incrementGeneration()
-                    crossfadeController.forceComplete()
-                    isCrossfading = false
-                }
-                guard advanceIndex() else { return }
-                play(song: queue[currentIndex])
-                refillRadioIfNeeded()
-            }
-        case .off:
-            next()
-        }
-    }
 }
-
-// swiftlint:enable type_body_length

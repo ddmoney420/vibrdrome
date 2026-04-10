@@ -24,7 +24,7 @@ struct DebugView: View {
         .navigationTitle("Debug")
         .onAppear { loadCacheSize() }
         .sheet(isPresented: $showExportSheet) {
-            ShareSheetView(text: exportText)
+            DebugShareSheetView(text: exportText)
         }
     }
 
@@ -223,7 +223,7 @@ struct DebugView: View {
 
 // MARK: - Share Sheet
 
-private struct ShareSheetView: View {
+private struct DebugShareSheetView: View {
     let text: String
     @Environment(\.dismiss) private var dismiss
 

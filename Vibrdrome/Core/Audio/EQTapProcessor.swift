@@ -162,9 +162,7 @@ enum EQTapProcessor {
 
     // MARK: - C Callbacks
 
-    // swiftlint:disable closure_parameter_position
-    private static let tapInit: MTAudioProcessingTapInitCallback = {
-        _, clientInfo, tapStorageOut in
+    private static let tapInit: MTAudioProcessingTapInitCallback = { _, clientInfo, tapStorageOut in
         tapStorageOut.pointee = clientInfo
     }
 
@@ -172,8 +170,7 @@ enum EQTapProcessor {
         Unmanaged<TapContext>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).release()
     }
 
-    private static let tapPrepare: MTAudioProcessingTapPrepareCallback = {
-        tap, _, processingFormat in
+    private static let tapPrepare: MTAudioProcessingTapPrepareCallback = { tap, _, processingFormat in
         let ctx = Unmanaged<TapContext>.fromOpaque(
             MTAudioProcessingTapGetStorage(tap)
         ).takeUnretainedValue()
@@ -186,9 +183,7 @@ enum EQTapProcessor {
 
     private static let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { _ in }
 
-    private static let tapProcess: MTAudioProcessingTapProcessCallback = {
-        tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
-    // swiftlint:enable closure_parameter_position
+    private static let tapProcess: MTAudioProcessingTapProcessCallback = { tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
 
         let status = MTAudioProcessingTapGetSourceAudio(
             tap, numberFrames, bufferListInOut, flagsOut, nil, numberFramesOut

@@ -28,6 +28,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Pull to refresh on Library
 - [ ] Search returns results (including fuzzy/acronym search)
 - [ ] Recent searches appear (saved on submit, not on keystroke)
+- [ ] Search filter chips (Genre, Year, Format) appear and filter results
 - [ ] Navigate to artist detail (from search, album, or Now Playing)
 - [ ] Navigate to album detail
 - [ ] Artist detail shows biography (About section)
@@ -56,6 +57,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] No back button (pull-down to dismiss only)
 - [ ] Streaming info shows below progress (WiFi icon + bitrate + format)
 - [ ] Progress slider has small dot thumb (not blob)
+- [ ] Circular progress ring around play/pause button
+- [ ] "Playing from" label shows playlist/shuffle context (not album)
 - [ ] Volume slider has no thumb (thin bar)
 - [ ] Shuffle / repeat flank transport controls (prev/play/next)
 - [ ] Volume slider adjusts playback volume
@@ -105,7 +108,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Add to Playlist
 - [ ] Favorite / Unfavorite
 - [ ] Go to Album / Go to Artist
-- [ ] Share (sends "Title — Artist" text)
+- [ ] Share (sends "Title — Artist" text with vibrdrome:// deep link)
+- [ ] Deep link `vibrdrome://song/{id}` opens song
 
 ## Album Detail
 
@@ -118,6 +122,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Text contrast readable in light mode
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
+- [ ] Album sort: Name, Artist, Year, Recently Added all work
+- [ ] Multi-select batch actions (Download All, Add to Playlist, Add to Queue)
 
 ## Widget
 
@@ -169,6 +175,10 @@ Run through this checklist before every TestFlight build. Each item should be ve
 
 - [ ] Subsonic scrobbling works (check server play count)
 - [ ] ListenBrainz scrobbling (enable toggle, enter token, verify at listenbrainz.org)
+- [ ] Last.fm: enter API Key + Shared Secret, then username + password, tap Sign In
+- [ ] Last.fm: "Signed in as [username]" appears with green checkmark after auth
+- [ ] Last.fm: Sign Out clears session and shows login fields again
+- [ ] Last.fm: scrobble appears on last.fm profile after playing 50%+ of a track
 - [ ] Now Playing notification sent on track start
 
 ## Settings 2.0
@@ -193,6 +203,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Profile menu shows server, music folders, downloads
 - [ ] Connection indicator (green/red dot)
 - [ ] Haptic on tab switch
+- [ ] Backup Settings exports named file (vibrdrome-backup-DATE.json)
+- [ ] Restore Settings imports from JSON file and applies settings
+- [ ] Crossfade Curve picker appears when crossfade > 0
 
 ## Playlist Sharing
 
@@ -237,3 +250,5 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Device rotation doesn't dismiss any views
 - [ ] HTTP server connection works with warning
 - [ ] HTTPS server connection works
+- [ ] Adaptive Bitrate adjusts quality on constrained networks (iOS)
+- [ ] No white flash when returning from background

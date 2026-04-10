@@ -8,6 +8,9 @@ struct AlbumDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var similarAlbums: [Album] = []
+    @State private var selectedSongs = Set<String>()
+    @State private var isSelecting = false
+    @State private var showAddToPlaylist = false
 
     var body: some View {
         ScrollView {
@@ -44,18 +47,44 @@ struct AlbumDetailView: View {
                                 .background(.ultraThinMaterial)
                             }
 
-                            TrackRow(song: song, showTrackNumber: true)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    AudioEngine.shared.play(song: song, from: songs, at: index)
+                            HStack(spacing: 0) {
+                                if isSelecting {
+                                    Button {
+                                        toggleSelection(song.id)
+                                    } label: {
+                                        Image(systemName: selectedSongs.contains(song.id)
+                                              ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selectedSongs.contains(song.id)
+                                                             ? Color.accentColor : .secondary)
+                                            .font(.title3)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, 16)
+                                    .padding(.trailing, 4)
                                 }
-                                .accessibilityIdentifier("trackRow_\(index)")
-                                .trackContextMenu(song: song, queue: songs, index: index)
+
+                                TrackRow(song: song, showTrackNumber: true)
+                                    .padding(.horizontal, isSelecting ? 8 : 16)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if isSelecting {
+                                            toggleSelection(song.id)
+                                        } else {
+                                            AudioEngine.shared.play(song: song, from: songs, at: index)
+                                        }
+                                    }
+                                    .accessibilityIdentifier("trackRow_\(index)")
+                                    .trackContextMenu(song: song, queue: songs, index: index)
+                            }
                             Divider()
-                                .padding(.leading, 56)
+                                .padding(.leading, isSelecting ? 72 : 56)
                         }
+                    }
+
+                    // Batch action bar
+                    if isSelecting && !selectedSongs.isEmpty {
+                        batchActionBar(songs: songs)
                     }
 
                     // Album info footer
@@ -74,6 +103,24 @@ struct AlbumDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSelecting.toggle()
+                        if !isSelecting { selectedSongs.removeAll() }
+                    }
+                } label: {
+                    Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .accessibilityLabel(isSelecting ? "Done Selecting" : "Select Songs")
+                .accessibilityIdentifier("albumSelectButton")
+            }
+        }
+        .sheet(isPresented: $showAddToPlaylist) {
+            AddToPlaylistView(songIds: Array(selectedSongs))
+                .environment(appState)
+        }
         .overlay {
             if isLoading && album == nil {
                 ProgressView()
@@ -375,6 +422,25 @@ struct AlbumDetailView: View {
                 }
             }
         }
+    }
+
+    private func toggleSelection(_ songId: String) {
+        if selectedSongs.contains(songId) {
+            selectedSongs.remove(songId)
+        } else {
+            selectedSongs.insert(songId)
+        }
+    }
+
+    @ViewBuilder
+    private func batchActionBar(songs: [Song]) -> some View {
+        BatchActionBar(
+            selectedSongIds: selectedSongs,
+            songs: songs,
+            onAddToPlaylist: { showAddToPlaylist = true }
+        )
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
     }
 
     private func loadAlbum() async {

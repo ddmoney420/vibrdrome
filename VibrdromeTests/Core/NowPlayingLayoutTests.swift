@@ -80,7 +80,7 @@ struct NowPlayingLayoutTests {
     @Test func songBitRatePresent() {
         let song = Song(
             id: "1", parent: nil, title: "Test", album: nil, artist: nil,
-            albumId: nil, artistId: nil, track: nil, year: nil, genre: nil,
+            albumArtist: nil, albumId: nil, artistId: nil, track: nil, year: nil, genre: nil,
             coverArt: nil, size: nil, contentType: nil, suffix: "mp3",
             duration: 200, bitRate: 320, path: nil, discNumber: nil,
             created: nil, starred: nil, userRating: nil, bpm: nil,
@@ -93,7 +93,7 @@ struct NowPlayingLayoutTests {
     @Test func songBitRateNil() {
         let song = Song(
             id: "1", parent: nil, title: "Test", album: nil, artist: nil,
-            albumId: nil, artistId: nil, track: nil, year: nil, genre: nil,
+            albumArtist: nil, albumId: nil, artistId: nil, track: nil, year: nil, genre: nil,
             coverArt: nil, size: nil, contentType: nil, suffix: nil,
             duration: nil, bitRate: nil, path: nil, discNumber: nil,
             created: nil, starred: nil, userRating: nil, bpm: nil,

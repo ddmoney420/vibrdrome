@@ -128,7 +128,7 @@ struct CachedSongConversionTests {
     @Test func nilOptionalFieldsRoundTrip() {
         let song = Song(
             id: "minimal", parent: nil, title: "Minimal",
-            album: nil, artist: nil, albumId: nil, artistId: nil,
+            album: nil, artist: nil, albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: nil,
             bitRate: nil, path: nil, discNumber: nil, created: nil,
@@ -173,7 +173,7 @@ struct CachedSongConversionTests {
     ) -> Song {
         Song(
             id: id, parent: nil, title: title,
-            album: album, artist: artist, albumId: albumId, artistId: nil,
+            album: album, artist: artist, albumArtist: nil, albumId: albumId, artistId: nil,
             track: track, year: year, genre: genre, coverArt: nil,
             size: size, contentType: contentType, suffix: suffix,
             duration: duration, bitRate: bitRate, path: nil,

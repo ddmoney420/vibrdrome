@@ -189,6 +189,7 @@ extension DirectoryChild {
             title: title ?? "Unknown",
             album: album,
             artist: artist,
+            albumArtist: nil,
             albumId: nil,
             artistId: nil,
             track: track,

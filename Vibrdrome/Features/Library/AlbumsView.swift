@@ -14,14 +14,47 @@ struct AlbumsView: View {
     @State private var error: String?
     @State private var hasMore = true
     @State private var searchText = ""
+    @State private var activeListType: AlbumListType?
+    @State private var clientSideSort: AlbumSortOption?
     private let pageSize = 40
 
-    private var filteredAlbums: [Album] {
-        if searchText.isEmpty { return albums }
-        return albums.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+    enum AlbumSortOption: String, CaseIterable {
+        case name, artist, year, recentlyAdded
+        var label: String {
+            switch self {
+            case .name: "Name"
+            case .artist: "Artist"
+            case .year: "Year"
+            case .recentlyAdded: "Recently Added"
+            }
         }
+        var albumListType: AlbumListType {
+            switch self {
+            case .name: .alphabeticalByName
+            case .artist: .alphabeticalByArtist
+            case .year: .byYear
+            case .recentlyAdded: .newest
+            }
+        }
+    }
+
+    private var effectiveListType: AlbumListType {
+        activeListType ?? listType
+    }
+
+    private var filteredAlbums: [Album] {
+        var result = albums
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        // Client-side sort for year (API doesn't support sort by year without range)
+        if clientSideSort == .year {
+            result.sort { ($0.year ?? 0) > ($1.year ?? 0) }
+        }
+        return result
     }
 
     var body: some View {
@@ -132,19 +165,45 @@ struct AlbumsView: View {
                 }
             }
         }
-        #if os(macOS)
         .toolbar {
-            ToolbarItem {
-                Button {
-                    albums = []
-                    hasMore = true
-                    Task { await loadAlbums() }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(AlbumSortOption.allCases, id: \.self) { option in
+                        Button {
+                            if option == .year {
+                                clientSideSort = .year
+                                activeListType = nil
+                            } else {
+                                clientSideSort = nil
+                                activeListType = option.albumListType
+                                albums = []
+                                hasMore = true
+                                Task { await loadAlbums() }
+                            }
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                if option == .year && clientSideSort == .year {
+                                    Image(systemName: "checkmark")
+                                } else if option != .year && effectiveListType == option.albumListType && clientSideSort == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        albums = []
+                        hasMore = true
+                        Task { await loadAlbums() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Image(systemName: "arrow.up.arrow.down")
                 }
             }
         }
-        #endif
         .task { await loadAlbums() }
         .refreshable {
             albums = []
@@ -155,8 +214,9 @@ struct AlbumsView: View {
 
     private func loadAlbums() async {
         let client = appState.subsonicClient
+        let sortType = effectiveListType
         let endpoint = SubsonicEndpoint.getAlbumList2(
-            type: listType, size: pageSize, offset: 0,
+            type: sortType, size: pageSize, offset: 0,
             fromYear: fromYear, toYear: toYear, genre: genre)
         // Show cached first page instantly
         if albums.isEmpty,
@@ -168,7 +228,7 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await client.getAlbumList(
-                type: listType, size: pageSize, offset: 0, genre: genre,
+                type: sortType, size: pageSize, offset: 0, genre: genre,
                 fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
@@ -185,7 +245,7 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await appState.subsonicClient.getAlbumList(
-                type: listType, size: pageSize, offset: albums.count, genre: genre,
+                type: effectiveListType, size: pageSize, offset: albums.count, genre: genre,
                 fromYear: fromYear, toYear: toYear)
             albums.append(contentsOf: result)
             hasMore = result.count >= pageSize

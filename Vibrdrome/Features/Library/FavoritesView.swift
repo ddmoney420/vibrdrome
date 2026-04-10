@@ -6,6 +6,9 @@ struct FavoritesView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var selectedSongs = Set<String>()
+    @State private var isSelecting = false
+    @State private var showBatchAddToPlaylist = false
 
     private var filteredArtists: [Artist] {
         guard let artists = starred?.artist else { return [] }
@@ -91,12 +94,38 @@ struct FavoritesView: View {
                         .listRowSeparator(.hidden)
 
                         ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
-                            TrackRow(song: song, showTrackNumber: false)
-                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
-                                .accessibilityIdentifier("favSongRow_\(song.id)")
-                                .onTapGesture {
-                                    AudioEngine.shared.play(song: song, from: filteredSongs, at: index)
+                            HStack(spacing: 0) {
+                                if isSelecting {
+                                    Button {
+                                        toggleSelection(song.id)
+                                    } label: {
+                                        Image(systemName: selectedSongs.contains(song.id)
+                                              ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selectedSongs.contains(song.id)
+                                                             ? Color.accentColor : .secondary)
+                                            .font(.title3)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.trailing, 8)
                                 }
+
+                                TrackRow(song: song, showTrackNumber: false)
+                                    .trackContextMenu(song: song, queue: filteredSongs, index: index)
+                                    .accessibilityIdentifier("favSongRow_\(song.id)")
+                                    .onTapGesture {
+                                        if isSelecting {
+                                            toggleSelection(song.id)
+                                        } else {
+                                            AudioEngine.shared.play(song: song, from: filteredSongs, at: index)
+                                        }
+                                    }
+                            }
+                        }
+
+                        // Batch action bar
+                        if isSelecting && !selectedSongs.isEmpty {
+                            favoritesBatchActionBar(songs: filteredSongs)
+                                .listRowSeparator(.hidden)
                         }
                     }
                 }
@@ -135,17 +164,50 @@ struct FavoritesView: View {
                 }
             }
         }
-        #if os(macOS)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSelecting.toggle()
+                        if !isSelecting { selectedSongs.removeAll() }
+                    }
+                } label: {
+                    Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .accessibilityLabel(isSelecting ? "Done Selecting" : "Select Songs")
+                .accessibilityIdentifier("favSelectButton")
+            }
+            #if os(macOS)
             ToolbarItem {
                 Button { Task { await loadStarred() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
+            #endif
         }
-        #endif
+        .sheet(isPresented: $showBatchAddToPlaylist) {
+            AddToPlaylistView(songIds: Array(selectedSongs))
+                .environment(appState)
+        }
         .task { await loadStarred() }
         .refreshable { await loadStarred() }
+    }
+
+    private func toggleSelection(_ songId: String) {
+        if selectedSongs.contains(songId) {
+            selectedSongs.remove(songId)
+        } else {
+            selectedSongs.insert(songId)
+        }
+    }
+
+    @ViewBuilder
+    private func favoritesBatchActionBar(songs: [Song]) -> some View {
+        BatchActionBar(
+            selectedSongIds: selectedSongs,
+            songs: songs,
+            onAddToPlaylist: { showBatchAddToPlaylist = true }
+        )
     }
 
     private var isEmpty: Bool {

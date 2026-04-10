@@ -10,11 +10,35 @@ struct PlaylistsView: View {
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
     @State private var searchText = ""
+    @State private var sortBy: PlaylistSortOption = .name
+
+    enum PlaylistSortOption: String, CaseIterable {
+        case name, songCount, recentlyUpdated
+        var label: String {
+            switch self {
+            case .name: "Name"
+            case .songCount: "Song Count"
+            case .recentlyUpdated: "Recently Updated"
+            }
+        }
+    }
 
     private var filteredPlaylists: [Playlist] {
-        if searchText.isEmpty { return playlists }
-        return playlists.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
+        let base: [Playlist]
+        if searchText.isEmpty {
+            base = playlists
+        } else {
+            base = playlists.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        switch sortBy {
+        case .name:
+            return base.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .songCount:
+            return base.sorted { ($0.songCount ?? 0) > ($1.songCount ?? 0) }
+        case .recentlyUpdated:
+            return base.sorted { ($0.changed ?? "") > ($1.changed ?? "") }
         }
     }
 
@@ -63,6 +87,31 @@ struct PlaylistsView: View {
                 .accessibilityLabel(showAsList ? "Grid View" : "List View")
                 .accessibilityIdentifier("playlistViewToggle")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(PlaylistSortOption.allCases, id: \.self) { option in
+                        Button {
+                            sortBy = option
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                if sortBy == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        Task { await loadPlaylists() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityIdentifier("playlistSortMenu")
+            }
         }
         #endif
         #if os(macOS)
@@ -78,8 +127,27 @@ struct PlaylistsView: View {
                 }
             }
             ToolbarItem {
-                Button { Task { await loadPlaylists() } } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                Menu {
+                    ForEach(PlaylistSortOption.allCases, id: \.self) { option in
+                        Button {
+                            sortBy = option
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                if sortBy == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        Task { await loadPlaylists() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
             }
         }

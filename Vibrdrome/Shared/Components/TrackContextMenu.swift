@@ -1,12 +1,6 @@
 import SwiftUI
 import os.log
 
-// V1: Enum-based navigation to avoid multiple navigationDestination(item:) for String
-enum TrackNavDestination: Hashable {
-    case album(String)
-    case artist(String)
-}
-
 struct TrackContextMenuModifier: ViewModifier {
     let song: Song
     var queue: [Song]?
@@ -14,7 +8,6 @@ struct TrackContextMenuModifier: ViewModifier {
 
     @Environment(AppState.self) private var appState
     @State private var showAddToPlaylist = false
-    @State private var navDestination: TrackNavDestination?
 
     func body(content: Content) -> some View {
         content
@@ -22,14 +15,6 @@ struct TrackContextMenuModifier: ViewModifier {
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistView(songIds: [song.id])
                     .environment(appState)
-            }
-            .navigationDestination(item: $navDestination) { destination in
-                switch destination {
-                case .album(let albumId):
-                    AlbumDetailView(albumId: albumId)
-                case .artist(let artistId):
-                    ArtistDetailView(artistId: artistId)
-                }
             }
     }
 
@@ -134,7 +119,7 @@ struct TrackContextMenuModifier: ViewModifier {
     private var navigationActions: some View {
         if let albumId = song.albumId {
             Button {
-                navDestination = .album(albumId)
+                appState.pendingNavigation = .album(id: albumId)
             } label: {
                 Label("Go to Album", systemImage: "square.stack")
             }
@@ -142,7 +127,7 @@ struct TrackContextMenuModifier: ViewModifier {
 
         if let artistId = song.artistId {
             Button {
-                navDestination = .artist(artistId)
+                appState.pendingNavigation = .artist(id: artistId)
             } label: {
                 Label("Go to Artist", systemImage: "music.mic")
             }
@@ -155,6 +140,7 @@ struct TrackContextMenuModifier: ViewModifier {
             if let album = song.album {
                 text += "\nAlbum: \(album)"
             }
+            text += "\nvibrdrome://song/\(song.id)"
             return text
         }()
         ShareLink(item: shareText) {

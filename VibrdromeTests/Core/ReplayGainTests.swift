@@ -97,7 +97,7 @@ struct ReplayGainTests {
     private func makeSong(replayGain: ReplayGain?) -> Song {
         Song(
             id: "test-1", parent: nil, title: "Test Song",
-            album: nil, artist: nil, albumId: nil, artistId: nil,
+            album: nil, artist: nil, albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: 300,
             bitRate: nil, path: nil, discNumber: nil, created: nil,

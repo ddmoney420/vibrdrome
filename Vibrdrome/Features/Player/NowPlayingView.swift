@@ -439,7 +439,7 @@ struct NowPlayingView: View {
         return VStack(spacing: 4) {
             #if os(iOS)
             GeometryReader { geo in
-                let fraction = songDuration > 0 ? sliderValue / songDuration : 0
+                let fraction = songDuration > 0 ? min(1, max(0, sliderValue / songDuration)) : 0
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(.white.opacity(0.2))

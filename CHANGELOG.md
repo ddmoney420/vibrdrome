@@ -4,6 +4,28 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 35 — April 10, 2026
+- Last.fm scrobbling with sign-in flow (API Key + username/password authentication)
+- Backup & Restore settings (exports named JSON file, imports from file picker)
+- Faceted search: Genre, Year, Format filter chips narrow search results
+- Deep links: `vibrdrome://song/{id}` in shared text opens songs directly
+- Crossfade curve options: Linear, Equal Power, Logarithmic
+- Album sort fix: Year (client-side), Recently Added, Name, Artist all correct
+- Multi-select batch actions: Download All, Add to Playlist, Add to Queue
+- Fix: Transcoding through reverse proxy no longer garbles audio (Accept-Encoding: identity)
+- Fix: Visualizer UI no longer auto-hides while interacting with menus
+- Fix: Visualizer controls fade out smoothly (0.5s) and reset timer on button taps
+- Fix: Audio no longer stutters when opening visualizer (tap pre-activated)
+- Refactor: AudioEngine split into 4 files (471 + Queue + Network + Playback)
+- Refactor: SearchView split (SearchView + Filters extension)
+- Refactor: BatchActionBar extracted as reusable component
+- 512 unit tests in 37 suites
+
+**TestFlight Notes:**
+> Last.fm scrobbling, backup/restore settings, faceted search filters, deep links,
+> crossfade curves. Bug fixes: proxy transcoding, visualizer auto-hide, audio
+> stutter on visualizer open. Major refactoring pass.
+
 ### Build 34 — April 9, 2026 (Hotfix)
 - Fix: Repeat All now correctly advances to next track and wraps queue (was restarting current track)
 - Fix: Transcoded streams on cellular no longer restart from beginning on buffering error (resumes from position)

@@ -36,7 +36,12 @@ struct TrackRow: View {
                     .lineLimit(1)
                 HStack(spacing: 4) {
                     if let artist = song.artist {
-                        Text(artist)
+                        if let albumArtist = song.albumArtist,
+                           albumArtist != artist {
+                            Text("\(artist) (\(albumArtist))")
+                        } else {
+                            Text(artist)
+                        }
                     }
                     if let duration = song.duration {
                         Text("·")

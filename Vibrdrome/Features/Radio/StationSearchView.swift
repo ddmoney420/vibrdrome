@@ -278,10 +278,10 @@ struct StationSearchView: View {
             engine.pause()
             previewingId = nil
         } else {
-            let radioStation = InternetRadioStation.preview(
+            guard let radioStation = InternetRadioStation.preview(
                 id: station.id, name: station.name,
                 streamUrl: station.streamUrl, homePageUrl: station.homepage
-            )
+            ) else { return }
             engine.playRadio(station: radioStation)
             previewingId = station.id
         }
@@ -354,14 +354,15 @@ struct StationSearchView: View {
 // MARK: - Preview helper
 
 private extension InternetRadioStation {
-    static func preview(id: String, name: String, streamUrl: String, homePageUrl: String?) -> InternetRadioStation {
+    static func preview(id: String, name: String, streamUrl: String, homePageUrl: String?) -> InternetRadioStation? {
         // We need to create an InternetRadioStation for preview playback
         // Since it's Decodable, we'll use JSON decoding
         var json: [String: Any] = ["id": id, "name": name, "streamUrl": streamUrl]
         if let homePageUrl { json["homePageUrl"] = homePageUrl }
-        // swiftlint:disable:next force_try
-        let data = try! JSONSerialization.data(withJSONObject: json)
-        // swiftlint:disable:next force_try
-        return try! JSONDecoder().decode(InternetRadioStation.self, from: data)
+        guard let data = try? JSONSerialization.data(withJSONObject: json),
+              let station = try? JSONDecoder().decode(InternetRadioStation.self, from: data) else {
+            return nil
+        }
+        return station
     }
 }

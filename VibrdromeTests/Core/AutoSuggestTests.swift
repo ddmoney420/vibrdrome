@@ -8,7 +8,7 @@ struct AutoSuggestTests {
     private func makeSong(id: String = "1", title: String = "Test") -> Song {
         Song(
             id: id, parent: nil, title: title,
-            album: nil, artist: nil, albumId: nil, artistId: nil,
+            album: nil, artist: nil, albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil,
             duration: 180, bitRate: nil, path: nil,

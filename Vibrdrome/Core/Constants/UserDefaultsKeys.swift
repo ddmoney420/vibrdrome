@@ -15,6 +15,7 @@ enum UserDefaultsKeys {
 
     static let gaplessPlayback = "gaplessPlayback"
     static let crossfadeDuration = "crossfadeDuration"
+    static let crossfadeCurve = "crossfadeCurve"
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
 
@@ -76,6 +77,18 @@ enum UserDefaultsKeys {
 
     static let listenBrainzEnabled = "listenBrainzEnabled"
     static let listenBrainzToken = "listenBrainzToken"
+
+    // MARK: - Last.fm
+
+    static let lastFmEnabled = "lastFmEnabled"
+    static let lastFmApiKey = "lastFmApiKey"
+    static let lastFmSecret = "lastFmSecret"
+    static let lastFmSessionKey = "lastFmSessionKey"
+    static let lastFmUsername = "lastFmUsername"
+
+    // MARK: - Adaptive Bitrate
+
+    static let adaptiveBitrateEnabled = "adaptiveBitrateEnabled"
 
     // MARK: - Player Behavior
 

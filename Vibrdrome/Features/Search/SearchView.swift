@@ -5,7 +5,7 @@ private let recentSearchesKey = "recentSearches"
 private let maxRecentSearches = 10
 
 struct SearchView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(AppState.self) var appState
     @Environment(\.modelContext) private var modelContext
     @State private var query = ""
     @State private var results: SearchResult3?
@@ -15,10 +15,28 @@ struct SearchView: View {
     @State private var recentSearches: [String] = UserDefaults.standard.stringArray(forKey: recentSearchesKey) ?? []
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
+    // MARK: - Filter State (internal for SearchView+Filters extension)
+    @State var availableGenres: [String] = []
+    @State var selectedGenre: String?
+    @State var selectedYear: Int?
+    @State var selectedFormat: String?
+    @State var showGenrePicker = false
+    @State var showYearPicker = false
+    @State var showFormatPicker = false
+
+    let formatOptions = ["FLAC", "MP3", "AAC", "OGG", "OPUS", "WAV"]
+
+    var hasActiveFilters: Bool {
+        selectedGenre != nil || selectedYear != nil || selectedFormat != nil
+    }
+
     var body: some View {
         ScrollView {
+            if results != nil || hasActiveFilters {
+                filterBar
+            }
             if let results {
-                resultsContent(results)
+                resultsContent(applyFilters(to: results))
             } else if let searchError, !query.isEmpty {
                 errorContent(searchError)
             } else if query.isEmpty {
@@ -49,6 +67,9 @@ struct SearchView: View {
             if isSearching {
                 ProgressView()
             }
+        }
+        .task {
+            await loadGenres()
         }
     }
 

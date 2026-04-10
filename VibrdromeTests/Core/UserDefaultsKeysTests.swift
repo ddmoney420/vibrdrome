@@ -16,8 +16,8 @@ struct UserDefaultsKeysTests {
 
     @Test func totalKeyCount() {
         // 4 server + 4 audio + 4 EQ + 3 downloads + 2 streaming + 3 carplay
-        // + 14 appearance + 1 discord + 2 listenbrainz + 2 library = 39
-        #expect(allKeyValues().count == 39)
+        // + 14 appearance + 1 discord + 2 listenbrainz + 4 lastfm + 1 adaptive + 2 library = 44
+        #expect(allKeyValues().count == 44)
     }
 
     // MARK: - No Empty Keys
@@ -94,6 +94,17 @@ struct UserDefaultsKeysTests {
         #expect(UserDefaultsKeys.listenBrainzToken == "listenBrainzToken")
     }
 
+    @Test func lastFmKeys() {
+        #expect(UserDefaultsKeys.lastFmEnabled == "lastFmEnabled")
+        #expect(UserDefaultsKeys.lastFmApiKey == "lastFmApiKey")
+        #expect(UserDefaultsKeys.lastFmSecret == "lastFmSecret")
+        #expect(UserDefaultsKeys.lastFmSessionKey == "lastFmSessionKey")
+    }
+
+    @Test func adaptiveBitrateKeys() {
+        #expect(UserDefaultsKeys.adaptiveBitrateEnabled == "adaptiveBitrateEnabled")
+    }
+
     @Test func libraryLayoutKeys() {
         #expect(UserDefaultsKeys.libraryLayout == "libraryLayout")
         #expect(UserDefaultsKeys.activeMusicFolderId == "activeMusicFolderId")
@@ -149,6 +160,13 @@ struct UserDefaultsKeysTests {
             // ListenBrainz
             UserDefaultsKeys.listenBrainzEnabled,
             UserDefaultsKeys.listenBrainzToken,
+            // Last.fm
+            UserDefaultsKeys.lastFmEnabled,
+            UserDefaultsKeys.lastFmApiKey,
+            UserDefaultsKeys.lastFmSecret,
+            UserDefaultsKeys.lastFmSessionKey,
+            // Adaptive Bitrate
+            UserDefaultsKeys.adaptiveBitrateEnabled,
             // Library
             UserDefaultsKeys.libraryLayout,
             UserDefaultsKeys.activeMusicFolderId,

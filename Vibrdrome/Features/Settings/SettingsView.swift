@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Accent Color Theme
 
@@ -41,6 +42,11 @@ struct SettingsView: View {
     @State private var showServerManager = false
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
+    @State private var showBackupShare = false
+    @State private var backupFileURL: URL?
+    @State private var showRestoreImporter = false
+    @State private var backupRestoreMessage: String?
+    @State private var showBackupRestoreAlert = false
 
     @AppStorage(UserDefaultsKeys.autoDownloadFavorites) private var autoDownloadFavorites: Bool = false
     @AppStorage(UserDefaultsKeys.autoSyncPlaylists) private var autoSyncPlaylists: Bool = false
@@ -86,6 +92,7 @@ struct SettingsView: View {
             #endif
 
             accessibilitySection
+            backupRestoreSection
             aboutSection
         }
         #if os(iOS)
@@ -116,6 +123,40 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will disconnect from the server. You can reconnect anytime.")
+        }
+        #if os(iOS)
+        .sheet(isPresented: $showBackupShare) {
+            if let backupFileURL {
+                SettingsShareSheet(activityItems: [backupFileURL])
+            }
+        }
+        #endif
+        .fileImporter(
+            isPresented: $showRestoreImporter,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let didAccess = url.startAccessingSecurityScopedResource()
+                defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+                if let data = try? Data(contentsOf: url) {
+                    restoreSettings(from: data)
+                    backupRestoreMessage = "Settings restored successfully. Some changes may require restarting the app."
+                } else {
+                    backupRestoreMessage = "Failed to read the backup file."
+                }
+                showBackupRestoreAlert = true
+            case .failure(let error):
+                backupRestoreMessage = "Import failed: \(error.localizedDescription)"
+                showBackupRestoreAlert = true
+            }
+        }
+        .alert("Backup & Restore", isPresented: $showBackupRestoreAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(backupRestoreMessage ?? "")
         }
     }
 
@@ -436,6 +477,152 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Backup & Restore Section
+
+    private var backupRestoreSection: some View {
+        Section {
+            Button {
+                guard let data = backupSettings() else { return }
+                let dateStr = formattedDateForFilename()
+                let fileName = "vibrdrome-backup-\(dateStr).json"
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                try? data.write(to: tempURL)
+                backupFileURL = tempURL
+                showBackupShare = true
+            } label: {
+                Label("Backup Settings", systemImage: "square.and.arrow.up")
+                    .foregroundColor(.accentColor)
+            }
+            .accessibilityIdentifier("backupSettingsButton")
+
+            Button {
+                showRestoreImporter = true
+            } label: {
+                Label("Restore Settings", systemImage: "square.and.arrow.down")
+                    .foregroundColor(.accentColor)
+            }
+            .accessibilityIdentifier("restoreSettingsButton")
+        } header: {
+            settingSectionHeader("Backup & Restore", icon: "externaldrive.fill.badge.timemachine", color: .orange)
+        } footer: {
+            Text("Backup: tap to share your settings as a text file. Save it to Files or send to yourself.\nRestore: tap to import a previously saved backup from Files.")
+        }
+    }
+
+    private static let backupKeys: [String] = [
+        UserDefaultsKeys.gaplessPlayback,
+        UserDefaultsKeys.crossfadeDuration,
+        UserDefaultsKeys.crossfadeCurve,
+        UserDefaultsKeys.replayGainMode,
+        UserDefaultsKeys.scrobblingEnabled,
+        UserDefaultsKeys.eqEnabled,
+        UserDefaultsKeys.eqCurrentPresetId,
+        UserDefaultsKeys.eqCurrentGains,
+        UserDefaultsKeys.customEQPresets,
+        UserDefaultsKeys.autoDownloadFavorites,
+        UserDefaultsKeys.downloadOverCellular,
+        UserDefaultsKeys.cacheLimitBytes,
+        UserDefaultsKeys.wifiMaxBitRate,
+        UserDefaultsKeys.cellularMaxBitRate,
+        UserDefaultsKeys.carPlayShowRadio,
+        UserDefaultsKeys.carPlayShowGenres,
+        UserDefaultsKeys.carPlayRecentCount,
+        UserDefaultsKeys.appColorScheme,
+        UserDefaultsKeys.accentColorTheme,
+        UserDefaultsKeys.largerText,
+        UserDefaultsKeys.textSize,
+        UserDefaultsKeys.autoSyncPlaylists,
+        UserDefaultsKeys.showSearchTab,
+        UserDefaultsKeys.showPlaylistsTab,
+        UserDefaultsKeys.showRadioTab,
+        UserDefaultsKeys.boldText,
+        UserDefaultsKeys.reduceMotion,
+        UserDefaultsKeys.disableVisualizer,
+        UserDefaultsKeys.showAlbumArtInLists,
+        UserDefaultsKeys.visualizerPreset,
+        UserDefaultsKeys.showVisualizerInToolbar,
+        UserDefaultsKeys.showEQInToolbar,
+        UserDefaultsKeys.showAirPlayInToolbar,
+        UserDefaultsKeys.showLyricsInToolbar,
+        UserDefaultsKeys.showSettingsInToolbar,
+        UserDefaultsKeys.nowPlayingToolbarOrder,
+        UserDefaultsKeys.discordRPCEnabled,
+        UserDefaultsKeys.listenBrainzEnabled,
+        UserDefaultsKeys.disableSpinningArt,
+        UserDefaultsKeys.rememberPlaybackPosition,
+        UserDefaultsKeys.enableMiniPlayerSwipe,
+        UserDefaultsKeys.showVolumeSlider,
+        UserDefaultsKeys.showAudioQualityInfo,
+        UserDefaultsKeys.showHeartInPlayer,
+        UserDefaultsKeys.showRatingInPlayer,
+        UserDefaultsKeys.showQueueInPlayer,
+        UserDefaultsKeys.enableLiquidGlass,
+        UserDefaultsKeys.enableMiniPlayerTint,
+        UserDefaultsKeys.albumBackgroundStyle,
+        UserDefaultsKeys.settingsInNavBar,
+        UserDefaultsKeys.showDownloadsTab,
+        UserDefaultsKeys.tabBarOrder,
+        UserDefaultsKeys.libraryLayout,
+    ]
+
+    private func backupSettings() -> Data? {
+        var backup: [String: Any] = [:]
+        for key in Self.backupKeys {
+            guard let value = UserDefaults.standard.object(forKey: key) else { continue }
+            // Only include JSON-safe types
+            switch value {
+            case is String, is Int, is Double, is Float, is Bool:
+                backup[key] = value
+            case let array as [Any] where JSONSerialization.isValidJSONObject(array):
+                backup[key] = array
+            case let dict as [String: Any] where JSONSerialization.isValidJSONObject(dict):
+                backup[key] = dict
+            default:
+                // Skip non-serializable values (Data, etc.)
+                continue
+            }
+        }
+        backup["_backupDate"] = ISO8601DateFormatter().string(from: Date())
+        backup["_appVersion"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        return try? JSONSerialization.data(withJSONObject: backup, options: [.prettyPrinted, .sortedKeys])
+    }
+
+    private func performBackup() {
+        guard let data = backupSettings() else {
+            backupRestoreMessage = "Failed to create backup."
+            showBackupRestoreAlert = true
+            return
+        }
+        let fileName = "vibrdrome-settings-\(formattedDateForFilename()).json"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try data.write(to: tempURL)
+            backupFileURL = tempURL
+            backupRestoreMessage = "Backup created. Use the share button to export."
+            showBackupRestoreAlert = true
+        } catch {
+            backupRestoreMessage = "Failed to write backup file: \(error.localizedDescription)"
+            showBackupRestoreAlert = true
+        }
+    }
+
+    private func restoreSettings(from data: Data) {
+        guard let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            backupRestoreMessage = "Invalid backup file format."
+            showBackupRestoreAlert = true
+            return
+        }
+        for (key, value) in dict where !key.hasPrefix("_") {
+            UserDefaults.standard.set(value, forKey: key)
+        }
+    }
+
+    private func formattedDateForFilename() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
+
     // MARK: - Helpers
 
     private func settingSectionHeader(_ title: String, icon: String, color: Color) -> some View {
@@ -462,3 +649,19 @@ struct SettingsView: View {
         Image("AppIconImage")
     }
 }
+
+// MARK: - Share Sheet (iOS)
+
+#if os(iOS)
+import UIKit
+
+private struct SettingsShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+#endif

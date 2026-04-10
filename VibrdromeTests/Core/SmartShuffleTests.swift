@@ -8,7 +8,7 @@ struct SmartShuffleTests {
     private func makeSong(id: String, artist: String? = nil, suffix: String? = nil) -> Song {
         Song(
             id: id, parent: nil, title: "Song \(id)",
-            album: nil, artist: artist, albumId: nil, artistId: nil,
+            album: nil, artist: artist, albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: suffix,
             duration: 180, bitRate: nil, path: nil,

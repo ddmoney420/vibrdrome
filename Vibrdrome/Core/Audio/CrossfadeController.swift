@@ -4,6 +4,45 @@ import os.log
 
 private let crossfadeLog = Logger(subsystem: "com.vibrdrome.app", category: "Crossfade")
 
+/// Crossfade volume curve types
+enum CrossfadeCurve: String, CaseIterable, Sendable {
+    case linear
+    case equalPower
+    case logarithmic
+
+    var label: String {
+        switch self {
+        case .linear: "Linear"
+        case .equalPower: "Equal Power"
+        case .logarithmic: "Logarithmic"
+        }
+    }
+
+    /// Compute fade-out gain for a given progress (0.0 = start, 1.0 = end)
+    func fadeOutGain(_ progress: Float) -> Float {
+        switch self {
+        case .linear:
+            return 1.0 - progress
+        case .equalPower:
+            return cos(progress * .pi / 2)
+        case .logarithmic:
+            return pow(1.0 - progress, 2)
+        }
+    }
+
+    /// Compute fade-in gain for a given progress (0.0 = start, 1.0 = end)
+    func fadeInGain(_ progress: Float) -> Float {
+        switch self {
+        case .linear:
+            return progress
+        case .equalPower:
+            return sin(progress * .pi / 2)
+        case .logarithmic:
+            return pow(progress, 2)
+        }
+    }
+}
+
 /// Manages dual-player crossfade transitions.
 /// When crossfadeDuration > 0, this controller handles volume ramps between two AVPlayer instances.
 @MainActor
@@ -64,7 +103,7 @@ final class CrossfadeController {
 
     /// Load a track onto the active player (used for initial play)
     func loadOnActive(url: URL) {
-        let item = AVPlayerItem(url: url)
+        let item = AudioEngine.makePlayerItem(url: url)
         activePlayer?.replaceCurrentItem(with: item)
     }
 
@@ -73,7 +112,7 @@ final class CrossfadeController {
     func beginCrossfade(nextURL: URL, duration: TimeInterval, onComplete: @escaping () -> Void) {
         cancelRamp()
 
-        let item = AVPlayerItem(url: nextURL)
+        let item = AudioEngine.makePlayerItem(url: nextURL)
         inactivePlayer?.replaceCurrentItem(with: item)
 
         rampDuration = duration
@@ -107,13 +146,19 @@ final class CrossfadeController {
         inFactor = 0.0
     }
 
+    private var currentCurve: CrossfadeCurve {
+        let raw = UserDefaults.standard.string(forKey: UserDefaultsKeys.crossfadeCurve) ?? "linear"
+        return CrossfadeCurve(rawValue: raw) ?? .linear
+    }
+
     private func tickRamp() {
         guard let startTime = rampStartTime, rampDuration > 0 else { return }
         let elapsed = Date().timeIntervalSince(startTime)
         let progress = Float(min(elapsed / rampDuration, 1.0))
 
-        outFactor = 1.0 - progress
-        inFactor = progress
+        let curve = currentCurve
+        outFactor = curve.fadeOutGain(progress)
+        inFactor = curve.fadeInGain(progress)
 
         // Notify AudioEngine to apply effective volume
         AudioEngine.shared.applyEffectiveVolume()

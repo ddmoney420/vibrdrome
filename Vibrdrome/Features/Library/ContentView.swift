@@ -86,6 +86,11 @@ struct ContentView: View {
                 .animation(.easeInOut, value: isOffline)
             }
         }
+        .onChange(of: appState.pendingNavigation) { _, newValue in
+            if newValue != nil && !appState.showNowPlaying {
+                handlePendingNavigation()
+            }
+        }
         .task {
             let monitor = NWPathMonitor()
             for await path in monitor.paths() {
@@ -215,6 +220,8 @@ struct ContentView: View {
                 libraryNavPath.append(AlbumNavItem(id: id))
             case .genre(let name):
                 libraryNavPath.append(GenreNavItem(name: name))
+            case .playlist(let id):
+                libraryNavPath.append(PlaylistNavItem(id: id))
             }
         }
     }
@@ -271,6 +278,10 @@ struct AlbumNavItem: Hashable {
 
 struct GenreNavItem: Hashable {
     let name: String
+}
+
+struct PlaylistNavItem: Hashable {
+    let id: String
 }
 
 struct OfflineNavItem: Hashable {

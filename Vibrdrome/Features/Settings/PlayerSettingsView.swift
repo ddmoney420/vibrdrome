@@ -1,5 +1,11 @@
 import SwiftUI
 
+// MARK: - Last.fm Auth Status
+
+private enum LastFmAuthStatus {
+    case idle, authenticating, success, failed
+}
+
 // MARK: - Bitrate Options (Player)
 
 private let bitrateOptions: [(String, Int)] = [
@@ -21,6 +27,7 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
+    @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
     @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
     @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
 
@@ -28,9 +35,19 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.listenBrainzToken) private var listenBrainzToken: String = ""
+    @AppStorage(UserDefaultsKeys.lastFmEnabled) private var lastFmEnabled: Bool = false
+    @AppStorage(UserDefaultsKeys.lastFmApiKey) private var lastFmApiKey: String = ""
+    @AppStorage(UserDefaultsKeys.lastFmSecret) private var lastFmSecret: String = ""
+    @AppStorage(UserDefaultsKeys.lastFmSessionKey) private var lastFmSessionKey: String = ""
+    @AppStorage(UserDefaultsKeys.lastFmUsername) private var lastFmUsername: String = ""
+    @State private var lastFmPassword: String = ""
+    @State private var lastFmAuthStatus: LastFmAuthStatus = .idle
     #if os(macOS)
     @AppStorage(UserDefaultsKeys.discordRPCEnabled) private var discordRPCEnabled: Bool = false
     #endif
+
+    // Adaptive Bitrate
+    @AppStorage(UserDefaultsKeys.adaptiveBitrateEnabled) private var adaptiveBitrateEnabled: Bool = false
 
     // Controls / Now Playing Toolbar
     @AppStorage(UserDefaultsKeys.showVolumeSlider) private var showVolumeSlider: Bool = true
@@ -108,6 +125,12 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("cellularQualityPicker")
+
+            Toggle(isOn: $adaptiveBitrateEnabled) {
+                Label("Adaptive Bitrate", systemImage: "antenna.radiowaves.left.and.right")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("adaptiveBitrateToggle")
             #endif
 
             Toggle(isOn: $gaplessPlayback) {
@@ -127,6 +150,18 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("crossfadePicker")
+
+            if crossfadeDuration > 0 {
+                Picker(selection: $crossfadeCurve) {
+                    ForEach(CrossfadeCurve.allCases, id: \.rawValue) { curve in
+                        Text(curve.label).tag(curve.rawValue)
+                    }
+                } label: {
+                    Label("Crossfade Curve", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("crossfadeCurvePicker")
+            }
 
             Picker(selection: $replayGainMode) {
                 Text("Off").tag("off")
@@ -183,6 +218,99 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("listenBrainzTokenField")
+            }
+
+            Toggle(isOn: $lastFmEnabled) {
+                Label("Last.fm", systemImage: "dot.radiowaves.forward")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("lastFmToggle")
+
+            if lastFmEnabled {
+                SecureField("API Key", text: $lastFmApiKey)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("lastFmApiKeyField")
+
+                SecureField("Shared Secret", text: $lastFmSecret)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .accessibilityIdentifier("lastFmSecretField")
+
+                if lastFmSessionKey.isEmpty {
+                    TextField("Last.fm Username", text: $lastFmUsername)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                        .accessibilityIdentifier("lastFmUsernameField")
+
+                    SecureField("Last.fm Password", text: $lastFmPassword)
+                        .textContentType(.password)
+                        .accessibilityIdentifier("lastFmPasswordField")
+
+                    Button {
+                        lastFmAuthStatus = .authenticating
+                        Task {
+                            let success = await LastFmClient.shared.authenticate(
+                                username: lastFmUsername,
+                                password: lastFmPassword
+                            )
+                            lastFmPassword = ""
+                            lastFmAuthStatus = success ? .success : .failed
+                            if success {
+                                // Re-read the session key that was stored by LastFmClient
+                                lastFmSessionKey = UserDefaults.standard.string(
+                                    forKey: UserDefaultsKeys.lastFmSessionKey
+                                ) ?? ""
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            if lastFmAuthStatus == .authenticating {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Authenticating...")
+                            } else {
+                                Label("Sign In", systemImage: "person.badge.key")
+                            }
+                        }
+                    }
+                    .disabled(
+                        lastFmApiKey.isEmpty || lastFmSecret.isEmpty
+                            || lastFmUsername.isEmpty || lastFmPassword.isEmpty
+                            || lastFmAuthStatus == .authenticating
+                    )
+                    .accessibilityIdentifier("lastFmAuthButton")
+
+                    if lastFmAuthStatus == .failed {
+                        Text("Authentication failed. Check your credentials.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                } else {
+                    HStack {
+                        Label("Signed in as \(lastFmUsername.isEmpty ? "Last.fm user" : lastFmUsername)",
+                              systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.subheadline)
+                        Spacer()
+                        Button("Sign Out") {
+                            lastFmSessionKey = ""
+                            lastFmPassword = ""
+                            lastFmAuthStatus = .idle
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                    }
+                    .accessibilityIdentifier("lastFmSignedInRow")
+                }
             }
 
             #if os(macOS)

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Nuke
+import os.log
 
 // D1: AppDelegate for background URLSession reconnection
 #if os(iOS)
@@ -91,6 +92,9 @@ struct VibrdromeApp: App {
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                 }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
             #else
             ContentView()
                 .environment(appState)
@@ -103,6 +107,9 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                }
+                .onOpenURL { url in
+                    handleDeepLink(url)
                 }
             #endif
         }
@@ -199,5 +206,42 @@ struct VibrdromeApp: App {
             .frame(width: 500, height: 600)
         }
         #endif
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "vibrdrome" else { return }
+        let logger = Logger(subsystem: "com.vibrdrome.app", category: "DeepLink")
+        let host = url.host ?? ""
+        let path = url.pathComponents.dropFirst() // Remove leading "/"
+
+        logger.info("Deep link received: \(url.absoluteString)")
+
+        switch host {
+        case "album":
+            if let albumId = path.first {
+                appState.pendingNavigation = .album(id: String(albumId))
+            }
+        case "artist":
+            if let artistId = path.first {
+                appState.pendingNavigation = .artist(id: String(artistId))
+            }
+        case "playlist":
+            if let playlistId = path.first {
+                appState.pendingNavigation = .playlist(id: String(playlistId))
+            }
+        case "song":
+            if let songId = path.first {
+                Task {
+                    do {
+                        let song = try await appState.subsonicClient.getSong(id: String(songId))
+                        AudioEngine.shared.play(song: song)
+                    } catch {
+                        logger.error("Failed to play song from deep link: \(error)")
+                    }
+                }
+            }
+        default:
+            logger.warning("Unknown deep link host: \(host)")
+        }
     }
 }

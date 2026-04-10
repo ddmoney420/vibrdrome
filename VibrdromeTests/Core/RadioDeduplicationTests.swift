@@ -171,7 +171,7 @@ struct RadioDeduplicationTests {
     private func makeSong(id: String) -> Song {
         Song(
             id: id, parent: nil, title: "Song \(id)",
-            album: nil, artist: nil, albumId: nil, artistId: nil,
+            album: nil, artist: nil, albumArtist: nil, albumId: nil, artistId: nil,
             track: nil, year: nil, genre: nil, coverArt: nil,
             size: nil, contentType: nil, suffix: nil, duration: 200,
             bitRate: nil, path: nil, discNumber: nil, created: nil,

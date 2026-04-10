@@ -7,11 +7,32 @@ struct GenresView: View {
     @State private var error: String?
     @State private var genreArt: [String: String] = [:] // genre → coverArtId
     @State private var searchText = ""
+    @State private var sortBy: GenreSortOption = .name
+
+    enum GenreSortOption: String, CaseIterable {
+        case name, songCount
+        var label: String {
+            switch self {
+            case .name: "Name (A-Z)"
+            case .songCount: "Song Count"
+            }
+        }
+    }
 
     private var filteredGenres: [Genre] {
-        if searchText.isEmpty { return genres }
-        return genres.filter {
-            $0.value.localizedCaseInsensitiveContains(searchText)
+        let base: [Genre]
+        if searchText.isEmpty {
+            base = genres
+        } else {
+            base = genres.filter {
+                $0.value.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        switch sortBy {
+        case .name:
+            return base.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+        case .songCount:
+            return base.sorted { ($0.songCount ?? 0) > ($1.songCount ?? 0) }
         }
     }
 
@@ -72,15 +93,32 @@ struct GenresView: View {
                 }
             }
         }
-        #if os(macOS)
         .toolbar {
-            ToolbarItem {
-                Button { Task { await loadGenres() } } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(GenreSortOption.allCases, id: \.self) { option in
+                        Button {
+                            sortBy = option
+                        } label: {
+                            HStack {
+                                Text(option.label)
+                                if sortBy == option {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button {
+                        Task { await loadGenres() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
                 }
             }
         }
-        #endif
         .task { await loadGenres() }
         .refreshable { await loadGenres() }
     }
