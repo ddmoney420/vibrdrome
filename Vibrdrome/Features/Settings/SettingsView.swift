@@ -505,7 +505,11 @@ struct SettingsView: View {
         } header: {
             settingSectionHeader("Backup & Restore", icon: "externaldrive.fill.badge.timemachine", color: .orange)
         } footer: {
-            Text("Backup: tap to share your settings as a text file. Save it to Files or send to yourself.\nRestore: tap to import a previously saved backup from Files.")
+            Text("""
+            Backup: tap to share your settings as a file. \
+            Save it to Files or send to yourself.
+            Restore: tap to import a previously saved backup.
+            """)
         }
     }
 
