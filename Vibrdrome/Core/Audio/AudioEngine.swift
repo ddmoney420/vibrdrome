@@ -1098,9 +1098,14 @@ final class AudioEngine {
 
         switch repeatMode {
         case .all:
-            // Loop current track — reload since AVQueuePlayer removed the item
-            guard let song = currentSong else { return }
-            play(song: song)
+            // Loop entire queue — advance to next, wrap to beginning if at end
+            if currentIndex + 1 >= queue.count {
+                currentIndex = 0
+                guard let song = queue.first else { return }
+                play(song: song)
+            } else {
+                next()
+            }
         case .one:
             // Repeat once then advance
             if !repeatOneUsed {

@@ -4,6 +4,14 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 34 — April 9, 2026 (Hotfix)
+- Fix: Repeat All now correctly advances to next track and wraps queue (was restarting current track)
+- Fix: Transcoded streams on cellular no longer restart from beginning on buffering error (resumes from position)
+- Fixes GitHub issue #2
+
+**TestFlight Notes:**
+> Hotfix: Repeat All loop and transcoding restart bugs fixed.
+
 ### Build 33 — April 9, 2026
 - Settings 2.0: reorganized into sub-pages (Player, Appearance, Tab Bar)
 - 15+ new customization toggles: volume slider, quality info, heart, rating, queue, liquid glass, mini player tint, spinning art, swipe gestures
