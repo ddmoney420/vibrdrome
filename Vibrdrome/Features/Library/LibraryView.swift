@@ -15,7 +15,10 @@ struct LibraryView: View {
     @State private var layoutConfig = LibraryLayoutConfig.load()
     @State private var showCustomize = false
     @State private var musicFolders: [MusicFolder] = []
+    @State private var showCreatePlaylist = false
+    @State private var showSmartPlaylist = false
     @AppStorage(UserDefaultsKeys.activeMusicFolderId) private var activeFolderId: String = ""
+    @AppStorage(UserDefaultsKeys.settingsInNavBar) private var settingsInNavBar = false
 
     init(navPath: Binding<NavigationPath> = .constant(NavigationPath())) {
         _navPath = navPath
@@ -43,39 +46,42 @@ struct LibraryView: View {
             .refreshable {
                 await fetchSections(client: appState.subsonicClient, skipCache: true)
             }
-            .navigationTitle("Library")
+            .navigationTitle(activeServerName)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) {
-                    if musicFolders.count > 1 {
-                        Menu {
-                            Button {
-                                activeFolderId = ""
-                                Task { await reloadSections() }
-                            } label: {
-                                HStack {
-                                    Text("All Libraries")
-                                    if activeFolderId.isEmpty { Image(systemName: "checkmark") }
-                                }
-                            }
-                            ForEach(musicFolders) { folder in
-                                Button {
-                                    activeFolderId = folder.id
-                                    Task { await reloadSections() }
-                                } label: {
-                                    HStack {
-                                        Text(folder.name ?? folder.id)
-                                        if activeFolderId == folder.id { Image(systemName: "checkmark") }
-                                    }
-                                }
-                            }
+                    Menu {
+                        Button {
+                            showCreatePlaylist = true
                         } label: {
-                            Image(systemName: "building.2")
+                            Label("New Playlist", systemImage: "music.note.list")
                         }
-                        .accessibilityLabel("Switch Library")
+                        Button {
+                            showSmartPlaylist = true
+                        } label: {
+                            Label("New Smart Playlist", systemImage: "sparkles")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Create New")
+                    .accessibilityIdentifier("createPlaylistButton")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    profileMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if settingsInNavBar {
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                        .accessibilityLabel("Settings")
+                        .accessibilityIdentifier("settingsNavBarButton")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -85,14 +91,6 @@ struct LibraryView: View {
                         Image(systemName: "slider.horizontal.3")
                     }
                     .accessibilityLabel("Customize Library")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                    .accessibilityLabel("Settings")
                 }
                 #else
                 ToolbarItem(placement: .automatic) {
@@ -136,6 +134,14 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showCustomize) {
                 LibraryCustomizeView(config: $layoutConfig)
+            }
+            .sheet(isPresented: $showCreatePlaylist) {
+                PlaylistEditorView(mode: .create)
+                    .environment(appState)
+            }
+            .sheet(isPresented: $showSmartPlaylist) {
+                SmartPlaylistView()
+                    .environment(appState)
             }
             .task {
                 guard !isLoaded else { return }
@@ -479,6 +485,87 @@ struct LibraryView: View {
     /// Returns the active folder ID or nil for "All Libraries"
     private var folderId: String? {
         activeFolderId.isEmpty ? nil : activeFolderId
+    }
+
+    /// Display name for the active server, shown as the navigation title
+    private var activeServerName: String {
+        if let activeId = appState.activeServerId,
+           let server = appState.servers.first(where: { $0.id == activeId }) {
+            return server.name
+        }
+        // Fallback: extract from URL or use "Home"
+        if !appState.serverURL.isEmpty, let host = URL(string: appState.serverURL)?.host {
+            return host
+        }
+        return "Home"
+    }
+
+    // MARK: - Profile Menu
+
+    private var profileMenu: some View {
+        Menu {
+            // Server section
+            Section("Server") {
+                ForEach(appState.servers) { server in
+                    Button {
+                        appState.switchToServer(id: server.id)
+                        Task { await reloadSections() }
+                    } label: {
+                        HStack {
+                            Text(server.name)
+                            if appState.activeServerId == server.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Music folders section
+            if musicFolders.count > 1 {
+                Section("Music Folders") {
+                    Button {
+                        activeFolderId = ""
+                        Task { await reloadSections() }
+                    } label: {
+                        HStack {
+                            Text("All Folders")
+                            if activeFolderId.isEmpty { Image(systemName: "checkmark") }
+                        }
+                    }
+                    ForEach(musicFolders) { folder in
+                        Button {
+                            activeFolderId = folder.id
+                            Task { await reloadSections() }
+                        } label: {
+                            HStack {
+                                Text(folder.name ?? folder.id)
+                                if activeFolderId == folder.id { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Downloads section
+            Section {
+                NavigationLink {
+                    DownloadsView()
+                } label: {
+                    Label("Downloaded", systemImage: "arrow.down.circle")
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(appState.isConfigured ? .green : .red)
+                    .frame(width: 8, height: 8)
+                Image(systemName: "person.circle")
+            }
+        }
+        .accessibilityLabel("Profile")
+        .accessibilityValue(appState.isConfigured ? "Connected" : "Disconnected")
+        .accessibilityIdentifier("profileMenuButton")
     }
 
     private func playRandomMix() async {

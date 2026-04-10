@@ -5,9 +5,17 @@ import NukeUI
 struct MiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt = false
+    @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
+    @AppStorage(UserDefaultsKeys.enableLiquidGlass) private var enableLiquidGlass = true
+    @AppStorage(UserDefaultsKeys.enableMiniPlayerSwipe) private var enableMiniPlayerSwipe = true
     @State private var dominantColor: Color?
 
     private var engine: AudioEngine { AudioEngine.shared }
+
+    private var shouldSpin: Bool {
+        engine.isPlaying && !disableSpinningArt && !reduceMotion
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,18 +42,12 @@ struct MiniPlayerView: View {
                                 .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
 
                             // Album art — circular, spinning
-                            AlbumArtView(
+                            SpinningAlbumArt(
                                 coverArtId: engine.currentSong?.coverArt
                                     ?? engine.currentRadioStation?.radioCoverArtId,
-                                size: 40,
-                                cornerRadius: 20
-                            )
-                            .rotationEffect(.degrees(engine.isPlaying ? 360 : 0))
-                            .animation(
-                                engine.isPlaying
-                                    ? .linear(duration: 8).repeatForever(autoreverses: false)
-                                    : .default,
-                                value: engine.isPlaying
+                                shouldSpin: shouldSpin,
+                                disableSpinningArt: disableSpinningArt,
+                                reduceMotion: reduceMotion
                             )
                         }
 
@@ -97,26 +99,20 @@ struct MiniPlayerView: View {
                 .disabled(engine.queue.isEmpty)
                 .accessibilityLabel("Next Track")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         }
         .background {
-            ZStack {
-                if let dominantColor {
-                    Capsule()
-                        .fill(dominantColor.opacity(0.15))
-                }
+            if enableMiniPlayerTint, let dominantColor {
                 Capsule()
-                    .fill(.ultraThinMaterial)
+                    .fill(dominantColor.opacity(0.15))
             }
         }
-        .clipShape(Capsule())
+        .background(.bar, in: Capsule())
         #if os(iOS)
-        .modifier(GlassEffectModifier())
+        .modifier(ConditionalGlassModifier(enabled: enableLiquidGlass))
         #endif
-        .padding(.horizontal, 16)
-        .padding(.bottom, 2)
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+        .padding(.horizontal, 20)
         .accessibilityIdentifier("MiniPlayer")
         #if os(iOS)
         .contextMenu {
@@ -147,16 +143,17 @@ struct MiniPlayerView: View {
                 }
             }
         }
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 40, coordinateSpace: .local)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 50, coordinateSpace: .local)
                 .onEnded { value in
+                    guard enableMiniPlayerSwipe else { return }
                     let horizontal = value.translation.width
                     let vertical = value.translation.height
-                    guard abs(horizontal) > abs(vertical) * 1.5 else { return }
-                    if horizontal < -40 {
+                    guard abs(horizontal) > abs(vertical) * 2 else { return }
+                    if horizontal < -50 {
                         Haptics.light()
                         engine.next()
-                    } else if horizontal > 40 {
+                    } else if horizontal > 50 {
                         Haptics.light()
                         engine.previous()
                     }
@@ -224,6 +221,43 @@ struct MiniPlayerView: View {
         dominantColor = nil
     }
     #endif
+}
+
+// MARK: - Spinning Album Art (isolated subview to prevent parent re-renders)
+
+private struct SpinningAlbumArt: View {
+    let coverArtId: String?
+    let shouldSpin: Bool
+    let disableSpinningArt: Bool
+    let reduceMotion: Bool
+
+    @State private var angle: Double = 0
+    @State private var timer: Timer?
+
+    var body: some View {
+        AlbumArtView(coverArtId: coverArtId, size: 40, cornerRadius: 20)
+            .drawingGroup()
+            .rotationEffect(.degrees(angle))
+            .onAppear { startIfNeeded() }
+            .onDisappear { stop() }
+            .onChange(of: shouldSpin) { _, spinning in
+                if spinning { startIfNeeded() } else { stop() }
+            }
+    }
+
+    private func startIfNeeded() {
+        guard shouldSpin, timer == nil else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { _ in
+            Task { @MainActor in
+                angle += 1.5
+            }
+        }
+    }
+
+    private func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
 }
 
 // MARK: - macOS Player Bar

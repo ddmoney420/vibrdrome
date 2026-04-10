@@ -25,6 +25,11 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showLyricsInToolbar) var showLyricsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSettingsInToolbar) var showSettingsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) var toolbarOrderJSON: String = "[]"
+    @AppStorage(UserDefaultsKeys.showVolumeSlider) var showVolumeSlider: Bool = true
+    @AppStorage(UserDefaultsKeys.showAudioQualityInfo) var showAudioQualityInfo: Bool = true
+    @AppStorage(UserDefaultsKeys.showHeartInPlayer) var showHeartInPlayer: Bool = true
+    @AppStorage(UserDefaultsKeys.showRatingInPlayer) var showRatingInPlayer: Bool = true
+    @AppStorage(UserDefaultsKeys.showQueueInPlayer) var showQueueInPlayer: Bool = true
     @State var showQuickSettings = false
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
@@ -160,7 +165,7 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 420
+            let controlsNeeded: CGFloat = 460
             let maxArtFromWidth = geo.size.width - 60
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
@@ -183,14 +188,18 @@ struct NowPlayingView: View {
                 progressSlider
                     .padding(.bottom, 4)
 
-                streamingInfo
-                    .padding(.bottom, 16)
+                if showAudioQualityInfo {
+                    streamingInfo
+                        .padding(.bottom, 16)
+                }
 
                 iOSPlaybackRow
                     .padding(.bottom, 16)
 
-                volumeSlider
-                    .padding(.bottom, 14)
+                if showVolumeSlider {
+                    volumeSlider
+                        .padding(.bottom, 14)
+                }
 
                 bottomToolbar
 

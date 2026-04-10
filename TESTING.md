@@ -171,19 +171,28 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] ListenBrainz scrobbling (enable toggle, enter token, verify at listenbrainz.org)
 - [ ] Now Playing notification sent on track start
 
-## Settings
+## Settings 2.0
 
-- [ ] WiFi/Cellular quality pickers work
-- [ ] Theme switching works (dark/light/system)
-- [ ] Accent color changes apply
-- [ ] Text size picker works (Small/Default/Large/Extra Large)
-- [ ] Tab bar customization (toggle Search/Playlists/Radio)
-- [ ] Disable Visualizer hides visualizer button
-- [ ] Multi-server: add/switch/delete servers
-- [ ] ListenBrainz toggle and token field
-- [ ] Auto-sync playlists toggle
-- [ ] Now Playing Toolbar customization (toggle + drag-to-reorder)
-- [ ] Always-visible search bars on Albums, Artists, Genres, Playlists, Favorites, Songs
+- [ ] Settings > Player sub-page opens (behavior, playback, scrobbling, controls, song display)
+- [ ] Settings > Appearance sub-page opens (theme, glass, accent, text, mini player)
+- [ ] Settings > Tab Bar sub-page opens (reorder tabs, toggle show/hide, settings location)
+- [ ] All settings pages scrollable to bottom (mini player doesn't block)
+- [ ] Disable Spinning Art toggle stops mini player rotation
+- [ ] Reduce Motion also stops spinning art
+- [ ] Volume Slider toggle hides/shows volume in Now Playing
+- [ ] Audio Quality Info toggle hides/shows streaming info
+- [ ] Heart/Rating/Queue toggles hide/show in Now Playing
+- [ ] Liquid Glass toggle enables/disables glass effects
+- [ ] Mini Player Tint toggle enables/disables color tint
+- [ ] Swipe Gestures toggle enables/disables mini player swipe
+- [ ] Now Playing Toolbar drag-to-reorder
+- [ ] Tab Bar drag-to-reorder with Downloads tab option
+- [ ] Settings in Navigation Bar moves Settings to top-right gear
+- [ ] Server name shows in title bar
+- [ ] + button shows New Playlist / New Smart Playlist
+- [ ] Profile menu shows server, music folders, downloads
+- [ ] Connection indicator (green/red dot)
+- [ ] Haptic on tab switch
 
 ## Playlist Sharing
 

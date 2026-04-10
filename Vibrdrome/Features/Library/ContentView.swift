@@ -11,6 +11,8 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab = true
     @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab = true
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab = true
+    @AppStorage(UserDefaultsKeys.settingsInNavBar) private var settingsInNavBar = false
+    @AppStorage(UserDefaultsKeys.showDownloadsTab) private var showDownloadsTab = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -29,6 +31,9 @@ struct ContentView: View {
                     .environment(appState)
             }
         }
+        #if os(iOS)
+        .background(Color(.systemBackground))
+        #endif
         #if os(iOS)
         .fullScreenCover(isPresented: Bindable(appState).showNowPlaying, onDismiss: {
             handlePendingNavigation()
@@ -108,7 +113,7 @@ struct ContentView: View {
     @available(iOS 18.0, macOS 15.0, *)
     private var modernTabView: some View {
         TabView(selection: $selectedTab) {
-            Tab("Library", systemImage: "music.note.house", value: 0) {
+            Tab("Home", systemImage: "house", value: 0) {
                 LibraryView(navPath: $libraryNavPath)
             }
             if showSearchTab {
@@ -126,11 +131,24 @@ struct ContentView: View {
                     NavigationStack { RadioView() }
                 }
             }
-            Tab("Settings", systemImage: "gear", value: 4) {
-                NavigationStack { SettingsView() }
+            if showDownloadsTab {
+                Tab("Downloads", systemImage: "arrow.down.circle", value: 5) {
+                    NavigationStack { DownloadsView() }
+                }
+            }
+            if !settingsInNavBar {
+                Tab("Settings", systemImage: "gear", value: 4) {
+                    NavigationStack { SettingsView() }
+                }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .animation(.smooth, value: selectedTab)
+        .onChange(of: selectedTab) { _, _ in
+            #if os(iOS)
+            Haptics.light()
+            #endif
+        }
         .overlay(alignment: .bottom) {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
@@ -142,7 +160,7 @@ struct ContentView: View {
     private var legacyTabView: some View {
         TabView(selection: $selectedTab) {
             LibraryView(navPath: $libraryNavPath)
-                .tabItem { Label("Library", systemImage: "music.note.house") }
+                .tabItem { Label("Home", systemImage: "house") }
                 .tag(0)
             if showSearchTab {
                 NavigationStack { SearchView() }
@@ -159,9 +177,22 @@ struct ContentView: View {
                     .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
                     .tag(3)
             }
-            NavigationStack { SettingsView() }
-                .tabItem { Label("Settings", systemImage: "gear") }
-                .tag(4)
+            if showDownloadsTab {
+                NavigationStack { DownloadsView() }
+                    .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
+                    .tag(5)
+                }
+            if !settingsInNavBar {
+                NavigationStack { SettingsView() }
+                    .tabItem { Label("Settings", systemImage: "gear") }
+                    .tag(4)
+            }
+        }
+        .animation(.smooth, value: selectedTab)
+        .onChange(of: selectedTab) { _, _ in
+            #if os(iOS)
+            Haptics.light()
+            #endif
         }
         .overlay(alignment: .bottom) {
             if engine.currentSong != nil || engine.currentRadioStation != nil {

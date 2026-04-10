@@ -4,9 +4,11 @@ import SwiftUI
 
 #if os(iOS)
 /// Applies `.glassEffect()` on iOS 26+, no-op on older versions.
+/// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
+        if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular.interactive(), in: .capsule)
         } else {
             content
@@ -15,9 +17,11 @@ struct GlassEffectModifier: ViewModifier {
 }
 
 /// Applies `.glassEffect()` with a circular shape on iOS 26+, no-op on older versions.
+/// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectCircleModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
+        if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular, in: .circle)
         } else {
             content
@@ -26,10 +30,25 @@ struct GlassEffectCircleModifier: ViewModifier {
 }
 
 /// Applies `.glassEffect()` with a rounded rectangle for toolbar bars on iOS 26+.
+/// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectToolbarModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
+        let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
+        if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular, in: .rect(cornerRadius: 16))
+        } else {
+            content
+        }
+    }
+}
+
+/// Conditionally applies `.glassEffect()` capsule on iOS 26+ when enabled.
+struct ConditionalGlassModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.modifier(GlassEffectModifier())
         } else {
             content
         }

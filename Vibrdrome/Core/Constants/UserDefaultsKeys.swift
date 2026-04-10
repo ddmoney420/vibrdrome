@@ -77,6 +77,29 @@ enum UserDefaultsKeys {
     static let listenBrainzEnabled = "listenBrainzEnabled"
     static let listenBrainzToken = "listenBrainzToken"
 
+    // MARK: - Player Behavior
+
+    static let disableSpinningArt = "disableSpinningArt"
+    static let rememberPlaybackPosition = "rememberPlaybackPosition"
+    static let enableMiniPlayerSwipe = "enableMiniPlayerSwipe"
+    static let showVolumeSlider = "showVolumeSlider"
+    static let showAudioQualityInfo = "showAudioQualityInfo"
+    static let showHeartInPlayer = "showHeartInPlayer"
+    static let showRatingInPlayer = "showRatingInPlayer"
+    static let showQueueInPlayer = "showQueueInPlayer"
+
+    // MARK: - Appearance Extended
+
+    static let enableLiquidGlass = "enableLiquidGlass"
+    static let enableMiniPlayerTint = "enableMiniPlayerTint"
+    static let albumBackgroundStyle = "albumBackgroundStyle"
+
+    // MARK: - Tab Bar Extended
+
+    static let settingsInNavBar = "settingsInNavBar"
+    static let showDownloadsTab = "showDownloadsTab"
+    static let tabBarOrder = "tabBarOrder"
+
     // MARK: - Library Layout
 
     static let libraryLayout = "libraryLayout"

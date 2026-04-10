@@ -56,7 +56,10 @@ final class AppState {
 
     private init() {
         // Register defaults for settings that should start as true
-        UserDefaults.standard.register(defaults: [UserDefaultsKeys.scrobblingEnabled: true])
+        UserDefaults.standard.register(defaults: [
+            UserDefaultsKeys.scrobblingEnabled: true,
+            UserDefaultsKeys.enableLiquidGlass: true
+        ])
 
         // Initialize with a placeholder; reconfigure once server config is loaded
         subsonicClient = SubsonicClient(

@@ -4,6 +4,29 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 33 — April 9, 2026
+- Settings 2.0: reorganized into sub-pages (Player, Appearance, Tab Bar)
+- 15+ new customization toggles: volume slider, quality info, heart, rating, queue, liquid glass, mini player tint, spinning art, swipe gestures
+- Smaller album art, bigger text for title/artist/album in Now Playing
+- Bigger heart and star icons
+- Spinning art toggle (independent + tied to Reduce Motion)
+- Circular progress ring on play/pause button
+- "Home" tab replaces "Library", server name in title bar
+- Profile menu: server switcher + music folder picker + downloads
+- + button: New Playlist / New Smart Playlist menu
+- Connection status indicator (green/red dot)
+- Settings tab conditionally hidden when in nav bar
+- Haptic on tab switch, animated tab transitions
+- Downloads tab option in Tab Bar settings
+- Mini player matches dock width, no default tint
+- White area bug fix on app resume
+- 510 unit tests in 37 suites
+
+**TestFlight Notes:**
+> Settings 2.0 with deep customization sub-pages. Player polish: smaller art,
+> bigger text, spinning art toggle, progress ring. Home tab with server name,
+> profile menu, + button for playlists. Mini player dock matching.
+
 ### Build 32 — April 9, 2026
 - Library: compact inline header with settings gear, folder switcher, and customize in top bar
 - Always-visible search bars on Albums, Artists, Genres, Playlists, Favorites, Songs

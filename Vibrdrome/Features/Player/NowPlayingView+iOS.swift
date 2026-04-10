@@ -39,7 +39,7 @@ extension NowPlayingView {
                     appState.showNowPlaying = false
                 } label: {
                     Text(engine.currentSong?.title ?? "Not Playing")
-                        .font(.title3)
+                        .font(.title2)
                         .bold()
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
@@ -47,7 +47,7 @@ extension NowPlayingView {
                 .buttonStyle(.plain)
             } else {
                 Text(engine.currentSong?.title ?? "Not Playing")
-                    .font(.title3)
+                    .font(.title2)
                     .bold()
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -59,14 +59,14 @@ extension NowPlayingView {
                     appState.showNowPlaying = false
                 } label: {
                     Text(engine.currentSong?.artist ?? "")
-                        .font(.body)
+                        .font(.title3)
                         .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
             } else {
                 Text(engine.currentSong?.artist ?? "")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
             }
@@ -77,14 +77,14 @@ extension NowPlayingView {
                     appState.showNowPlaying = false
                 } label: {
                     Text(engine.currentSong?.album ?? "")
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(.white.opacity(0.5))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
             } else if let album = engine.currentSong?.album {
                 Text(album)
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
             }
@@ -97,69 +97,75 @@ extension NowPlayingView {
 
     var heartRow: some View {
         HStack {
-            Button {
-                Haptics.success()
-                guard let song = engine.currentSong else { return }
-                let songId = song.id
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Task {
-                    do {
-                        if wasStarred {
-                            try await OfflineActionQueue.shared.unstar(id: songId)
-                        } else {
-                            try await OfflineActionQueue.shared.star(id: songId)
-                            if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
-                                DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+            if showHeartInPlayer {
+                Button {
+                    Haptics.success()
+                    guard let song = engine.currentSong else { return }
+                    let songId = song.id
+                    let wasStarred = isStarred
+                    isStarred = !wasStarred
+                    Task {
+                        do {
+                            if wasStarred {
+                                try await OfflineActionQueue.shared.unstar(id: songId)
+                            } else {
+                                try await OfflineActionQueue.shared.star(id: songId)
+                                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
+                                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                                }
                             }
-                        }
-                        guard engine.currentSong?.id == songId else { return }
-                    } catch {
-                        if engine.currentSong?.id == songId {
-                            isStarred = wasStarred
+                            guard engine.currentSong?.id == songId else { return }
+                        } catch {
+                            if engine.currentSong?.id == songId {
+                                isStarred = wasStarred
+                            }
                         }
                     }
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .font(.title2)
+                        .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
                 }
-            } label: {
-                Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .font(.title3)
-                    .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
+                .buttonStyle(.plain)
+                .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
+                .accessibilityIdentifier("favoriteButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
-            .accessibilityIdentifier("favoriteButton")
 
             Spacer()
 
-            // Star rating
-            HStack(spacing: 10) {
-                ForEach(1...5, id: \.self) { star in
-                    Image(systemName: star <= currentRating ? "star.fill" : "star")
-                        .font(.title3)
-                        .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
-                        .onTapGesture {
-                            Haptics.light()
-                            let newRating = star == currentRating ? 0 : star
-                            currentRating = newRating
-                            guard let songId = engine.currentSong?.id else { return }
-                            Task {
-                                try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+            if showRatingInPlayer {
+                // Star rating
+                HStack(spacing: 12) {
+                    ForEach(1...5, id: \.self) { star in
+                        Image(systemName: star <= currentRating ? "star.fill" : "star")
+                            .font(.title2)
+                            .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
+                            .onTapGesture {
+                                Haptics.light()
+                                let newRating = star == currentRating ? 0 : star
+                                currentRating = newRating
+                                guard let songId = engine.currentSong?.id else { return }
+                                Task {
+                                    try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                                }
                             }
-                        }
+                    }
                 }
             }
 
             Spacer()
 
-            // Queue button (symmetry with heart)
-            Button { showQueue = true } label: {
-                Image(systemName: "list.bullet")
-                    .font(.title3)
-                    .foregroundColor(.white.opacity(0.5))
+            if showQueueInPlayer {
+                // Queue button (symmetry with heart)
+                Button { showQueue = true } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.title3)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show Queue")
+                .accessibilityIdentifier("queueButton")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Show Queue")
-            .accessibilityIdentifier("queueButton")
         }
     }
 
@@ -231,8 +237,21 @@ extension NowPlayingView {
                 Haptics.medium()
                 engine.togglePlayPause()
             } label: {
-                Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 52))
+                ZStack {
+                    // Background ring
+                    Circle()
+                        .stroke(.white.opacity(0.2), lineWidth: 3)
+                        .frame(width: 56, height: 56)
+                    // Progress ring
+                    Circle()
+                        .trim(from: 0, to: engine.duration > 0 ? engine.currentTime / engine.duration : 0)
+                        .stroke(.white.opacity(0.6), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 56, height: 56)
+                        .rotationEffect(.degrees(-90))
+                    // Play/pause icon
+                    Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 52))
+                }
             }
             .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
             .accessibilityIdentifier("playPauseButton")

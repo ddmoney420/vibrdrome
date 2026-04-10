@@ -33,16 +33,6 @@ enum AccentColorTheme: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Bitrate Options
-
-private let bitrateOptions: [(String, Int)] = [
-    ("Original", 0),
-    ("320 kbps", 320),
-    ("256 kbps", 256),
-    ("192 kbps", 192),
-    ("128 kbps", 128),
-]
-
 // MARK: - Settings View
 
 struct SettingsView: View {
@@ -52,36 +42,11 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
 
-    @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
-    @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
-    @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
-    @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
-    #if os(macOS)
-    @AppStorage(UserDefaultsKeys.discordRPCEnabled) private var discordRPCEnabled: Bool = false
-    #endif
-    @AppStorage(UserDefaultsKeys.listenBrainzToken) private var listenBrainzToken: String = ""
-    @AppStorage(UserDefaultsKeys.appColorScheme) private var appColorScheme: String = "system"
-    @AppStorage(UserDefaultsKeys.accentColorTheme) private var accentColorTheme: String = "blue"
-    @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
-    @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
-    @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
-    @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.autoDownloadFavorites) private var autoDownloadFavorites: Bool = false
     @AppStorage(UserDefaultsKeys.autoSyncPlaylists) private var autoSyncPlaylists: Bool = false
     @AppStorage(UserDefaultsKeys.downloadOverCellular) private var downloadOverCellular: Bool = false
-    @AppStorage(UserDefaultsKeys.textSize) private var textSizePref: String = "default"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
-    @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer: Bool = false
-    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
-    @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) private var showVisualizerInToolbar: Bool = true
-    @AppStorage(UserDefaultsKeys.showEQInToolbar) private var showEQInToolbar: Bool = true
-    @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) private var showAirPlayInToolbar: Bool = true
-    @AppStorage(UserDefaultsKeys.showLyricsInToolbar) private var showLyricsInToolbar: Bool = true
-    @AppStorage(UserDefaultsKeys.showSettingsInToolbar) private var showSettingsInToolbar: Bool = true
-    @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab: Bool = true
-    @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab: Bool = true
-    @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayRecentCount) private var carPlayRecentCount: Int = 25
     @AppStorage(UserDefaultsKeys.carPlayShowGenres) private var carPlayShowGenres: Bool = true
     @AppStorage(UserDefaultsKeys.carPlayShowRadio) private var carPlayShowRadio: Bool = true
@@ -92,17 +57,40 @@ struct SettingsView: View {
     var body: some View {
         List {
             serverSection
-            playbackSection
+
+            NavigationLink {
+                PlayerSettingsView()
+            } label: {
+                Label("Player", systemImage: "play.circle.fill")
+            }
+            .accessibilityIdentifier("playerSettingsLink")
+
+            NavigationLink {
+                AppearanceSettingsView()
+            } label: {
+                Label("Appearance", systemImage: "paintbrush.fill")
+            }
+            .accessibilityIdentifier("appearanceSettingsLink")
+
             downloadsSection
-            appearanceSection
-            tabBarSection
+
             #if os(iOS)
-            nowPlayingToolbarSection
+            NavigationLink {
+                TabBarSettingsView()
+            } label: {
+                Label("Tab Bar", systemImage: "dock.rectangle")
+            }
+            .accessibilityIdentifier("tabBarSettingsLink")
+
             carPlaySection
             #endif
+
             accessibilitySection
             aboutSection
         }
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
         .navigationTitle("Settings")
         .sheet(isPresented: $showServerConfig) {
             ServerConfigView()
@@ -218,119 +206,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Playback Section
-
-    private var playbackSection: some View {
-        Section {
-            Picker(selection: $wifiMaxBitRate) {
-                ForEach(bitrateOptions, id: \.1) { name, value in
-                    Text(name).tag(value)
-                }
-            } label: {
-                Label("WiFi Quality", systemImage: "wifi")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("wifiQualityPicker")
-
-            #if os(iOS)
-            Picker(selection: $cellularMaxBitRate) {
-                ForEach(bitrateOptions, id: \.1) { name, value in
-                    Text(name).tag(value)
-                }
-            } label: {
-                Label("Cellular Quality", systemImage: "cellularbars")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("cellularQualityPicker")
-            #endif
-
-            Toggle(isOn: $scrobblingEnabled) {
-                Label("Scrobbling", systemImage: "music.note.tv")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("scrobblingToggle")
-
-            Toggle(isOn: $listenBrainzEnabled) {
-                Label("ListenBrainz", systemImage: "dot.radiowaves.right")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("listenBrainzToggle")
-
-            #if os(macOS)
-            Toggle(isOn: $discordRPCEnabled) {
-                Label("Discord Rich Presence", systemImage: "gamecontroller.fill")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("discordRPCToggle")
-            .onChange(of: discordRPCEnabled) { _, newValue in
-                Task {
-                    if !newValue {
-                        await DiscordRPCClient.shared.clearPresence()
-                        await DiscordRPCClient.shared.disconnect()
-                    }
-                }
-            }
-            #endif
-
-            if listenBrainzEnabled {
-                SecureField("User Token", text: $listenBrainzToken)
-                    .textContentType(.password)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
-                    .accessibilityIdentifier("listenBrainzTokenField")
-            }
-
-            Toggle(isOn: $gaplessPlayback) {
-                Label("Gapless Playback", systemImage: "waveform.path")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("gaplessPlaybackToggle")
-
-            Picker(selection: $crossfadeDuration) {
-                Text("Off").tag(0)
-                Text("2s").tag(2)
-                Text("5s").tag(5)
-                Text("8s").tag(8)
-                Text("12s").tag(12)
-            } label: {
-                Label("Crossfade", systemImage: "waveform.path.ecg")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("crossfadePicker")
-
-            Picker(selection: $replayGainMode) {
-                Text("Off").tag("off")
-                Text("Track").tag("track")
-                Text("Album").tag("album")
-            } label: {
-                Label("ReplayGain", systemImage: "speaker.wave.2")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("replayGainPicker")
-
-            Toggle(isOn: $eqEnabled) {
-                Label("Equalizer", systemImage: "slider.vertical.3")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("equalizerToggle")
-            .onChange(of: eqEnabled) { _, newValue in
-                AudioEngine.shared.applyEQToggle(enabled: newValue)
-            }
-
-            NavigationLink {
-                EQView()
-            } label: {
-                Label("EQ Settings", systemImage: "slider.horizontal.3")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("eqSettingsLink")
-        } header: {
-            settingSectionHeader("Playback", icon: "play.circle.fill", color: .purple)
-        }
-    }
-
     // MARK: - Downloads Section
 
     private var downloadsSection: some View {
@@ -390,139 +265,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Appearance Section
-
-    private var appearanceSection: some View {
-        Section {
-            Picker(selection: $appColorScheme) {
-                Text("System").tag("system")
-                Text("Dark").tag("dark")
-                Text("Light").tag("light")
-            } label: {
-                Label("Theme", systemImage: "circle.lefthalf.filled")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("themePicker")
-
-            // Accent color picker
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Accent Color", systemImage: "paintpalette.fill")
-
-                LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 36), spacing: 10)
-                ], spacing: 10) {
-                    ForEach(AccentColorTheme.allCases) { theme in
-                        Button {
-                            accentColorTheme = theme.rawValue
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(theme.color.gradient)
-                                    .frame(width: 32, height: 32)
-                                if accentColorTheme == theme.rawValue {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(theme.rawValue)
-                        .accessibilityValue(accentColorTheme == theme.rawValue ? "Selected" : "")
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-
-            Toggle(isOn: $showAlbumArtInLists) {
-                Label("Album Art in Lists", systemImage: "photo")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("albumArtInListsToggle")
-        } header: {
-            settingSectionHeader("Appearance", icon: "paintbrush.fill", color: .orange)
-        }
-    }
-
-    // MARK: - Now Playing Toolbar Section
-
-    @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) private var toolbarOrderJSON: String = "[]"
-
-    private var nowPlayingToolbarSection: some View {
-        let order = NowPlayingToolbarItem.decodeOrder(from: toolbarOrderJSON)
-        return Section {
-            ForEach(order) { item in
-                Toggle(isOn: toolbarBinding(for: item)) {
-                    Label(toolbarItemLabel(for: item), systemImage: toolbarItemIcon(for: item))
-                        .foregroundColor(.primary)
-                }
-                .accessibilityIdentifier("showToolbar_\(item.rawValue)")
-            }
-            .onMove { source, destination in
-                var mutable = order
-                mutable.move(fromOffsets: source, toOffset: destination)
-                toolbarOrderJSON = NowPlayingToolbarItem.encodeOrder(mutable)
-            }
-        } header: {
-            settingSectionHeader("Now Playing Toolbar", icon: "rectangle.dock.bottom", color: .purple)
-        } footer: {
-            Text("Toggle visibility and drag to reorder toolbar icons.")
-        }
-    }
-
-    private func toolbarBinding(for item: NowPlayingToolbarItem) -> Binding<Bool> {
-        switch item {
-        case .visualizer: return $showVisualizerInToolbar
-        case .eq: return $showEQInToolbar
-        case .airplay: return $showAirPlayInToolbar
-        case .lyrics: return $showLyricsInToolbar
-        case .settings: return $showSettingsInToolbar
-        }
-    }
-
-    private func toolbarItemLabel(for item: NowPlayingToolbarItem) -> String {
-        switch item {
-        case .visualizer: return "Visualizer"
-        case .eq: return "Equalizer"
-        case .airplay: return "AirPlay"
-        case .lyrics: return "Lyrics"
-        case .settings: return "Quick Settings"
-        }
-    }
-
-    private func toolbarItemIcon(for item: NowPlayingToolbarItem) -> String {
-        switch item {
-        case .visualizer: return "waveform.path"
-        case .eq: return "slider.vertical.3"
-        case .airplay: return "airplayaudio"
-        case .lyrics: return "quote.bubble"
-        case .settings: return "gearshape"
-        }
-    }
-
-    // MARK: - Tab Bar Section
-
-    private var tabBarSection: some View {
-        Section {
-            Toggle(isOn: $showSearchTab) {
-                Label("Search", systemImage: "magnifyingglass")
-                    .foregroundColor(.primary)
-            }
-            Toggle(isOn: $showPlaylistsTab) {
-                Label("Playlists", systemImage: "music.note.list")
-                    .foregroundColor(.primary)
-            }
-            Toggle(isOn: $showRadioTab) {
-                Label("Radio", systemImage: "antenna.radiowaves.left.and.right")
-                    .foregroundColor(.primary)
-            }
-        } header: {
-            settingSectionHeader("Tab Bar", icon: "dock.rectangle", color: .teal)
-        } footer: {
-            Text("Library and Settings tabs are always shown.")
-        }
-    }
-
     // MARK: - CarPlay Section
 
     #if os(iOS)
@@ -559,23 +301,6 @@ struct SettingsView: View {
 
     private var accessibilitySection: some View {
         Section {
-            Picker(selection: $textSizePref) {
-                Text("Small").tag("small")
-                Text("Default").tag("default")
-                Text("Large").tag("large")
-                Text("Extra Large").tag("xlarge")
-            } label: {
-                Label("Text Size", systemImage: "textformat.size")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("textSizePicker")
-
-            Toggle(isOn: $boldText) {
-                Label("Bold Text", systemImage: "bold")
-                    .foregroundColor(.primary)
-            }
-            .accessibilityIdentifier("boldTextToggle")
-
             Toggle(isOn: $reduceMotion) {
                 Label("Reduce Motion", systemImage: "figure.walk")
                     .foregroundColor(.primary)
