@@ -42,6 +42,7 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.lastFmUsername) private var lastFmUsername: String = ""
     @State private var lastFmPassword: String = ""
     @State private var lastFmAuthStatus: LastFmAuthStatus = .idle
+    @State private var lastFmAuthError: String?
     #if os(macOS)
     @AppStorage(UserDefaultsKeys.discordRPCEnabled) private var discordRPCEnabled: Bool = false
     #endif
@@ -257,18 +258,21 @@ struct PlayerSettingsView: View {
 
                     Button {
                         lastFmAuthStatus = .authenticating
+                        lastFmAuthError = nil
                         Task {
-                            let success = await LastFmClient.shared.authenticate(
+                            let error = await LastFmClient.shared.authenticate(
                                 username: lastFmUsername,
                                 password: lastFmPassword
                             )
                             lastFmPassword = ""
-                            lastFmAuthStatus = success ? .success : .failed
-                            if success {
-                                // Re-read the session key that was stored by LastFmClient
+                            if error == nil {
+                                lastFmAuthStatus = .success
                                 lastFmSessionKey = UserDefaults.standard.string(
                                     forKey: UserDefaultsKeys.lastFmSessionKey
                                 ) ?? ""
+                            } else {
+                                lastFmAuthStatus = .failed
+                                lastFmAuthError = error
                             }
                         }
                     } label: {
@@ -290,7 +294,7 @@ struct PlayerSettingsView: View {
                     .accessibilityIdentifier("lastFmAuthButton")
 
                     if lastFmAuthStatus == .failed {
-                        Text("Authentication failed. Check your credentials.")
+                        Text(lastFmAuthError ?? "Authentication failed")
                             .font(.caption)
                             .foregroundStyle(.red)
                     }

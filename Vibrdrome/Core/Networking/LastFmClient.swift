@@ -50,9 +50,10 @@ actor LastFmClient {
     }
 
     /// Authenticate with Last.fm using mobile auth flow (username/password).
-    /// On success, stores the session key in UserDefaults and returns true.
-    func authenticate(username: String, password: String) async -> Bool {
-        guard let apiKey, let secret else { return false }
+    /// On success, stores the session key in UserDefaults and returns nil.
+    /// On failure, returns the error message.
+    func authenticate(username: String, password: String) async -> String? {
+        guard let apiKey, let secret else { return "API Key or Shared Secret is empty" }
         var params: [String: String] = [
             "method": "auth.getMobileSession",
             "api_key": apiKey,
@@ -66,7 +67,7 @@ actor LastFmClient {
         params["api_sig"] = md5Hash(sigString)
         params["format"] = "json"
 
-        guard let url = URL(string: baseURL) else { return false }
+        guard let url = URL(string: baseURL) else { return "Invalid API URL" }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -76,19 +77,25 @@ actor LastFmClient {
             let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 lastFmLog.error("Last.fm auth failed: HTTP \(http.statusCode)")
-                return false
+                return "HTTP error \(http.statusCode)"
             }
             // Parse session key from response
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let session = json["session"] as? [String: Any],
-               let key = session["key"] as? String {
-                UserDefaults.standard.set(key, forKey: UserDefaultsKeys.lastFmSessionKey)
-                return true
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let session = json["session"] as? [String: Any],
+                   let key = session["key"] as? String {
+                    UserDefaults.standard.set(key, forKey: UserDefaultsKeys.lastFmSessionKey)
+                    return nil // success
+                }
+                // Return the error from Last.fm (e.g. invalid API key, wrong credentials)
+                let errorMsg = (json["message"] as? String) ?? "Unknown error"
+                let errorCode = (json["error"] as? Int) ?? 0
+                lastFmLog.error("Last.fm auth rejected: \(errorCode) — \(errorMsg)")
+                return errorMsg
             }
-            return false
+            return "Could not parse response"
         } catch {
             lastFmLog.error("Last.fm auth error: \(error.localizedDescription)")
-            return false
+            return error.localizedDescription
         }
     }
 
@@ -133,11 +140,19 @@ actor LastFmClient {
         return hash.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Characters allowed in application/x-www-form-urlencoded values.
+    /// Stricter than `.urlQueryAllowed` — encodes +, &, =, @, etc.
+    private static let formAllowed: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-._~")
+        return set
+    }()
+
     private func urlEncode(_ params: [String: String]) -> String {
         params.map { key, value in
-            let escapedKey = key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key
+            let escapedKey = key.addingPercentEncoding(withAllowedCharacters: Self.formAllowed) ?? key
             let escapedValue = value.addingPercentEncoding(
-                withAllowedCharacters: .urlQueryAllowed
+                withAllowedCharacters: Self.formAllowed
             ) ?? value
             return "\(escapedKey)=\(escapedValue)"
         }.joined(separator: "&")
