@@ -160,9 +160,20 @@ struct AlbumDetailView: View {
                     .bold()
 
                 if let artist = album.artist {
-                    Text(artist)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
+                    if let artistId = album.artistId {
+                        Button {
+                            appState.pendingNavigation = .artist(id: artistId)
+                        } label: {
+                            Text(artist)
+                                .font(.body)
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text(artist)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 albumMetadataRow(album)
@@ -214,9 +225,20 @@ struct AlbumDetailView: View {
                 .multilineTextAlignment(.center)
 
             if let artist = album.artist {
-                Text(artist)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+                if let artistId = album.artistId {
+                    Button {
+                        appState.pendingNavigation = .artist(id: artistId)
+                    } label: {
+                        Text(artist)
+                            .font(.body)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(artist)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             albumMetadataRow(album)

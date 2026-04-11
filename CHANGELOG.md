@@ -4,6 +4,18 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 36 — April 10, 2026
+- Tappable artist name on album detail — navigates to artist page
+- Offline scrobble queue for ListenBrainz and Last.fm (queued when offline, flushed on reconnect)
+- Fix: Last.fm auth — passwords with special characters now encoded correctly
+- Fix: Last.fm auth — error messages from Last.fm now shown in UI instead of generic failure
+- Fix: Visualizer no longer causes audio stutter (audio tap always active)
+- 512 unit tests in 37 suites
+
+**TestFlight Notes:**
+> Tappable artist on album detail, offline ListenBrainz/Last.fm scrobble queue,
+> Last.fm auth fix for special characters, visualizer audio stutter fix.
+
 ### Build 35 — April 10, 2026
 - Last.fm scrobbling with sign-in flow (API Key + username/password authentication)
 - Backup & Restore settings (exports named JSON file, imports from file picker)

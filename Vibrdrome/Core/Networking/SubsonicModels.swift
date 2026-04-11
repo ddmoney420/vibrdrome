@@ -186,6 +186,30 @@ struct Song: Decodable, Identifiable, Sendable {
     let bpm: Int?
     let replayGain: ReplayGain?
     let musicBrainzId: String?
+
+    init(
+        id: String, parent: String? = nil, title: String, album: String? = nil,
+        artist: String? = nil, albumArtist: String? = nil,
+        albumId: String? = nil, artistId: String? = nil,
+        track: Int? = nil, year: Int? = nil, genre: String? = nil,
+        coverArt: String? = nil, size: Int? = nil,
+        contentType: String? = nil, suffix: String? = nil,
+        duration: Int? = nil, bitRate: Int? = nil, path: String? = nil,
+        discNumber: Int? = nil, created: String? = nil,
+        starred: String? = nil, userRating: Int? = nil,
+        bpm: Int? = nil, replayGain: ReplayGain? = nil, musicBrainzId: String? = nil
+    ) {
+        self.id = id; self.parent = parent; self.title = title; self.album = album
+        self.artist = artist; self.albumArtist = albumArtist
+        self.albumId = albumId; self.artistId = artistId
+        self.track = track; self.year = year; self.genre = genre
+        self.coverArt = coverArt; self.size = size
+        self.contentType = contentType; self.suffix = suffix
+        self.duration = duration; self.bitRate = bitRate; self.path = path
+        self.discNumber = discNumber; self.created = created
+        self.starred = starred; self.userRating = userRating
+        self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
+    }
 }
 
 struct ReplayGain: Decodable, Sendable {

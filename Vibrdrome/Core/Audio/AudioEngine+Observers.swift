@@ -159,8 +159,8 @@ extension AudioEngine {
                 }
             }
         }
-        Task { await ListenBrainzClient.shared.submitListen(song: song) }
-        Task { await LastFmClient.shared.scrobble(song: song) }
+        Task { await OfflineActionQueue.shared.listenBrainzScrobble(song: song) }
+        Task { await OfflineActionQueue.shared.lastFmScrobble(song: song) }
     }
 
     func submitScrobbleIfNeeded() {
@@ -181,8 +181,8 @@ extension AudioEngine {
                     }
                 }
             }
-            Task { await ListenBrainzClient.shared.submitListen(song: song) }
-            Task { await LastFmClient.shared.scrobble(song: song) }
+            Task { await OfflineActionQueue.shared.listenBrainzScrobble(song: song) }
+            Task { await OfflineActionQueue.shared.lastFmScrobble(song: song) }
         }
     }
 

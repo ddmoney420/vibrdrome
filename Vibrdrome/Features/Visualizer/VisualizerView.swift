@@ -172,14 +172,7 @@ struct VisualizerView: View {
                 }
         )
         .onAppear {
-            // Tap is pre-activated from the toolbar button to avoid audio stutter.
-            // Only apply here as a fallback (e.g. opened via other paths).
-            if !engine.visualizerActive {
-                engine.visualizerActive = true
-                if !engine.eqEnabled, let item = engine.activePlayer?.currentItem {
-                    engine.applyEQTapIfNeeded(to: item)
-                }
-            }
+            engine.visualizerActive = true
             scheduleHideControls()
             if !warningShown {
                 showWarning = true

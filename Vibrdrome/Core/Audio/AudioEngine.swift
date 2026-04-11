@@ -312,8 +312,9 @@ final class AudioEngine {
     var visualizerActive = false
 
     /// Apply audio tap to an AVPlayerItem for EQ processing and/or FFT spectrum extraction.
+    /// Always applied — the tap is passthrough when EQ gains are zero, and FFT extraction
+    /// is lightweight. This avoids audio stutter when opening the visualizer mid-playback.
     func applyEQTapIfNeeded(to item: AVPlayerItem) {
-        guard eqEnabled || visualizerActive else { return }
         let gen = generation
         Task {
             do {
@@ -328,41 +329,14 @@ final class AudioEngine {
         }
     }
 
-    /// Called when user toggles EQ on/off — applies or removes tap on currently playing item(s)
+    /// Called when user toggles EQ on/off — syncs coefficients (tap stays active always)
     func applyEQToggle(enabled: Bool) {
         eqEnabled = enabled
         if enabled {
-            // Apply tap to all currently active items
             EQEngine.shared.syncCoefficients()
-            switch activeMode {
-            case .gapless:
-                if let item = gaplessPlayer?.currentItem {
-                    applyEQTapForced(to: item)
-                }
-                if let lookahead = gaplessPlayer?.items().last,
-                   lookahead !== gaplessPlayer?.currentItem {
-                    applyEQTapForced(to: lookahead)
-                }
-            case .crossfade:
-                if let item = crossfadeController.activePlayer?.currentItem {
-                    applyEQTapForced(to: item)
-                }
-                if isCrossfading, let item = crossfadeController.inactivePlayer?.currentItem {
-                    applyEQTapForced(to: item)
-                }
-            }
-        } else {
-            // Remove EQ taps from all active items
-            switch activeMode {
-            case .gapless:
-                for item in gaplessPlayer?.items() ?? [] {
-                    item.audioMix = nil
-                }
-            case .crossfade:
-                crossfadeController.activePlayer?.currentItem?.audioMix = nil
-                crossfadeController.inactivePlayer?.currentItem?.audioMix = nil
-            }
         }
+        // Tap is always active — EQ coefficients are zeroed when disabled,
+        // so the tap passes through audio unchanged. No need to add/remove.
     }
 
     /// Apply EQ tap unconditionally (bypasses eqEnabled check — used by applyEQToggle)

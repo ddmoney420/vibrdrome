@@ -86,6 +86,47 @@ final class OfflineActionQueue {
         enqueue(actionType: "scrobble", targetId: id, submission: submission)
     }
 
+    /// Queue a ListenBrainz scrobble — submits immediately if online, queues if offline
+    func listenBrainzScrobble(song: Song) async {
+        if isConnected {
+            await ListenBrainzClient.shared.submitListen(song: song)
+            return
+        }
+        enqueueExternalScrobble(actionType: "listenBrainzScrobble", song: song)
+    }
+
+    /// Queue a Last.fm scrobble — submits immediately if online, queues if offline
+    func lastFmScrobble(song: Song) async {
+        if isConnected {
+            await LastFmClient.shared.scrobble(song: song)
+            return
+        }
+        enqueueExternalScrobble(actionType: "lastFmScrobble", song: song)
+    }
+
+    private func enqueueExternalScrobble(actionType: String, song: Song) {
+        let serverId = AppState.shared.activeServerId ?? ""
+        let action = PendingAction(
+            serverId: serverId,
+            actionType: actionType,
+            targetId: song.id
+        )
+        action.songTitle = song.title
+        action.songArtist = song.artist
+        action.songAlbum = song.album
+        action.songAlbumArtist = song.albumArtist
+        action.songDuration = song.duration
+        let context = PersistenceController.shared.container.mainContext
+        context.insert(action)
+        do {
+            try context.save()
+            refreshCounts()
+            offlineLog.info("Queued \(actionType) for \(song.title)")
+        } catch {
+            offlineLog.error("Failed to save pending \(actionType): \(error)")
+        }
+    }
+
     // MARK: - Enqueue
 
     private func enqueue(actionType: String, targetId: String, submission: Bool = true) {
@@ -167,6 +208,12 @@ final class OfflineActionQueue {
             try await client.unstar(artistId: action.targetId)
         case "scrobble":
             try await client.scrobble(id: action.targetId, submission: action.submission)
+        case "listenBrainzScrobble":
+            let song = songFromAction(action)
+            await ListenBrainzClient.shared.submitListen(song: song, listenedAt: action.createdAt)
+        case "lastFmScrobble":
+            let song = songFromAction(action)
+            await LastFmClient.shared.scrobble(song: song, timestamp: action.createdAt)
         default:
             offlineLog.warning("Unknown action type: \(action.actionType)")
         }
@@ -210,6 +257,18 @@ final class OfflineActionQueue {
         } catch {
             offlineLog.error("Failed to save after clearing failed: \(error)")
         }
+    }
+
+    /// Reconstruct a minimal Song from queued PendingAction metadata
+    private func songFromAction(_ action: PendingAction) -> Song {
+        Song(
+            id: action.targetId,
+            title: action.songTitle ?? "Unknown",
+            album: action.songAlbum,
+            artist: action.songArtist,
+            albumArtist: action.songAlbumArtist,
+            duration: action.songDuration
+        )
     }
 
     // MARK: - Counts
