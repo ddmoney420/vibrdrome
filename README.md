@@ -82,12 +82,12 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Offline mode** — download songs, albums, and entire playlists
 - **Offline playlists** — batch download with full metadata preservation
 - **Cache management** — configurable size limits with LRU eviction (pinned playlists protected)
-- **Offline star/scrobble queue** — actions sync automatically on reconnect
+- **Offline star/scrobble queue** — stars, ListenBrainz, and Last.fm scrobbles queued offline, flushed on reconnect
 - **Offline indicator** — banner when server is unreachable
 - **Download badges** — green icon on downloaded tracks throughout the app
 
 ### Platform &nbsp; ᕦ(ò_óˇ)ᕤ
-- **CarPlay support** — browse, search, artist radio, and playback controls
+- **CarPlay support** — Now Playing with shuffle, repeat, Up Next queue, progress tracking, and auto-navigate on track start
 - **Home screen widget** — Now Playing with album art blur, interactive controls (small/medium/large)
 - **Siri Shortcuts** — "Play my favorites", "Play a random mix", and more
 - **macOS native app** — NavigationSplitView sidebar, keyboard shortcuts, pop-out player
@@ -98,7 +98,7 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 
 ### Customization &nbsp; ─=≡Σ((( つ◕ل͜◕)つ
 - **Theming** — dark/light/system mode with 10 accent color themes
-- **Customizable library** — reorder & show/hide pills and carousels
+- **Customizable library** — reorder & show/hide pills and carousels, optional dock tabs for Artists, Albums, Songs, Genres, Favorites
 - **Customizable Now Playing toolbar** — drag-to-reorder and show/hide Visualizer, EQ, AirPlay, Lyrics, Settings
 - **Always-visible search** — search bars on all browse views (Albums, Artists, Genres, Playlists, Favorites)
 - **Swipe actions** — swipe right to Play Next, swipe left to Add to Queue
@@ -109,10 +109,10 @@ This entire project was **vibe coded** — designed, directed, and shipped using
 - **Lossless badge** — shows in album detail for FLAC/ALAC/WAV albums
 - **Per-track actions** — tappable heart, download icon, and inline "..." menu on every track
 - **Library folder switching** — filter by music folder on multi-library servers
-- **Tappable metadata** — tap song title, artist, album name, or album art on Now Playing to navigate
+- **Tappable metadata** — tap song title, artist, album name, or album art on Now Playing to navigate; tappable artist on album detail
 - **Text size picker** — Small, Default, Large, and Extra Large text options
 - **Accessibility** — VoiceOver support, bold text, reduce motion, disable visualizer
-- **Scrobbling** — automatic scrobble submission with offline queuing
+- **Scrobbling** — automatic scrobble submission with offline queuing for ListenBrainz and Last.fm
 - **ListenBrainz** — scrobble to ListenBrainz with token authentication
 - **Discord Rich Presence** — show what you're listening to on Discord (macOS)
 - **Apple Watch** — companion app with playback controls, queue, library, sleep timer
@@ -264,6 +264,7 @@ No contribution is too small. Even fixing a typo helps. ¯\\\_(ツ)\_/¯
 
 - **Website:** [vibrdrome.io](https://vibrdrome.io)
 - **Discord:** [Join the server](https://discord.gg/9q5uw3CfN)
+- **Email:** [vibrdrome@gmail.com](mailto:vibrdrome@gmail.com)
 - **GitHub Issues:** [Report bugs or request features](https://github.com/ddmoney420/vibrdrome/issues)
 
 ---
