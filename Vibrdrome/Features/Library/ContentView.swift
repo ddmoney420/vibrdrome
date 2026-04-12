@@ -13,6 +13,11 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab = true
     @AppStorage(UserDefaultsKeys.settingsInNavBar) private var settingsInNavBar = false
     @AppStorage(UserDefaultsKeys.showDownloadsTab) private var showDownloadsTab = false
+    @AppStorage(UserDefaultsKeys.showArtistsTab) private var showArtistsTab = false
+    @AppStorage(UserDefaultsKeys.showAlbumsTab) private var showAlbumsTab = false
+    @AppStorage(UserDefaultsKeys.showSongsTab) private var showSongsTab = false
+    @AppStorage(UserDefaultsKeys.showGenresTab) private var showGenresTab = false
+    @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab = false
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -121,29 +126,56 @@ struct ContentView: View {
             Tab("Home", systemImage: "house", value: 0) {
                 LibraryView(navPath: $libraryNavPath)
             }
-            if showSearchTab {
-                Tab("Search", systemImage: "magnifyingglass", value: 1) {
-                    NavigationStack { SearchView() }
+            if showArtistsTab {
+                Tab("Artists", systemImage: "music.mic", value: 10) {
+                    NavigationStack { ArtistsView() }
                 }
             }
-            if showPlaylistsTab {
-                Tab("Playlists", systemImage: "music.note.list", value: 2) {
-                    NavigationStack { PlaylistsView() }
+            if showAlbumsTab {
+                Tab("Albums", systemImage: "square.stack.fill", value: 11) {
+                    NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
                 }
             }
-            if showRadioTab {
-                Tab("Radio", systemImage: "antenna.radiowaves.left.and.right", value: 3) {
-                    NavigationStack { RadioView() }
+            if showSongsTab {
+                Tab("Songs", systemImage: "music.note", value: 12) {
+                    NavigationStack { SongsView() }
                 }
             }
-            if showDownloadsTab {
-                Tab("Downloads", systemImage: "arrow.down.circle", value: 5) {
-                    NavigationStack { DownloadsView() }
+            if showGenresTab {
+                Tab("Genres", systemImage: "guitars.fill", value: 13) {
+                    NavigationStack { GenresView() }
                 }
             }
-            if !settingsInNavBar {
-                Tab("Settings", systemImage: "gear", value: 4) {
-                    NavigationStack { SettingsView() }
+            Group {
+                if showFavoritesTab {
+                    Tab("Favorites", systemImage: "heart.fill", value: 14) {
+                        NavigationStack { FavoritesView() }
+                    }
+                }
+                if showSearchTab {
+                    Tab("Search", systemImage: "magnifyingglass", value: 1) {
+                        NavigationStack { SearchView() }
+                    }
+                }
+                if showPlaylistsTab {
+                    Tab("Playlists", systemImage: "music.note.list", value: 2) {
+                        NavigationStack { PlaylistsView() }
+                    }
+                }
+                if showRadioTab {
+                    Tab("Radio", systemImage: "antenna.radiowaves.left.and.right", value: 3) {
+                        NavigationStack { RadioView() }
+                    }
+                }
+                if showDownloadsTab {
+                    Tab("Downloads", systemImage: "arrow.down.circle", value: 5) {
+                        NavigationStack { DownloadsView() }
+                    }
+                }
+                if !settingsInNavBar {
+                    Tab("Settings", systemImage: "gear", value: 4) {
+                        NavigationStack { SettingsView() }
+                    }
                 }
             }
         }
@@ -167,6 +199,31 @@ struct ContentView: View {
             LibraryView(navPath: $libraryNavPath)
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(0)
+            if showArtistsTab {
+                NavigationStack { ArtistsView() }
+                    .tabItem { Label("Artists", systemImage: "music.mic") }
+                    .tag(10)
+            }
+            if showAlbumsTab {
+                NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+                    .tabItem { Label("Albums", systemImage: "square.stack.fill") }
+                    .tag(11)
+            }
+            if showSongsTab {
+                NavigationStack { SongsView() }
+                    .tabItem { Label("Songs", systemImage: "music.note") }
+                    .tag(12)
+            }
+            if showGenresTab {
+                NavigationStack { GenresView() }
+                    .tabItem { Label("Genres", systemImage: "guitars.fill") }
+                    .tag(13)
+            }
+            if showFavoritesTab {
+                NavigationStack { FavoritesView() }
+                    .tabItem { Label("Favorites", systemImage: "heart.fill") }
+                    .tag(14)
+            }
             if showSearchTab {
                 NavigationStack { SearchView() }
                     .tabItem { Label("Search", systemImage: "magnifyingglass") }

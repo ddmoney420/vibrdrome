@@ -27,6 +27,7 @@ extension AudioEngine {
                 guard let self,
                       self.generationValue == observerGeneration else { return }
                 self.currentTime = time.seconds
+                NowPlayingManager.shared.updateElapsedTime(time.seconds)
                 self.autoScrobbleIfNeeded()
             }
         }

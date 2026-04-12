@@ -9,7 +9,7 @@ struct SubsonicAuth: Sendable {
 
     private func generateSalt(length: Int = 12) -> String {
         let chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-        return String((0..<length).map { _ in chars.randomElement()! })
+        return String((0..<length).compactMap { _ in chars.randomElement() })
     }
 
     private func md5Hash(_ string: String) -> String {

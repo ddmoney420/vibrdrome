@@ -72,16 +72,19 @@ extension AudioEngine {
 
     /// Pick a random next index, preferring a different artist than the current track.
     func smartShuffleNextIndex() -> Int {
+        guard !queue.isEmpty else { return 0 }
         let currentArtist = queue[currentIndex].artist
         // Build list of candidate indices (all except current)
         var candidates = Array(0..<queue.count)
-        candidates.remove(at: currentIndex)
+        if candidates.count > 1 {
+            candidates.remove(at: currentIndex)
+        }
         // Prefer candidates with a different artist
         let differentArtist = candidates.filter { queue[$0].artist != currentArtist }
-        if !differentArtist.isEmpty {
-            return differentArtist.randomElement()!
+        if let pick = differentArtist.randomElement() {
+            return pick
         }
         // All tracks are by the same artist — just pick any other track
-        return candidates.randomElement()!
+        return candidates.randomElement() ?? currentIndex
     }
 }

@@ -20,6 +20,11 @@ struct TabBarSettingsView: View {
     @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab: Bool = true
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab: Bool = true
     @AppStorage(UserDefaultsKeys.showDownloadsTab) private var showDownloadsTab: Bool = false
+    @AppStorage(UserDefaultsKeys.showArtistsTab) private var showArtistsTab: Bool = false
+    @AppStorage(UserDefaultsKeys.showAlbumsTab) private var showAlbumsTab: Bool = false
+    @AppStorage(UserDefaultsKeys.showSongsTab) private var showSongsTab: Bool = false
+    @AppStorage(UserDefaultsKeys.showGenresTab) private var showGenresTab: Bool = false
+    @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab: Bool = false
     @AppStorage(UserDefaultsKeys.tabBarOrder) private var tabBarOrderJSON: String = "[]"
 
     @State private var tabItems: [TabItemConfig] = []
@@ -30,6 +35,31 @@ struct TabBarSettingsView: View {
                 id: "library", name: "Library", icon: "music.note.house.fill",
                 description: "Browse your music library",
                 isAlwaysShown: true, defaultsKey: nil, defaultValue: true
+            ),
+            TabItemConfig(
+                id: "artists", name: "Artists", icon: "music.mic",
+                description: "Browse all artists",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showArtistsTab, defaultValue: false
+            ),
+            TabItemConfig(
+                id: "albums", name: "Albums", icon: "square.stack.fill",
+                description: "Browse all albums",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showAlbumsTab, defaultValue: false
+            ),
+            TabItemConfig(
+                id: "songs", name: "Songs", icon: "music.note",
+                description: "Browse all songs",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showSongsTab, defaultValue: false
+            ),
+            TabItemConfig(
+                id: "genres", name: "Genres", icon: "guitars.fill",
+                description: "Browse by genre",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showGenresTab, defaultValue: false
+            ),
+            TabItemConfig(
+                id: "favorites", name: "Favorites", icon: "heart.fill",
+                description: "Your favorited songs and albums",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showFavoritesTab, defaultValue: false
             ),
             TabItemConfig(
                 id: "search", name: "Search", icon: "magnifyingglass",
@@ -144,6 +174,11 @@ struct TabBarSettingsView: View {
 
     private func toggleBinding(for item: TabItemConfig) -> Binding<Bool> {
         switch item.id {
+        case "artists": return $showArtistsTab
+        case "albums": return $showAlbumsTab
+        case "songs": return $showSongsTab
+        case "genres": return $showGenresTab
+        case "favorites": return $showFavoritesTab
         case "search": return $showSearchTab
         case "playlists": return $showPlaylistsTab
         case "radio": return $showRadioTab

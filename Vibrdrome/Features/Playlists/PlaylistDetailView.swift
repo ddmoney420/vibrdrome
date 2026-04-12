@@ -115,7 +115,17 @@ struct PlaylistDetailView: View {
                         }
                     }
                     .onDelete { offsets in
-                        removeFromPlaylist(at: offsets, songs: playlist.entry ?? [])
+                        // Map filtered indices to original playlist indices
+                        let allSongs = playlist.entry ?? []
+                        let filtered = filteredSongs
+                        let originalIndices = offsets.compactMap { offset -> Int? in
+                            guard offset < filtered.count else { return nil }
+                            let songId = filtered[offset].id
+                            return allSongs.firstIndex(where: { $0.id == songId })
+                        }
+                        removeFromPlaylist(
+                            at: IndexSet(originalIndices), songs: allSongs
+                        )
                     }
                 }
 
