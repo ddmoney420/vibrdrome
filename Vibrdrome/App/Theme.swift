@@ -7,12 +7,16 @@ import SwiftUI
 /// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectModifier: ViewModifier {
     func body(content: Content) -> some View {
+        #if swift(>=6.1)
         let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
         if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular.interactive(), in: .capsule)
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }
 
@@ -20,12 +24,16 @@ struct GlassEffectModifier: ViewModifier {
 /// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectCircleModifier: ViewModifier {
     func body(content: Content) -> some View {
+        #if swift(>=6.1)
         let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
         if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular, in: .circle)
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }
 
@@ -33,12 +41,16 @@ struct GlassEffectCircleModifier: ViewModifier {
 /// Respects the `enableLiquidGlass` user preference.
 struct GlassEffectToolbarModifier: ViewModifier {
     func body(content: Content) -> some View {
+        #if swift(>=6.1)
         let glassEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.enableLiquidGlass)
         if #available(iOS 26.0, *), glassEnabled {
             content.glassEffect(.regular, in: .rect(cornerRadius: 16))
         } else {
             content
         }
+        #else
+        content
+        #endif
     }
 }
 
