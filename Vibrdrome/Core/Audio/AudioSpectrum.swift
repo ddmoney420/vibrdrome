@@ -21,6 +21,15 @@ final class AudioSpectrum: @unchecked Sendable {
     private var _energy: Float = 0
     private var _bands: [Float] = Array(repeating: 0, count: bandCount)
 
+    // Sample accumulator — collects incoming tap samples until we have a
+    // full FFT window. Audio taps can deliver variable buffer sizes; gating
+    // on count >= fftSize silently drops all data when the buffer is smaller
+    // and leaves the visualizer falling through to its simulated fallback.
+    // Only ever touched from the audio render thread (single writer), so no
+    // lock is required on the buffer itself.
+    private var _accumBuffer: [Float] = Array(repeating: 0, count: fftSize)
+    private var _accumFill: Int = 0
+
     // FFT setup (reusable, created once)
     private let fftSetup: FFTSetup?
     private let log2n: vDSP_Length
@@ -48,17 +57,47 @@ final class AudioSpectrum: @unchecked Sendable {
             _bass = 0; _mid = 0; _treble = 0; _energy = 0
             _bands = Array(repeating: 0, count: Self.bandCount)
         }
+        _accumFill = 0
     }
 
     // MARK: - FFT Processing (called from audio render thread)
 
     /// Process raw PCM samples and extract frequency data.
     /// Called from the MTAudioProcessingTap callback — must be fast and lock-free where possible.
+    /// Accepts any buffer size; accumulates samples until a full FFT window is available.
     func processPCM(_ samples: UnsafePointer<Float>, count: Int, sampleRate: Float) {
-        guard let fftSetup, count >= Self.fftSize else { return }
-        let magnitudes = computeFFT(samples: samples, fftSetup: fftSetup)
-        let newBands = bucketIntoBands(magnitudes: magnitudes, sampleRate: sampleRate)
-        smoothAndStore(newBands)
+        guard let fftSetup, count > 0 else { return }
+
+        var remaining = count
+        var sourceOffset = 0
+
+        while remaining > 0 {
+            let space = Self.fftSize - _accumFill
+            let toCopy = min(space, remaining)
+
+            _accumBuffer.withUnsafeMutableBufferPointer { dst in
+                guard let base = dst.baseAddress else { return }
+                for i in 0..<toCopy {
+                    base[_accumFill + i] = samples[sourceOffset + i]
+                }
+            }
+
+            _accumFill += toCopy
+            sourceOffset += toCopy
+            remaining -= toCopy
+
+            if _accumFill >= Self.fftSize {
+                let magnitudes = _accumBuffer.withUnsafeBufferPointer { buf -> [Float] in
+                    guard let base = buf.baseAddress else { return [] }
+                    return computeFFT(samples: base, fftSetup: fftSetup)
+                }
+                if !magnitudes.isEmpty {
+                    let newBands = bucketIntoBands(magnitudes: magnitudes, sampleRate: sampleRate)
+                    smoothAndStore(newBands)
+                }
+                _accumFill = 0
+            }
+        }
     }
 
     private func computeFFT(samples: UnsafePointer<Float>, fftSetup: FFTSetup) -> [Float] {

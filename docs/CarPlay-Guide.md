@@ -21,8 +21,8 @@ No additional configuration is needed. Vibrdrome uses the same server you config
 - **Random** -- Discover random albums from your library.
 - **Favorites** -- Quick access to your starred music.
 
-### Search
-- Use the CarPlay search interface (keyboard or Siri) to find artists, albums, or songs.
+### Discover
+- Browse random songs from your library for quick discovery.
 
 ### Playback Controls
 - **Play/Pause** -- Tap the on-screen button or use the steering wheel play/pause button.
@@ -32,7 +32,7 @@ No additional configuration is needed. Vibrdrome uses the same server you config
 ## Limitations
 
 - **No download management** -- You cannot start or manage downloads from the CarPlay interface. Use the iPhone app for that.
-- **List size cap** -- Apple limits CarPlay lists to 200 items. Large libraries are truncated. Use search to find specific content.
+- **List size cap** -- Apple limits CarPlay lists to 200 items. Large libraries are truncated.
 - **No settings access** -- Server and playback settings must be changed in the main app.
 
 ## Troubleshooting

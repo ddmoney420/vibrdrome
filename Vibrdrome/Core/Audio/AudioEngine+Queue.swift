@@ -28,6 +28,17 @@ extension AudioEngine {
         if activeMode == .gapless { prepareLookahead() }
     }
 
+    func addToQueueNext(_ songs: [Song]) {
+        let insertAt = min(currentIndex + 1, queue.count)
+        queue.insert(contentsOf: songs, at: insertAt)
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
+    func addToQueue(_ songs: [Song]) {
+        queue.append(contentsOf: songs)
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
     func removeFromQueue(at index: Int) {
         let absoluteIndex = currentIndex + 1 + index
         guard absoluteIndex > currentIndex, absoluteIndex < queue.count else { return }

@@ -80,7 +80,7 @@ struct VibrdromeApp: App {
         WindowGroup {
             #if os(macOS)
             MacContentView()
-                .frame(minWidth: 800, minHeight: 500)
+                .frame(minWidth: 1000, minHeight: 560)
                 .environment(appState)
                 .modelContainer(persistenceController.container)
                 .preferredColorScheme(colorScheme)

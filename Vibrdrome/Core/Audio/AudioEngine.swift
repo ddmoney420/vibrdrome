@@ -273,17 +273,40 @@ final class AudioEngine {
         }
     }
 
-    /// Compute ReplayGain factor for a song
+    /// Compute ReplayGain factor for a song, including user pre-gain adjustments.
+    /// - Pre-gain for tagged tracks: boosts to compensate for -18 LUFS target (0 to +6 dB)
+    /// - Fallback for untagged tracks/radio: attenuates hot masters (0 to -6 dB)
     func computeReplayGainFactor(for song: Song) -> Float {
-        guard let rg = song.replayGain else { return 1.0 }
+        let defaults = UserDefaults.standard
+        let preGainDb = defaults.double(forKey: UserDefaultsKeys.replayGainPreGainDb)
+        let fallbackDb = defaults.double(forKey: UserDefaultsKeys.replayGainFallbackDb)
+
+        guard replayGainMode != .off else { return 1.0 }
+
+        guard let rg = song.replayGain else {
+            // No ReplayGain tags — apply fallback attenuation
+            if fallbackDb != 0 {
+                return max(0.0, min(1.5, Float(pow(10, fallbackDb / 20))))
+            }
+            return 1.0
+        }
+
         let gain: Double?
         switch replayGainMode {
         case .off: return 1.0
         case .track: gain = rg.trackGain
         case .album: gain = rg.albumGain ?? rg.trackGain
         }
-        guard let gainDb = gain else { return 1.0 }
-        let linear = Float(pow(10, gainDb / 20))
+        guard let gainDb = gain else {
+            // RG metadata exists but no gain value — apply fallback
+            if fallbackDb != 0 {
+                return max(0.0, min(1.5, Float(pow(10, fallbackDb / 20))))
+            }
+            return 1.0
+        }
+
+        let totalDb = gainDb + preGainDb
+        let linear = Float(pow(10, totalDb / 20))
         // Cap at 1.5x (+3.5dB) to prevent clipping on hot masters
         return max(0.0, min(1.5, linear))
     }

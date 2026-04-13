@@ -236,21 +236,14 @@ struct AlbumDetailView: View {
             .disabled(album.song?.isEmpty ?? true)
             .accessibilityIdentifier("albumShuffleButton")
 
-            Button {
-                if let songs = album.song {
-                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
-                }
-            } label: {
-                Label("Download", systemImage: "arrow.down.circle")
+            albumMoreMenu(album) {
+                Label("More", systemImage: "ellipsis")
                     .fontWeight(.semibold)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 22)
                     .background(.ultraThinMaterial, in: Capsule())
                     .foregroundStyle(.white)
             }
-            .buttonStyle(.plain)
-            .disabled(album.song?.isEmpty ?? true)
-            .accessibilityIdentifier("albumDownloadButton")
         }
     }
 
@@ -389,7 +382,6 @@ struct AlbumDetailView: View {
     @ViewBuilder
     private func circularActionButtons(_ album: Album) -> some View {
         HStack(spacing: 16) {
-            // Shuffle
             Button {
                 if var songs = album.song, !songs.isEmpty {
                     Haptics.medium()
@@ -398,9 +390,7 @@ struct AlbumDetailView: View {
                 }
             } label: {
                 Image(systemName: "shuffle")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
+                    .font(.body).fontWeight(.semibold).foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
                     .modifier(GlassEffectCircleModifier())
@@ -408,7 +398,6 @@ struct AlbumDetailView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumShuffleButton")
 
-            // Play pill
             Button {
                 if let songs = album.song, let first = songs.first {
                     Haptics.medium()
@@ -417,35 +406,22 @@ struct AlbumDetailView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "play.fill")
-                    Text("Play")
-                        .fontWeight(.semibold)
+                    Text("Play").fontWeight(.semibold)
                 }
-                .font(.body)
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .font(.body).foregroundStyle(.black)
+                .frame(maxWidth: .infinity).frame(height: 44)
                 .background(.white, in: Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumPlayButton")
 
-            // Download
-            Button {
-                if let songs = album.song {
-                    Haptics.light()
-                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
+            albumMoreMenu(album) {
+                Image(systemName: "ellipsis")
+                    .font(.body).fontWeight(.semibold).foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
                     .modifier(GlassEffectCircleModifier())
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("albumDownloadButton")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -458,6 +434,42 @@ struct AlbumDetailView: View {
         EmptyView()
     }
     #endif
+
+    private func albumMoreMenu<Label: View>(_ album: Album, @ViewBuilder label: () -> Label) -> some View {
+        Menu {
+            Button {
+                if let songs = album.song, !songs.isEmpty {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    AudioEngine.shared.addToQueueNext(songs)
+                }
+            } label: { SwiftUI.Label("Play Next", systemImage: "text.insert") }
+
+            Button {
+                if let songs = album.song, !songs.isEmpty {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    AudioEngine.shared.addToQueue(songs)
+                }
+            } label: { SwiftUI.Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                if let songs = album.song {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
+                }
+            } label: { SwiftUI.Label("Download", systemImage: "arrow.down.circle") }
+        } label: {
+            label()
+        }
+        .disabled(album.song?.isEmpty ?? true)
+        .accessibilityLabel("More Options")
+        .accessibilityIdentifier("albumMoreButton")
+    }
 
     @ViewBuilder
     private func albumFooter(_ album: Album) -> some View {

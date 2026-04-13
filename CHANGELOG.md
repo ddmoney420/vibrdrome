@@ -4,6 +4,26 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 38 — April 13, 2026
+- Security: Last.fm/ListenBrainz credentials moved to Keychain, download suffix sanitized
+- Accessibility: VoiceOver labels for star rating, volume slider, track row buttons, connection dot
+- CarPlay: removed CPSearchTemplate (not allowed for audio apps), replaced with Recently Played
+- CarPlay: radio stations split into sections to fix head unit truncation
+- CarPlay: reconnection restores queue and re-setups remote commands
+- macOS: multi-track overlap fix, crossfade players stopped on new track
+- macOS UI overhaul: mini player polish, Now Playing enhancements, album detail styling, grid/list toggles, keyboard shortcuts, settings parity
+- iPad: server manager unresponsive fix (NavigationLink instead of sheet)
+- ReplayGain pre-gain + fallback gain for loudness matching (GitHub issue #4)
+- Album Play Next / Add to Queue on album detail and album context menu
+- Onboarding tip on server config screen
+- Refactored album context menus and action buttons
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Security hardening, accessibility audit, CarPlay overhaul (Recently Played
+> replaces broken Search), macOS UI overhaul, iPad fix, ReplayGain pre-gain,
+> album queue actions. 532 tests.
+
 ### Build 37 — April 11, 2026
 - CarPlay: Now Playing template with shuffle, repeat, Up Next queue
 - CarPlay: progress slider and time tracking now update in real-time

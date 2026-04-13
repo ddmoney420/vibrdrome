@@ -188,27 +188,13 @@ struct LyricsPanelView: View {
         SidePanelContainer(title: "Lyrics", onClose: {
             appState.activeSidePanel = nil
         }) {
-            ScrollView {
+            Group {
                 if isLoading {
                     ProgressView("Loading lyrics...")
                         .padding(40)
-                } else if let lyrics = selectedLyrics, let lines = lyrics.line {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let title = lyrics.displayTitle ?? engine.currentSong?.title {
-                            Text(title).font(.headline)
-                            if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
-                                Text(artist)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                            Text(line.value.isEmpty ? "♪" : line.value)
-                                .font(.body)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                    .padding(16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let lyrics = selectedLyrics, let lines = lyrics.line, !lines.isEmpty {
+                    SyncedLyricsPanelContent(lyrics: lyrics, lines: lines)
                 } else if error != nil {
                     ContentUnavailableView {
                         Label("Error", systemImage: "exclamationmark.triangle")
@@ -246,6 +232,89 @@ struct LyricsPanelView: View {
             loadedSongId = songId
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+}
+
+/// Synced lyrics content with timer-driven active-line highlight + auto-scroll.
+private struct SyncedLyricsPanelContent: View {
+    let lyrics: StructuredLyrics
+    let lines: [LyricLine]
+
+    @State private var activeLineIndex: Int = 0
+    @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    private let timer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
+
+    private var engine: AudioEngine { AudioEngine.shared }
+
+    var body: some View {
+        GeometryReader { geo in
+            let horizontalPadding: CGFloat = 16
+            let contentWidth = max(0, geo.size.width - horizontalPadding * 2)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        if let title = lyrics.displayTitle ?? engine.currentSong?.title {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(title)
+                                    .font(.headline)
+                                    .frame(width: contentWidth, alignment: .leading)
+                                if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
+                                    Text(artist)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: contentWidth, alignment: .leading)
+                                }
+                            }
+                            .padding(.bottom, 8)
+                        }
+
+                        ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                            Text(line.value.isEmpty ? "♪" : line.value)
+                                .font(.body)
+                                .fontWeight(index == activeLineIndex ? .bold : .regular)
+                                .foregroundStyle(index == activeLineIndex ? .primary : .secondary)
+                                .opacity(index == activeLineIndex ? 1.0 : 0.55)
+                                .multilineTextAlignment(.leading)
+                                .frame(width: contentWidth, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .id(index)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if lyrics.synced, let start = line.start {
+                                        engine.seek(to: Double(start) / 1000.0)
+                                    }
+                                }
+                        }
+
+                        Spacer(minLength: 60)
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.vertical, 16)
+                }
+                .onChange(of: activeLineIndex) { _, newIndex in
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+                .onReceive(timer) { _ in updateActiveLine() }
+                .onAppear { updateActiveLine() }
+            }
+        }
+    }
+
+    private func updateActiveLine() {
+        guard lyrics.synced else { return }
+        let currentMs = max(0, Int(engine.currentTime * 1000) + (lyrics.offset ?? 0))
+        var newIndex = 0
+        for (index, line) in lines.enumerated() {
+            if let start = line.start, currentMs >= start {
+                newIndex = index
+            }
+        }
+        if newIndex != activeLineIndex {
+            activeLineIndex = newIndex
         }
     }
 }

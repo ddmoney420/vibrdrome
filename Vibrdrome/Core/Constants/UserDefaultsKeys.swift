@@ -90,6 +90,11 @@ enum UserDefaultsKeys {
 
     static let adaptiveBitrateEnabled = "adaptiveBitrateEnabled"
 
+    // MARK: - ReplayGain Pre-Gain
+
+    static let replayGainPreGainDb = "replayGainPreGainDb"
+    static let replayGainFallbackDb = "replayGainFallbackDb"
+
     // MARK: - Player Behavior
 
     static let disableSpinningArt = "disableSpinningArt"

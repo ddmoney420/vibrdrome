@@ -233,54 +233,45 @@ struct AlbumsView: View {
 
     @ViewBuilder
     private func rowContextMenu(for album: Album) -> some View {
-        Button {
-            Task {
-                do {
-                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                    if let songs = detail.song, let first = songs.first {
-                        AudioEngine.shared.play(song: first, from: songs, at: 0)
-                    }
-                } catch {
-                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                        .error("Failed to load album for playback: \(error)")
+        Group {
+            Button {
+                albumAction(album) { songs in
+                    if let first = songs.first { AudioEngine.shared.play(song: first, from: songs, at: 0) }
                 }
-            }
-        } label: {
-            Label("Play", systemImage: "play.fill")
+            } label: { Label("Play", systemImage: "play.fill") }
+
+            Button {
+                albumAction(album) { songs in
+                    var shuffled = songs; shuffled.shuffle()
+                    if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled, at: 0) }
+                }
+            } label: { Label("Shuffle", systemImage: "shuffle") }
+
+            Button {
+                albumAction(album) { songs in AudioEngine.shared.addToQueueNext(songs) }
+            } label: { Label("Play Next", systemImage: "text.insert") }
+
+            Button {
+                albumAction(album) { songs in AudioEngine.shared.addToQueue(songs) }
+            } label: { Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                albumAction(album) { songs in
+                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
+                }
+            } label: { Label("Download", systemImage: "arrow.down.circle") }
         }
-        Button {
-            Task {
-                do {
-                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                    if var songs = detail.song, !songs.isEmpty {
-                        songs.shuffle()
-                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                    }
-                } catch {
-                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                        .error("Failed to load album for shuffle: \(error)")
-                }
+    }
+
+    private func albumAction(_ album: Album, action: @escaping ([Song]) -> Void) {
+        Task {
+            do {
+                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                if let songs = detail.song, !songs.isEmpty { action(songs) }
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                    .error("Album action failed: \(error)")
             }
-        } label: {
-            Label("Shuffle", systemImage: "shuffle")
-        }
-        Button {
-            Task {
-                do {
-                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                    if let songs = detail.song {
-                        DownloadManager.shared.downloadAlbum(
-                            songs: songs,
-                            client: appState.subsonicClient
-                        )
-                    }
-                } catch {
-                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                        .error("Failed to load album for download: \(error)")
-                }
-            }
-        } label: {
-            Label("Download", systemImage: "arrow.down.circle")
         }
     }
 

@@ -1,10 +1,10 @@
 #if os(iOS)
 import CarPlay
+import os.log
 
 @MainActor
 final class CarPlayManager: NSObject {
     private let interfaceController: CPInterfaceController
-    private var searchHandler: CarPlaySearchHandler?
     private var isNavigating = false
     /// Self-cleaning task set: each task removes itself on completion (C1)
     private var activeTasks: Set<UUID> = []
@@ -25,8 +25,6 @@ final class CarPlayManager: NSObject {
         for (_, task) in taskMap { task.cancel() }
         taskMap.removeAll()
         activeTasks.removeAll()
-        // C5: Cancel search handler tasks
-        searchHandler?.cancel()
         // C6: Stop config observation
         configObservation?.cancel()
         configObservation = nil
@@ -232,12 +230,12 @@ final class CarPlayManager: NSObject {
         items.append(nowPlayingItem)
 
         // Search item at the end
-        let searchItem = CPListItem(text: "Search", detailText: nil, image: UIImage(systemName: "magnifyingglass"))
-        searchItem.handler = { [weak self] _, completion in
-            self?.showSearch()
+        let recentItem = CPListItem(text: "Recently Played", detailText: nil, image: UIImage(systemName: "clock.arrow.circlepath"))
+        recentItem.handler = { [weak self] _, completion in
+            self?.showRecentlyPlayed()
             completion()
         }
-        items.append(searchItem)
+        items.append(recentItem)
 
         let section = CPListSection(items: items)
         let template = CPListTemplate(title: "Library", sections: [section])
@@ -588,27 +586,39 @@ final class CarPlayManager: NSObject {
         let template = CPListTemplate(title: "Radio", sections: [])
         template.tabImage = UIImage(systemName: "antenna.radiowaves.left.and.right")
 
-        trackTask {
+        trackTask { [weak self] in
             do {
                 let client = AppState.shared.subsonicClient
                 let stations = try await client.getRadioStations()
                 guard !Task.isCancelled else { return }
-                let items = stations.map { [weak self] station in
-                    let item = CPListItem(text: station.name, detailText: nil,
-                                          image: UIImage(systemName: "radio"))
-                    if let artId = station.radioCoverArtId {
-                        self?.loadImage(id: artId, size: 120, into: item)
-                    } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }) {
-                        // Favicon fallback for stations without server artwork
-                        self?.loadFavicon(host: host, into: item)
+
+                // Group into sections of 20 to avoid CarPlay head unit item limits
+                let chunkSize = 20
+                var sections: [CPListSection] = []
+                for start in stride(from: 0, to: stations.count, by: chunkSize) {
+                    let end = min(start + chunkSize, stations.count)
+                    let chunk = stations[start..<end]
+                    let items = chunk.map { station in
+                        let item = CPListItem(text: station.name, detailText: nil,
+                                              image: UIImage(systemName: "radio"))
+                        if let artId = station.radioCoverArtId {
+                            self?.loadImage(id: artId, size: 120, into: item)
+                        } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }) {
+                            self?.loadFavicon(host: host, into: item)
+                        }
+                        item.handler = { _, completion in
+                            AudioEngine.shared.playRadio(station: station)
+                            completion()
+                        }
+                        return item
                     }
-                    item.handler = { _, completion in
-                        AudioEngine.shared.playRadio(station: station)
-                        completion()
-                    }
-                    return item
+                    let header = stations.count > chunkSize
+                        ? "\(start + 1)–\(end) of \(stations.count)"
+                        : nil
+                    sections.append(CPListSection(items: items, header: header,
+                                                  sectionIndexTitle: nil))
                 }
-                template.updateSections([CPListSection(items: items)])
+                template.updateSections(sections)
             } catch {
                 guard !Task.isCancelled else { return }
                 template.updateSections([CPListSection(items: [
@@ -622,12 +632,32 @@ final class CarPlayManager: NSObject {
 
     // MARK: - Search
 
-    private func showSearch() {
-        let handler = CarPlaySearchHandler()
-        self.searchHandler = handler
-        let template = CPSearchTemplate()
-        template.delegate = handler
-        interfaceController.pushTemplate(template, animated: true) { _, _ in }
+    private func showRecentlyPlayed() {
+        navigateTo { [weak self] in
+            let songs = AudioEngine.shared.recentlyPlayed
+            guard !songs.isEmpty else {
+                return CPListTemplate(title: "Recently Played", sections: [
+                    CPListSection(items: [
+                        CPListItem(text: "No recent songs", detailText: "Start playing to build history"),
+                    ]),
+                ])
+            }
+            let items = songs.prefix(30).map { song in
+                let item = CPListItem(text: song.title, detailText: song.artist ?? "")
+                if let coverArtId = song.coverArt {
+                    self?.loadImage(id: coverArtId, size: 120, into: item)
+                }
+                item.handler = { _, completion in
+                    AudioEngine.shared.play(song: song, from: Array(songs))
+                    completion()
+                }
+                return item
+            }
+            return CPListTemplate(
+                title: "Recently Played",
+                sections: [CPListSection(items: items)]
+            )
+        }
     }
 
     // MARK: - Now Playing Navigation

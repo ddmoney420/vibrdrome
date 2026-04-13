@@ -151,8 +151,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 ## CarPlay
 
 - [ ] App appears on CarPlay dashboard
-- [ ] Browse library
-- [ ] Search works (Library > Search)
+- [ ] Browse library (Artists, Albums, Favorites, etc.)
+- [ ] Discover shows random songs (Library > Discover)
 - [ ] Play/pause/skip from CarPlay
 - [ ] No logout on CarPlay connect/disconnect
 - [ ] Artwork shows on all lists

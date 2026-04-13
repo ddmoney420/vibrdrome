@@ -226,32 +226,31 @@ private struct SpinningAlbumArt: View {
     let reduceMotion: Bool
     var size: CGFloat = 40
 
-    @State private var angle: Double = 0
-    @State private var timer: Timer?
+    /// Degrees of rotation accumulated at the moment the last pause/resume happened.
+    @State private var accumulatedAngle: Double = 0
+    /// The last time the spin was (re)started. Used to compute live angle from elapsed time.
+    @State private var resumedAt: Date = .now
+
+    /// Degrees per second — one full revolution every 12 seconds.
+    private let degreesPerSecond: Double = 30
 
     var body: some View {
-        AlbumArtView(coverArtId: coverArtId, size: size, cornerRadius: size / 2)
-            .drawingGroup()
-            .rotationEffect(.degrees(angle))
-            .onAppear { startIfNeeded() }
-            .onDisappear { stop() }
-            .onChange(of: shouldSpin) { _, spinning in
-                if spinning { startIfNeeded() } else { stop() }
-            }
-    }
-
-    private func startIfNeeded() {
-        guard shouldSpin, timer == nil else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { _ in
-            Task { @MainActor in
-                angle += 1.5
+        TimelineView(.animation(minimumInterval: nil, paused: !shouldSpin)) { context in
+            let elapsed = shouldSpin ? context.date.timeIntervalSince(resumedAt) : 0
+            let angle = accumulatedAngle + elapsed * degreesPerSecond
+            AlbumArtView(coverArtId: coverArtId, size: size, cornerRadius: size / 2)
+                .drawingGroup()
+                .rotationEffect(.degrees(angle))
+        }
+        .onChange(of: shouldSpin) { wasSpinning, isSpinning in
+            if wasSpinning && !isSpinning {
+                // Pausing: freeze the current angle so we don't snap back on resume.
+                let elapsed = Date.now.timeIntervalSince(resumedAt)
+                accumulatedAngle += elapsed * degreesPerSecond
+            } else if !wasSpinning && isSpinning {
+                resumedAt = .now
             }
         }
-    }
-
-    private func stop() {
-        timer?.invalidate()
-        timer = nil
     }
 }
 

@@ -30,6 +30,8 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
     @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
+    @AppStorage(UserDefaultsKeys.replayGainPreGainDb) private var replayGainPreGainDb: Double = 0
+    @AppStorage(UserDefaultsKeys.replayGainFallbackDb) private var replayGainFallbackDb: Double = 0
     @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
 
     // Scrobbling
@@ -178,6 +180,34 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("replayGainPicker")
+
+            if replayGainMode != "off" {
+                HStack {
+                    Label("RG Pre-Gain", systemImage: "plus.forwardslash.minus")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text(String(format: "%+.1f dB", replayGainPreGainDb))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $replayGainPreGainDb, in: 0...6, step: 0.5)
+                    .accessibilityLabel("ReplayGain Pre-Gain")
+                    .accessibilityValue(String(format: "%.1f dB", replayGainPreGainDb))
+                    .accessibilityIdentifier("replayGainPreGainSlider")
+
+                HStack {
+                    Label("Fallback Gain", systemImage: "speaker.slash")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text(String(format: "%+.1f dB", replayGainFallbackDb))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $replayGainFallbackDb, in: -6...0, step: 0.5)
+                    .accessibilityLabel("Fallback Gain")
+                    .accessibilityValue(String(format: "%.1f dB", replayGainFallbackDb))
+                    .accessibilityIdentifier("replayGainFallbackSlider")
+            }
 
             Toggle(isOn: $eqEnabled) {
                 Label("Equalizer", systemImage: "slider.vertical.3")
