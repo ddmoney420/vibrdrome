@@ -51,6 +51,13 @@ final class AppState {
         case showLyrics
     }
     var pendingNowPlayingAction: NowPlayingAction?
+
+    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info).
+    /// Mutually exclusive: setting one closes the others.
+    enum SidePanel: String, Equatable {
+        case queue, lyrics, artistInfo
+    }
+    var activeSidePanel: SidePanel?
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?

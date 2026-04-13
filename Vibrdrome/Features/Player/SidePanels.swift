@@ -1,0 +1,367 @@
+#if os(macOS)
+import SwiftUI
+import os.log
+
+// MARK: - Side Panel Container
+
+/// Common chrome for a side panel: header bar with title + close button, then content.
+struct SidePanelContainer<Content: View>: View {
+    let title: String
+    let onClose: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close \(title)")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.bar)
+
+            Divider()
+
+            content()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Queue Panel
+
+struct QueuePanelView: View {
+    @Environment(AppState.self) private var appState
+    private var engine: AudioEngine { AudioEngine.shared }
+
+    var body: some View {
+        SidePanelContainer(title: "Queue", onClose: {
+            appState.activeSidePanel = nil
+        }) {
+            List {
+                if let current = engine.currentSong {
+                    Section("Now Playing") {
+                        nowPlayingRow(current)
+                    }
+                }
+
+                let upNext = engine.upNext
+                if !upNext.isEmpty {
+                    Section("Up Next — \(upNext.count) songs") {
+                        ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
+                            upNextRow(song, index: index)
+                        }
+                    }
+                }
+
+                if engine.queue.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Queue", systemImage: "music.note.list")
+                    } description: {
+                        Text("Play some music to build a queue")
+                    }
+                }
+            }
+        }
+    }
+
+    private func nowPlayingRow(_ current: Song) -> some View {
+        HStack(spacing: 12) {
+            AlbumArtView(coverArtId: current.coverArt, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Button {
+                    appState.pendingNavigation = .song(id: current.id)
+                } label: {
+                    Text(current.title)
+                        .font(.body)
+                        .bold()
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                if let artist = current.artist {
+                    Button {
+                        if let artistId = current.artistId {
+                            appState.pendingNavigation = .artist(id: artistId)
+                        }
+                    } label: {
+                        Text(artist)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(current.artistId == nil)
+                }
+            }
+            Spacer()
+            if engine.isPlaying {
+                Image(systemName: "waveform")
+                    .foregroundStyle(Color.accentColor)
+                    .symbolEffect(.variableColor)
+            }
+        }
+    }
+
+    private func upNextRow(_ song: Song, index: Int) -> some View {
+        HStack(spacing: 12) {
+            AlbumArtView(coverArtId: song.coverArt, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Button {
+                    appState.pendingNavigation = .song(id: song.id)
+                } label: {
+                    Text(song.title)
+                        .font(.body)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                if let artist = song.artist {
+                    Button {
+                        if let artistId = song.artistId {
+                            appState.pendingNavigation = .artist(id: artistId)
+                        }
+                    } label: {
+                        Text(artist)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(song.artistId == nil)
+                }
+            }
+            Spacer()
+            if let duration = song.duration {
+                Text(formatDuration(duration))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            let absoluteIndex = engine.currentIndex + 1 + index
+            engine.play(song: song, from: engine.queue, at: absoluteIndex)
+        }
+        .contextMenu {
+            Button {
+                let absoluteIndex = engine.currentIndex + 1 + index
+                engine.play(song: song, from: engine.queue, at: absoluteIndex)
+            } label: {
+                Label("Play Now", systemImage: "play.fill")
+            }
+            Button(role: .destructive) {
+                engine.removeFromQueue(at: index)
+            } label: {
+                Label("Remove from Queue", systemImage: "minus.circle")
+            }
+        }
+    }
+}
+
+// MARK: - Lyrics Panel
+
+struct LyricsPanelView: View {
+    @Environment(AppState.self) private var appState
+    @State private var lyricsList: LyricsList?
+    @State private var isLoading = true
+    @State private var error: String?
+    @State private var loadedSongId: String?
+
+    private var engine: AudioEngine { AudioEngine.shared }
+
+    private var selectedLyrics: StructuredLyrics? {
+        guard let list = lyricsList?.structuredLyrics, !list.isEmpty else { return nil }
+        return list.first(where: { $0.synced }) ?? list.first
+    }
+
+    var body: some View {
+        SidePanelContainer(title: "Lyrics", onClose: {
+            appState.activeSidePanel = nil
+        }) {
+            ScrollView {
+                if isLoading {
+                    ProgressView("Loading lyrics...")
+                        .padding(40)
+                } else if let lyrics = selectedLyrics, let lines = lyrics.line {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let title = lyrics.displayTitle ?? engine.currentSong?.title {
+                            Text(title).font(.headline)
+                            if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
+                                Text(artist)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                            Text(line.value.isEmpty ? "♪" : line.value)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(16)
+                } else if error != nil {
+                    ContentUnavailableView {
+                        Label("Error", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(error ?? "")
+                    }
+                    .padding(20)
+                } else {
+                    ContentUnavailableView {
+                        Label("No Lyrics", systemImage: "text.quote")
+                    } description: {
+                        Text("No lyrics available for this song")
+                    }
+                    .padding(20)
+                }
+            }
+        }
+        .task(id: engine.currentSong?.id) {
+            await loadLyrics()
+        }
+    }
+
+    private func loadLyrics() async {
+        guard let songId = engine.currentSong?.id else {
+            lyricsList = nil
+            isLoading = false
+            return
+        }
+        if loadedSongId == songId { return }
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        do {
+            lyricsList = try await appState.subsonicClient.getLyrics(songId: songId)
+            loadedSongId = songId
+        } catch {
+            self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+}
+
+// MARK: - Artist Info Panel
+
+struct ArtistInfoPanelView: View {
+    @Environment(AppState.self) private var appState
+    @State private var info: ArtistInfo2?
+    @State private var isLoading = true
+    @State private var loadedArtistId: String?
+
+    private var engine: AudioEngine { AudioEngine.shared }
+    private var artistId: String? { engine.currentSong?.artistId }
+    private var artistName: String? { engine.currentSong?.artist }
+
+    var body: some View {
+        SidePanelContainer(title: "Artist Info", onClose: {
+            appState.activeSidePanel = nil
+        }) {
+            ScrollView {
+                if isLoading {
+                    ProgressView("Loading...").padding(40)
+                } else if artistId == nil {
+                    ContentUnavailableView {
+                        Label("No Artist", systemImage: "music.mic")
+                    } description: {
+                        Text("No artist information available for this track")
+                    }
+                    .padding(20)
+                } else {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let name = artistName {
+                            Button {
+                                if let id = artistId {
+                                    appState.pendingNavigation = .artist(id: id)
+                                }
+                            } label: {
+                                Text(name)
+                                    .font(.title2)
+                                    .bold()
+                                    .foregroundStyle(.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if let bio = info?.biography, !bio.isEmpty {
+                            Text(cleanBio(bio))
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("No biography available")
+                                .font(.body)
+                                .foregroundStyle(.tertiary)
+                        }
+
+                        if let similar = info?.similarArtist, !similar.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Similar Artists")
+                                    .font(.headline)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 12) {
+                                        ForEach(similar.prefix(20)) { artist in
+                                            Button {
+                                                appState.pendingNavigation = .artist(id: artist.id)
+                                            } label: {
+                                                VStack(spacing: 6) {
+                                                    AlbumArtView(
+                                                        coverArtId: artist.coverArt,
+                                                        size: 64,
+                                                        cornerRadius: 32
+                                                    )
+                                                    Text(artist.name)
+                                                        .font(.caption)
+                                                        .lineLimit(2)
+                                                        .multilineTextAlignment(.center)
+                                                        .frame(width: 72)
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+        }
+        .task(id: artistId) {
+            await loadInfo()
+        }
+    }
+
+    private func loadInfo() async {
+        guard let id = artistId else {
+            info = nil
+            isLoading = false
+            return
+        }
+        if loadedArtistId == id { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            info = try await appState.subsonicClient.getArtistInfo(id: id, count: 20)
+            loadedArtistId = id
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "ArtistInfoPanel")
+                .error("Failed to load artist info: \(error)")
+        }
+    }
+
+    private func cleanBio(_ text: String) -> String {
+        text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+#endif

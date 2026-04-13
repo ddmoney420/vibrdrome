@@ -122,4 +122,11 @@ enum UserDefaultsKeys {
 
     static let libraryLayout = "libraryLayout"
     static let activeMusicFolderId = "activeMusicFolderId"
+
+    // MARK: - macOS Layout
+
+    static let macNowPlayingPlacement = "macNowPlayingPlacement"
+    static let macSidePanelMechanic = "macSidePanelMechanic"
+    static let macSidePanelWidth = "macSidePanelWidth"
+    static let macMiniPlayerPanelTrigger = "macMiniPlayerPanelTrigger"
 }

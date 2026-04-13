@@ -261,10 +261,15 @@ private struct SpinningAlbumArt: View {
 struct MacMiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @SceneStorage("sidebarSelection") private var sidebarSelectionRaw: String = "artists"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt = false
     @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
     @State private var dominantColor: Color?
+
+    private func navigateToNowPlaying() {
+        sidebarSelectionRaw = "nowPlaying"
+    }
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -316,7 +321,7 @@ struct MacMiniPlayerView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    openWindow(id: "now-playing")
+                    navigateToNowPlaying()
                 }
 
                 // Song info
@@ -334,7 +339,7 @@ struct MacMiniPlayerView: View {
                 .frame(minWidth: 120, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    openWindow(id: "now-playing")
+                    navigateToNowPlaying()
                 }
 
                 Spacer()

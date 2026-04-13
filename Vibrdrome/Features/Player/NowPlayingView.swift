@@ -6,6 +6,8 @@ import AVKit
 #endif
 
 struct NowPlayingView: View {
+    var isInline: Bool = false
+
     @Environment(AppState.self) var appState
     @Environment(\.dismiss) private var dismiss
     @State var showQueue = false
@@ -32,9 +34,9 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showQueueInPlayer) var showQueueInPlayer: Bool = true
     @State var showQuickSettings = false
     #if os(macOS)
-    @Environment(\.openWindow) private var openWindow
-    @State private var nsWindow: NSWindow?
-    @State private var macSheet: MacNowPlayingSheet?
+    @Environment(\.openWindow) var openWindow
+    @State var nsWindow: NSWindow?
+    @State var macSheet: MacNowPlayingSheet?
     #endif
 
     var engine: AudioEngine { AudioEngine.shared }
@@ -69,7 +71,7 @@ struct NowPlayingView: View {
                         }
                     }
             )
-            .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
+            .task(id: engine.currentSong?.id ?? engine.currentRadioStation?.id) {
                 await loadAlbumArt()
             }
             #if os(macOS)
@@ -91,13 +93,27 @@ struct NowPlayingView: View {
                 }
             }
             .onChange(of: showQueue) { _, newValue in
-                if newValue { macSheet = .queue; showQueue = false }
+                if newValue {
+                    if isInline {
+                        appState.activeSidePanel = (appState.activeSidePanel == .queue) ? nil : .queue
+                    } else {
+                        macSheet = .queue
+                    }
+                    showQueue = false
+                }
             }
             .onChange(of: showEQ) { _, newValue in
                 if newValue { macSheet = .eq; showEQ = false }
             }
             .onChange(of: appState.showLyrics) { _, newValue in
-                if newValue { macSheet = .lyrics; appState.showLyrics = false }
+                if newValue {
+                    if isInline {
+                        appState.activeSidePanel = (appState.activeSidePanel == .lyrics) ? nil : .lyrics
+                    } else {
+                        macSheet = .lyrics
+                    }
+                    appState.showLyrics = false
+                }
             }
             #else
             .sheet(isPresented: $showQueue) {
@@ -144,6 +160,7 @@ struct NowPlayingView: View {
                 currentRating = engine.currentSong?.userRating ?? 0
                 isDragging = false
                 sliderValue = 0
+                Task { await loadAlbumArt() }
             }
     }
 
@@ -345,7 +362,6 @@ struct NowPlayingView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
                 .fill(.white.opacity(0.1))
-
             if let albumImage {
                 Image(platformImage: albumImage)
                     .resizable()
@@ -355,53 +371,58 @@ struct NowPlayingView: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
-        #if os(iOS)
-        .onTapGesture {
-            guard let albumId = engine.currentSong?.albumId else { return }
-            appState.pendingNavigation = .album(id: albumId)
-            appState.showNowPlaying = false
-        }
-        .contextMenu {
-            if let albumImage {
-                Button {
-                    UIImageWriteToSavedPhotosAlbum(albumImage, nil, nil, nil)
-                    Haptics.success()
-                } label: {
-                    Label("Save to Photos", systemImage: "square.and.arrow.down")
-                }
+        .onTapGesture { handleAlbumArtTap() }
+        .contextMenu { albumArtContextMenu }
+    }
 
-                ShareLink(
-                    item: Image(uiImage: albumImage),
-                    preview: SharePreview(
-                        engine.currentSong?.title ?? "Album Art",
-                        image: Image(uiImage: albumImage)
-                    )
-                )
-            }
-        }
+    private func handleAlbumArtTap() {
+        #if os(iOS)
+        guard let albumId = engine.currentSong?.albumId else { return }
+        appState.pendingNavigation = .album(id: albumId)
+        appState.showNowPlaying = false
         #else
-        .onTapGesture {
+        if isInline {
+            appState.activeSidePanel = (appState.activeSidePanel == .queue) ? nil : .queue
+        } else {
             guard let albumId = engine.currentSong?.albumId else { return }
             appState.pendingNavigation = .album(id: albumId)
             dismiss()
         }
-        .contextMenu {
-            if let albumImage {
-                Button {
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.writeObjects([albumImage])
-                } label: {
-                    Label("Copy Album Art", systemImage: "doc.on.doc")
-                }
-                Button {
-                    saveAlbumArtToDownloads(albumImage, title: engine.currentSong?.title)
-                } label: {
-                    Label("Save to Downloads", systemImage: "square.and.arrow.down")
-                }
-            }
-        }
         #endif
+    }
+
+    @ViewBuilder
+    private var albumArtContextMenu: some View {
+        if let albumImage {
+            #if os(iOS)
+            Button {
+                UIImageWriteToSavedPhotosAlbum(albumImage, nil, nil, nil)
+                Haptics.success()
+            } label: {
+                Label("Save to Photos", systemImage: "square.and.arrow.down")
+            }
+            ShareLink(
+                item: Image(uiImage: albumImage),
+                preview: SharePreview(
+                    engine.currentSong?.title ?? "Album Art",
+                    image: Image(uiImage: albumImage)
+                )
+            )
+            #else
+            Button {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.writeObjects([albumImage])
+            } label: {
+                Label("Copy Album Art", systemImage: "doc.on.doc")
+            }
+            Button {
+                saveAlbumArtToDownloads(albumImage, title: engine.currentSong?.title)
+            } label: {
+                Label("Save to Downloads", systemImage: "square.and.arrow.down")
+            }
+            #endif
+        }
     }
 
     // MARK: - Song Info
@@ -694,215 +715,6 @@ struct NowPlayingView: View {
             }
         }
     }
-
-    // MARK: - Controls Toolbar (above progress bar, macOS only)
-
-    #if os(macOS)
-    private var controlsToolbar: some View {
-        HStack(spacing: 0) {
-            Button { engine.toggleShuffle() } label: {
-                Image(systemName: "shuffle")
-                    .foregroundColor(engine.shuffleEnabled ? .white : .white.opacity(0.5))
-            }
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(engine.shuffleEnabled ? "On" : "Off")
-            .accessibilityIdentifier("shuffleButton")
-
-            Spacer()
-
-            Menu {
-                if SleepTimer.shared.isActive {
-                    Button {
-                        SleepTimer.shared.stop()
-                    } label: {
-                        Label("Cancel Timer", systemImage: "xmark")
-                    }
-                } else {
-                    ForEach([15, 30, 45, 60, 120], id: \.self) { minutes in
-                        Button {
-                            SleepTimer.shared.start(mode: .minutes(minutes))
-                        } label: {
-                            Text(minutes < 60 ? "\(minutes) min" : "\(minutes / 60) hr")
-                        }
-                    }
-                    Button {
-                        SleepTimer.shared.start(mode: .endOfTrack)
-                    } label: {
-                        Text("End of Track")
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: SleepTimer.shared.isActive ? "moon.fill" : "moon")
-                        .foregroundColor(SleepTimer.shared.isActive ? .white : .white.opacity(0.5))
-                    if SleepTimer.shared.isActive {
-                        Text(formatSleepTime(SleepTimer.shared.remainingSeconds))
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.7))
-                            .monospacedDigit()
-                    }
-                }
-            }
-            .accessibilityLabel("Sleep Timer")
-            .accessibilityIdentifier("sleepTimerMenu")
-
-            Spacer()
-
-            Menu {
-                ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { rate in
-                    Button {
-                        engine.playbackRate = Float(rate)
-                    } label: {
-                        HStack {
-                            Text(rate == 1.0 ? "Normal" : "\(rate, specifier: "%.2g")x")
-                            if engine.playbackRate == Float(rate) {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Text(engine.playbackRate == 1.0 ? "1x" : "\(engine.playbackRate, specifier: "%.2g")x")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(engine.playbackRate != 1.0 ? .white : .white.opacity(0.5))
-            }
-            .accessibilityLabel("Playback Speed")
-            .accessibilityIdentifier("playbackSpeedMenu")
-
-            Spacer()
-
-            Button { showEQ = true } label: {
-                Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.eqEnabled
-                            ? .white
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.5)
-                    )
-            }
-            .accessibilityLabel("Equalizer")
-            .accessibilityValue(engine.eqEnabled ? "Active" : "Inactive")
-            .accessibilityIdentifier("eqButton")
-
-            Spacer()
-
-            Button { appState.showLyrics = true } label: {
-                Image(systemName: "quote.bubble")
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            .accessibilityLabel("Lyrics")
-            .accessibilityIdentifier("lyricsButton")
-
-            Spacer()
-
-            Button { engine.cycleRepeatMode() } label: {
-                Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
-                    .foregroundColor(engine.repeatMode != .off ? .white : .white.opacity(0.5))
-            }
-            .accessibilityLabel("Repeat")
-            .accessibilityValue(repeatAccessibilityValue)
-            .accessibilityIdentifier("repeatButton")
-        }
-        .font(.body)
-        .buttonStyle(.plain)
-        .foregroundColor(.white.opacity(0.5))
-    }
-
-    // MARK: - Actions Toolbar (below playback controls, macOS only)
-
-    private var actionsToolbar: some View {
-        HStack(spacing: 0) {
-            if showHeartInPlayer {
-                Button {
-                    guard let song = engine.currentSong else { return }
-                    let songId = song.id
-                    let wasStarred = isStarred
-                    isStarred = !wasStarred
-                    Task {
-                        do {
-                            if wasStarred {
-                                try await OfflineActionQueue.shared.unstar(id: songId)
-                            } else {
-                                try await OfflineActionQueue.shared.star(id: songId)
-                                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
-                                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
-                                }
-                            }
-                            guard engine.currentSong?.id == songId else { return }
-                        } catch {
-                            if engine.currentSong?.id == songId {
-                                isStarred = wasStarred
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: isStarred ? "heart.fill" : "heart")
-                        .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
-                }
-                .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
-                .accessibilityIdentifier("favoriteButton")
-
-                Spacer()
-            }
-
-            if showQueueInPlayer {
-                Button { showQueue = true } label: {
-                    Image(systemName: "list.bullet")
-                }
-                .accessibilityLabel("Show Queue")
-                .accessibilityIdentifier("queueButton")
-
-                Spacer()
-            }
-
-            Button {
-                openWindow(id: "visualizer")
-            } label: {
-                Image(systemName: "waveform")
-            }
-            .accessibilityLabel("Show Visualizer")
-            .accessibilityIdentifier("visualizerButton")
-
-            Spacer()
-
-            Button {
-                nsWindow?.collectionBehavior.insert(.fullScreenPrimary)
-                nsWindow?.toggleFullScreen(nil)
-            } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-            }
-            .accessibilityLabel("Toggle Full Screen")
-        }
-        .font(.body)
-        .buttonStyle(.plain)
-        .foregroundColor(.white.opacity(0.5))
-    }
-
-    // MARK: - macOS Volume Slider
-
-    private var macVolumeSlider: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "speaker.fill")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
-                .accessibilityHidden(true)
-
-            Slider(value: Binding(
-                get: { Double(engine.userVolume) },
-                set: { engine.userVolume = Float($0) }
-            ).animation(nil), in: 0...1)
-            .tint(.white)
-            .accessibilityLabel("Volume")
-            .accessibilityValue(String(format: "%.0f%%", engine.userVolume * 100))
-
-            Image(systemName: "speaker.wave.3.fill")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
-                .accessibilityHidden(true)
-        }
-    }
-    #endif
 
     func formatSleepTime(_ seconds: Int) -> String {
         let m = seconds / 60

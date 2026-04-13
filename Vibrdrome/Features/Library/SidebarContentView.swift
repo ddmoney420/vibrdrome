@@ -8,8 +8,21 @@ struct SidebarContentView: View {
     @Environment(\.openWindow) private var openWindow
     #endif
     @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.artists.rawValue
+    #if os(macOS)
+    @AppStorage(UserDefaultsKeys.macSidePanelWidth) private var sidePanelWidthChoice: String = "medium"
+    #endif
     @State private var detailPath = NavigationPath()
     @State private var randomActionInFlight = false
+
+    #if os(macOS)
+    private var sidePanelWidth: CGFloat {
+        switch sidePanelWidthChoice {
+        case "small": return 300
+        case "large": return 480
+        default: return 360
+        }
+    }
+    #endif
 
     private var selection: Binding<SidebarItem?> {
         Binding(
@@ -26,6 +39,7 @@ struct SidebarContentView: View {
         case search
         case playlists
         case radio
+        case nowPlaying
         case downloads
         case settings
     }
@@ -89,12 +103,41 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.playlists)
                     Label("Stations", systemImage: "antenna.radiowaves.left.and.right")
                         .tag(SidebarItem.radio)
+                    #if os(macOS)
+                    Label("Now Playing", systemImage: "play.circle")
+                        .tag(SidebarItem.nowPlaying)
+                    #endif
                     Label("Settings", systemImage: "gear")
                         .tag(SidebarItem.settings)
                 }
             }
             .navigationTitle("Vibrdrome")
         } detail: {
+            #if os(macOS)
+            HStack(spacing: 0) {
+                NavigationStack(path: $detailPath) {
+                    detailView
+                        .navigationDestination(for: SidebarNavRoute.self) { route in
+                            switch route {
+                            case .album(let id):
+                                AlbumDetailView(albumId: id)
+                            case .artist(let id):
+                                ArtistDetailView(artistId: id)
+                            case .song(let id):
+                                SongDetailView(songId: id)
+                            }
+                        }
+                }
+
+                if let panel = appState.activeSidePanel {
+                    Divider()
+                    sidePanelView(for: panel)
+                        .frame(width: sidePanelWidth)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: appState.activeSidePanel)
+            #else
             NavigationStack(path: $detailPath) {
                 detailView
                     .navigationDestination(for: SidebarNavRoute.self) { route in
@@ -108,6 +151,7 @@ struct SidebarContentView: View {
                         }
                     }
             }
+            #endif
         }
         .onChange(of: selectionRaw) { _, _ in
             if !detailPath.isEmpty {
@@ -134,7 +178,8 @@ struct SidebarContentView: View {
         #if os(macOS)
         VStack(spacing: 0) {
             splitView
-            if engine.currentSong != nil || engine.currentRadioStation != nil {
+            if (engine.currentSong != nil || engine.currentRadioStation != nil)
+                && selection.wrappedValue != .nowPlaying {
                 Divider()
                 MacMiniPlayerView()
             }
@@ -180,6 +225,12 @@ struct SidebarContentView: View {
             PlaylistsView()
         case .radio:
             RadioView()
+        case .nowPlaying:
+            #if os(macOS)
+            NowPlayingView(isInline: true)
+            #else
+            EmptyView()
+            #endif
         case .settings:
             SettingsView()
         case nil:
@@ -190,6 +241,22 @@ struct SidebarContentView: View {
             }
         }
     }
+
+    // MARK: - Side panels
+
+    #if os(macOS)
+    @ViewBuilder
+    private func sidePanelView(for panel: AppState.SidePanel) -> some View {
+        switch panel {
+        case .queue:
+            QueuePanelView()
+        case .lyrics:
+            LyricsPanelView()
+        case .artistInfo:
+            ArtistInfoPanelView()
+        }
+    }
+    #endif
 
     // MARK: - Random Album / Random Mix actions
 
@@ -221,8 +288,8 @@ struct SidebarContentView: View {
             guard let first = mix.first else { return }
             AudioEngine.shared.play(song: first, from: mix, at: 0)
             #if os(macOS)
-            appState.pendingNowPlayingAction = .showQueue
-            openWindow(id: "now-playing")
+            selectionRaw = SidebarItem.nowPlaying.rawValue
+            appState.activeSidePanel = .queue
             #endif
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Sidebar")

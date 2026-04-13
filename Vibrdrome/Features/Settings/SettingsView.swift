@@ -39,7 +39,6 @@ enum AccentColorTheme: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showServerConfig = false
-    @State private var showServerManager = false
     @State private var showDeleteConfirmation = false
     @State private var showLogoutConfirmation = false
     @State private var showBackupShare = false
@@ -78,6 +77,15 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("appearanceSettingsLink")
 
+            #if os(macOS)
+            NavigationLink {
+                LayoutSettingsView()
+            } label: {
+                Label("Layout", systemImage: "rectangle.3.group")
+            }
+            .accessibilityIdentifier("layoutSettingsLink")
+            #endif
+
             downloadsSection
 
             #if os(iOS)
@@ -101,10 +109,6 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .sheet(isPresented: $showServerConfig) {
             ServerConfigView()
-                .environment(appState)
-        }
-        .sheet(isPresented: $showServerManager) {
-            ServerManagerView()
                 .environment(appState)
         }
         .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
@@ -221,8 +225,9 @@ struct SettingsView: View {
                         .foregroundColor(.accentColor)
                 }
 
-                Button {
-                    showServerManager = true
+                NavigationLink {
+                    ServerManagerView(embedded: true)
+                        .environment(appState)
                 } label: {
                     Label("Manage Servers", systemImage: "server.rack")
                         .foregroundColor(.accentColor)
