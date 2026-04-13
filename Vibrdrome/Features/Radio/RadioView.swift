@@ -126,6 +126,17 @@ struct RadioView: View {
                 }
             }
             ToolbarItem {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Label(showAsList ? "Grid View" : "List View",
+                          systemImage: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .help(showAsList ? "Show as Grid" : "Show as List")
+            }
+            ToolbarItem {
                 Button { Task { await loadStations() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -235,9 +246,8 @@ struct RadioView: View {
 
     private var stationGrid: some View {
         LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-        ], spacing: 12) {
+            GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
+        ], spacing: 16) {
             ForEach(Array(filteredStations.enumerated()), id: \.element.id) { index, station in
                 stationCardView(station, colorIndex: index)
             }
@@ -255,11 +265,11 @@ struct RadioView: View {
             #endif
             engine.playRadio(station: station)
         } label: {
-            VStack(spacing: 8) {
-                stationIcon(station, color: color, isPlaying: isPlaying)
+            VStack(spacing: 10) {
+                stationIcon(station, color: color, isPlaying: isPlaying, size: 140)
 
                 Text(station.name)
-                    .font(.caption)
+                    .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
                     .lineLimit(2)
@@ -267,38 +277,41 @@ struct RadioView: View {
 
                 if isPlaying {
                     Image(systemName: "waveform")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundColor(color)
                         .symbolEffect(.variableColor)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, 16)
+            .padding(.horizontal, 12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(isPlaying ? color.opacity(0.5) : .clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)
     }
 
-    private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
+    private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool, size: CGFloat = 48) -> some View {
+        let cornerRadius = max(8, size * 0.18)
+        let iconFontSize = size * 0.4
+        let faviconSize = size * 0.55
+        return ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(color.gradient.opacity(isPlaying ? 1.0 : 0.7))
-                .frame(width: 48, height: 48)
+                .frame(width: size, height: size)
             if let artId = station.radioCoverArtId {
                 // Navidrome 0.61+ server artwork
-                let url = appState.subsonicClient.coverArtURL(id: artId, size: 120)
+                let url = appState.subsonicClient.coverArtURL(id: artId, size: Int(size * 2))
                 AsyncImage(url: url) { image in
                     image.resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .frame(width: size, height: size)
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                 } placeholder: {
                     Image(systemName: "radio")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: iconFontSize, weight: .semibold))
                         .foregroundColor(.white)
                 }
             } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }),
@@ -306,15 +319,15 @@ struct RadioView: View {
                 // Favicon fallback
                 AsyncImage(url: faviconURL) { image in
                     image.resizable().aspectRatio(contentMode: .fit)
-                        .frame(width: 28, height: 28)
+                        .frame(width: faviconSize, height: faviconSize)
                 } placeholder: {
                     Image(systemName: "radio")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: iconFontSize, weight: .semibold))
                         .foregroundColor(.white)
                 }
             } else {
                 Image(systemName: "radio")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: iconFontSize, weight: .semibold))
                     .foregroundColor(.white)
             }
         }

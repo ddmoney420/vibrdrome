@@ -10,7 +10,6 @@ struct ArtistDetailView: View {
     @State private var biography: String?
     @State private var isLoading = true
     @State private var error: String?
-    @State private var showAllTopSongs = false
     @State private var showFullBio = false
 
     var body: some View {
@@ -18,8 +17,7 @@ struct ArtistDetailView: View {
             // Top Songs section
             if !topSongs.isEmpty {
                 Section {
-                    let displayed = showAllTopSongs ? topSongs : Array(topSongs.prefix(5))
-                    ForEach(Array(displayed.enumerated()), id: \.element.id) { index, song in
+                    ForEach(Array(topSongs.enumerated()), id: \.element.id) { index, song in
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -27,18 +25,8 @@ struct ArtistDetailView: View {
                             }
                             .trackContextMenu(song: song, queue: topSongs, index: index)
                     }
-
-                    if topSongs.count > 5 {
-                        Button {
-                            withAnimation { showAllTopSongs.toggle() }
-                        } label: {
-                            Text(showAllTopSongs ? "Show Less" : "See All \(topSongs.count) Songs")
-                                .font(.caption)
-                                .foregroundColor(.accentColor)
-                        }
-                    }
                 } header: {
-                    Text("Top Songs")
+                    Text("Top Tracks")
                 }
             }
 
@@ -171,7 +159,7 @@ struct ArtistDetailView: View {
             artist = loadedArtist
             // Load top songs and similar artists in parallel
             async let topSongsResult = appState.subsonicClient.getTopSongs(
-                artist: loadedArtist.name, count: 20
+                artist: loadedArtist.name, count: 10
             )
             async let artistInfoResult = appState.subsonicClient.getArtistInfo(id: artistId)
             topSongs = try await topSongsResult

@@ -127,6 +127,17 @@ struct PlaylistsView: View {
                 }
             }
             ToolbarItem {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Label(showAsList ? "Grid View" : "List View",
+                          systemImage: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .help(showAsList ? "Show as Grid" : "Show as List")
+            }
+            ToolbarItem {
                 Menu {
                     ForEach(PlaylistSortOption.allCases, id: \.self) { option in
                         Button {

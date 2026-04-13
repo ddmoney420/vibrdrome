@@ -1,10 +1,13 @@
 import SwiftUI
+import NukeUI
 
 struct AlbumDetailView: View {
     let albumId: String
 
     @Environment(AppState.self) private var appState
     @State private var album: Album?
+    @State private var albumNotes: String?
+    @State private var showFullNotes = false
     @State private var isLoading = true
     @State private var error: String?
     @State private var similarAlbums: [Album] = []
@@ -90,6 +93,9 @@ struct AlbumDetailView: View {
                     // Album info footer
                     albumFooter(album)
 
+                    // About / notes
+                    aboutSection
+
                     // Similar albums
                     similarAlbumsSection
                 }
@@ -150,39 +156,125 @@ struct AlbumDetailView: View {
     #if os(macOS)
     @ViewBuilder
     private func albumHeaderMacOS(_ album: Album) -> some View {
-        HStack(alignment: .top, spacing: 20) {
-            AlbumArtView(coverArtId: album.coverArt, size: 200, cornerRadius: 12)
-                .shadow(radius: 8)
+        ZStack {
+            blurredArt(coverArtId: album.coverArt)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(album.name)
-                    .font(.title2)
-                    .bold()
+            HStack(alignment: .top, spacing: 24) {
+                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14)
+                    .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
-                if let artist = album.artist {
-                    if let artistId = album.artistId {
-                        Button {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(album.name)
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.white)
+
+                    if let artist = album.artist {
+                        if let artistId = album.artistId {
+                            Button {
+                                appState.pendingNavigation = .artist(id: artistId)
+                            } label: {
+                                Text(artist)
+                                    .font(.title3)
+                                    .foregroundColor(.white.opacity(0.85))
+                            }
+                            .buttonStyle(.plain)
+                        } else {
                             Text(artist)
-                                .font(.body)
-                                .foregroundColor(.accentColor)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.7))
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        Text(artist)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
                     }
+
+                    albumMetadataRow(album)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    Spacer(minLength: 12)
+
+                    macOSHeaderActionButtons(album)
                 }
-
-                albumMetadataRow(album)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
             }
-
-            Spacer()
+            .padding(28)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private func macOSHeaderActionButtons(_ album: Album) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if let songs = album.song, let first = songs.first {
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.white, in: Capsule())
+                    .foregroundStyle(.black)
+            }
+            .buttonStyle(.plain)
+            .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumPlayButton")
+
+            Button {
+                if var songs = album.song, !songs.isEmpty {
+                    songs.shuffle()
+                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                }
+            } label: {
+                Label("Shuffle", systemImage: "shuffle")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumShuffleButton")
+
+            Button {
+                if let songs = album.song {
+                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
+                }
+            } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumDownloadButton")
+        }
+    }
+
+    @ViewBuilder
+    private func blurredArt(coverArtId: String?) -> some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black
+                if let coverArtId {
+                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 600)) { state in
+                        if let image = state.image {
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .blur(radius: 60)
+                    .saturation(1.3)
+                    .overlay(Color.black.opacity(0.35))
+                }
+            }
+        }
     }
     #else
     @ViewBuilder
@@ -363,32 +455,7 @@ struct AlbumDetailView: View {
     #if os(macOS)
     @ViewBuilder
     private func macOSActionButtons(_ album: Album) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                if let songs = album.song, let first = songs.first {
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                }
-            } label: {
-                Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(album.song?.isEmpty ?? true)
-
-            Button {
-                if var songs = album.song, !songs.isEmpty {
-                    songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                }
-            } label: {
-                Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(album.song?.isEmpty ?? true)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        EmptyView()
     }
     #endif
 
@@ -403,6 +470,42 @@ struct AlbumDetailView: View {
                     .padding(.vertical, 12)
             }
         }
+    }
+
+    @ViewBuilder
+    private var aboutSection: some View {
+        if let albumNotes, !albumNotes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About")
+                    .font(.title3)
+                    .bold()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                Text(cleanNotes(albumNotes))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(showFullNotes ? nil : 5)
+                    .padding(.horizontal, 16)
+
+                if albumNotes.count > 240 {
+                    Button {
+                        withAnimation { showFullNotes.toggle() }
+                    } label: {
+                        Text(showFullNotes ? "Show Less" : "Read More")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
+    private func cleanNotes(_ text: String) -> String {
+        text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @ViewBuilder
@@ -471,6 +574,10 @@ struct AlbumDetailView: View {
         defer { isLoading = false }
         do {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
+            // Load album notes (info2) in background — non-fatal if it fails
+            if let info = try? await appState.subsonicClient.getAlbumInfo(id: albumId) {
+                albumNotes = info.notes
+            }
             // Load similar albums from first song
             if let firstSong = album?.song?.first {
                 let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)

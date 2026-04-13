@@ -7,6 +7,7 @@ struct TrackRow: View {
     var queue: [Song]?
     var index: Int?
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var isDownloaded = false
     @State private var isStarred = false
 
@@ -30,18 +31,34 @@ struct TrackRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
-                    .lineLimit(1)
+                Button {
+                    appState.pendingNavigation = .song(id: song.id)
+                } label: {
+                    Text(song.title)
+                        .font(.body)
+                        .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("trackTitleButton_\(song.id)")
+
                 HStack(spacing: 4) {
                     if let artist = song.artist {
-                        if let albumArtist = song.albumArtist,
-                           albumArtist != artist {
-                            Text("\(artist) (\(albumArtist))")
-                        } else {
-                            Text(artist)
+                        Button {
+                            if let artistId = song.artistId {
+                                appState.pendingNavigation = .artist(id: artistId)
+                            }
+                        } label: {
+                            if let albumArtist = song.albumArtist,
+                               albumArtist != artist {
+                                Text("\(artist) (\(albumArtist))")
+                            } else {
+                                Text(artist)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(song.artistId == nil)
+                        .accessibilityIdentifier("trackArtistButton_\(song.id)")
                     }
                     if let duration = song.duration {
                         Text("·")

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlbumCard: View {
     let album: Album
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12,10 +13,19 @@ struct AlbumCard: View {
                     .font(.body)
                     .lineLimit(1)
                 if let artist = album.artist {
-                    Text(artist)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    Button {
+                        if let artistId = album.artistId {
+                            appState.pendingNavigation = .artist(id: artistId)
+                        }
+                    } label: {
+                        Text(artist)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(album.artistId == nil)
+                    .accessibilityIdentifier("albumCardArtistButton_\(album.id)")
                 }
                 HStack(spacing: 4) {
                     if let year = album.year {

@@ -117,6 +117,12 @@ struct TrackContextMenuModifier: ViewModifier {
 
     @ViewBuilder
     private var navigationActions: some View {
+        Button {
+            appState.pendingNavigation = .song(id: song.id)
+        } label: {
+            Label("Song Info", systemImage: "info.circle")
+        }
+
         if let albumId = song.albumId {
             Button {
                 appState.pendingNavigation = .album(id: albumId)

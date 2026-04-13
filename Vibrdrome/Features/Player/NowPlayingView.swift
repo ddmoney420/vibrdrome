@@ -34,6 +34,7 @@ struct NowPlayingView: View {
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     @State private var nsWindow: NSWindow?
+    @State private var macSheet: MacNowPlayingSheet?
     #endif
 
     var engine: AudioEngine { AudioEngine.shared }
@@ -71,6 +72,34 @@ struct NowPlayingView: View {
             .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
                 await loadAlbumArt()
             }
+            #if os(macOS)
+            .sheet(item: $macSheet) { sheet in
+                switch sheet {
+                case .queue:
+                    QueueView()
+                        .environment(appState)
+                        .frame(minWidth: 480, idealWidth: 540, minHeight: 600, idealHeight: 720)
+                case .lyrics:
+                    if let song = engine.currentSong {
+                        LyricsView(songId: song.id)
+                            .environment(appState)
+                            .frame(minWidth: 480, idealWidth: 540, minHeight: 600, idealHeight: 720)
+                    }
+                case .eq:
+                    EQView()
+                        .frame(minWidth: 480, idealWidth: 540, minHeight: 480, idealHeight: 560)
+                }
+            }
+            .onChange(of: showQueue) { _, newValue in
+                if newValue { macSheet = .queue; showQueue = false }
+            }
+            .onChange(of: showEQ) { _, newValue in
+                if newValue { macSheet = .eq; showEQ = false }
+            }
+            .onChange(of: appState.showLyrics) { _, newValue in
+                if newValue { macSheet = .lyrics; appState.showLyrics = false }
+            }
+            #else
             .sheet(isPresented: $showQueue) {
                 QueueView()
                     .environment(appState)
@@ -84,6 +113,7 @@ struct NowPlayingView: View {
             .sheet(isPresented: $showEQ) {
                 EQView()
             }
+            #endif
             #if os(iOS)
             .sheet(isPresented: $showQuickSettings) {
                 quickSettingsSheet
@@ -100,7 +130,15 @@ struct NowPlayingView: View {
                     appearScale = 1.0
                     appearOpacity = 1.0
                 }
+                #if os(macOS)
+                if let next = consumePendingAction(appState) { macSheet = next }
+                #endif
             }
+            #if os(macOS)
+            .onChange(of: appState.pendingNowPlayingAction) { _, _ in
+                if let next = consumePendingAction(appState) { macSheet = next }
+            }
+            #endif
             .onChange(of: engine.currentSong?.id) {
                 isStarred = engine.currentSong?.starred != nil
                 currentRating = engine.currentSong?.userRating ?? 0
@@ -113,7 +151,7 @@ struct NowPlayingView: View {
     private var mainContent: some View {
         #if os(macOS)
         GeometryReader { geo in
-            let controlsNeeded: CGFloat = 360
+            let controlsNeeded: CGFloat = 480
             let artSize = max(150, min(geo.size.width - 120, geo.size.height - controlsNeeded))
 
             VStack(spacing: 0) {
@@ -134,10 +172,25 @@ struct NowPlayingView: View {
                     .padding(.bottom, 6)
 
                 progressSlider
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 6)
+
+                if showAudioQualityInfo {
+                    streamingInfo
+                        .padding(.bottom, 8)
+                }
 
                 playbackControls
                     .padding(.bottom, 8)
+
+                if showRatingInPlayer {
+                    starRating
+                        .padding(.bottom, 10)
+                }
+
+                if showVolumeSlider {
+                    macVolumeSlider
+                        .padding(.bottom, 10)
+                }
 
                 actionsToolbar
                     .padding(.bottom, 10)
@@ -324,6 +377,28 @@ struct NowPlayingView: View {
                         image: Image(uiImage: albumImage)
                     )
                 )
+            }
+        }
+        #else
+        .onTapGesture {
+            guard let albumId = engine.currentSong?.albumId else { return }
+            appState.pendingNavigation = .album(id: albumId)
+            dismiss()
+        }
+        .contextMenu {
+            if let albumImage {
+                Button {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.writeObjects([albumImage])
+                } label: {
+                    Label("Copy Album Art", systemImage: "doc.on.doc")
+                }
+                Button {
+                    saveAlbumArtToDownloads(albumImage, title: engine.currentSong?.title)
+                } label: {
+                    Label("Save to Downloads", systemImage: "square.and.arrow.down")
+                }
             }
         }
         #endif
@@ -560,6 +635,43 @@ struct NowPlayingView: View {
         }
     }
 
+    // MARK: - Streaming Info (cross-platform)
+
+    var streamingInfo: some View {
+        Group {
+            if let song = engine.currentSong {
+                let downloaded = isCurrentSongDownloaded
+                let suffix = song.suffix?.uppercased() ?? "—"
+                if downloaded {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 9))
+                        Text("Downloaded · \(suffix)")
+                    }
+                } else {
+                    let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
+                    HStack(spacing: 4) {
+                        Image(systemName: "wifi")
+                            .font(.system(size: 9))
+                        Text("\(bitRate) · \(suffix)")
+                    }
+                }
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(.white.opacity(0.5))
+        .frame(maxWidth: .infinity)
+    }
+
+    var isCurrentSongDownloaded: Bool {
+        guard let songId = engine.currentSong?.id else { return false }
+        let modelContext = PersistenceController.shared.container.mainContext
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+        )
+        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+    }
+
     // MARK: - Star Rating
 
     var starRating: some View {
@@ -701,42 +813,56 @@ struct NowPlayingView: View {
 
     private var actionsToolbar: some View {
         HStack(spacing: 0) {
-            Button {
-                guard let song = engine.currentSong else { return }
-                let songId = song.id
-                let wasStarred = isStarred
-                isStarred = !wasStarred
-                Task {
-                    do {
-                        if wasStarred {
-                            try await OfflineActionQueue.shared.unstar(id: songId)
-                        } else {
-                            try await OfflineActionQueue.shared.star(id: songId)
-                            if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
-                                DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+            if showHeartInPlayer {
+                Button {
+                    guard let song = engine.currentSong else { return }
+                    let songId = song.id
+                    let wasStarred = isStarred
+                    isStarred = !wasStarred
+                    Task {
+                        do {
+                            if wasStarred {
+                                try await OfflineActionQueue.shared.unstar(id: songId)
+                            } else {
+                                try await OfflineActionQueue.shared.star(id: songId)
+                                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
+                                    DownloadManager.shared.download(song: song, client: appState.subsonicClient)
+                                }
+                            }
+                            guard engine.currentSong?.id == songId else { return }
+                        } catch {
+                            if engine.currentSong?.id == songId {
+                                isStarred = wasStarred
                             }
                         }
-                        guard engine.currentSong?.id == songId else { return }
-                    } catch {
-                        if engine.currentSong?.id == songId {
-                            isStarred = wasStarred
-                        }
                     }
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
                 }
+                .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
+                .accessibilityIdentifier("favoriteButton")
+
+                Spacer()
+            }
+
+            if showQueueInPlayer {
+                Button { showQueue = true } label: {
+                    Image(systemName: "list.bullet")
+                }
+                .accessibilityLabel("Show Queue")
+                .accessibilityIdentifier("queueButton")
+
+                Spacer()
+            }
+
+            Button {
+                openWindow(id: "visualizer")
             } label: {
-                Image(systemName: isStarred ? "heart.fill" : "heart")
-                    .foregroundColor(isStarred ? .pink : .white.opacity(0.5))
+                Image(systemName: "waveform")
             }
-            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
-            .accessibilityIdentifier("favoriteButton")
-
-            Spacer()
-
-            Button { showQueue = true } label: {
-                Image(systemName: "list.bullet")
-            }
-            .accessibilityLabel("Show Queue")
-            .accessibilityIdentifier("queueButton")
+            .accessibilityLabel("Show Visualizer")
+            .accessibilityIdentifier("visualizerButton")
 
             Spacer()
 
@@ -752,6 +878,30 @@ struct NowPlayingView: View {
         .buttonStyle(.plain)
         .foregroundColor(.white.opacity(0.5))
     }
+
+    // MARK: - macOS Volume Slider
+
+    private var macVolumeSlider: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.fill")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
+
+            Slider(value: Binding(
+                get: { Double(engine.userVolume) },
+                set: { engine.userVolume = Float($0) }
+            ).animation(nil), in: 0...1)
+            .tint(.white)
+            .accessibilityLabel("Volume")
+            .accessibilityValue(String(format: "%.0f%%", engine.userVolume * 100))
+
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
+        }
+    }
     #endif
 
     func formatSleepTime(_ seconds: Int) -> String {
@@ -760,6 +910,36 @@ struct NowPlayingView: View {
         return "\(m):\(String(format: "%02d", s))"
     }
 }
+
+// MARK: - macOS Sheet Coordinator
+
+#if os(macOS)
+enum MacNowPlayingSheet: String, Identifiable {
+    case queue, lyrics, eq
+    var id: String { rawValue }
+}
+
+@MainActor
+func consumePendingAction(_ appState: AppState) -> MacNowPlayingSheet? {
+    guard let action = appState.pendingNowPlayingAction else { return nil }
+    appState.pendingNowPlayingAction = nil
+    switch action {
+    case .showQueue: return .queue
+    case .showLyrics: return .lyrics
+    }
+}
+
+func saveAlbumArtToDownloads(_ image: NSImage, title: String?) {
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let png = bitmap.representation(using: .png, properties: [:]) else { return }
+    let safeTitle = (title ?? "Album Art").replacingOccurrences(of: "/", with: "_")
+    let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        ?? FileManager.default.homeDirectoryForCurrentUser
+    let url = downloads.appendingPathComponent("\(safeTitle).png")
+    try? png.write(to: url)
+}
+#endif
 
 // MARK: - Toolbar Item Identifiers
 

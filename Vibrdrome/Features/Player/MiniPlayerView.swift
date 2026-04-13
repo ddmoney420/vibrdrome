@@ -198,7 +198,6 @@ struct MiniPlayerView: View {
         return ""
     }
 
-    #if os(iOS)
     private func loadDominantColor() async {
         let coverArtId = engine.currentSong?.coverArt
             ?? engine.currentRadioStation?.radioCoverArtId
@@ -216,11 +215,6 @@ struct MiniPlayerView: View {
             dominantColor = Color(avgColor)
         }
     }
-    #else
-    private func loadDominantColor() async {
-        dominantColor = nil
-    }
-    #endif
 }
 
 // MARK: - Spinning Album Art (isolated subview to prevent parent re-renders)
@@ -230,12 +224,13 @@ private struct SpinningAlbumArt: View {
     let shouldSpin: Bool
     let disableSpinningArt: Bool
     let reduceMotion: Bool
+    var size: CGFloat = 40
 
     @State private var angle: Double = 0
     @State private var timer: Timer?
 
     var body: some View {
-        AlbumArtView(coverArtId: coverArtId, size: 40, cornerRadius: 20)
+        AlbumArtView(coverArtId: coverArtId, size: size, cornerRadius: size / 2)
             .drawingGroup()
             .rotationEffect(.degrees(angle))
             .onAppear { startIfNeeded() }
@@ -267,8 +262,15 @@ struct MacMiniPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt = false
+    @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
+    @State private var dominantColor: Color?
 
     private var engine: AudioEngine { AudioEngine.shared }
+
+    private var shouldSpin: Bool {
+        engine.isPlaying && !disableSpinningArt && !reduceMotion
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -289,12 +291,33 @@ struct MacMiniPlayerView: View {
             .frame(height: 3)
 
             HStack(spacing: 16) {
-                // Album art
-                AlbumArtView(
-                    coverArtId: engine.currentSong?.coverArt,
-                    size: 40,
-                    cornerRadius: 6
-                )
+                // Spinning album art with circular progress ring
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.1), lineWidth: 2.5)
+                        .frame(width: 56, height: 56)
+
+                    Circle()
+                        .trim(from: 0, to: engine.duration > 0
+                              ? engine.currentTime / engine.duration : 0)
+                        .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: 56, height: 56)
+                        .rotationEffect(.degrees(-90))
+                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
+
+                    SpinningAlbumArt(
+                        coverArtId: engine.currentSong?.coverArt
+                            ?? engine.currentRadioStation?.radioCoverArtId,
+                        shouldSpin: shouldSpin,
+                        disableSpinningArt: disableSpinningArt,
+                        reduceMotion: reduceMotion,
+                        size: 48
+                    )
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openWindow(id: "now-playing")
+                }
 
                 // Song info
                 VStack(alignment: .leading, spacing: 1) {
@@ -309,6 +332,10 @@ struct MacMiniPlayerView: View {
                         .lineLimit(1)
                 }
                 .frame(minWidth: 120, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openWindow(id: "now-playing")
+                }
 
                 Spacer()
 
@@ -359,6 +386,18 @@ struct MacMiniPlayerView: View {
                         .accessibilityHidden(true)
                 }
 
+                // Visualizer
+                Button {
+                    openWindow(id: "visualizer")
+                } label: {
+                    Image(systemName: "waveform")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open Visualizer")
+                .accessibilityLabel("Open Visualizer")
+
                 // Pop-out mini player
                 Button {
                     openWindow(id: "mini-player")
@@ -374,10 +413,45 @@ struct MacMiniPlayerView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .background(.bar)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            openWindow(id: "now-playing")
+        .background {
+            ZStack {
+                Rectangle().fill(.bar)
+                if enableMiniPlayerTint, let dominantColor {
+                    Rectangle()
+                        .fill(dominantColor.opacity(0.15))
+                }
+            }
+        }
+        .contextMenu {
+            if let song = engine.currentSong {
+                if let albumId = song.albumId {
+                    Button {
+                        appState.pendingNavigation = .album(id: albumId)
+                    } label: {
+                        Label("Go to Album", systemImage: "square.stack")
+                    }
+                }
+                if let artistId = song.artistId {
+                    Button {
+                        appState.pendingNavigation = .artist(id: artistId)
+                    } label: {
+                        Label("Go to Artist", systemImage: "music.mic")
+                    }
+                }
+                Button {
+                    AudioEngine.shared.addToQueueNext(song)
+                } label: {
+                    Label("Play Next", systemImage: "text.insert")
+                }
+                Button {
+                    AudioEngine.shared.startRadioFromSong(song)
+                } label: {
+                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                }
+            }
+        }
+        .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
+            await loadDominantColor()
         }
     }
 
@@ -393,12 +467,34 @@ struct MacMiniPlayerView: View {
 
     private var displaySubtitle: String {
         if let song = engine.currentSong {
+            let nextIndex = engine.currentIndex + 1
+            if engine.queue.indices.contains(nextIndex) {
+                return "Next: \(engine.queue[nextIndex].title)"
+            }
             return song.artist ?? ""
         }
         if engine.currentRadioStation != nil {
             return "Internet Radio"
         }
         return ""
+    }
+
+    private func loadDominantColor() async {
+        let coverArtId = engine.currentSong?.coverArt
+            ?? engine.currentRadioStation?.radioCoverArtId
+        guard let coverArtId else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        let url = appState.subsonicClient.coverArtURL(id: coverArtId, size: 80)
+        guard let image = try? await ImagePipeline.shared.image(for: url),
+              let avgColor = image.averageColor else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) {
+            dominantColor = Color(avgColor)
+        }
     }
 }
 
@@ -408,8 +504,15 @@ struct PopOutPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
+    @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt = false
+    @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
+    @State private var dominantColor: Color?
 
     private var engine: AudioEngine { AudioEngine.shared }
+
+    private var shouldSpin: Bool {
+        engine.isPlaying && !disableSpinningArt && !reduceMotion
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -429,24 +532,42 @@ struct PopOutPlayerView: View {
             .frame(height: 2)
 
             HStack(spacing: 10) {
-                // Album art
-                AlbumArtView(
-                    coverArtId: engine.currentSong?.coverArt,
-                    size: 52,
-                    cornerRadius: 8
-                )
+                // Spinning album art with circular progress ring
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.1), lineWidth: 2.5)
+                        .frame(width: 56, height: 56)
+
+                    Circle()
+                        .trim(from: 0, to: engine.duration > 0
+                              ? engine.currentTime / engine.duration : 0)
+                        .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: 56, height: 56)
+                        .rotationEffect(.degrees(-90))
+                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
+
+                    SpinningAlbumArt(
+                        coverArtId: engine.currentSong?.coverArt
+                            ?? engine.currentRadioStation?.radioCoverArtId,
+                        shouldSpin: shouldSpin,
+                        disableSpinningArt: disableSpinningArt,
+                        reduceMotion: reduceMotion,
+                        size: 48
+                    )
+                }
+                .contentShape(Rectangle())
                 .onTapGesture {
                     openWindow(id: "now-playing")
                 }
 
                 // Song info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(engine.currentSong?.title ?? engine.currentRadioStation?.name ?? "Not Playing")
+                    Text(displayTitle)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)
 
-                    Text(engine.currentSong?.artist ?? (engine.currentRadioStation != nil ? "Internet Radio" : ""))
+                    Text(displaySubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -482,8 +603,89 @@ struct PopOutPlayerView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
-        .background(.bar)
-        .frame(width: 320, height: 76)
+        .background {
+            ZStack {
+                Rectangle().fill(.bar)
+                if enableMiniPlayerTint, let dominantColor {
+                    Rectangle()
+                        .fill(dominantColor.opacity(0.15))
+                }
+            }
+        }
+        .frame(width: 320, height: 84)
+        .contextMenu {
+            if let song = engine.currentSong {
+                if let albumId = song.albumId {
+                    Button {
+                        appState.pendingNavigation = .album(id: albumId)
+                    } label: {
+                        Label("Go to Album", systemImage: "square.stack")
+                    }
+                }
+                if let artistId = song.artistId {
+                    Button {
+                        appState.pendingNavigation = .artist(id: artistId)
+                    } label: {
+                        Label("Go to Artist", systemImage: "music.mic")
+                    }
+                }
+                Button {
+                    AudioEngine.shared.addToQueueNext(song)
+                } label: {
+                    Label("Play Next", systemImage: "text.insert")
+                }
+                Button {
+                    AudioEngine.shared.startRadioFromSong(song)
+                } label: {
+                    Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                }
+            }
+        }
+        .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
+            await loadDominantColor()
+        }
+    }
+
+    private var displayTitle: String {
+        if let song = engine.currentSong {
+            return song.title
+        }
+        if let station = engine.currentRadioStation {
+            return station.name
+        }
+        return "Not Playing"
+    }
+
+    private var displaySubtitle: String {
+        if let song = engine.currentSong {
+            let nextIndex = engine.currentIndex + 1
+            if engine.queue.indices.contains(nextIndex) {
+                return "Next: \(engine.queue[nextIndex].title)"
+            }
+            return song.artist ?? ""
+        }
+        if engine.currentRadioStation != nil {
+            return "Internet Radio"
+        }
+        return ""
+    }
+
+    private func loadDominantColor() async {
+        let coverArtId = engine.currentSong?.coverArt
+            ?? engine.currentRadioStation?.radioCoverArtId
+        guard let coverArtId else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        let url = appState.subsonicClient.coverArtURL(id: coverArtId, size: 80)
+        guard let image = try? await ImagePipeline.shared.image(for: url),
+              let avgColor = image.averageColor else {
+            withAnimation { dominantColor = nil }
+            return
+        }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.5)) {
+            dominantColor = Color(avgColor)
+        }
     }
 }
 #endif

@@ -38,10 +38,19 @@ final class AppState {
     enum PendingNavigation: Equatable {
         case artist(id: String)
         case album(id: String)
+        case song(id: String)
         case genre(name: String)
         case playlist(id: String)
     }
     var pendingNavigation: PendingNavigation?
+
+    /// Single-shot trigger consumed by NowPlayingView when it appears or this changes.
+    /// Used by sidebar actions (e.g., Random Mix) to surface the queue panel.
+    enum NowPlayingAction: Equatable {
+        case showQueue
+        case showLyrics
+    }
+    var pendingNowPlayingAction: NowPlayingAction?
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?

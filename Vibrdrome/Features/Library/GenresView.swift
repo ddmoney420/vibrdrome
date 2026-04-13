@@ -8,6 +8,7 @@ struct GenresView: View {
     @State private var genreArt: [String: String] = [:] // genre → coverArtId
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
+    @AppStorage("genresViewStyle") private var showAsList = true
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -37,30 +38,13 @@ struct GenresView: View {
     }
 
     var body: some View {
-        List(filteredGenres) { genre in
-            NavigationLink {
-                AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
-            } label: {
-                HStack(spacing: 12) {
-                    AlbumArtView(
-                        coverArtId: genreArt[genre.value],
-                        size: 48,
-                        cornerRadius: 8
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(genre.value)
-                            .font(.body)
-                        Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
+        Group {
+            if showAsList {
+                genreList
+            } else {
+                genreGrid
             }
-            .accessibilityIdentifier("genreRow_\(genre.value)")
         }
-        .listStyle(.plain)
         #if os(iOS)
         .contentMargins(.bottom, 80)
         #endif
@@ -94,6 +78,17 @@ struct GenresView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("genresViewToggle")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ForEach(GenreSortOption.allCases, id: \.self) { option in
@@ -121,6 +116,79 @@ struct GenresView: View {
         }
         .task { await loadGenres() }
         .refreshable { await loadGenres() }
+    }
+
+    // MARK: - List view
+
+    private var genreList: some View {
+        List(filteredGenres) { genre in
+            NavigationLink {
+                AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
+            } label: {
+                HStack(spacing: 12) {
+                    AlbumArtView(
+                        coverArtId: genreArt[genre.value],
+                        size: 48,
+                        cornerRadius: 8
+                    )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(genre.value)
+                            .font(.body)
+                        Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            }
+            .accessibilityIdentifier("genreRow_\(genre.value)")
+        }
+        .listStyle(.plain)
+    }
+
+    // MARK: - Grid view
+
+    private var genreGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
+            ], spacing: 20) {
+                ForEach(filteredGenres) { genre in
+                    NavigationLink {
+                        AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
+                    } label: {
+                        genreCard(genre)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("genreCard_\(genre.value)")
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func genreCard(_ genre: Genre) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AlbumArtView(
+                coverArtId: genreArt[genre.value],
+                size: Theme.albumCardSize,
+                cornerRadius: 10
+            )
+            .frame(maxWidth: .infinity)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(genre.value)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private func loadGenres() async {

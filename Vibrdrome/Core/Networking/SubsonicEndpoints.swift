@@ -47,6 +47,7 @@ enum SubsonicEndpoint: Sendable {
     case createBookmark(id: String, position: Int, comment: String? = nil)
     case deleteBookmark(id: String)
     case getArtistInfo2(id: String, count: Int = 20)
+    case getAlbumInfo2(id: String)
     case getSimilarSongs2(id: String, count: Int = 50)
     case getTopSongs(artist: String, count: Int = 50)
     case getMusicFolders
@@ -89,6 +90,7 @@ enum SubsonicEndpoint: Sendable {
         case .createBookmark: "/rest/createBookmark"
         case .deleteBookmark: "/rest/deleteBookmark"
         case .getArtistInfo2: "/rest/getArtistInfo2"
+        case .getAlbumInfo2: "/rest/getAlbumInfo2"
         case .getSimilarSongs2: "/rest/getSimilarSongs2"
         case .getTopSongs: "/rest/getTopSongs"
         case .getMusicFolders: "/rest/getMusicFolders"
@@ -267,6 +269,9 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "id", value: id),
                 URLQueryItem(name: "count", value: "\(count)"),
             ]
+
+        case .getAlbumInfo2(let id):
+            return [URLQueryItem(name: "id", value: id)]
 
         case .getSimilarSongs2(let id, let count):
             return [

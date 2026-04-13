@@ -7,6 +7,7 @@ struct ArtistsView: View {
     @State private var error: String?
     @State private var searchText = ""
     @State private var sortReversed = false
+    @AppStorage("artistsViewStyle") private var showAsList = true
 
     enum ArtistSortOption: String, CaseIterable {
         case nameAZ, nameZA
@@ -40,21 +41,13 @@ struct ArtistsView: View {
     }
 
     var body: some View {
-        List {
-            ForEach(filteredIndexes, id: \.id) { index in
-                Section(header: Text(index.name)) {
-                    ForEach(index.artists) { artist in
-                        NavigationLink {
-                            ArtistDetailView(artistId: artist.id)
-                        } label: {
-                            ArtistRow(artist: artist)
-                        }
-                        .accessibilityIdentifier("artistRow_\(artist.id)")
-                    }
-                }
+        Group {
+            if showAsList {
+                artistList
+            } else {
+                artistGrid
             }
         }
-        .listStyle(.plain)
         .navigationTitle("Artists")
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Artists")
@@ -79,6 +72,17 @@ struct ArtistsView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("artistsViewToggle")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
@@ -114,6 +118,86 @@ struct ArtistsView: View {
         }
         .task { await loadArtists() }
         .refreshable { await loadArtists() }
+    }
+
+    // MARK: - List view
+
+    private var artistList: some View {
+        List {
+            ForEach(filteredIndexes, id: \.id) { index in
+                Section(header: Text(index.name)) {
+                    ForEach(index.artists) { artist in
+                        NavigationLink {
+                            ArtistDetailView(artistId: artist.id)
+                        } label: {
+                            ArtistRow(artist: artist)
+                        }
+                        .accessibilityIdentifier("artistRow_\(artist.id)")
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    // MARK: - Grid view (circular bubbles)
+
+    private var artistGrid: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
+                ForEach(filteredIndexes, id: \.id) { index in
+                    Section {
+                        LazyVGrid(columns: [
+                            GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 16)
+                        ], spacing: 20) {
+                            ForEach(index.artists) { artist in
+                                NavigationLink {
+                                    ArtistDetailView(artistId: artist.id)
+                                } label: {
+                                    artistGridCard(artist)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("artistCard_\(artist.id)")
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    } header: {
+                        Text(index.name)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(.bar)
+                    }
+                }
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private func artistGridCard(_ artist: Artist) -> some View {
+        VStack(spacing: 8) {
+            AlbumArtView(
+                coverArtId: artist.coverArt,
+                size: Theme.artistBubbleSize,
+                cornerRadius: Theme.artistBubbleSize / 2
+            )
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(artist.name)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            if let count = artist.albumCount {
+                Text(verbatim: "\(count) album\(count == 1 ? "" : "s")")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func loadArtists() async {

@@ -16,6 +16,7 @@ struct AlbumsView: View {
     @State private var searchText = ""
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
+    @AppStorage("albumsViewStyle") private var showAsList = false
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -58,81 +59,13 @@ struct AlbumsView: View {
     }
 
     var body: some View {
-        List {
-            ForEach(filteredAlbums) { album in
-                NavigationLink {
-                    AlbumDetailView(albumId: album.id)
-                } label: {
-                    AlbumCard(album: album)
-                }
-                .accessibilityIdentifier("albumRow_\(album.id)")
-                .contextMenu {
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                                if let songs = detail.song, let first = songs.first {
-                                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                                    .error("Failed to load album for playback: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                                if var songs = detail.song, !songs.isEmpty {
-                                    songs.shuffle()
-                                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                                    .error("Failed to load album for shuffle: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                    }
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getAlbum(id: album.id)
-                                if let songs = detail.song {
-                                    DownloadManager.shared.downloadAlbum(
-                                        songs: songs,
-                                        client: appState.subsonicClient
-                                    )
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                                    .error("Failed to load album for download: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Download", systemImage: "arrow.down.circle")
-                    }
-                }
-                .onAppear {
-                    if album.id == albums.last?.id && hasMore {
-                        Task { await loadMore() }
-                    }
-                }
-            }
-
-            if isLoading && !albums.isEmpty {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
+        Group {
+            if showAsList {
+                albumList
+            } else {
+                albumGrid
             }
         }
-        .listStyle(.plain)
         #if os(iOS)
         .contentMargins(.bottom, 80)
         #endif
@@ -166,6 +99,17 @@ struct AlbumsView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("albumsViewToggle")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ForEach(AlbumSortOption.allCases, id: \.self) { option in
@@ -209,6 +153,140 @@ struct AlbumsView: View {
             albums = []
             hasMore = true
             await loadAlbums()
+        }
+    }
+
+    // MARK: - List view
+
+    private var albumList: some View {
+        List {
+            ForEach(filteredAlbums) { album in
+                NavigationLink {
+                    AlbumDetailView(albumId: album.id)
+                } label: {
+                    AlbumCard(album: album)
+                }
+                .accessibilityIdentifier("albumRow_\(album.id)")
+                .contextMenu { rowContextMenu(for: album) }
+                .onAppear { paginateIfNeeded(album) }
+            }
+
+            if isLoading && !albums.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    // MARK: - Grid view
+
+    private var albumGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
+            ], spacing: 20) {
+                ForEach(filteredAlbums) { album in
+                    NavigationLink {
+                        AlbumDetailView(albumId: album.id)
+                    } label: {
+                        albumGridCard(album)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("albumCard_\(album.id)")
+                    .contextMenu { rowContextMenu(for: album) }
+                    .onAppear { paginateIfNeeded(album) }
+                }
+            }
+            .padding(16)
+
+            if isLoading && !albums.isEmpty {
+                ProgressView()
+                    .padding()
+            }
+        }
+    }
+
+    private func albumGridCard(_ album: Album) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            AlbumArtView(coverArtId: album.coverArt, size: Theme.albumCardSize, cornerRadius: 10)
+                .frame(maxWidth: .infinity)
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(album.name)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            if let artist = album.artist {
+                Text(artist)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(for album: Album) -> some View {
+        Button {
+            Task {
+                do {
+                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                    if let songs = detail.song, let first = songs.first {
+                        AudioEngine.shared.play(song: first, from: songs, at: 0)
+                    }
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                        .error("Failed to load album for playback: \(error)")
+                }
+            }
+        } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+        Button {
+            Task {
+                do {
+                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                    if var songs = detail.song, !songs.isEmpty {
+                        songs.shuffle()
+                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    }
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                        .error("Failed to load album for shuffle: \(error)")
+                }
+            }
+        } label: {
+            Label("Shuffle", systemImage: "shuffle")
+        }
+        Button {
+            Task {
+                do {
+                    let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                    if let songs = detail.song {
+                        DownloadManager.shared.downloadAlbum(
+                            songs: songs,
+                            client: appState.subsonicClient
+                        )
+                    }
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                        .error("Failed to load album for download: \(error)")
+                }
+            }
+        } label: {
+            Label("Download", systemImage: "arrow.down.circle")
+        }
+    }
+
+    private func paginateIfNeeded(_ album: Album) {
+        if album.id == albums.last?.id && hasMore {
+            Task { await loadMore() }
         }
     }
 

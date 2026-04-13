@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 #if os(iOS)
 // MARK: - iOS-specific views for NowPlayingView
@@ -169,43 +168,6 @@ extension NowPlayingView {
                 .accessibilityIdentifier("queueButton")
             }
         }
-    }
-
-    // MARK: - Streaming Info
-
-    var streamingInfo: some View {
-        Group {
-            if let song = engine.currentSong {
-                let downloaded = isCurrentSongDownloaded
-                let suffix = song.suffix?.uppercased() ?? "—"
-                if downloaded {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 9))
-                        Text("Downloaded · \(suffix)")
-                    }
-                } else {
-                    let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
-                    HStack(spacing: 4) {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 9))
-                        Text("\(bitRate) · \(suffix)")
-                    }
-                }
-            }
-        }
-        .font(.caption2)
-        .foregroundStyle(.white.opacity(0.5))
-        .frame(maxWidth: .infinity)
-    }
-
-    var isCurrentSongDownloaded: Bool {
-        guard let songId = engine.currentSong?.id else { return false }
-        let modelContext = PersistenceController.shared.container.mainContext
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-        )
-        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     // MARK: - iOS Playback Row

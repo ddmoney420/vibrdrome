@@ -202,25 +202,7 @@ struct SearchView: View {
             if showAlbumArtInLists {
                 AlbumArtView(coverArtId: song.coverArt, size: 48, cornerRadius: 8)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    if let artist = song.artist {
-                        Text(artist)
-                    }
-                    if let album = song.album {
-                        Text("·")
-                        Text(album)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
+            songRowTitleBlock(song)
 
             Spacer()
 
@@ -246,6 +228,49 @@ struct SearchView: View {
             AudioEngine.shared.play(song: song, from: songs, at: index)
         }
         .trackContextMenu(song: song, queue: songs, index: index)
+    }
+
+    @ViewBuilder
+    private func songRowTitleBlock(_ song: Song) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                appState.pendingNavigation = .song(id: song.id)
+            } label: {
+                Text(song.title)
+                    .font(.body)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 4) {
+                if let artist = song.artist {
+                    Button {
+                        if let artistId = song.artistId {
+                            appState.pendingNavigation = .artist(id: artistId)
+                        }
+                    } label: {
+                        Text(artist)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(song.artistId == nil)
+                }
+                if let album = song.album {
+                    Text("·")
+                    Button {
+                        if let albumId = song.albumId {
+                            appState.pendingNavigation = .album(id: albumId)
+                        }
+                    } label: {
+                        Text(album)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(song.albumId == nil)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
     }
 
     // MARK: - Empty & Error States

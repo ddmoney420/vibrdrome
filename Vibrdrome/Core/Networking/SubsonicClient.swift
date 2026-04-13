@@ -366,6 +366,14 @@ final class SubsonicClient {
         )
     }
 
+    func getAlbumInfo(id: String) async throws -> AlbumInfo2 {
+        let body = try await request(.getAlbumInfo2(id: id))
+        return body.albumInfo ?? AlbumInfo2(
+            notes: nil, musicBrainzId: nil, lastFmUrl: nil,
+            smallImageUrl: nil, mediumImageUrl: nil, largeImageUrl: nil
+        )
+    }
+
     func getSimilarSongs(id: String, count: Int = 50) async throws -> [Song] {
         let body = try await request(.getSimilarSongs2(id: id, count: count))
         return body.similarSongs2?.song ?? []

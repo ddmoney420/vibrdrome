@@ -117,51 +117,7 @@ struct VibrdromeApp: App {
         .defaultSize(width: 1100, height: 750)
         .commands {
             CommandMenu("Playback") {
-                Button("Play/Pause") {
-                    AudioEngine.shared.togglePlayPause()
-                }
-                .keyboardShortcut("p", modifiers: .command)
-
-                Button("Play/Pause") {
-                    AudioEngine.shared.togglePlayPause()
-                }
-                .keyboardShortcut(.space, modifiers: [])
-
-                Divider()
-
-                Button("Next Track") {
-                    AudioEngine.shared.next()
-                }
-                .keyboardShortcut(.rightArrow, modifiers: .command)
-
-                Button("Previous Track") {
-                    AudioEngine.shared.previous()
-                }
-                .keyboardShortcut(.leftArrow, modifiers: .command)
-
-                Divider()
-
-                Button("Shuffle") {
-                    AudioEngine.shared.toggleShuffle()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-
-                Button("Repeat") {
-                    AudioEngine.shared.cycleRepeatMode()
-                }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-
-                Divider()
-
-                Button("Volume Up") {
-                    AudioEngine.shared.volume = min(1, AudioEngine.shared.volume + 0.1)
-                }
-                .keyboardShortcut(.upArrow, modifiers: .command)
-
-                Button("Volume Down") {
-                    AudioEngine.shared.volume = max(0, AudioEngine.shared.volume - 0.1)
-                }
-                .keyboardShortcut(.downArrow, modifiers: .command)
+                PlaybackCommands()
             }
         }
         #endif
@@ -245,3 +201,133 @@ struct VibrdromeApp: App {
         }
     }
 }
+
+#if os(macOS)
+private struct PlaybackCommands: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Group {
+            Button("Play/Pause") {
+                AudioEngine.shared.togglePlayPause()
+            }
+            .keyboardShortcut("p", modifiers: .command)
+
+            Button("Play/Pause") {
+                AudioEngine.shared.togglePlayPause()
+            }
+            .keyboardShortcut(.space, modifiers: [])
+
+            Divider()
+
+            Button("Next Track") {
+                AudioEngine.shared.next()
+            }
+            .keyboardShortcut(.rightArrow, modifiers: .command)
+
+            Button("Previous Track") {
+                AudioEngine.shared.previous()
+            }
+            .keyboardShortcut(.leftArrow, modifiers: .command)
+
+            Button("Seek Forward 10s") {
+                let engine = AudioEngine.shared
+                engine.seek(to: min(engine.duration, engine.currentTime + 10))
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [.command, .shift])
+
+            Button("Seek Backward 10s") {
+                let engine = AudioEngine.shared
+                engine.seek(to: max(0, engine.currentTime - 10))
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Shuffle") {
+                AudioEngine.shared.toggleShuffle()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+
+            Button("Repeat") {
+                AudioEngine.shared.cycleRepeatMode()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Volume Up") {
+                AudioEngine.shared.volume = min(1, AudioEngine.shared.volume + 0.1)
+            }
+            .keyboardShortcut(.upArrow, modifiers: .command)
+
+            Button("Volume Down") {
+                AudioEngine.shared.volume = max(0, AudioEngine.shared.volume - 0.1)
+            }
+            .keyboardShortcut(.downArrow, modifiers: .command)
+        }
+        Group {
+            Divider()
+
+            Button("Toggle Favorite") {
+                Self.toggleFavorite()
+            }
+            .keyboardShortcut("l", modifiers: .command)
+
+            Button("Show Visualizer") {
+                openWindow(id: "visualizer")
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Rate ★") { Self.setRating(1) }
+                .keyboardShortcut("1", modifiers: .command)
+            Button("Rate ★★") { Self.setRating(2) }
+                .keyboardShortcut("2", modifiers: .command)
+            Button("Rate ★★★") { Self.setRating(3) }
+                .keyboardShortcut("3", modifiers: .command)
+            Button("Rate ★★★★") { Self.setRating(4) }
+                .keyboardShortcut("4", modifiers: .command)
+            Button("Rate ★★★★★") { Self.setRating(5) }
+                .keyboardShortcut("5", modifiers: .command)
+            Button("Clear Rating") { Self.setRating(0) }
+                .keyboardShortcut("0", modifiers: .command)
+        }
+    }
+
+    private static func toggleFavorite() {
+        guard let song = AudioEngine.shared.currentSong else { return }
+        let songId = song.id
+        let wasStarred = song.starred != nil
+        Task {
+            do {
+                if wasStarred {
+                    try await OfflineActionQueue.shared.unstar(id: songId)
+                } else {
+                    try await OfflineActionQueue.shared.star(id: songId)
+                    if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoDownloadFavorites) {
+                        DownloadManager.shared.download(song: song, client: AppState.shared.subsonicClient)
+                    }
+                }
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Commands")
+                    .error("Toggle favorite failed: \(error)")
+            }
+        }
+    }
+
+    private static func setRating(_ rating: Int) {
+        guard let song = AudioEngine.shared.currentSong else { return }
+        let songId = song.id
+        Task {
+            do {
+                try await AppState.shared.subsonicClient.setRating(id: songId, rating: rating)
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Commands")
+                    .error("Set rating failed: \(error)")
+            }
+        }
+    }
+}
+#endif

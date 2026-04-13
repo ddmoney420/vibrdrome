@@ -35,6 +35,7 @@ struct SubsonicResponseBody: Decodable {
     let playQueue: PlayQueue?
     let bookmarks: BookmarksWrapper?
     let artistInfo2: ArtistInfo2?
+    let albumInfo: AlbumInfo2?
     let similarSongs2: SimilarSongs2Response?
     let topSongs: TopSongsResponse?
     let musicFolders: MusicFoldersWrapper?
@@ -48,7 +49,7 @@ struct SubsonicResponseBody: Decodable {
         case artists, artist, album, song, searchResult3
         case playlists, playlist, genres, starred2, albumList2, randomSongs
         case internetRadioStations, lyricsList, playQueue, bookmarks
-        case artistInfo2, similarSongs2, topSongs
+        case artistInfo2, albumInfo, similarSongs2, topSongs
         case musicFolders, directory, indexes
         case jukeboxStatus, jukeboxPlaylist
     }
@@ -77,6 +78,7 @@ struct SubsonicResponseBody: Decodable {
         playQueue = try container.decodeIfPresent(PlayQueue.self, forKey: .playQueue)
         bookmarks = try container.decodeIfPresent(BookmarksWrapper.self, forKey: .bookmarks)
         artistInfo2 = try container.decodeIfPresent(ArtistInfo2.self, forKey: .artistInfo2)
+        albumInfo = try container.decodeIfPresent(AlbumInfo2.self, forKey: .albumInfo)
         similarSongs2 = try container.decodeIfPresent(SimilarSongs2Response.self, forKey: .similarSongs2)
         topSongs = try container.decodeIfPresent(TopSongsResponse.self, forKey: .topSongs)
         musicFolders = try container.decodeIfPresent(MusicFoldersWrapper.self, forKey: .musicFolders)
@@ -117,6 +119,15 @@ struct Artist: Decodable, Identifiable, Sendable {
 struct ArtistInfo2: Decodable, Sendable {
     let similarArtist: [Artist]?
     let biography: String?
+    let musicBrainzId: String?
+    let lastFmUrl: String?
+    let smallImageUrl: String?
+    let mediumImageUrl: String?
+    let largeImageUrl: String?
+}
+
+struct AlbumInfo2: Decodable, Sendable {
+    let notes: String?
     let musicBrainzId: String?
     let lastFmUrl: String?
     let smallImageUrl: String?

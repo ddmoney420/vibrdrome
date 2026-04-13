@@ -18,14 +18,32 @@ struct QueueView: View {
                             AlbumArtView(coverArtId: current.coverArt, size: 44)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(current.title)
-                                    .font(.body)
-                                    .bold()
-                                    .lineLimit(1)
-                                Text(current.artist ?? "")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                Button {
+                                    appState.pendingNavigation = .song(id: current.id)
+                                    dismiss()
+                                } label: {
+                                    Text(current.title)
+                                        .font(.body)
+                                        .bold()
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+
+                                if let artist = current.artist {
+                                    Button {
+                                        if let artistId = current.artistId {
+                                            appState.pendingNavigation = .artist(id: artistId)
+                                            dismiss()
+                                        }
+                                    } label: {
+                                        Text(artist)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(current.artistId == nil)
+                                }
                             }
 
                             Spacer()
@@ -93,13 +111,31 @@ struct QueueView: View {
                                 AlbumArtView(coverArtId: song.coverArt, size: 40)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.title)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                    Text(song.artist ?? "")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                                    Button {
+                                        appState.pendingNavigation = .song(id: song.id)
+                                        dismiss()
+                                    } label: {
+                                        Text(song.title)
+                                            .font(.body)
+                                            .lineLimit(1)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if let artist = song.artist {
+                                        Button {
+                                            if let artistId = song.artistId {
+                                                appState.pendingNavigation = .artist(id: artistId)
+                                                dismiss()
+                                            }
+                                        } label: {
+                                            Text(artist)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(song.artistId == nil)
+                                    }
                                 }
 
                                 Spacer()
