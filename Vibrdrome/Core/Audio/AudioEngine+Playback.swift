@@ -60,6 +60,11 @@ extension AudioEngine {
         if newMode != activeMode {
             tearDownCurrentMode()
             activeMode = newMode
+        } else if activeMode == .crossfade {
+            // Same mode but new track — stop the old crossfade players
+            crossfadeController.cancelRamp()
+            crossfadeController.activePlayer?.pause()
+            crossfadeController.inactivePlayer?.pause()
         }
 
         let url = resolveURL(for: song)

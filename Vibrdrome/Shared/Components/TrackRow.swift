@@ -82,6 +82,7 @@ struct TrackRow: View {
                     .foregroundStyle(isStarred ? .pink : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
             .accessibilityIdentifier("trackHeartButton_\(song.id)")
 
             // Download button
@@ -89,6 +90,7 @@ struct TrackRow: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.callout)
                     .foregroundStyle(.green)
+                    .accessibilityLabel("Downloaded")
             } else {
                 Button {
                     #if os(iOS)
@@ -104,6 +106,7 @@ struct TrackRow: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Download Song")
                 .accessibilityIdentifier("trackDownloadButton_\(song.id)")
             }
 
@@ -135,6 +138,7 @@ struct TrackRow: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Song Options")
             .accessibilityIdentifier("trackMenuButton_\(song.id)")
         }
         .contentShape(Rectangle())

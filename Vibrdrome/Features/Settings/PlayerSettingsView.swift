@@ -1,3 +1,4 @@
+import KeychainAccess
 import SwiftUI
 
 // MARK: - Last.fm Auth Status
@@ -34,12 +35,16 @@ struct PlayerSettingsView: View {
     // Scrobbling
     @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
-    @AppStorage(UserDefaultsKeys.listenBrainzToken) private var listenBrainzToken: String = ""
     @AppStorage(UserDefaultsKeys.lastFmEnabled) private var lastFmEnabled: Bool = false
-    @AppStorage(UserDefaultsKeys.lastFmApiKey) private var lastFmApiKey: String = ""
-    @AppStorage(UserDefaultsKeys.lastFmSecret) private var lastFmSecret: String = ""
-    @AppStorage(UserDefaultsKeys.lastFmSessionKey) private var lastFmSessionKey: String = ""
     @AppStorage(UserDefaultsKeys.lastFmUsername) private var lastFmUsername: String = ""
+
+    // Credentials stored in Keychain, not UserDefaults
+    private static let lastFmKC = Keychain(service: "com.vibrdrome.lastfm")
+    private static let lbKC = Keychain(service: "com.vibrdrome.listenbrainz")
+    @State private var listenBrainzToken: String = lbKC["token"] ?? ""
+    @State private var lastFmApiKey: String = lastFmKC["apiKey"] ?? ""
+    @State private var lastFmSecret: String = lastFmKC["secret"] ?? ""
+    @State private var lastFmSessionKey: String = lastFmKC["sessionKey"] ?? ""
     @State private var lastFmPassword: String = ""
     @State private var lastFmAuthStatus: LastFmAuthStatus = .idle
     @State private var lastFmAuthError: String?
@@ -219,6 +224,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("listenBrainzTokenField")
+                    .onChange(of: listenBrainzToken) { _, val in
+                        Self.lbKC["token"] = val.isEmpty ? nil : val
+                    }
             }
 
             Toggle(isOn: $lastFmEnabled) {
@@ -235,6 +243,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("lastFmApiKeyField")
+                    .onChange(of: lastFmApiKey) { _, val in
+                        Self.lastFmKC["apiKey"] = val.isEmpty ? nil : val
+                    }
 
                 SecureField("Shared Secret", text: $lastFmSecret)
                     .textContentType(.password)
@@ -243,6 +254,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("lastFmSecretField")
+                    .onChange(of: lastFmSecret) { _, val in
+                        Self.lastFmKC["secret"] = val.isEmpty ? nil : val
+                    }
 
                 if lastFmSessionKey.isEmpty {
                     TextField("Last.fm Username", text: $lastFmUsername)
@@ -267,9 +281,7 @@ struct PlayerSettingsView: View {
                             lastFmPassword = ""
                             if error == nil {
                                 lastFmAuthStatus = .success
-                                lastFmSessionKey = UserDefaults.standard.string(
-                                    forKey: UserDefaultsKeys.lastFmSessionKey
-                                ) ?? ""
+                                lastFmSessionKey = Self.lastFmKC["sessionKey"] ?? ""
                             } else {
                                 lastFmAuthStatus = .failed
                                 lastFmAuthError = error
@@ -307,6 +319,7 @@ struct PlayerSettingsView: View {
                         Spacer()
                         Button("Sign Out") {
                             lastFmSessionKey = ""
+                            Self.lastFmKC["sessionKey"] = nil
                             lastFmPassword = ""
                             lastFmAuthStatus = .idle
                         }

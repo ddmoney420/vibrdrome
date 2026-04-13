@@ -1,8 +1,10 @@
 import CryptoKit
 import Foundation
+import KeychainAccess
 import os.log
 
 private let lastFmLog = Logger(subsystem: "com.vibrdrome.app", category: "LastFm")
+nonisolated(unsafe) private let lastFmKeychain = Keychain(service: "com.vibrdrome.lastfm")
 
 /// Lightweight Last.fm API client for scrobbling.
 actor LastFmClient {
@@ -11,17 +13,17 @@ actor LastFmClient {
     private let baseURL = "https://ws.audioscrobbler.com/2.0/"
 
     private var apiKey: String? {
-        let key = UserDefaults.standard.string(forKey: UserDefaultsKeys.lastFmApiKey)
+        let key = lastFmKeychain["apiKey"]
         return (key?.isEmpty ?? true) ? nil : key
     }
 
     private var secret: String? {
-        let key = UserDefaults.standard.string(forKey: UserDefaultsKeys.lastFmSecret)
+        let key = lastFmKeychain["secret"]
         return (key?.isEmpty ?? true) ? nil : key
     }
 
     private var sessionKey: String? {
-        let key = UserDefaults.standard.string(forKey: UserDefaultsKeys.lastFmSessionKey)
+        let key = lastFmKeychain["sessionKey"]
         return (key?.isEmpty ?? true) ? nil : key
     }
 
@@ -83,7 +85,7 @@ actor LastFmClient {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 if let session = json["session"] as? [String: Any],
                    let key = session["key"] as? String {
-                    UserDefaults.standard.set(key, forKey: UserDefaultsKeys.lastFmSessionKey)
+                    lastFmKeychain["sessionKey"] = key
                     return nil // success
                 }
                 // Return the error from Last.fm (e.g. invalid API key, wrong credentials)

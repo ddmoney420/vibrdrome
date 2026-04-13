@@ -511,6 +511,9 @@ struct LibraryView: View {
                                 Circle()
                                     .fill(appState.isConfigured ? .green : .red)
                                     .frame(width: 8, height: 8)
+                                    .accessibilityLabel(
+                                        appState.isConfigured ? "Connected" : "Disconnected"
+                                    )
                             }
                             Text(server.name)
                             Spacer()

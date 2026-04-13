@@ -139,7 +139,9 @@ extension NowPlayingView {
                     ForEach(1...5, id: \.self) { star in
                         Image(systemName: star <= currentRating ? "star.fill" : "star")
                             .font(.title2)
-                            .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
+                            .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.6))
+                            .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
+                            .accessibilityAddTraits(.isButton)
                             .onTapGesture {
                                 Haptics.light()
                                 let newRating = star == currentRating ? 0 : star
@@ -289,7 +291,8 @@ extension NowPlayingView {
         HStack(spacing: 8) {
             Image(systemName: "speaker.fill")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -312,10 +315,22 @@ extension NowPlayingView {
                 )
             }
             .frame(height: 20)
+            .accessibilityLabel("Volume")
+            .accessibilityValue(String(format: "%.0f%%", engine.userVolume * 100))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    engine.userVolume = min(1, engine.userVolume + 0.1)
+                case .decrement:
+                    engine.userVolume = max(0, engine.userVolume - 0.1)
+                @unknown default: break
+                }
+            }
 
             Image(systemName: "speaker.wave.3.fill")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
         }
     }
 

@@ -1,7 +1,9 @@
 import Foundation
+import KeychainAccess
 import os.log
 
 private let lbLog = Logger(subsystem: "com.vibrdrome.app", category: "ListenBrainz")
+nonisolated(unsafe) private let lbKeychain = Keychain(service: "com.vibrdrome.listenbrainz")
 
 /// Lightweight ListenBrainz API client for scrobbling.
 actor ListenBrainzClient {
@@ -10,7 +12,7 @@ actor ListenBrainzClient {
     private let baseURL = "https://api.listenbrainz.org/1"
 
     private var token: String? {
-        UserDefaults.standard.string(forKey: UserDefaultsKeys.listenBrainzToken)
+        lbKeychain["token"]
     }
 
     var isEnabled: Bool {

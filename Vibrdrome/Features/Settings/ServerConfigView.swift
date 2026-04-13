@@ -167,6 +167,21 @@ struct ServerConfigView: View {
                     .listRowBackground(Color.clear)
                 }
 
+                Section {
+                    Label {
+                        Text("""
+                        Enter your Navidrome server URL and credentials. \
+                        Works with any Subsonic-compatible server. \
+                        Use "Test Connection" to verify before signing in.
+                        """)
+                        .font(.caption)
+                    } icon: {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.accentColor)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
                 Section("Server Details") {
                     TextField("URL", text: $url, prompt: Text("https://..."))
                         .textContentType(.URL)

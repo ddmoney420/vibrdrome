@@ -440,6 +440,9 @@ final class AudioEngine {
         clearLookahead()
         generation += 1
 
+        // Stop current playback before replacing to prevent audio overlap
+        gaplessPlayer?.pause()
+
         let item = Self.makePlayerItem(url: url)
         applyEQTapIfNeeded(to: item)
 

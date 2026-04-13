@@ -331,7 +331,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     static func localPath(for song: Song) -> String {
         let artist = song.artist?.sanitizedFileName ?? "Unknown"
         let album = song.album?.sanitizedFileName ?? "Unknown"
-        let suffix = song.suffix ?? "mp3"
+        let suffix = (song.suffix ?? "mp3").sanitizedFileName
         let title = song.title.sanitizedFileName
         let safeName = title.isEmpty ? song.id : title
         // D4: Include discNumber to prevent path collisions on multi-disc albums

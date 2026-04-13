@@ -66,9 +66,12 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] AirPlay button opens system route picker
 - [ ] Settings gear opens Quick Settings sheet
 - [ ] Quick Settings: sleep timer, speed, crossfade, download, share all work
+- [ ] Sleep timer: no volume pop on expire (smooth volume fade to silence)
 - [ ] EQ sheet opens from toolbar
 - [ ] Lyrics sheet opens (synced lyrics auto-scroll and tap-to-seek)
+- [ ] Lyrics with negative offset don't break sync
 - [ ] Visualizer opens (if not disabled)
+- [ ] Visualizer does not cause audio stutter on open
 - [ ] Queue opens
 - [ ] Long-press album art shows save/share options
 - [ ] Drag to dismiss works
@@ -120,6 +123,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Per-track download icon (bigger, .callout size)
 - [ ] Per-track inline "..." menu (Play Next, Add to Queue, Start Radio, Share)
 - [ ] Text contrast readable in light mode
+- [ ] Tappable artist name navigates to artist page
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
 - [ ] Album sort: Name, Artist, Year, Recently Added all work
@@ -152,6 +156,11 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Play/pause/skip from CarPlay
 - [ ] No logout on CarPlay connect/disconnect
 - [ ] Artwork shows on all lists
+- [ ] Now Playing template shows current track with progress
+- [ ] Shuffle and repeat buttons work in Now Playing
+- [ ] Up Next queue shows upcoming tracks
+- [ ] Auto-navigates to Now Playing when a track starts
+- [ ] State refreshes correctly on CarPlay reconnect
 
 ## Radio
 
@@ -170,6 +179,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Downloads view Play All / Shuffle buttons work
 - [ ] Tap a downloaded song to play from that point
 - [ ] Search works offline (finds downloaded songs by title/artist/album)
+- [ ] Download concurrency capped at 3 (no more than 3 simultaneous downloads)
 
 ## Scrobbling
 
@@ -179,6 +189,10 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Last.fm: "Signed in as [username]" appears with green checkmark after auth
 - [ ] Last.fm: Sign Out clears session and shows login fields again
 - [ ] Last.fm: scrobble appears on last.fm profile after playing 50%+ of a track
+- [ ] Last.fm: special characters in password don't break auth (URL encoding)
+- [ ] Last.fm: error messages shown in UI on auth failure
+- [ ] Offline scrobble queue: scrobbles queued while offline
+- [ ] Offline scrobble queue: queued scrobbles flush on reconnect (ListenBrainz and Last.fm)
 - [ ] Now Playing notification sent on track start
 
 ## Settings 2.0
@@ -186,6 +200,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Settings > Player sub-page opens (behavior, playback, scrobbling, controls, song display)
 - [ ] Settings > Appearance sub-page opens (theme, glass, accent, text, mini player)
 - [ ] Settings > Tab Bar sub-page opens (reorder tabs, toggle show/hide, settings location)
+- [ ] Tab Bar: optional dock tabs for Artists, Albums, Songs, Genres, Favorites (all default OFF)
 - [ ] All settings pages scrollable to bottom (mini player doesn't block)
 - [ ] Disable Spinning Art toggle stops mini player rotation
 - [ ] Reduce Motion also stops spinning art
@@ -198,17 +213,17 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Now Playing Toolbar drag-to-reorder
 - [ ] Tab Bar drag-to-reorder with Downloads tab option
 - [ ] Settings in Navigation Bar moves Settings to top-right gear
-- [ ] Server name shows in title bar
+- [ ] Toolbar shows only 2 buttons: + and profile
+- [ ] Profile menu shows server name with green connection dot, music folders, downloads
 - [ ] + button shows New Playlist / New Smart Playlist
-- [ ] Profile menu shows server, music folders, downloads
-- [ ] Connection indicator (green/red dot)
 - [ ] Haptic on tab switch
 - [ ] Backup Settings exports named file (vibrdrome-backup-DATE.json)
 - [ ] Restore Settings imports from JSON file and applies settings
 - [ ] Crossfade Curve picker appears when crossfade > 0
 
-## Playlist Sharing
+## Playlists
 
+- [ ] Playlist delete swipe targets correct song when search is active
 - [ ] Make Public / Make Private toggle in playlist menu
 - [ ] Globe icon shows on public playlists in list
 
