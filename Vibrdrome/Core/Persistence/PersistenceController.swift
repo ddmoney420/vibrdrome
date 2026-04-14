@@ -11,6 +11,13 @@ final class PersistenceController {
     let container: ModelContainer
 
     init() {
+        // Schema notes:
+        // - All models are caches or queued actions. The Navidrome server is the source of truth.
+        // - Adding optional properties with defaults is a lightweight migration (safe).
+        // - Removing/renaming properties or changing types requires a versioned schema migration
+        //   OR the catch block below will delete and recreate the store (acceptable for cache data).
+        // - PendingAction gained songTitle/songArtist/songAlbum/songAlbumArtist/songDuration in Build 37.
+        // - DownloadedSong gained additional fields in Build 32.
         let schema = Schema([
             CachedArtist.self,
             CachedAlbum.self,

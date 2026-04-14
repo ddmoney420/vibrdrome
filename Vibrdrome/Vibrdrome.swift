@@ -1,3 +1,4 @@
+import KeychainAccess
 import SwiftUI
 import SwiftData
 import Nuke
@@ -54,6 +55,32 @@ struct VibrdromeApp: App {
     @AppStorage(UserDefaultsKeys.boldText) private var boldText: Bool = false
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion: Bool = false
     private let persistenceController = PersistenceController.shared
+
+    init() {
+        Self.migrateCredentialsToKeychain()
+    }
+
+    /// One-time migration: move Last.fm/ListenBrainz credentials from UserDefaults to Keychain.
+    /// Safe to call multiple times. Only migrates if UserDefaults has a value and Keychain does not.
+    private static func migrateCredentialsToKeychain() {
+        let defaults = UserDefaults.standard
+        let lastFmKC = Keychain(service: "com.vibrdrome.lastfm")
+        let lbKC = Keychain(service: "com.vibrdrome.listenbrainz")
+
+        let migrations: [(key: String, keychain: Keychain, keychainKey: String)] = [
+            (UserDefaultsKeys.lastFmApiKey, lastFmKC, "apiKey"),
+            (UserDefaultsKeys.lastFmSecret, lastFmKC, "secret"),
+            (UserDefaultsKeys.lastFmSessionKey, lastFmKC, "sessionKey"),
+            (UserDefaultsKeys.listenBrainzToken, lbKC, "token"),
+        ]
+
+        for m in migrations {
+            if let value = defaults.string(forKey: m.key), !value.isEmpty, m.keychain[m.keychainKey] == nil {
+                m.keychain[m.keychainKey] = value
+                defaults.removeObject(forKey: m.key)
+            }
+        }
+    }
 
     private var colorScheme: ColorScheme? {
         switch appColorScheme {
