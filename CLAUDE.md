@@ -45,7 +45,12 @@ xcodegen generate
 - **Website-only changes** (docs/ folder) do not need CI — consider skipping CI with `[skip ci]` in commit message when only docs change
 - Before pushing, ask: "Does this need CI, or can I verify locally?"
 - **ALWAYS run SwiftLint before committing** — zero violations required
-- **Branching**: Use `develop` for feature work, merge to `main` for releases. Direct commits to `main` only for hotfixes.
+- **Branching**: `main` is protected. All work goes on `develop`. Merge to `main` via PR only.
+  - `main` requires: PR + CI passing (SwiftLint + Build iOS). No direct pushes.
+  - `develop` is the daily working branch. Commit freely here.
+  - Release flow: finish work on `develop` -> create PR to `main` -> CI passes -> merge -> archive and upload to TestFlight.
+  - Hotfixes: `enforce_admins` is off, so repo owner can bypass protection in emergencies.
+  - Tag each release: `v1.0.0-beta.39`, etc.
 - **Never send messages to external people** without explicit user review and approval
 
 ## Pre-TestFlight Checklist
