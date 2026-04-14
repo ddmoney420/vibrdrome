@@ -259,45 +259,7 @@ struct PlaylistsView: View {
                     playlistCard(playlist)
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
-                                if let songs = detail.entry, let first = songs.first {
-                                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
-                                    .error("Failed to load playlist for playback: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
-                                if var songs = detail.entry, !songs.isEmpty {
-                                    songs.shuffle()
-                                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
-                                    .error("Failed to load playlist for shuffle: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        deletePlaylist(playlist)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
+                .contextMenu { playlistContextMenu(playlist) }
             }
         }
         .padding(.horizontal, 16)
@@ -343,6 +305,7 @@ struct PlaylistsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .contextMenu { playlistContextMenu(playlist) }
 
                 if playlist.id != filteredPlaylists.last?.id {
                     Divider().padding(.leading, 86)
@@ -372,6 +335,50 @@ struct PlaylistsView: View {
                 Text(verbatim: "\(playlist.songCount ?? 0) songs")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func playlistContextMenu(_ playlist: Playlist) -> some View {
+        Button {
+            playlistAction(playlist) { songs in
+                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs, at: 0) }
+            }
+        } label: { Label("Play", systemImage: "play.fill") }
+
+        Button {
+            playlistAction(playlist) { songs in
+                var shuffled = songs; shuffled.shuffle()
+                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled, at: 0) }
+            }
+        } label: { Label("Shuffle", systemImage: "shuffle") }
+
+        Button {
+            playlistAction(playlist) { songs in AudioEngine.shared.addToQueueNext(songs) }
+        } label: { Label("Play Next", systemImage: "text.insert") }
+
+        Button {
+            playlistAction(playlist) { songs in AudioEngine.shared.addToQueue(songs) }
+        } label: { Label("Add to Queue", systemImage: "text.append") }
+
+        Divider()
+
+        Button(role: .destructive) {
+            deletePlaylist(playlist)
+        } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    private func playlistAction(_ playlist: Playlist, action: @escaping ([Song]) -> Void) {
+        Task {
+            do {
+                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
+                if let songs = detail.entry, !songs.isEmpty { action(songs) }
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
+                    .error("Playlist action failed: \(error)")
             }
         }
     }

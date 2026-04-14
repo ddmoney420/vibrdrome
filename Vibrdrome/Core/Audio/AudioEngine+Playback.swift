@@ -33,6 +33,17 @@ extension AudioEngine {
 
         submitScrobbleIfNeeded()
 
+        // Record outgoing song in play history (only if it actually played)
+        if let outgoing = currentSong, outgoing.id != song.id {
+            playHistory.append(outgoing)
+            if playHistory.count > 50 { playHistory.removeFirst() }
+        }
+
+        // Clear history when loading a brand new queue
+        if newQueue != nil {
+            playHistory = []
+        }
+
         if isCrossfading {
             incrementGeneration()
             crossfadeController.forceComplete()
@@ -214,6 +225,13 @@ extension AudioEngine {
                 if savedTime > 1 { seek(to: savedTime) }
                 return
             }
+        }
+
+        // If track is at or past its end (e.g. after sleep timer "end of track"),
+        // advance to next track instead of resuming dead audio
+        if duration > 0 && currentTime >= duration - 0.5 {
+            next()
+            return
         }
 
         switch activeMode {

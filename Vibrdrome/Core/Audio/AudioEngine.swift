@@ -90,6 +90,8 @@ final class AudioEngine {
 
     var queue: [Song] = []
     var currentIndex: Int = 0
+    /// Tracks actually played (song IDs in order), for accurate "recently played" display
+    var playHistory: [Song] = []
     var shuffleEnabled = false
     var repeatMode: RepeatMode = .off
     var shufflePlayCount = 0

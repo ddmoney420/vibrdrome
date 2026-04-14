@@ -31,16 +31,10 @@ struct TrackRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Button {
-                    appState.pendingNavigation = .song(id: song.id)
-                } label: {
-                    Text(song.title)
-                        .font(.body)
-                        .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("trackTitleButton_\(song.id)")
+                Text(song.title)
+                    .font(.body)
+                    .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
+                    .lineLimit(1)
 
                 HStack(spacing: 4) {
                     if let artist = song.artist {

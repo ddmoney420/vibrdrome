@@ -76,6 +76,28 @@ struct PlaylistDetailView: View {
                             .buttonStyle(.bordered)
                             .accessibilityIdentifier("playlistShuffleButton")
                             .disabled(playlist.entry?.isEmpty ?? true)
+
+                            Menu {
+                                Button {
+                                    if let songs = playlist.entry, !songs.isEmpty {
+                                        AudioEngine.shared.addToQueueNext(songs)
+                                    }
+                                } label: {
+                                    Label("Play Next", systemImage: "text.insert")
+                                }
+                                Button {
+                                    if let songs = playlist.entry, !songs.isEmpty {
+                                        AudioEngine.shared.addToQueue(songs)
+                                    }
+                                } label: {
+                                    Label("Add to Queue", systemImage: "text.append")
+                                }
+                            } label: {
+                                Label("More", systemImage: "ellipsis.circle")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("playlistMoreButton")
+                            .disabled(playlist.entry?.isEmpty ?? true)
                         }
                     }
                     .frame(maxWidth: .infinity)

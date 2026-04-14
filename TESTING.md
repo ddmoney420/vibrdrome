@@ -21,6 +21,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Gapless playback (two tracks transition without gap)
 - [ ] Crossfade works when enabled in settings
 - [ ] Playback rate (speed) changes work
+- [ ] Sleep timer "End of Track": after it pauses, pressing play advances to next track
+- [ ] Recently Played in Queue shows only songs actually listened to (not unplayed queue entries)
 
 ## Library & Navigation
 
@@ -37,6 +39,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Generations shows decade cards
 - [ ] Playlists load (grid and list view toggle)
 - [ ] Playlist mosaic shows 2x2 album art grid
+- [ ] Playlist context menu: Play, Shuffle, Play Next, Add to Queue, Delete (grid + list)
+- [ ] Playlist detail: "More" menu with Play Next and Add to Queue
 - [ ] Radio stations load (grid and list view toggle)
 - [ ] Library folder switching (if multi-library server)
 - [ ] Customizable library (add/remove/reorder pills and carousels)
@@ -56,6 +60,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Star rating works (tap to rate, tap same to clear)
 - [ ] No back button (pull-down to dismiss only)
 - [ ] Streaming info shows below progress (WiFi icon + bitrate + format)
+- [ ] ReplayGain info shows below streaming info when RG tags present (T: +X.X dB / A: +X.X dB)
 - [ ] Progress slider has small dot thumb (not blob)
 - [ ] Circular progress ring around play/pause button
 - [ ] "Playing from" label shows playlist/shuffle context (not album)

@@ -663,18 +663,23 @@ struct NowPlayingView: View {
             if let song = engine.currentSong {
                 let downloaded = isCurrentSongDownloaded
                 let suffix = song.suffix?.uppercased() ?? "—"
-                if downloaded {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 9))
-                        Text("Downloaded · \(suffix)")
+                VStack(spacing: 2) {
+                    if downloaded {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 9))
+                            Text("Downloaded · \(suffix)")
+                        }
+                    } else {
+                        let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
+                        HStack(spacing: 4) {
+                            Image(systemName: "wifi")
+                                .font(.system(size: 9))
+                            Text("\(bitRate) · \(suffix)")
+                        }
                     }
-                } else {
-                    let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
-                    HStack(spacing: 4) {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 9))
-                        Text("\(bitRate) · \(suffix)")
+                    if let rg = song.replayGain {
+                        replayGainInfo(rg)
                     }
                 }
             }
@@ -682,6 +687,21 @@ struct NowPlayingView: View {
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.5))
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func replayGainInfo(_ rg: ReplayGain) -> some View {
+        let parts = [
+            rg.trackGain.map { String(format: "T: %+.1f dB", $0) },
+            rg.albumGain.map { String(format: "A: %+.1f dB", $0) },
+        ].compactMap { $0 }
+        if !parts.isEmpty {
+            HStack(spacing: 4) {
+                Image(systemName: "speaker.wave.2")
+                    .font(.system(size: 9))
+                Text("RG " + parts.joined(separator: " · "))
+            }
+        }
     }
 
     var isCurrentSongDownloaded: Bool {

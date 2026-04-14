@@ -4,6 +4,20 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 39 — April 14, 2026
+- Fix: Sleep timer "End of Track" resume now advances to next track instead of running past the end
+- Fix: Recently Played now tracks actual play history, not unplayed queue entries
+- Fix: Track title tap no longer navigates to Song Info (use long-press context menu)
+- Fix: Tab bar reorder removed (iOS handles via long-press on tab bar natively)
+- ReplayGain track/album gain values shown in Now Playing streaming info
+- Playlist Play Next / Add to Queue on detail page and context menu (grid + list)
+- Playlist context menu added to list view (was grid-only)
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Sleep timer end-of-track fix, Recently Played accuracy, track title
+> behavior, ReplayGain info display, playlist queue actions.
+
 ### Build 38 — April 13, 2026
 - Security: Last.fm/ListenBrainz credentials moved to Keychain, download suffix sanitized
 - Accessibility: VoiceOver labels for star rating, volume slider, track row buttons, connection dot
