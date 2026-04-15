@@ -25,3 +25,5 @@ secrets.*
 
 # Claude Code
 .claude/
+AppIcon.trace
+*.trace
