@@ -375,65 +375,8 @@ struct AlbumsView: View {
             descriptor.sortBy = [SortDescriptor(\.name)]
             let allAlbums = try modelContext.fetch(descriptor)
 
-            // Pre-compute recently played album IDs if needed
-            var recentlyPlayedAlbumIds: Set<String>?
-            if filter.isRecentlyPlayed {
-                let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-                let songDescriptor = FetchDescriptor<CachedSong>(
-                    predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
-                )
-                let recentSongs = (try? modelContext.fetch(songDescriptor)) ?? []
-                recentlyPlayedAlbumIds = Set(recentSongs.compactMap(\.albumId))
-            }
-
-            let filtered = allAlbums.filter { album in
-                // Favorited filter
-                switch filter.isFavorited {
-                case .yes: if !album.isStarred { return false }
-                case .no: if album.isStarred { return false }
-                case .none: break
-                }
-
-                // Rated filter
-                switch filter.isRated {
-                case .yes: if album.userRating == 0 { return false }
-                case .no: if album.userRating != 0 { return false }
-                case .none: break
-                }
-
-                // Recently played filter
-                if let recentIds = recentlyPlayedAlbumIds {
-                    if !recentIds.contains(album.id) { return false }
-                }
-
-                // Artist filter
-                if !filter.selectedArtistIds.isEmpty {
-                    guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
-                        return false
-                    }
-                }
-
-                // Genre filter
-                if !filter.selectedGenres.isEmpty {
-                    guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
-                        return false
-                    }
-                }
-
-                // Label filter
-                if !filter.selectedLabels.isEmpty {
-                    guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
-                        return false
-                    }
-                }
-
-                // Year filter
-                if let yearFilter = filter.year {
-                    guard album.year == yearFilter else { return false }
-                }
-
-                return true
-            }
+            let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
+            let filtered = allAlbums.filter { albumMatchesFilter($0, filter: filter, recentIds: recentlyPlayedAlbumIds) }
 
             localFilteredAlbums = filtered.map { $0.toAlbum() }
         } catch {
@@ -441,6 +384,59 @@ struct AlbumsView: View {
                 .error("Failed to apply local filters: \(error)")
             localFilteredAlbums = nil
         }
+    }
+
+    private func recentlyPlayedIds(for filter: LibraryFilter) -> Set<String>? {
+        guard filter.isRecentlyPlayed else { return nil }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let songDescriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
+        )
+        let recentSongs = (try? modelContext.fetch(songDescriptor)) ?? []
+        return Set(recentSongs.compactMap(\.albumId))
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private func albumMatchesFilter(
+        _ album: CachedAlbum, filter: LibraryFilter, recentIds: Set<String>?
+    ) -> Bool {
+        switch filter.isFavorited {
+        case .yes: if !album.isStarred { return false }
+        case .no: if album.isStarred { return false }
+        case .none: break
+        }
+
+        switch filter.isRated {
+        case .yes: if album.userRating == 0 { return false }
+        case .no: if album.userRating != 0 { return false }
+        case .none: break
+        }
+
+        if let recentIds, !recentIds.contains(album.id) { return false }
+
+        if !filter.selectedArtistIds.isEmpty {
+            guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
+                return false
+            }
+        }
+
+        if !filter.selectedGenres.isEmpty {
+            guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
+                return false
+            }
+        }
+
+        if !filter.selectedLabels.isEmpty {
+            guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
+                return false
+            }
+        }
+
+        if let yearFilter = filter.year {
+            guard album.year == yearFilter else { return false }
+        }
+
+        return true
     }
     #endif
 }

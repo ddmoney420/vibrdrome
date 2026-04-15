@@ -581,54 +581,11 @@ struct SongsView: View {
             descriptor.sortBy = [SortDescriptor(\.title)]
             let allSongs = try modelContext.fetch(descriptor)
 
-            // Pre-compute recently played cutoff if needed
             let recentCutoff: Date? = filter.isRecentlyPlayed
                 ? Calendar.current.date(byAdding: .day, value: -30, to: Date())
                 : nil
 
-            let filtered = allSongs.filter { song in
-                // Favorited filter
-                switch filter.isFavorited {
-                case .yes: if !song.isStarred { return false }
-                case .no: if song.isStarred { return false }
-                case .none: break
-                }
-
-                // Rated filter
-                switch filter.isRated {
-                case .yes: if song.rating == 0 { return false }
-                case .no: if song.rating != 0 { return false }
-                case .none: break
-                }
-
-                // Recently played filter
-                if let cutoff = recentCutoff {
-                    guard let lastPlayed = song.lastPlayed, lastPlayed > cutoff else {
-                        return false
-                    }
-                }
-
-                // Artist filter
-                if !filter.selectedArtistIds.isEmpty {
-                    guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
-                        return false
-                    }
-                }
-
-                // Genre filter
-                if !filter.selectedGenres.isEmpty {
-                    guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
-                        return false
-                    }
-                }
-
-                // Year filter
-                if let yearFilter = filter.year {
-                    guard song.year == yearFilter else { return false }
-                }
-
-                return true
-            }
+            let filtered = allSongs.filter { songMatchesFilter($0, filter: filter, recentCutoff: recentCutoff) }
 
             localFilteredSongs = filtered.map { $0.toSong() }
         } catch {
@@ -636,6 +593,47 @@ struct SongsView: View {
                 .error("Failed to apply local filters: \(error)")
             localFilteredSongs = nil
         }
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private func songMatchesFilter(
+        _ song: CachedSong, filter: LibraryFilter, recentCutoff: Date?
+    ) -> Bool {
+        switch filter.isFavorited {
+        case .yes: if !song.isStarred { return false }
+        case .no: if song.isStarred { return false }
+        case .none: break
+        }
+
+        switch filter.isRated {
+        case .yes: if song.rating == 0 { return false }
+        case .no: if song.rating != 0 { return false }
+        case .none: break
+        }
+
+        if let cutoff = recentCutoff {
+            guard let lastPlayed = song.lastPlayed, lastPlayed > cutoff else {
+                return false
+            }
+        }
+
+        if !filter.selectedArtistIds.isEmpty {
+            guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
+                return false
+            }
+        }
+
+        if !filter.selectedGenres.isEmpty {
+            guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
+                return false
+            }
+        }
+
+        if let yearFilter = filter.year {
+            guard song.year == yearFilter else { return false }
+        }
+
+        return true
     }
     #endif
 }
