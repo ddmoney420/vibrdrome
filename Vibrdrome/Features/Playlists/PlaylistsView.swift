@@ -9,7 +9,6 @@ struct PlaylistsView: View {
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var searchText = ""
     @State private var sortBy: PlaylistSortOption = .name
 
@@ -250,8 +249,9 @@ struct PlaylistsView: View {
     // MARK: - Playlist Grid
 
     private var playlistGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                 count: max(2, min(4, gridColumns))), spacing: 20) {
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
+        ], spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)
@@ -316,9 +316,11 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            PlaylistMosaicView(playlist: playlist, size: Theme.playlistCardSize, cornerRadius: 12)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                PlaylistMosaicView(playlist: playlist, size: geo.size.width, cornerRadius: 12)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(playlist.name)
                 .font(.subheadline)

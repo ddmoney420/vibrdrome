@@ -19,7 +19,6 @@ struct SongsView: View {
     @State private var filterArtist: String?
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage("songsViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var sortBy: SongSortOption = .title
 
     private let pageSize = 500
@@ -440,8 +439,9 @@ struct SongsView: View {
                         .padding(.horizontal, 16)
                 }
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: max(2, min(4, gridColumns))), spacing: 20) {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)
+                ], spacing: 20) {
                     ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
                             .contentShape(Rectangle())
@@ -498,9 +498,11 @@ struct SongsView: View {
 
     private func songCard(_ song: Song) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: song.coverArt, size: 160, cornerRadius: 10)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                AlbumArtView(coverArtId: song.coverArt, size: geo.size.width, cornerRadius: 10)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Button {
                 appState.pendingNavigation = .song(id: song.id)

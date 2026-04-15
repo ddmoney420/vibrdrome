@@ -11,7 +11,6 @@ struct GenresView: View {
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -154,8 +153,9 @@ struct GenresView: View {
 
     private var genreGrid: some View {
         ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                     count: max(2, min(4, gridColumns))), spacing: 20) {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
+            ], spacing: 20) {
                 ForEach(filteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
@@ -172,12 +172,14 @@ struct GenresView: View {
 
     private func genreCard(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            AlbumArtView(
-                coverArtId: genreArt[genre.value],
-                size: Theme.albumCardSize,
-                cornerRadius: 10
-            )
-            .frame(maxWidth: .infinity)
+            GeometryReader { geo in
+                AlbumArtView(
+                    coverArtId: genreArt[genre.value],
+                    size: geo.size.width,
+                    cornerRadius: 10
+                )
+            }
+            .aspectRatio(1, contentMode: .fit)
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(genre.value)

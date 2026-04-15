@@ -12,7 +12,6 @@ struct ArtistsView: View {
     @State private var searchText = ""
     @State private var sortReversed = false
     @AppStorage("artistsViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
 
     enum ArtistSortOption: String, CaseIterable {
         case nameAZ, nameZA
@@ -241,8 +240,9 @@ struct ArtistsView: View {
             LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
                 ForEach(filteredIndexes, id: \.id) { index in
                     Section {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                                 count: max(2, min(4, gridColumns))), spacing: 20) {
+                        LazyVGrid(columns: [
+                            GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 16)
+                        ], spacing: 20) {
                             ForEach(index.artists) { artist in
                                 NavigationLink {
                                     ArtistDetailView(artistId: artist.id)
@@ -271,11 +271,14 @@ struct ArtistsView: View {
 
     private func artistGridCard(_ artist: Artist) -> some View {
         VStack(spacing: 8) {
-            AlbumArtView(
-                coverArtId: artist.coverArt,
-                size: Theme.artistBubbleSize,
-                cornerRadius: Theme.artistBubbleSize / 2
-            )
+            GeometryReader { geo in
+                AlbumArtView(
+                    coverArtId: artist.coverArt,
+                    size: geo.size.width,
+                    cornerRadius: geo.size.width / 2
+                )
+            }
+            .aspectRatio(1, contentMode: .fit)
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(artist.name)

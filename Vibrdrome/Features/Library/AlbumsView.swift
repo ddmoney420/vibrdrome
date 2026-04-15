@@ -20,7 +20,6 @@ struct AlbumsView: View {
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -220,13 +219,11 @@ struct AlbumsView: View {
 
     // MARK: - Grid view
 
-    private var gridItems: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 16), count: max(2, min(4, gridColumns)))
-    }
-
     private var albumGrid: some View {
         ScrollView {
-            LazyVGrid(columns: gridItems, spacing: 20) {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
+            ], spacing: 20) {
                 ForEach(filteredAlbums) { album in
                     NavigationLink {
                         AlbumDetailView(albumId: album.id)
@@ -250,9 +247,11 @@ struct AlbumsView: View {
 
     private func albumGridCard(_ album: Album) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: album.coverArt, size: Theme.albumCardSize, cornerRadius: 10)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                AlbumArtView(coverArtId: album.coverArt, size: geo.size.width, cornerRadius: 10)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(album.name)
                 .font(.subheadline)
