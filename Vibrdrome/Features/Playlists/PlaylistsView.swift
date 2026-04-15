@@ -9,6 +9,7 @@ struct PlaylistsView: View {
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var searchText = ""
     @State private var sortBy: PlaylistSortOption = .name
 
@@ -249,9 +250,8 @@ struct PlaylistsView: View {
     // MARK: - Playlist Grid
 
     private var playlistGrid: some View {
-        LazyVGrid(columns: [
-            GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
-        ], spacing: 20) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
+                                 count: max(2, min(4, gridColumns))), spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)

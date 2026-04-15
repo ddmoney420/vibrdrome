@@ -137,7 +137,7 @@ struct FavoritesView: View {
         #endif
         .navigationTitle("Favorites")
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Favorites")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Favorites")
         #else
         .searchable(text: $searchText, prompt: "Search Favorites")
         #endif

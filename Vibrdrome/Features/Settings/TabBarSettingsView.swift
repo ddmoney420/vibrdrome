@@ -159,10 +159,14 @@ struct TabBarSettingsView: View {
                 }
                 .accessibilityIdentifier("tabRow_\(item.id)")
             }
+            .onMove { source, destination in
+                tabItems.move(fromOffsets: source, toOffset: destination)
+                saveTabOrder()
+            }
         } header: {
             settingSectionHeader("Tabs", icon: "dock.rectangle", color: .teal)
         } footer: {
-            Text("Toggle to show or hide tabs. To reorder, long-press the tab bar.")
+            Text("Drag to reorder tabs. Toggle to show or hide.")
         }
     }
 

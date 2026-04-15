@@ -116,6 +116,8 @@ struct AppearanceSettingsView: View {
 
     // MARK: - Lists Section
 
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+
     private var listsSection: some View {
         Section {
             Toggle(isOn: $showAlbumArtInLists) {
@@ -123,6 +125,16 @@ struct AppearanceSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("albumArtInListsToggle")
+
+            Picker(selection: $gridColumns) {
+                Text("2").tag(2)
+                Text("3").tag(3)
+                Text("4").tag(4)
+            } label: {
+                Label("Grid Columns", systemImage: "square.grid.2x2")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("gridColumnsPicker")
         } header: {
             settingSectionHeader("Lists", icon: "list.bullet", color: .green)
         }
