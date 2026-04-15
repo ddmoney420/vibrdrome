@@ -5,9 +5,10 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var selectedTab = 0
+    @State private var selectedTab = "library"
     @State private var libraryNavPath = NavigationPath()
     @State private var isOffline = false
+    @AppStorage(UserDefaultsKeys.tabBarOrder) private var tabBarOrderJSON = "[]"
     @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab = true
     @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab = true
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab = true
@@ -69,7 +70,7 @@ struct ContentView: View {
         .overlay(alignment: .top) {
             if isOffline {
                 Button {
-                    selectedTab = 0
+                    selectedTab = "library"
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         libraryNavPath.append(OfflineNavItem())
                     }
@@ -120,66 +121,58 @@ struct ContentView: View {
         }
     }
 
+    private var orderedTabIds: [String] {
+        if let data = tabBarOrderJSON.data(using: .utf8),
+           let saved = try? JSONDecoder().decode([String].self, from: data),
+           !saved.isEmpty {
+            // Ensure all known tabs are in the list (append missing ones)
+            let allIds = ["library", "artists", "albums", "songs", "genres",
+                          "favorites", "search", "playlists", "radio", "downloads", "settings"]
+            var result = saved.filter { allIds.contains($0) }
+            for id in allIds where !result.contains(id) {
+                result.append(id)
+            }
+            return result
+        }
+        return ["library", "artists", "albums", "songs", "genres",
+                "favorites", "search", "playlists", "radio", "downloads", "settings"]
+    }
+
+    private func isTabVisible(_ id: String) -> Bool {
+        switch id {
+        case "library": return true
+        case "artists": return showArtistsTab
+        case "albums": return showAlbumsTab
+        case "songs": return showSongsTab
+        case "genres": return showGenresTab
+        case "favorites": return showFavoritesTab
+        case "search": return showSearchTab
+        case "playlists": return showPlaylistsTab
+        case "radio": return showRadioTab
+        case "downloads": return showDownloadsTab
+        case "settings": return !settingsInNavBar
+        default: return false
+        }
+    }
+
     @available(iOS 18.0, macOS 15.0, *)
     private var modernTabView: some View {
-        TabView(selection: $selectedTab) {
-            Tab("Home", systemImage: "house", value: 0) {
+        let order = orderedTabIds
+        return TabView(selection: $selectedTab) {
+            // Tabs rendered in saved order. Each tab checks its own visibility.
+            // Home is always first regardless of saved order.
+            Tab("Home", systemImage: "house", value: "library") {
                 LibraryView(navPath: $libraryNavPath)
             }
-            if showArtistsTab {
-                Tab("Artists", systemImage: "music.mic", value: 10) {
-                    NavigationStack { ArtistsView() }
-                }
-            }
-            if showAlbumsTab {
-                Tab("Albums", systemImage: "square.stack.fill", value: 11) {
-                    NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-                }
-            }
-            if showSongsTab {
-                Tab("Songs", systemImage: "music.note", value: 12) {
-                    NavigationStack { SongsView() }
-                }
-            }
-            if showGenresTab {
-                Tab("Genres", systemImage: "guitars.fill", value: 13) {
-                    NavigationStack { GenresView() }
-                }
-            }
-            Group {
-                if showFavoritesTab {
-                    Tab("Favorites", systemImage: "heart.fill", value: 14) {
-                        NavigationStack { FavoritesView() }
-                    }
-                }
-                if showSearchTab {
-                    Tab("Search", systemImage: "magnifyingglass", value: 1) {
-                        NavigationStack { SearchView() }
-                    }
-                }
-                if showPlaylistsTab {
-                    Tab("Playlists", systemImage: "music.note.list", value: 2) {
-                        NavigationStack { PlaylistsView() }
-                    }
-                }
-                if showRadioTab {
-                    Tab("Radio", systemImage: "antenna.radiowaves.left.and.right", value: 3) {
-                        NavigationStack { RadioView() }
-                    }
-                }
-                if showDownloadsTab {
-                    Tab("Downloads", systemImage: "arrow.down.circle", value: 5) {
-                        NavigationStack { DownloadsView() }
-                    }
-                }
-                if !settingsInNavBar {
-                    Tab("Settings", systemImage: "gear", value: 4) {
-                        NavigationStack { SettingsView() }
-                    }
+            ForEach(order.filter { $0 != "library" && isTabVisible($0) }, id: \.self) { tabId in
+                // Use AnyView to erase types in ForEach
+                Tab(tabLabel(tabId), systemImage: tabIcon(tabId), value: tabId) {
+                    tabView(for: tabId)
                 }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .id(tabBarOrderJSON)
         .animation(.smooth, value: selectedTab)
         .onChange(of: selectedTab) { _, _ in
             #if os(iOS)
@@ -194,60 +187,109 @@ struct ContentView: View {
         }
     }
 
+    private func tabLabel(_ id: String) -> String {
+        switch id {
+        case "artists": return "Artists"
+        case "albums": return "Albums"
+        case "songs": return "Songs"
+        case "genres": return "Genres"
+        case "favorites": return "Favorites"
+        case "search": return "Search"
+        case "playlists": return "Playlists"
+        case "radio": return "Radio"
+        case "downloads": return "Downloads"
+        case "settings": return "Settings"
+        default: return "Home"
+        }
+    }
+
+    private func tabIcon(_ id: String) -> String {
+        switch id {
+        case "artists": return "music.mic"
+        case "albums": return "square.stack.fill"
+        case "songs": return "music.note"
+        case "genres": return "guitars.fill"
+        case "favorites": return "heart.fill"
+        case "search": return "magnifyingglass"
+        case "playlists": return "music.note.list"
+        case "radio": return "antenna.radiowaves.left.and.right"
+        case "downloads": return "arrow.down.circle"
+        case "settings": return "gear"
+        default: return "house"
+        }
+    }
+
+    @ViewBuilder
+    private func tabView(for id: String) -> some View {
+        switch id {
+        case "artists": NavigationStack { ArtistsView() }
+        case "albums": NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
+        case "songs": NavigationStack { SongsView() }
+        case "genres": NavigationStack { GenresView() }
+        case "favorites": NavigationStack { FavoritesView() }
+        case "search": NavigationStack { SearchView() }
+        case "playlists": NavigationStack { PlaylistsView() }
+        case "radio": NavigationStack { RadioView() }
+        case "downloads": NavigationStack { DownloadsView() }
+        case "settings": NavigationStack { SettingsView() }
+        default: EmptyView()
+        }
+    }
+
     private var legacyTabView: some View {
         TabView(selection: $selectedTab) {
             LibraryView(navPath: $libraryNavPath)
                 .tabItem { Label("Home", systemImage: "house") }
-                .tag(0)
+                .tag("library")
             if showArtistsTab {
                 NavigationStack { ArtistsView() }
                     .tabItem { Label("Artists", systemImage: "music.mic") }
-                    .tag(10)
+                    .tag("artists")
             }
             if showAlbumsTab {
                 NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
                     .tabItem { Label("Albums", systemImage: "square.stack.fill") }
-                    .tag(11)
+                    .tag("albums")
             }
             if showSongsTab {
                 NavigationStack { SongsView() }
                     .tabItem { Label("Songs", systemImage: "music.note") }
-                    .tag(12)
+                    .tag("songs")
             }
             if showGenresTab {
                 NavigationStack { GenresView() }
                     .tabItem { Label("Genres", systemImage: "guitars.fill") }
-                    .tag(13)
+                    .tag("genres")
             }
             if showFavoritesTab {
                 NavigationStack { FavoritesView() }
                     .tabItem { Label("Favorites", systemImage: "heart.fill") }
-                    .tag(14)
+                    .tag("favorites")
             }
             if showSearchTab {
                 NavigationStack { SearchView() }
                     .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    .tag(1)
+                    .tag("search")
             }
             if showPlaylistsTab {
                 NavigationStack { PlaylistsView() }
                     .tabItem { Label("Playlists", systemImage: "music.note.list") }
-                    .tag(2)
+                    .tag("playlists")
             }
             if showRadioTab {
                 NavigationStack { RadioView() }
                     .tabItem { Label("Radio", systemImage: "antenna.radiowaves.left.and.right") }
-                    .tag(3)
+                    .tag("radio")
             }
             if showDownloadsTab {
                 NavigationStack { DownloadsView() }
                     .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
-                    .tag(5)
-                }
+                    .tag("downloads")
+            }
             if !settingsInNavBar {
                 NavigationStack { SettingsView() }
                     .tabItem { Label("Settings", systemImage: "gear") }
-                    .tag(4)
+                    .tag("settings")
             }
         }
         .animation(.smooth, value: selectedTab)
@@ -267,7 +309,7 @@ struct ContentView: View {
     private func handlePendingNavigation() {
         guard let nav = appState.pendingNavigation else { return }
         appState.pendingNavigation = nil
-        selectedTab = 0
+        selectedTab = "library"
         // Small delay to ensure tab switch completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             switch nav {
