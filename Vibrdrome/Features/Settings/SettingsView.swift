@@ -348,21 +348,102 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
 
-            Button {
-                Task {
-                    await appState.librarySyncManager.sync(
-                        client: appState.subsonicClient,
-                        container: PersistenceController.shared.container
+            // Live sync stats during sync
+            if let stats = appState.librarySyncManager.lastSyncStats,
+               appState.librarySyncManager.isSyncing {
+                HStack(spacing: 12) {
+                    Label("+\(stats.albumsAdded + stats.artistsAdded + stats.songsAdded)", systemImage: "plus.circle")
+                        .foregroundStyle(.green)
+                    Label("~\(stats.albumsUpdated + stats.artistsUpdated + stats.songsUpdated)", systemImage: "pencil.circle")
+                        .foregroundStyle(.orange)
+                    Label("-\(stats.albumsRemoved + stats.artistsRemoved + stats.songsRemoved)", systemImage: "minus.circle")
+                        .foregroundStyle(.red)
+                }
+                .font(.caption)
+            }
+
+            // Last sync result summary
+            if let stats = appState.librarySyncManager.lastSyncStats,
+               !appState.librarySyncManager.isSyncing,
+               stats.totalChanges > 0 {
+                HStack {
+                    Text("Last sync: \(stats.totalChanges) changes in \(String(format: "%.1f", stats.duration))s")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack {
+                Button {
+                    Task {
+                        await appState.librarySyncManager.sync(
+                            client: appState.subsonicClient,
+                            container: PersistenceController.shared.container
+                        )
+                    }
+                } label: {
+                    Label(
+                        appState.librarySyncManager.isSyncing ? "Syncing…" : "Full Sync",
+                        systemImage: "arrow.clockwise"
                     )
                 }
-            } label: {
-                Label(
-                    appState.librarySyncManager.isSyncing ? "Syncing…" : "Sync Now",
-                    systemImage: "arrow.clockwise"
-                )
+                .disabled(appState.librarySyncManager.isSyncing)
+                .accessibilityIdentifier("librarySyncButton")
+
+                Spacer()
+
+                Button {
+                    Task {
+                        await appState.librarySyncManager.incrementalSync(
+                            client: appState.subsonicClient,
+                            container: PersistenceController.shared.container
+                        )
+                    }
+                } label: {
+                    Label("Quick Sync", systemImage: "bolt.circle")
+                }
+                .disabled(appState.librarySyncManager.isSyncing)
+                .accessibilityIdentifier("incrementalSyncButton")
             }
-            .disabled(appState.librarySyncManager.isSyncing)
-            .accessibilityIdentifier("librarySyncButton")
+
+            NavigationLink {
+                SyncHistoryView()
+            } label: {
+                Label("Sync History", systemImage: "clock.arrow.circlepath")
+            }
+            .accessibilityIdentifier("syncHistoryLink")
+
+            #if os(iOS)
+            Toggle(isOn: Binding(
+                get: { UserDefaults.standard.bool(forKey: UserDefaultsKeys.backgroundSyncEnabled) },
+                set: { newValue in
+                    UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.backgroundSyncEnabled)
+                    if newValue {
+                        BackgroundSyncScheduler.shared.scheduleRefresh()
+                        BackgroundSyncScheduler.shared.scheduleFullSync()
+                    } else {
+                        BackgroundSyncScheduler.shared.cancelAll()
+                    }
+                }
+            )) {
+                Label("Background Sync", systemImage: "arrow.triangle.2.circlepath")
+            }
+            #endif
+
+            Picker(selection: Binding(
+                get: {
+                    let val = UserDefaults.standard.integer(forKey: UserDefaultsKeys.syncPollingInterval)
+                    return [5, 15, 30, 60].contains(val) ? val : 15
+                },
+                set: { UserDefaults.standard.set($0, forKey: UserDefaultsKeys.syncPollingInterval) }
+            )) {
+                Text("5 min").tag(5)
+                Text("15 min").tag(15)
+                Text("30 min").tag(30)
+                Text("60 min").tag(60)
+            } label: {
+                Label("Check for Changes", systemImage: "timer")
+            }
         } header: {
             settingSectionHeader("Library", icon: "books.vertical.fill", color: .purple)
         }

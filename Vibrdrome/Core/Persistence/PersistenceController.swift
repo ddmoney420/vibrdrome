@@ -30,6 +30,7 @@ final class PersistenceController {
             OfflinePlaylist.self,
             PendingAction.self,
             SavedQueue.self,
+            SyncHistory.self,
         ])
 
         let config = ModelConfiguration(

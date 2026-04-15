@@ -5,8 +5,18 @@ import os.log
 
 private let syncLog = Logger(subsystem: "com.vibrdrome.app", category: "LibrarySync")
 
-/// Syncs full library metadata (albums, artists, songs) from the Subsonic API
-/// into SwiftData for local filtering and search.
+/// Sync mode determines the depth of library synchronization.
+enum SyncMode: String, Sendable {
+    /// Full re-sync of all metadata — catches additions, updates, and deletions.
+    case full
+    /// Lightweight sync — only fetches recently changed content.
+    case incremental
+    /// Triggered by BGTaskScheduler in the background.
+    case background
+}
+
+/// Syncs library metadata (albums, artists, songs, playlists) from the Subsonic API
+/// into SwiftData for local filtering, search, and offline support.
 @Observable
 @MainActor
 final class LibrarySyncManager {
@@ -18,15 +28,123 @@ final class LibrarySyncManager {
     }
     var syncError: String?
 
+    /// Stats from the most recent sync, updated live during sync.
+    var lastSyncStats: SyncStats?
+
+    /// Polling timer for change detection while app is active.
+    private var pollingTask: Task<Void, Never>?
+
     private let albumPageSize = 500
     private let songPageSize = 500
 
-    /// Run a full library sync: albums, artists, then songs.
+    /// Stale threshold for auto-sync (24 hours).
+    private let staleInterval: TimeInterval = 86400
+    /// Interval between full syncs to catch deletions (7 days).
+    private let fullSyncInterval: TimeInterval = 604_800
+
+    // MARK: - Sync Stats
+
+    struct SyncStats: Sendable {
+        var albumsAdded = 0
+        var albumsUpdated = 0
+        var albumsRemoved = 0
+        var artistsAdded = 0
+        var artistsUpdated = 0
+        var artistsRemoved = 0
+        var songsAdded = 0
+        var songsUpdated = 0
+        var songsRemoved = 0
+        var playlistsSynced = 0
+        var conflictsDetected = 0
+        var conflictsResolved = 0
+        var startTime = Date()
+
+        var totalChanges: Int {
+            albumsAdded + albumsUpdated + albumsRemoved +
+            artistsAdded + artistsUpdated + artistsRemoved +
+            songsAdded + songsUpdated + songsRemoved
+        }
+
+        var duration: TimeInterval {
+            Date().timeIntervalSince(startTime)
+        }
+    }
+
+    // MARK: - Public API
+
+    /// Run a full library sync: albums, artists, songs, then playlists.
     func sync(client: SubsonicClient, container: ModelContainer) async {
+        await performSync(mode: .full, client: client, container: container)
+    }
+
+    /// Run an incremental sync — only fetches changes since last sync.
+    func incrementalSync(client: SubsonicClient, container: ModelContainer) async {
+        await performSync(mode: .incremental, client: client, container: container)
+    }
+
+    /// Check if sync is stale and trigger the appropriate sync mode.
+    func syncIfStale(client: SubsonicClient, container: ModelContainer) async {
+        guard let last = lastSyncDate else {
+            await performSync(mode: .full, client: client, container: container)
+            return
+        }
+        let elapsed = Date().timeIntervalSince(last)
+        guard elapsed > staleInterval else { return }
+
+        // Check if server data actually changed before doing work
+        let serverChanged = await hasServerChanged(client: client)
+
+        if serverChanged {
+            // Use full sync if it's been over a week, otherwise incremental
+            let lastFull = UserDefaults.standard.object(forKey: UserDefaultsKeys.lastFullSyncDate) as? Date
+            let needsFullSync = lastFull == nil || Date().timeIntervalSince(lastFull!) > fullSyncInterval
+            let mode: SyncMode = needsFullSync ? .full : .incremental
+            await performSync(mode: mode, client: client, container: container)
+        } else {
+            // Server unchanged — just update the stale check timestamp
+            lastSyncDate = Date()
+            syncLog.info("Server data unchanged, skipping sync")
+        }
+    }
+
+    // MARK: - Change Detection Polling
+
+    /// Start periodic polling for server changes while the app is active.
+    func startPolling(client: SubsonicClient, container: ModelContainer) {
+        stopPolling()
+        let intervalMinutes = UserDefaults.standard.integer(forKey: UserDefaultsKeys.syncPollingInterval)
+        let interval = max(TimeInterval(intervalMinutes > 0 ? intervalMinutes : 15) * 60, 300)
+
+        pollingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self, !self.isSyncing else { continue }
+
+                let changed = await self.hasServerChanged(client: client)
+                if changed {
+                    syncLog.info("Polling detected server changes, triggering incremental sync")
+                    await self.performSync(mode: .incremental, client: client, container: container)
+                }
+            }
+        }
+        syncLog.info("Started change detection polling every \(Int(interval))s")
+    }
+
+    /// Stop the periodic polling timer.
+    func stopPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
+    }
+
+    // MARK: - Core Sync Engine
+
+    private func performSync(mode: SyncMode, client: SubsonicClient, container: ModelContainer) async {
         guard !isSyncing else { return }
         isSyncing = true
         syncError = nil
-        syncProgress = "Starting sync…"
+        syncProgress = mode == .full ? "Starting full sync…" : "Starting incremental sync…"
+        var stats = SyncStats()
+        lastSyncStats = stats
         defer {
             isSyncing = false
             syncProgress = nil
@@ -36,133 +154,242 @@ final class LibrarySyncManager {
             let context = ModelContext(container)
             context.autosaveEnabled = false
 
-            try await syncAlbums(client: client, context: context)
-            try await syncArtists(client: client, context: context)
-            try await syncSongs(client: client, context: context)
-            try await syncPlaylists(client: client, context: context)
+            switch mode {
+            case .full, .background:
+                try await syncAlbums(client: client, context: context, stats: &stats, incremental: false)
+                try await syncArtists(client: client, context: context, stats: &stats, incremental: false)
+                try await syncSongs(client: client, context: context, stats: &stats, incremental: false)
+                try await syncPlaylists(client: client, context: context, stats: &stats)
+                UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastFullSyncDate)
+
+            case .incremental:
+                try await syncAlbums(client: client, context: context, stats: &stats, incremental: true)
+                try await syncArtists(client: client, context: context, stats: &stats, incremental: true)
+                try await syncSongs(client: client, context: context, stats: &stats, incremental: true)
+                try await syncPlaylists(client: client, context: context, stats: &stats)
+            }
 
             try context.save()
             lastSyncDate = Date()
-            syncLog.info("Library sync completed successfully")
+            lastSyncStats = stats
+
+            // Save sync history
+            saveSyncHistory(stats: stats, mode: mode, context: context)
+
+            syncLog.info("""
+                Library sync (\(mode.rawValue)) completed in \
+                \(String(format: "%.1f", stats.duration))s — \
+                \(stats.totalChanges) changes \
+                (+\(stats.albumsAdded + stats.artistsAdded + stats.songsAdded) \
+                ~\(stats.albumsUpdated + stats.artistsUpdated + stats.songsUpdated) \
+                -\(stats.albumsRemoved + stats.artistsRemoved + stats.songsRemoved))
+                """)
 
             // Prefetch cover art in background after metadata sync
-            await prefetchCoverArt(client: client, context: context)
+            if stats.albumsAdded > 0 || stats.artistsAdded > 0 {
+                await prefetchCoverArt(client: client, context: context)
+            }
         } catch {
             syncError = "Sync failed: \(error.localizedDescription)"
-            syncLog.error("Library sync failed: \(error)")
+            lastSyncStats = stats
+            saveSyncHistory(stats: stats, mode: mode, context: ModelContext(container), error: error)
+            syncLog.error("Library sync (\(mode.rawValue)) failed: \(error)")
         }
     }
 
-    /// Check if sync is stale (>24h) and trigger background sync if needed.
-    func syncIfStale(client: SubsonicClient, container: ModelContainer) async {
-        guard let last = lastSyncDate else {
-            await sync(client: client, container: container)
-            return
+    // MARK: - Server Change Detection
+
+    /// Lightweight check if server data has changed since last sync.
+    /// Uses getIndexes with ifModifiedSince to avoid fetching full data.
+    private func hasServerChanged(client: SubsonicClient) async -> Bool {
+        let lastModified = UserDefaults.standard.integer(forKey: UserDefaultsKeys.lastServerModified)
+        guard lastModified > 0 else { return true }
+
+        do {
+            let indexes = try await client.getIndexes(ifModifiedSince: lastModified)
+            if let serverModified = indexes.lastModified, serverModified > lastModified {
+                return true
+            }
+            let hasContent = indexes.index?.isEmpty == false || indexes.child?.isEmpty == false
+            return hasContent
+        } catch {
+            syncLog.warning("Change detection failed: \(error.localizedDescription)")
+            return true
         }
-        if Date().timeIntervalSince(last) > 86400 {
-            await sync(client: client, container: container)
+    }
+
+    /// Update the stored server lastModified timestamp.
+    private func updateServerModifiedTimestamp(client: SubsonicClient) async {
+        do {
+            let indexes = try await client.getIndexes()
+            if let lastModified = indexes.lastModified {
+                UserDefaults.standard.set(lastModified, forKey: UserDefaultsKeys.lastServerModified)
+            }
+        } catch {
+            syncLog.warning("Failed to fetch server modified timestamp: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Albums
 
-    private func syncAlbums(client: SubsonicClient, context: ModelContext) async throws {
+    private func syncAlbums(client: SubsonicClient, context: ModelContext,
+                            stats: inout SyncStats, incremental: Bool) async throws {
         syncProgress = "Syncing albums…"
+
+        // Build lookup dictionary of existing albums for O(1) access
+        let allLocal = try context.fetch(FetchDescriptor<CachedAlbum>())
+        var localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
+
         var offset = 0
         var serverAlbumIds = Set<String>()
         var totalFetched = 0
 
-        while true {
-            let page = try await client.getAlbumList(
-                type: .alphabeticalByName, size: albumPageSize, offset: offset
-            )
-            if page.isEmpty { break }
-
-            for album in page {
+        if incremental {
+            // Fetch only newest albums (added/modified recently)
+            let newestAlbums = try await client.getAlbumList(type: .newest, size: albumPageSize)
+            for album in newestAlbums {
                 serverAlbumIds.insert(album.id)
-                upsertAlbum(album, context: context)
+                if let existing = localMap[album.id] {
+                    if hasAlbumChanged(existing, album) {
+                        existing.update(from: album)
+                        stats.albumsUpdated += 1
+                    }
+                } else {
+                    let cached = CachedAlbum(from: album)
+                    context.insert(cached)
+                    localMap[album.id] = cached
+                    stats.albumsAdded += 1
+                }
+            }
+            totalFetched = newestAlbums.count
+        } else {
+            // Full sync: fetch all albums
+            while true {
+                let page = try await client.getAlbumList(
+                    type: .alphabeticalByName, size: albumPageSize, offset: offset
+                )
+                if page.isEmpty { break }
+
+                for album in page {
+                    serverAlbumIds.insert(album.id)
+                    if let existing = localMap[album.id] {
+                        if hasAlbumChanged(existing, album) {
+                            existing.update(from: album)
+                            stats.albumsUpdated += 1
+                        }
+                    } else {
+                        let cached = CachedAlbum(from: album)
+                        context.insert(cached)
+                        localMap[album.id] = cached
+                        stats.albumsAdded += 1
+                    }
+                }
+
+                totalFetched += page.count
+                syncProgress = "Syncing albums… \(totalFetched)"
+                offset += page.count
+
+                if page.count < albumPageSize { break }
             }
 
-            totalFetched += page.count
-            syncProgress = "Syncing albums… \(totalFetched)"
-            offset += page.count
-
-            if page.count < albumPageSize { break }
-        }
-
-        // Remove albums no longer on server
-        let allLocal = try context.fetch(FetchDescriptor<CachedAlbum>())
-        for local in allLocal where !serverAlbumIds.contains(local.id) {
-            context.delete(local)
+            // Remove albums no longer on server
+            for local in allLocal where !serverAlbumIds.contains(local.id) {
+                context.delete(local)
+                stats.albumsRemoved += 1
+            }
         }
 
         try context.save()
-        syncLog.info("Synced \(totalFetched) albums")
+        lastSyncStats = stats
+        let added = stats.albumsAdded
+        let updated = stats.albumsUpdated
+        let removed = stats.albumsRemoved
+        syncLog.info("Synced \(totalFetched) albums (+\(added) ~\(updated) -\(removed))")
     }
 
-    private func upsertAlbum(_ album: Album, context: ModelContext) {
-        let albumId = album.id
-        var descriptor = FetchDescriptor<CachedAlbum>(
-            predicate: #Predicate { $0.id == albumId }
-        )
-        descriptor.fetchLimit = 1
-        if let existing = try? context.fetch(descriptor).first {
-            existing.update(from: album)
-        } else {
-            context.insert(CachedAlbum(from: album))
-        }
+    private func hasAlbumChanged(_ cached: CachedAlbum, _ server: Album) -> Bool {
+        cached.name != server.name ||
+        cached.artistName != server.artist ||
+        cached.year != server.year ||
+        cached.genre != server.genre ||
+        cached.songCount != server.songCount ||
+        cached.duration != server.duration ||
+        cached.isStarred != (server.starred != nil) ||
+        cached.coverArtId != server.coverArt
     }
 
     // MARK: - Artists
 
-    private func syncArtists(client: SubsonicClient, context: ModelContext) async throws {
+    private func syncArtists(client: SubsonicClient, context: ModelContext,
+                             stats: inout SyncStats, incremental: Bool) async throws {
         syncProgress = "Syncing artists…"
         let indexes = try await client.getArtists()
         var serverArtistIds = Set<String>()
 
+        // Build lookup dictionary
+        let allLocal = try context.fetch(FetchDescriptor<CachedArtist>())
+        let localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
+
         for index in indexes {
             for artist in index.artist ?? [] {
                 serverArtistIds.insert(artist.id)
-                upsertArtist(artist, context: context)
+                if let existing = localMap[artist.id] {
+                    if hasArtistChanged(existing, artist) {
+                        existing.name = artist.name
+                        existing.coverArtId = artist.coverArt
+                        existing.albumCount = artist.albumCount
+                        existing.isStarred = artist.starred != nil
+                        existing.cachedAt = Date()
+                        stats.artistsUpdated += 1
+                    }
+                } else {
+                    context.insert(CachedArtist(from: artist))
+                    stats.artistsAdded += 1
+                }
             }
         }
 
-        // Remove artists no longer on server
-        let allLocal = try context.fetch(FetchDescriptor<CachedArtist>())
-        for local in allLocal where !serverArtistIds.contains(local.id) {
-            context.delete(local)
+        // Remove artists no longer on server (only on full sync)
+        if !incremental {
+            for local in allLocal where !serverArtistIds.contains(local.id) {
+                context.delete(local)
+                stats.artistsRemoved += 1
+            }
         }
 
         try context.save()
-        syncLog.info("Synced \(serverArtistIds.count) artists")
+        lastSyncStats = stats
+        let artAdded = stats.artistsAdded
+        let artUpdated = stats.artistsUpdated
+        let artRemoved = stats.artistsRemoved
+        syncLog.info("Synced \(serverArtistIds.count) artists (+\(artAdded) ~\(artUpdated) -\(artRemoved))")
     }
 
-    private func upsertArtist(_ artist: Artist, context: ModelContext) {
-        let artistId = artist.id
-        var descriptor = FetchDescriptor<CachedArtist>(
-            predicate: #Predicate { $0.id == artistId }
-        )
-        descriptor.fetchLimit = 1
-        if let existing = try? context.fetch(descriptor).first {
-            existing.name = artist.name
-            existing.coverArtId = artist.coverArt
-            existing.albumCount = artist.albumCount
-            existing.isStarred = artist.starred != nil
-            existing.cachedAt = Date()
-        } else {
-            context.insert(CachedArtist(from: artist))
-        }
+    private func hasArtistChanged(_ cached: CachedArtist, _ server: Artist) -> Bool {
+        cached.name != server.name ||
+        cached.coverArtId != server.coverArt ||
+        cached.albumCount != server.albumCount ||
+        cached.isStarred != (server.starred != nil)
     }
 
     // MARK: - Songs
 
-    private func syncSongs(client: SubsonicClient, context: ModelContext) async throws {
+    private func syncSongs(client: SubsonicClient, context: ModelContext,
+                           stats: inout SyncStats, incremental: Bool) async throws {
         syncProgress = "Syncing songs…"
+
+        // Build lookup dictionary for O(1) access
+        let allLocal = try context.fetch(FetchDescriptor<CachedSong>())
+        var localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
+
+        // Pre-fetch album map for linking
+        let allAlbums = try context.fetch(FetchDescriptor<CachedAlbum>())
+        let albumMap = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.id, $0) })
+
         var offset = 0
         var serverSongIds = Set<String>()
         var totalFetched = 0
 
-        // Use search3 with empty query to get all songs
         while true {
             let result = try await client.search(
                 query: "", artistCount: 0, albumCount: 0,
@@ -173,105 +400,117 @@ final class LibrarySyncManager {
 
             for song in songs {
                 serverSongIds.insert(song.id)
-                upsertSong(song, context: context)
+                if let existing = localMap[song.id] {
+                    if hasSongChanged(existing, song) {
+                        updateSongFields(existing, from: song)
+                        stats.songsUpdated += 1
+                    }
+                } else {
+                    let cached = CachedSong(from: song)
+                    if let albumId = song.albumId {
+                        cached.album = albumMap[albumId]
+                    }
+                    context.insert(cached)
+                    localMap[song.id] = cached
+                    stats.songsAdded += 1
+                }
             }
 
             totalFetched += songs.count
             syncProgress = "Syncing songs… \(totalFetched)"
             offset += songs.count
 
-            // Save periodically to manage memory
             if totalFetched % 2000 == 0 {
                 try context.save()
+                lastSyncStats = stats
             }
 
             if songs.count < songPageSize { break }
         }
 
-        // Remove songs no longer on server (only cached songs without downloads)
-        let allLocal = try context.fetch(FetchDescriptor<CachedSong>())
-        for local in allLocal where !serverSongIds.contains(local.id) && local.download == nil {
-            context.delete(local)
+        // Remove songs no longer on server (only on full sync, preserve downloads)
+        if !incremental {
+            for local in allLocal where !serverSongIds.contains(local.id) && local.download == nil {
+                context.delete(local)
+                stats.songsRemoved += 1
+            }
         }
 
         try context.save()
-        syncLog.info("Synced \(totalFetched) songs")
+        lastSyncStats = stats
+        await updateServerModifiedTimestamp(client: client)
+        let songAdded = stats.songsAdded
+        let songUpdated = stats.songsUpdated
+        let songRemoved = stats.songsRemoved
+        syncLog.info("Synced \(totalFetched) songs (+\(songAdded) ~\(songUpdated) -\(songRemoved))")
     }
 
-    private func upsertSong(_ song: Song, context: ModelContext) {
-        let songId = song.id
-        var descriptor = FetchDescriptor<CachedSong>(
-            predicate: #Predicate { $0.id == songId }
-        )
-        descriptor.fetchLimit = 1
-        if let existing = try? context.fetch(descriptor).first {
-            existing.title = song.title
-            existing.artist = song.artist
-            existing.albumArtist = song.albumArtist
-            existing.albumName = song.album
-            existing.albumId = song.albumId
-            existing.artistId = song.artistId
-            existing.coverArtId = song.coverArt
-            existing.track = song.track
-            existing.discNumber = song.discNumber
-            existing.year = song.year
-            existing.genre = song.genre
-            existing.duration = song.duration
-            existing.bitRate = song.bitRate
-            existing.suffix = song.suffix
-            existing.contentType = song.contentType
-            existing.size = song.size
-            existing.isStarred = song.starred != nil
-            existing.rating = song.userRating ?? 0
-            existing.cachedAt = Date()
-        } else {
-            let cached = CachedSong(from: song)
-            // Link to album if it exists
-            if let albumId = song.albumId {
-                var albumDesc = FetchDescriptor<CachedAlbum>(
-                    predicate: #Predicate { $0.id == albumId }
-                )
-                albumDesc.fetchLimit = 1
-                cached.album = try? context.fetch(albumDesc).first
-            }
-            context.insert(cached)
-        }
+    private func hasSongChanged(_ cached: CachedSong, _ server: Song) -> Bool {
+        cached.title != server.title ||
+        cached.artist != server.artist ||
+        cached.albumName != server.album ||
+        cached.track != server.track ||
+        cached.year != server.year ||
+        cached.genre != server.genre ||
+        cached.duration != server.duration ||
+        cached.isStarred != (server.starred != nil) ||
+        cached.coverArtId != server.coverArt ||
+        cached.bitRate != server.bitRate
+    }
+
+    private func updateSongFields(_ cached: CachedSong, from song: Song) {
+        cached.title = song.title
+        cached.artist = song.artist
+        cached.albumArtist = song.albumArtist
+        cached.albumName = song.album
+        cached.albumId = song.albumId
+        cached.artistId = song.artistId
+        cached.coverArtId = song.coverArt
+        cached.track = song.track
+        cached.discNumber = song.discNumber
+        cached.year = song.year
+        cached.genre = song.genre
+        cached.duration = song.duration
+        cached.bitRate = song.bitRate
+        cached.suffix = song.suffix
+        cached.contentType = song.contentType
+        cached.size = song.size
+        cached.isStarred = song.starred != nil
+        cached.rating = song.userRating ?? 0
+        cached.cachedAt = Date()
     }
 
     // MARK: - Playlists
 
-    private func syncPlaylists(client: SubsonicClient, context: ModelContext) async throws {
+    private func syncPlaylists(client: SubsonicClient, context: ModelContext,
+                               stats: inout SyncStats) async throws {
         syncProgress = "Syncing playlists…"
         let playlists = try await client.getPlaylists()
         var serverPlaylistIds = Set<String>()
 
+        let allLocal = try context.fetch(FetchDescriptor<CachedPlaylist>())
+        let localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
+
         for playlist in playlists {
             serverPlaylistIds.insert(playlist.id)
-
-            // Fetch full playlist with song entries
             let detail = try await client.getPlaylist(id: playlist.id)
-            upsertPlaylist(detail, context: context)
+            upsertPlaylist(detail, context: context, localMap: localMap)
+            stats.playlistsSynced += 1
         }
 
-        // Remove playlists no longer on server
-        let allLocal = try context.fetch(FetchDescriptor<CachedPlaylist>())
         for local in allLocal where !serverPlaylistIds.contains(local.id) {
             context.delete(local)
         }
 
         try context.save()
+        lastSyncStats = stats
         syncLog.info("Synced \(playlists.count) playlists with entries")
     }
 
-    private func upsertPlaylist(_ playlist: Playlist, context: ModelContext) {
-        let playlistId = playlist.id
-        var descriptor = FetchDescriptor<CachedPlaylist>(
-            predicate: #Predicate { $0.id == playlistId }
-        )
-        descriptor.fetchLimit = 1
-
+    private func upsertPlaylist(_ playlist: Playlist, context: ModelContext,
+                                localMap: [String: CachedPlaylist]) {
         let cached: CachedPlaylist
-        if let existing = try? context.fetch(descriptor).first {
+        if let existing = localMap[playlist.id] {
             existing.name = playlist.name
             existing.songCount = playlist.songCount
             existing.duration = playlist.duration
@@ -285,13 +524,10 @@ final class LibrarySyncManager {
             context.insert(cached)
         }
 
-        // Sync playlist entries (ordered song references)
-        // Remove old entries
         for entry in cached.entries {
             context.delete(entry)
         }
 
-        // Add current entries in order
         if let songs = playlist.entry {
             for (index, song) in songs.enumerated() {
                 let entry = CachedPlaylistEntry(songId: song.id, order: index)
@@ -306,7 +542,6 @@ final class LibrarySyncManager {
     private func prefetchCoverArt(client: SubsonicClient, context: ModelContext) async {
         syncProgress = "Prefetching cover art…"
 
-        // Collect all unique coverArtIds from albums (albums cover most songs too)
         var coverArtIds = Set<String>()
 
         let albums = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
@@ -324,15 +559,11 @@ final class LibrarySyncManager {
         syncLog.info("Prefetching \(total) cover art images")
 
         let pipeline = ImagePipeline.shared
-
-        // Pre-compute URLs on the main actor (SubsonicClient is @MainActor)
         let urlMap: [(String, URL)] = coverArtIds.map { id in
             (id, client.coverArtURL(id: id, size: 600))
         }
 
         var fetched = 0
-
-        // Process in batches of 10 concurrent requests
         let batchSize = 10
         for batchStart in stride(from: 0, to: urlMap.count, by: batchSize) {
             let batch = urlMap[batchStart..<min(batchStart + batchSize, urlMap.count)]
@@ -350,5 +581,43 @@ final class LibrarySyncManager {
         }
 
         syncLog.info("Cover art prefetch complete: \(fetched) processed")
+    }
+
+    // MARK: - Sync History
+
+    private func saveSyncHistory(stats: SyncStats, mode: SyncMode,
+                                 context: ModelContext, error: Error? = nil) {
+        let history = SyncHistory(syncType: mode.rawValue)
+        history.durationSeconds = stats.duration
+        history.albumsAdded = stats.albumsAdded
+        history.albumsUpdated = stats.albumsUpdated
+        history.albumsRemoved = stats.albumsRemoved
+        history.artistsAdded = stats.artistsAdded
+        history.artistsUpdated = stats.artistsUpdated
+        history.artistsRemoved = stats.artistsRemoved
+        history.songsAdded = stats.songsAdded
+        history.songsUpdated = stats.songsUpdated
+        history.songsRemoved = stats.songsRemoved
+        history.playlistsSynced = stats.playlistsSynced
+        history.conflictsDetected = stats.conflictsDetected
+        history.conflictsResolved = stats.conflictsResolved
+        history.succeeded = error == nil
+        history.errorMessage = error?.localizedDescription
+        context.insert(history)
+        try? context.save()
+
+        pruneSyncHistory(context: context)
+    }
+
+    private func pruneSyncHistory(context: ModelContext) {
+        var descriptor = FetchDescriptor<SyncHistory>(
+            sortBy: [SortDescriptor(\.syncDate, order: .reverse)]
+        )
+        descriptor.fetchOffset = 50
+        guard let old = try? context.fetch(descriptor), !old.isEmpty else { return }
+        for entry in old {
+            context.delete(entry)
+        }
+        try? context.save()
     }
 }

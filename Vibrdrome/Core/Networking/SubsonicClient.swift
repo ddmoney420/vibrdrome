@@ -389,8 +389,8 @@ final class SubsonicClient {
         return body.musicFolders?.musicFolder ?? []
     }
 
-    func getIndexes(musicFolderId: String? = nil) async throws -> IndexesResponse {
-        let body = try await request(.getIndexes(musicFolderId: musicFolderId))
+    func getIndexes(musicFolderId: String? = nil, ifModifiedSince: Int? = nil) async throws -> IndexesResponse {
+        let body = try await request(.getIndexes(musicFolderId: musicFolderId, ifModifiedSince: ifModifiedSince))
         guard let indexes = body.indexes else {
             throw SubsonicError.apiError(code: 70, message: "Indexes not found")
         }

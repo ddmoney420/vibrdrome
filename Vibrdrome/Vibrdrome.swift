@@ -127,6 +127,10 @@ struct VibrdromeApp: App {
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
                     }
                 }
                 .onOpenURL { url in
@@ -144,6 +148,19 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    BackgroundSyncScheduler.shared.registerTasks()
+                    BackgroundSyncScheduler.shared.scheduleRefresh()
+                    BackgroundSyncScheduler.shared.scheduleFullSync()
+                    Task {
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
