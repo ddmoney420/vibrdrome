@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import os.log
 
 struct AlbumsView: View {
@@ -9,7 +10,9 @@ struct AlbumsView: View {
     var toYear: Int?
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var albums: [Album] = []
+    @State private var localFilteredAlbums: [Album]?
     @State private var isLoading = true
     @State private var error: String?
     @State private var hasMore = true
@@ -45,7 +48,8 @@ struct AlbumsView: View {
     }
 
     private var filteredAlbums: [Album] {
-        var result = albums
+        let source = localFilteredAlbums ?? albums
+        var result = source
         if !searchText.isEmpty {
             result = result.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText) ||
@@ -100,6 +104,23 @@ struct AlbumsView: View {
             }
         }
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .albumFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .albumFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.albumFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Album Filters")
+                .accessibilityIdentifier("albumFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -149,12 +170,26 @@ struct AlbumsView: View {
                 }
             }
         }
-        .task { await loadAlbums() }
+        .task {
+            await loadAlbums()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+        }
         .refreshable {
             albums = []
             hasMore = true
             await loadAlbums()
         }
+        #if os(macOS)
+        .onChange(of: appState.albumFilter.isFavorited) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRated) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRecentlyPlayed) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedArtistIds) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedGenres) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedLabels) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.year) { applyLocalFilters() }
+        #endif
     }
 
     // MARK: - List view
@@ -279,6 +314,7 @@ struct AlbumsView: View {
     }
 
     private func paginateIfNeeded(_ album: Album) {
+        guard localFilteredAlbums == nil else { return }
         if album.id == albums.last?.id && hasMore {
             Task { await loadMore() }
         }
@@ -325,4 +361,86 @@ struct AlbumsView: View {
             hasMore = false
         }
     }
+
+    #if os(macOS)
+    private func applyLocalFilters() {
+        let filter = appState.albumFilter
+        guard filter.isActive else {
+            localFilteredAlbums = nil
+            return
+        }
+
+        do {
+            var descriptor = FetchDescriptor<CachedAlbum>()
+            descriptor.sortBy = [SortDescriptor(\.name)]
+            let allAlbums = try modelContext.fetch(descriptor)
+
+            // Pre-compute recently played album IDs if needed
+            var recentlyPlayedAlbumIds: Set<String>?
+            if filter.isRecentlyPlayed {
+                let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+                let songDescriptor = FetchDescriptor<CachedSong>(
+                    predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
+                )
+                let recentSongs = (try? modelContext.fetch(songDescriptor)) ?? []
+                recentlyPlayedAlbumIds = Set(recentSongs.compactMap(\.albumId))
+            }
+
+            let filtered = allAlbums.filter { album in
+                // Favorited filter
+                switch filter.isFavorited {
+                case .yes: if !album.isStarred { return false }
+                case .no: if album.isStarred { return false }
+                case .none: break
+                }
+
+                // Rated filter
+                switch filter.isRated {
+                case .yes: if album.userRating == 0 { return false }
+                case .no: if album.userRating != 0 { return false }
+                case .none: break
+                }
+
+                // Recently played filter
+                if let recentIds = recentlyPlayedAlbumIds {
+                    if !recentIds.contains(album.id) { return false }
+                }
+
+                // Artist filter
+                if !filter.selectedArtistIds.isEmpty {
+                    guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
+                        return false
+                    }
+                }
+
+                // Genre filter
+                if !filter.selectedGenres.isEmpty {
+                    guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
+                        return false
+                    }
+                }
+
+                // Label filter
+                if !filter.selectedLabels.isEmpty {
+                    guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
+                        return false
+                    }
+                }
+
+                // Year filter
+                if let yearFilter = filter.year {
+                    guard album.year == yearFilter else { return false }
+                }
+
+                return true
+            }
+
+            localFilteredAlbums = filtered.map { $0.toAlbum() }
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredAlbums = nil
+        }
+    }
+    #endif
 }

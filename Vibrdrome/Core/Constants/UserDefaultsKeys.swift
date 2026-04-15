@@ -135,4 +135,8 @@ enum UserDefaultsKeys {
     static let macSidePanelMechanic = "macSidePanelMechanic"
     static let macSidePanelWidth = "macSidePanelWidth"
     static let macMiniPlayerPanelTrigger = "macMiniPlayerPanelTrigger"
+
+    // MARK: - Library Sync
+
+    static let lastLibrarySyncDate = "lastLibrarySyncDate"
 }

@@ -87,6 +87,7 @@ struct SettingsView: View {
             #endif
 
             downloadsSection
+            librarySyncSection
 
             #if os(iOS)
             NavigationLink {
@@ -308,6 +309,62 @@ struct SettingsView: View {
             }
         } header: {
             settingSectionHeader("Downloads", icon: "arrow.down.circle.fill", color: .cyan)
+        }
+    }
+
+    // MARK: - Library Sync Section
+
+    private var librarySyncSection: some View {
+        Section {
+            HStack {
+                Label("Library Sync", systemImage: "arrow.triangle.2.circlepath.circle.fill")
+                Spacer()
+                if appState.librarySyncManager.isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if let lastSync = appState.librarySyncManager.lastSyncDate {
+                    Text(lastSync, style: .relative)
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                    Text("ago")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                } else {
+                    Text("Never")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+            }
+
+            if let progress = appState.librarySyncManager.syncProgress {
+                Text(progress)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let syncError = appState.librarySyncManager.syncError {
+                Text(syncError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                Task {
+                    await appState.librarySyncManager.sync(
+                        client: appState.subsonicClient,
+                        container: PersistenceController.shared.container
+                    )
+                }
+            } label: {
+                Label(
+                    appState.librarySyncManager.isSyncing ? "Syncing…" : "Sync Now",
+                    systemImage: "arrow.clockwise"
+                )
+            }
+            .disabled(appState.librarySyncManager.isSyncing)
+            .accessibilityIdentifier("librarySyncButton")
+        } header: {
+            settingSectionHeader("Library", icon: "books.vertical.fill", color: .purple)
         }
     }
 

@@ -1,9 +1,13 @@
 import NukeUI
 import SwiftUI
+import SwiftData
+import os.log
 
 struct SongsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var songs: [Song] = []
+    @State private var localFilteredSongs: [Song]?
     @State private var isLoading = true
     @State private var hasMore = false
     @State private var searchText = ""
@@ -47,7 +51,12 @@ struct SongsView: View {
     }
 
     private var displayedSongs: [Song] {
-        var base = searchText.count >= 2 ? searchResults : songs
+        var base: [Song]
+        #if os(macOS)
+        base = localFilteredSongs ?? (searchText.count >= 2 ? searchResults : songs)
+        #else
+        base = searchText.count >= 2 ? searchResults : songs
+        #endif
         if let filterYear {
             base = base.filter { $0.year == filterYear }
         }
@@ -109,6 +118,23 @@ struct SongsView: View {
             }
         }
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .songFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .songFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.songFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Song Filters")
+                .accessibilityIdentifier("songFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -217,7 +243,18 @@ struct SongsView: View {
         .task {
             await loadSongs()
             await loadGenres()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
         }
+        #if os(macOS)
+        .onChange(of: appState.songFilter.isFavorited) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.isRated) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.isRecentlyPlayed) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedArtistIds) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedGenres) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.year) { applyLocalFilters() }
+        #endif
     }
 
     // MARK: - Active Filter Chips
@@ -372,7 +409,7 @@ struct SongsView: View {
                     .accessibilityIdentifier("songRow_\(song.id)")
                     .trackContextMenu(song: song)
                     .onAppear {
-                        if searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
+                        if localFilteredSongs == nil && searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
                             Task { await loadMore() }
                         }
                     }
@@ -414,7 +451,7 @@ struct SongsView: View {
                             .accessibilityIdentifier("songCard_\(song.id)")
                             .trackContextMenu(song: song)
                             .onAppear {
-                                if searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
+                                if localFilteredSongs == nil && searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
                                     Task { await loadMore() }
                                 }
                             }
@@ -530,4 +567,75 @@ struct SongsView: View {
             hasMore = newSongs.count >= pageSize
         } catch {}
     }
+
+    #if os(macOS)
+    private func applyLocalFilters() {
+        let filter = appState.songFilter
+        guard filter.isActive else {
+            localFilteredSongs = nil
+            return
+        }
+
+        do {
+            var descriptor = FetchDescriptor<CachedSong>()
+            descriptor.sortBy = [SortDescriptor(\.title)]
+            let allSongs = try modelContext.fetch(descriptor)
+
+            // Pre-compute recently played cutoff if needed
+            let recentCutoff: Date? = filter.isRecentlyPlayed
+                ? Calendar.current.date(byAdding: .day, value: -30, to: Date())
+                : nil
+
+            let filtered = allSongs.filter { song in
+                // Favorited filter
+                switch filter.isFavorited {
+                case .yes: if !song.isStarred { return false }
+                case .no: if song.isStarred { return false }
+                case .none: break
+                }
+
+                // Rated filter
+                switch filter.isRated {
+                case .yes: if song.rating == 0 { return false }
+                case .no: if song.rating != 0 { return false }
+                case .none: break
+                }
+
+                // Recently played filter
+                if let cutoff = recentCutoff {
+                    guard let lastPlayed = song.lastPlayed, lastPlayed > cutoff else {
+                        return false
+                    }
+                }
+
+                // Artist filter
+                if !filter.selectedArtistIds.isEmpty {
+                    guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
+                        return false
+                    }
+                }
+
+                // Genre filter
+                if !filter.selectedGenres.isEmpty {
+                    guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
+                        return false
+                    }
+                }
+
+                // Year filter
+                if let yearFilter = filter.year {
+                    guard song.year == yearFilter else { return false }
+                }
+
+                return true
+            }
+
+            localFilteredSongs = filtered.map { $0.toSong() }
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Songs")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredSongs = nil
+        }
+    }
+    #endif
 }

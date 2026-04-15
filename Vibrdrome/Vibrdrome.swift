@@ -115,9 +115,19 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = ImagePipeline {
+                        let dataCache = try? DataCache(name: "com.vibrdrome.images")
+                        dataCache?.sizeLimit = 5 * 1024 * 1024 * 1024 // 5 GB on macOS
+                        if let dataCache { $0.dataCache = dataCache }
+                    }
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    Task {
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)

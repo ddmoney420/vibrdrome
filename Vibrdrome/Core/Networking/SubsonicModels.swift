@@ -137,6 +137,10 @@ struct AlbumInfo2: Decodable, Sendable {
 
 // MARK: - Album Models
 
+struct RecordLabel: Decodable, Sendable {
+    let name: String
+}
+
 struct Album: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -149,8 +153,14 @@ struct Album: Decodable, Identifiable, Sendable {
     let genre: String?
     let starred: String?
     let created: String?
+    let userRating: Int?
     let song: [Song]?
     let replayGain: ReplayGain?
+    let musicBrainzId: String?
+    let recordLabels: [RecordLabel]?
+
+    /// First record label name, for convenience.
+    var label: String? { recordLabels?.first?.name }
 }
 
 struct AlbumList2Response: Decodable, Sendable {

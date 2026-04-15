@@ -114,29 +114,28 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            HStack(spacing: 0) {
-                NavigationStack(path: $detailPath) {
-                    detailView
-                        .navigationDestination(for: SidebarNavRoute.self) { route in
-                            switch route {
-                            case .album(let id):
-                                AlbumDetailView(albumId: id)
-                            case .artist(let id):
-                                ArtistDetailView(artistId: id)
-                            case .song(let id):
-                                SongDetailView(songId: id)
-                            }
+            NavigationStack(path: $detailPath) {
+                detailView
+                    .navigationDestination(for: SidebarNavRoute.self) { route in
+                        switch route {
+                        case .album(let id):
+                            AlbumDetailView(albumId: id)
+                        case .artist(let id):
+                            ArtistDetailView(artistId: id)
+                        case .song(let id):
+                            SongDetailView(songId: id)
                         }
-                }
-
+                    }
+            }
+            .inspector(isPresented: Binding(
+                get: { appState.activeSidePanel != nil },
+                set: { if !$0 { appState.activeSidePanel = nil } }
+            )) {
                 if let panel = appState.activeSidePanel {
-                    Divider()
                     sidePanelView(for: panel)
-                        .frame(width: sidePanelWidth)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: appState.activeSidePanel)
+            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
             #else
             NavigationStack(path: $detailPath) {
                 detailView
@@ -254,6 +253,12 @@ struct SidebarContentView: View {
             LyricsPanelView()
         case .artistInfo:
             ArtistInfoPanelView()
+        case .albumFilters:
+            LibraryFilterSidebarView(context: .album)
+        case .artistFilters:
+            LibraryFilterSidebarView(context: .artist)
+        case .songFilters:
+            LibraryFilterSidebarView(context: .song)
         }
     }
     #endif

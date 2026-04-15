@@ -1,8 +1,12 @@
 import SwiftUI
+import SwiftData
+import os.log
 
 struct ArtistsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var indexes: [ArtistIndex] = []
+    @State private var localFilteredArtists: [Artist]?
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
@@ -21,6 +25,19 @@ struct ArtistsView: View {
     }
 
     private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
+        // When local filters are active, use flat filtered list (no index grouping)
+        if let filtered = localFilteredArtists {
+            let source: [Artist]
+            if searchText.isEmpty {
+                source = filtered
+            } else {
+                source = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            }
+            let sorted = sortReversed ? source.reversed() : Array(source)
+            guard !sorted.isEmpty else { return [] }
+            return [("filtered", "Results", sorted)]
+        }
+
         var raw: [(id: String, name: String, artists: [Artist])]
         if searchText.isEmpty {
             raw = indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
@@ -94,6 +111,23 @@ struct ArtistsView: View {
             }
         }
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .artistFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .artistFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.artistFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Artist Filters")
+                .accessibilityIdentifier("artistFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -138,8 +172,17 @@ struct ArtistsView: View {
                 }
             }
         }
-        .task { await loadArtists() }
+        .task {
+            await loadArtists()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+        }
         .refreshable { await loadArtists() }
+        #if os(macOS)
+        .onChange(of: appState.artistFilter.isFavorited) { applyLocalFilters() }
+        .onChange(of: appState.artistFilter.selectedGenres) { applyLocalFilters() }
+        #endif
     }
 
     // MARK: - List view
@@ -268,4 +311,66 @@ struct ArtistsView: View {
             }
         }
     }
+
+    #if os(macOS)
+    private func applyLocalFilters() {
+        let filter = appState.artistFilter
+        guard filter.isActive else {
+            localFilteredArtists = nil
+            return
+        }
+
+        do {
+            var descriptor = FetchDescriptor<CachedArtist>()
+            descriptor.sortBy = [SortDescriptor(\.name)]
+            let allArtists = try modelContext.fetch(descriptor)
+
+            // Pre-compute artist IDs that have albums matching selected genres
+            var artistIdsWithMatchingGenres: Set<String>?
+            if !filter.selectedGenres.isEmpty {
+                let albumDescriptor = FetchDescriptor<CachedAlbum>()
+                let allAlbums = try modelContext.fetch(albumDescriptor)
+                var ids = Set<String>()
+                for album in allAlbums {
+                    if let genre = album.genre, filter.selectedGenres.contains(genre),
+                       let artistId = album.artistId {
+                        ids.insert(artistId)
+                    }
+                }
+                artistIdsWithMatchingGenres = ids
+            }
+
+            let filtered = allArtists.filter { artist in
+                // Favorited filter
+                switch filter.isFavorited {
+                case .yes: if !artist.isStarred { return false }
+                case .no: if artist.isStarred { return false }
+                case .none: break
+                }
+
+                // Genre filter (via album lookup)
+                if let matchIds = artistIdsWithMatchingGenres {
+                    if !matchIds.contains(artist.id) { return false }
+                }
+
+                return true
+            }
+
+            localFilteredArtists = filtered.map { cached in
+                Artist(
+                    id: cached.id,
+                    name: cached.name,
+                    coverArt: cached.coverArtId,
+                    albumCount: cached.albumCount,
+                    starred: cached.isStarred ? "true" : nil,
+                    album: nil
+                )
+            }
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Artists")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredArtists = nil
+        }
+    }
+    #endif
 }

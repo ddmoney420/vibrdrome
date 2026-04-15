@@ -12,6 +12,8 @@ final class CachedPlaylist {
     var isPublic: Bool = false
     var cachedAt: Date = Date()
 
+    var entries: [CachedPlaylistEntry] = []
+
     init(from playlist: Playlist) {
         self.id = playlist.id
         self.name = playlist.name

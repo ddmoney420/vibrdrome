@@ -1,7 +1,9 @@
+import SwiftData
 import SwiftUI
 
 struct GenresView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var genres: [Genre] = []
     @State private var isLoading = true
     @State private var error: String?
@@ -193,7 +195,16 @@ struct GenresView: View {
 
     private func loadGenres() async {
         let client = appState.subsonicClient
-        // Show cached data instantly
+
+        // Try local SwiftData first — derive genres from cached songs
+        if genres.isEmpty {
+            let localGenres = deriveGenresFromCache()
+            if !localGenres.isEmpty {
+                genres = localGenres
+            }
+        }
+
+        // Show cached API response if no local data
         if genres.isEmpty,
            let cached = await client.cachedResponse(for: .getGenres, ttl: 3600) {
             genres = (cached.genres?.genre ?? [])
@@ -207,10 +218,32 @@ struct GenresView: View {
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
             await loadGenreArt(client: client)
         } catch {
-            if genres.isEmpty {
+            // If network fails but we have local data, load art from cache
+            if !genres.isEmpty {
+                await loadGenreArt(client: client)
+            } else {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
         }
+    }
+
+    private func deriveGenresFromCache() -> [Genre] {
+        let allSongs = (try? modelContext.fetch(FetchDescriptor<CachedSong>())) ?? []
+        var genreMap: [String: (albumIds: Set<String>, songCount: Int)] = [:]
+
+        for song in allSongs {
+            guard let genre = song.genre, !genre.isEmpty else { continue }
+            var entry = genreMap[genre] ?? (albumIds: Set<String>(), songCount: 0)
+            entry.songCount += 1
+            if let albumId = song.albumId {
+                entry.albumIds.insert(albumId)
+            }
+            genreMap[genre] = entry
+        }
+
+        return genreMap.map { key, value in
+            Genre(songCount: value.songCount, albumCount: value.albumIds.count, value: key)
+        }.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
     }
 
     private func loadGenreArt(client: SubsonicClient) async {
