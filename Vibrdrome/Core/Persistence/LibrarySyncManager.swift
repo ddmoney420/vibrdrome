@@ -20,6 +20,12 @@ enum SyncMode: String, Sendable {
 @Observable
 @MainActor
 final class LibrarySyncManager {
+    static let shared = LibrarySyncManager()
+
+    /// Configured by AppState at login for convenience sync calls.
+    weak var client: SubsonicClient?
+    var container: ModelContainer?
+
     var isSyncing = false
     var syncProgress: String?
     var lastSyncDate: Date? {
@@ -80,6 +86,12 @@ final class LibrarySyncManager {
     /// Run an incremental sync — only fetches changes since last sync.
     func incrementalSync(client: SubsonicClient, container: ModelContainer) async {
         await performSync(mode: .incremental, client: client, container: container)
+    }
+
+    /// Convenience: sync using the configured client and container.
+    func syncIfStale() async {
+        guard let client, let container else { return }
+        await syncIfStale(client: client, container: container)
     }
 
     /// Check if sync is stale and trigger the appropriate sync mode.
@@ -517,6 +529,7 @@ final class LibrarySyncManager {
             existing.coverArtId = playlist.coverArt
             existing.owner = playlist.owner
             existing.isPublic = playlist.isPublic ?? false
+            existing.changed = playlist.changed
             existing.cachedAt = Date()
             cached = existing
         } else {

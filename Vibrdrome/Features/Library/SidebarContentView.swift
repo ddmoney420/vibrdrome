@@ -159,6 +159,22 @@ struct SidebarContentView: View {
             if !detailPath.isEmpty {
                 detailPath = NavigationPath()
             }
+            #if os(macOS)
+            // Auto-switch filter panel when a filter panel is already open
+            if let panel = appState.activeSidePanel,
+               panel == .albumFilters || panel == .artistFilters || panel == .songFilters {
+                switch SidebarItem(rawValue: selectionRaw) {
+                case .albums, .recentlyAdded, .mostPlayed, .recentlyPlayed:
+                    appState.activeSidePanel = .albumFilters
+                case .artists:
+                    appState.activeSidePanel = .artistFilters
+                case .songs:
+                    appState.activeSidePanel = .songFilters
+                default:
+                    appState.activeSidePanel = nil
+                }
+            }
+            #endif
         }
         .onChange(of: appState.pendingNavigation) { _, newValue in
             guard let nav = newValue else { return }

@@ -181,7 +181,7 @@ struct TopSongsResponse: Decodable, Sendable {
 
 // MARK: - Song Model
 
-struct Song: Decodable, Identifiable, Sendable {
+struct Song: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let parent: String?
     let title: String
@@ -233,7 +233,7 @@ struct Song: Decodable, Identifiable, Sendable {
     }
 }
 
-struct ReplayGain: Decodable, Sendable {
+struct ReplayGain: Decodable, Sendable, Equatable {
     let trackGain: Double?
     let albumGain: Double?
     let trackPeak: Double?

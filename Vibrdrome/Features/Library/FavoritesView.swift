@@ -1,29 +1,33 @@
 import SwiftUI
+import SwiftData
 
 struct FavoritesView: View {
     @Environment(AppState.self) private var appState
-    @State private var starred: Starred2?
-    @State private var isLoading = true
-    @State private var error: String?
+    @Query(filter: #Predicate<CachedArtist> { $0.isStarred }, sort: \CachedArtist.name)
+    private var starredArtists: [CachedArtist]
+    @Query(filter: #Predicate<CachedAlbum> { $0.isStarred }, sort: \CachedAlbum.name)
+    private var starredAlbums: [CachedAlbum]
+    @Query(filter: #Predicate<CachedSong> { $0.isStarred }, sort: \CachedSong.title)
+    private var starredSongs: [CachedSong]
     @State private var searchText = ""
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
 
     private var filteredArtists: [Artist] {
-        guard let artists = starred?.artist else { return [] }
+        let artists = starredArtists.map { $0.toArtist() }
         if searchText.isEmpty { return artists }
         return artists.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     private var filteredAlbums: [Album] {
-        guard let albums = starred?.album else { return [] }
+        let albums = starredAlbums.map { $0.toAlbum() }
         if searchText.isEmpty { return albums }
         return albums.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     private var filteredSongs: [Song] {
-        guard let songs = starred?.song else { return [] }
+        let songs = starredSongs.map { $0.toSong() }
         if searchText.isEmpty { return songs }
         return songs.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
@@ -33,7 +37,7 @@ struct FavoritesView: View {
 
     var body: some View {
         List {
-            if starred != nil {
+            if !isEmpty {
                 // Starred Artists
                 if !filteredArtists.isEmpty {
                     Section("Artists") {
@@ -145,18 +149,7 @@ struct FavoritesView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay {
-            if isLoading && starred == nil {
-                ProgressView("Loading favorites...")
-            } else if let error, starred == nil {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("Retry") { Task { await loadStarred() } }
-                        .buttonStyle(.bordered)
-                }
-            } else if !isLoading && isEmpty {
+            if isEmpty {
                 ContentUnavailableView {
                     Label("No Favorites", systemImage: "heart")
                 } description: {
@@ -179,7 +172,7 @@ struct FavoritesView: View {
             }
             #if os(macOS)
             ToolbarItem {
-                Button { Task { await loadStarred() } } label: {
+                Button { Task { await LibrarySyncManager.shared.syncIfStale() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
@@ -189,8 +182,7 @@ struct FavoritesView: View {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
         }
-        .task { await loadStarred() }
-        .refreshable { await loadStarred() }
+        .refreshable { await LibrarySyncManager.shared.syncIfStale() }
     }
 
     private func toggleSelection(_ songId: String) {
@@ -211,20 +203,6 @@ struct FavoritesView: View {
     }
 
     private var isEmpty: Bool {
-        guard let starred else { return true }
-        return (starred.artist?.isEmpty ?? true) &&
-               (starred.album?.isEmpty ?? true) &&
-               (starred.song?.isEmpty ?? true)
-    }
-
-    private func loadStarred() async {
-        isLoading = true
-        error = nil
-        defer { isLoading = false }
-        do {
-            starred = try await appState.subsonicClient.getStarred()
-        } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
-        }
+        starredArtists.isEmpty && starredAlbums.isEmpty && starredSongs.isEmpty
     }
 }

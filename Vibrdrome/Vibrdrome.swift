@@ -123,10 +123,12 @@ struct VibrdromeApp: App {
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
                         await appState.librarySyncManager.syncIfStale(
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
                         appState.librarySyncManager.startPolling(
                             client: appState.subsonicClient,
                             container: persistenceController.container
@@ -152,10 +154,12 @@ struct VibrdromeApp: App {
                     BackgroundSyncScheduler.shared.scheduleRefresh()
                     BackgroundSyncScheduler.shared.scheduleFullSync()
                     Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
                         await appState.librarySyncManager.syncIfStale(
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
                         appState.librarySyncManager.startPolling(
                             client: appState.subsonicClient,
                             container: persistenceController.container

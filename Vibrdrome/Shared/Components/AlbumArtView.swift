@@ -1,12 +1,16 @@
 import SwiftUI
 import NukeUI
 
-struct AlbumArtView: View {
+struct AlbumArtView: View, Equatable {
     let coverArtId: String?
     var size: CGFloat = 50
     var cornerRadius: CGFloat = 6
 
     @Environment(AppState.self) private var appState
+
+    nonisolated static func == (lhs: AlbumArtView, rhs: AlbumArtView) -> Bool {
+        lhs.coverArtId == rhs.coverArtId && lhs.size == rhs.size && lhs.cornerRadius == rhs.cornerRadius
+    }
 
     var body: some View {
         if let coverArtId {
