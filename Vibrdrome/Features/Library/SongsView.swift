@@ -595,44 +595,29 @@ struct SongsView: View {
         }
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
     private func songMatchesFilter(
         _ song: CachedSong, filter: LibraryFilter, recentCutoff: Date?
     ) -> Bool {
-        switch filter.isFavorited {
-        case .yes: if !song.isStarred { return false }
-        case .no: if song.isStarred { return false }
-        case .none: break
-        }
-
-        switch filter.isRated {
-        case .yes: if song.rating == 0 { return false }
-        case .no: if song.rating != 0 { return false }
-        case .none: break
-        }
-
+        guard filter.isFavorited.matches(song.isStarred) else { return false }
+        guard filter.isRated.matches(song.rating != 0) else { return false }
         if let cutoff = recentCutoff {
             guard let lastPlayed = song.lastPlayed, lastPlayed > cutoff else {
                 return false
             }
         }
-
         if !filter.selectedArtistIds.isEmpty {
             guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
                 return false
             }
         }
-
         if !filter.selectedGenres.isEmpty {
             guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
                 return false
             }
         }
-
         if let yearFilter = filter.year {
             guard song.year == yearFilter else { return false }
         }
-
         return true
     }
     #endif

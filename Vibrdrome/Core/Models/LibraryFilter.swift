@@ -3,6 +3,15 @@ import Foundation
 /// Tri-state filter value: no filter, must be true, or must be false.
 enum TriState: String, CaseIterable, Sendable, Equatable {
     case none, yes, no
+
+    /// Returns true if the value satisfies this filter (`.none` always passes).
+    func matches(_ value: Bool) -> Bool {
+        switch self {
+        case .none: true
+        case .yes: value
+        case .no: !value
+        }
+    }
 }
 
 /// Observable filter state for library filter sidebars (albums, artists, songs).

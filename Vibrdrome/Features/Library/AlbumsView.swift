@@ -396,46 +396,30 @@ struct AlbumsView: View {
         return Set(recentSongs.compactMap(\.albumId))
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
     private func albumMatchesFilter(
         _ album: CachedAlbum, filter: LibraryFilter, recentIds: Set<String>?
     ) -> Bool {
-        switch filter.isFavorited {
-        case .yes: if !album.isStarred { return false }
-        case .no: if album.isStarred { return false }
-        case .none: break
-        }
-
-        switch filter.isRated {
-        case .yes: if album.userRating == 0 { return false }
-        case .no: if album.userRating != 0 { return false }
-        case .none: break
-        }
-
+        guard filter.isFavorited.matches(album.isStarred) else { return false }
+        guard filter.isRated.matches(album.userRating != 0) else { return false }
         if let recentIds, !recentIds.contains(album.id) { return false }
-
         if !filter.selectedArtistIds.isEmpty {
             guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
                 return false
             }
         }
-
         if !filter.selectedGenres.isEmpty {
             guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
                 return false
             }
         }
-
         if !filter.selectedLabels.isEmpty {
             guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
                 return false
             }
         }
-
         if let yearFilter = filter.year {
             guard album.year == yearFilter else { return false }
         }
-
         return true
     }
     #endif
