@@ -17,6 +17,7 @@ struct AlbumsView: View {
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -71,7 +72,7 @@ struct AlbumsView: View {
         #endif
         .navigationTitle(title)
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search in Albums")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
         #else
         .searchable(text: $searchText, prompt: "Search in Albums")
         #endif
@@ -184,11 +185,13 @@ struct AlbumsView: View {
 
     // MARK: - Grid view
 
+    private var gridItems: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 16), count: max(2, min(4, gridColumns)))
+    }
+
     private var albumGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
-            ], spacing: 20) {
+            LazyVGrid(columns: gridItems, spacing: 20) {
                 ForEach(filteredAlbums) { album in
                     NavigationLink {
                         AlbumDetailView(albumId: album.id)

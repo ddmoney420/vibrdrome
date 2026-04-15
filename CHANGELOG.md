@@ -4,6 +4,17 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 40 — April 15, 2026
+- Tab bar drag-to-reorder restored in Settings
+- A-Z section index on Artists list with tap-to-jump (split X-Z into individual letters, [Unknown] as #)
+- Grid columns setting (2/3/4) in Appearance, applied to Albums, Artists, Playlists, Genres, Songs, Radio
+- Search bars hidden by default (pull down to reveal) on all browse views
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Tab bar reorder restored, A-Z artist index, configurable grid columns,
+> search bars hidden by default.
+
 ### Build 39 — April 14, 2026
 - Fix: Sleep timer "End of Track" resume now advances to next track instead of running past the end
 - Fix: Recently Played now tracks actual play history, not unplayed queue entries

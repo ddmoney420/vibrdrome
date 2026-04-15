@@ -15,6 +15,7 @@ struct SongsView: View {
     @State private var filterArtist: String?
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage("songsViewStyle") private var showAsList = true
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var sortBy: SongSortOption = .title
 
     private let pageSize = 500
@@ -86,7 +87,7 @@ struct SongsView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search songs")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search songs")
         #else
         .searchable(text: $searchText, prompt: "Search songs")
         #endif
@@ -402,9 +403,8 @@ struct SongsView: View {
                         .padding(.horizontal, 16)
                 }
 
-                LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)
-                ], spacing: 20) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
+                                         count: max(2, min(4, gridColumns))), spacing: 20) {
                     ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
                             .contentShape(Rectangle())

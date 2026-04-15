@@ -9,6 +9,7 @@ struct GenresView: View {
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -50,7 +51,7 @@ struct GenresView: View {
         #endif
         .navigationTitle("Genres")
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Genres")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Genres")
         #else
         .searchable(text: $searchText, prompt: "Search Genres")
         #endif
@@ -151,9 +152,8 @@ struct GenresView: View {
 
     private var genreGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
-            ], spacing: 20) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
+                                     count: max(2, min(4, gridColumns))), spacing: 20) {
                 ForEach(filteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)

@@ -8,6 +8,7 @@ struct ArtistsView: View {
     @State private var searchText = ""
     @State private var sortReversed = false
     @AppStorage("artistsViewStyle") private var showAsList = true
+    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
 
     enum ArtistSortOption: String, CaseIterable {
         case nameAZ, nameZA
@@ -20,11 +21,11 @@ struct ArtistsView: View {
     }
 
     private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
-        let base: [(id: String, name: String, artists: [Artist])]
+        var raw: [(id: String, name: String, artists: [Artist])]
         if searchText.isEmpty {
-            base = indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
+            raw = indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
         } else {
-            base = indexes.compactMap { index in
+            raw = indexes.compactMap { index in
                 let filtered = (index.artist ?? []).filter {
                     $0.name.localizedCaseInsensitiveContains(searchText)
                 }
@@ -32,12 +33,33 @@ struct ArtistsView: View {
                 return (id: index.id, name: index.name, artists: filtered)
             }
         }
+        // Split combined sections like "X-Z" into individual letter sections
+        raw = raw.flatMap { section -> [(id: String, name: String, artists: [Artist])] in
+            guard section.name.contains("-"), section.name.count <= 3 else { return [section] }
+            let grouped = Dictionary(grouping: section.artists) { artist -> String in
+                let first = artist.name.prefix(1).uppercased()
+                return first.rangeOfCharacter(from: .letters) != nil ? first : "#"
+            }
+            return grouped.keys.sorted().map { letter in
+                (id: "\(section.id)_\(letter)", name: letter, artists: grouped[letter]!)
+            }
+        }
+        // Rename "Unknown" to "#"
+        raw = raw.map { section in
+            if section.name.localizedCaseInsensitiveCompare("Unknown") == .orderedSame
+                || section.name == "[Unknown]"
+                || section.name.hasPrefix("[")
+                || (section.name.count > 1 && section.name.rangeOfCharacter(from: .letters) == nil) {
+                return (id: section.id, name: "#", artists: section.artists)
+            }
+            return section
+        }
         if sortReversed {
-            return base.reversed().map { section in
+            return raw.reversed().map { section in
                 (id: section.id, name: section.name, artists: section.artists.reversed())
             }
         }
-        return base
+        return raw
     }
 
     var body: some View {
@@ -50,7 +72,7 @@ struct ArtistsView: View {
         }
         .navigationTitle("Artists")
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Artists")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Artists")
         #else
         .searchable(text: $searchText, prompt: "Search Artists")
         #endif
@@ -123,21 +145,50 @@ struct ArtistsView: View {
     // MARK: - List view
 
     private var artistList: some View {
-        List {
-            ForEach(filteredIndexes, id: \.id) { index in
-                Section(header: Text(index.name)) {
-                    ForEach(index.artists) { artist in
-                        NavigationLink {
-                            ArtistDetailView(artistId: artist.id)
-                        } label: {
-                            ArtistRow(artist: artist)
+        ScrollViewReader { proxy in
+            List {
+                ForEach(filteredIndexes, id: \.id) { index in
+                    Section(header: Text(index.name).id(index.name)) {
+                        ForEach(index.artists) { artist in
+                            NavigationLink {
+                                ArtistDetailView(artistId: artist.id)
+                            } label: {
+                                ArtistRow(artist: artist)
+                            }
+                            .accessibilityIdentifier("artistRow_\(artist.id)")
                         }
-                        .accessibilityIdentifier("artistRow_\(artist.id)")
                     }
                 }
             }
+            .listStyle(.plain)
+            .contentMargins(.trailing, 28)
+            .overlay(alignment: .trailing) {
+                sectionIndex(proxy: proxy)
+            }
         }
-        .listStyle(.plain)
+    }
+
+    private func sectionIndex(proxy: ScrollViewProxy) -> some View {
+        VStack(spacing: 1) {
+            ForEach(filteredIndexes, id: \.id) { index in
+                let label = sectionIndexLabel(index.name)
+                Text(label)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 20, height: 16)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation { proxy.scrollTo(index.name, anchor: .top) }
+                    }
+            }
+        }
+        .padding(.trailing, 6)
+        .accessibilityLabel("Section Index")
+    }
+
+    /// Section names are now pre-split, so just return as-is
+    private func sectionIndexLabel(_ name: String) -> String {
+        name
     }
 
     // MARK: - Grid view (circular bubbles)
@@ -147,9 +198,8 @@ struct ArtistsView: View {
             LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
                 ForEach(filteredIndexes, id: \.id) { index in
                     Section {
-                        LazyVGrid(columns: [
-                            GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 16)
-                        ], spacing: 20) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
+                                                 count: max(2, min(4, gridColumns))), spacing: 20) {
                             ForEach(index.artists) { artist in
                                 NavigationLink {
                                     ArtistDetailView(artistId: artist.id)
