@@ -114,18 +114,21 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            NavigationStack(path: $detailPath) {
-                detailView
-                    .navigationDestination(for: SidebarNavRoute.self) { route in
-                        switch route {
-                        case .album(let id):
-                            AlbumDetailView(albumId: id)
-                        case .artist(let id):
-                            ArtistDetailView(artistId: id)
-                        case .song(let id):
-                            SongDetailView(songId: id)
+            GeometryReader { geometry in
+                NavigationStack(path: $detailPath) {
+                    detailView
+                        .navigationDestination(for: SidebarNavRoute.self) { route in
+                            switch route {
+                            case .album(let id):
+                                AlbumDetailView(albumId: id)
+                            case .artist(let id):
+                                ArtistDetailView(artistId: id)
+                            case .song(let id):
+                                SongDetailView(songId: id)
+                            }
                         }
-                    }
+                }
+                .environment(\.contentWidth, geometry.size.width)
             }
             .inspector(isPresented: Binding(
                 get: { appState.activeSidePanel != nil },
