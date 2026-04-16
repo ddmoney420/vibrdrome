@@ -64,6 +64,14 @@ final class AppState {
     var artistFilter = LibraryFilter()
     var songFilter = LibraryFilter()
 
+    /// Cached albums state for back-navigation, keyed by view configuration.
+    struct AlbumsViewSnapshot {
+        var albums: [Album]
+        var hasMore: Bool
+        var scrollIndex: Int?
+    }
+    var albumsViewSnapshots: [String: AlbumsViewSnapshot] = [:]
+
     /// Library sync manager.
     let librarySyncManager = LibrarySyncManager.shared
 

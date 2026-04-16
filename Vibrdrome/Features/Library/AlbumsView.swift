@@ -24,6 +24,8 @@ struct AlbumsView: View {
     @State private var cachedFilteredAlbums: [Album] = []
     @State private var scrollLoadTask: Task<Void, Never>?
     @State private var pendingPageTarget: Int = 0
+    @State private var visibleIndices: Set<Int> = []
+    @State private var restoredScrollIndex: Int?
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -48,6 +50,27 @@ struct AlbumsView: View {
 
     private var effectiveListType: AlbumListType {
         activeListType ?? listType
+    }
+
+    private var cacheKey: String {
+        "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+    }
+
+    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) {
+        self.listType = listType
+        self.title = title
+        self.genre = genre
+        self.fromYear = fromYear
+        self.toYear = toYear
+
+        let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+        if let snapshot = AppState.shared.albumsViewSnapshots[key] {
+            _albums = State(initialValue: snapshot.albums)
+            _hasMore = State(initialValue: snapshot.hasMore)
+            _isLoading = State(initialValue: false)
+            _cachedFilteredAlbums = State(initialValue: snapshot.albums)
+            _restoredScrollIndex = State(initialValue: snapshot.scrollIndex)
+        }
     }
 
     private func computeFilteredAlbums() -> [Album] {
@@ -173,8 +196,13 @@ struct AlbumsView: View {
                 }
             }
         }
+        .navigationDestination(for: AlbumNavItem.self) { item in
+            AlbumDetailView(albumId: item.id)
+        }
         .task {
-            await loadAlbums()
+            if albums.isEmpty {
+                await loadAlbums()
+            }
             #if os(macOS)
             applyLocalFilters()
             #endif
@@ -182,6 +210,7 @@ struct AlbumsView: View {
         }
         .onChange(of: searchText) { recomputeFilteredAlbums() }
         .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
+        .onDisappear { saveSnapshot() }
         .refreshable {
             albums = []
             hasMore = true
@@ -201,55 +230,67 @@ struct AlbumsView: View {
     // MARK: - List view
 
     private var albumList: some View {
-        List {
-            ForEach(0..<totalItemCount, id: \.self) { index in
-                Group {
-                    if index < cachedFilteredAlbums.count {
-                        let album = cachedFilteredAlbums[index]
-                        NavigationLink {
-                            AlbumDetailView(albumId: album.id)
-                        } label: {
-                            AlbumCard(album: album)
+        ScrollViewReader { proxy in
+            List {
+                ForEach(0..<totalItemCount, id: \.self) { index in
+                    Group {
+                        if index < cachedFilteredAlbums.count {
+                            let album = cachedFilteredAlbums[index]
+                            NavigationLink(value: AlbumNavItem(id: album.id)) {
+                                AlbumCard(album: album)
+                            }
+                            .accessibilityIdentifier("albumRow_\(album.id)")
+                            .contextMenu { rowContextMenu(for: album) }
+                        } else {
+                            albumListPlaceholder
                         }
-                        .accessibilityIdentifier("albumRow_\(album.id)")
-                        .contextMenu { rowContextMenu(for: album) }
-                    } else {
-                        albumListPlaceholder
                     }
+                    .id(index)
+                    .onAppear {
+                        visibleIndices.insert(index)
+                        triggerLoadIfNeeded(at: index)
+                    }
+                    .onDisappear { visibleIndices.remove(index) }
                 }
-                .onAppear { triggerLoadIfNeeded(at: index) }
             }
+            .listStyle(.plain)
+            .onAppear { restoreScroll(proxy: proxy) }
         }
-        .listStyle(.plain)
     }
 
     // MARK: - Grid view
 
     private var albumGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
-            ], spacing: 20) {
-                ForEach(0..<totalItemCount, id: \.self) { index in
-                    Group {
-                        if index < cachedFilteredAlbums.count {
-                            let album = cachedFilteredAlbums[index]
-                            NavigationLink {
-                                AlbumDetailView(albumId: album.id)
-                            } label: {
-                                albumGridCard(album)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
+                ], spacing: 20) {
+                    ForEach(0..<totalItemCount, id: \.self) { index in
+                        Group {
+                            if index < cachedFilteredAlbums.count {
+                                let album = cachedFilteredAlbums[index]
+                                NavigationLink(value: AlbumNavItem(id: album.id)) {
+                                    albumGridCard(album)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("albumCard_\(album.id)")
+                                .contextMenu { rowContextMenu(for: album) }
+                            } else {
+                                albumGridPlaceholder
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("albumCard_\(album.id)")
-                            .contextMenu { rowContextMenu(for: album) }
-                        } else {
-                            albumGridPlaceholder
                         }
+                        .id(index)
+                        .onAppear {
+                            visibleIndices.insert(index)
+                            triggerLoadIfNeeded(at: index)
+                        }
+                        .onDisappear { visibleIndices.remove(index) }
                     }
-                    .onAppear { triggerLoadIfNeeded(at: index) }
                 }
+                .padding(16)
             }
-            .padding(16)
+            .onAppear { restoreScroll(proxy: proxy) }
         }
     }
 
@@ -401,6 +442,7 @@ struct AlbumsView: View {
             albums = result
             hasMore = result.count >= pageSize
             recomputeFilteredAlbums()
+            saveSnapshot()
         } catch {
             if albums.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
@@ -432,10 +474,24 @@ struct AlbumsView: View {
             }
         }
         recomputeFilteredAlbums()
+        saveSnapshot()
     }
 
     private func recomputeFilteredAlbums() {
         cachedFilteredAlbums = computeFilteredAlbums()
+    }
+
+    private func saveSnapshot() {
+        appState.albumsViewSnapshots[cacheKey] = AppState.AlbumsViewSnapshot(
+            albums: albums, hasMore: hasMore, scrollIndex: visibleIndices.min()
+        )
+    }
+
+    private func restoreScroll(proxy: ScrollViewProxy) {
+        if let target = restoredScrollIndex, target > 0, target < cachedFilteredAlbums.count {
+            proxy.scrollTo(target, anchor: .top)
+            restoredScrollIndex = nil
+        }
     }
 
     #if os(macOS)
