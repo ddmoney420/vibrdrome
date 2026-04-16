@@ -13,6 +13,7 @@ struct ArtistsView: View {
     @State private var searchText = ""
     @State private var sortReversed = false
     @AppStorage("artistsViewStyle") private var showAsList = true
+    @State private var cachedFilteredIndexes: [(id: String, name: String, artists: [Artist])] = []
 
     enum ArtistSortOption: String, CaseIterable {
         case nameAZ, nameZA
@@ -24,7 +25,7 @@ struct ArtistsView: View {
         }
     }
 
-    private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
+    private func computeFilteredIndexes() -> [(id: String, name: String, artists: [Artist])] {
         // When local filters are active, use flat filtered list (no index grouping)
         if let filtered = localFilteredArtists {
             let source: [Artist]
@@ -177,7 +178,10 @@ struct ArtistsView: View {
             #if os(macOS)
             applyLocalFilters()
             #endif
+            recomputeFilteredIndexes()
         }
+        .onChange(of: searchText) { recomputeFilteredIndexes() }
+        .onChange(of: sortReversed) { recomputeFilteredIndexes() }
         .refreshable { await loadArtists() }
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
@@ -190,7 +194,7 @@ struct ArtistsView: View {
     private var artistList: some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(filteredIndexes, id: \.id) { index in
+                ForEach(cachedFilteredIndexes, id: \.id) { index in
                     Section(header: Text(index.name).id(index.name)) {
                         ForEach(index.artists) { artist in
                             NavigationLink {
@@ -213,7 +217,7 @@ struct ArtistsView: View {
 
     private func sectionIndex(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 1) {
-            ForEach(filteredIndexes, id: \.id) { index in
+            ForEach(cachedFilteredIndexes, id: \.id) { index in
                 let label = sectionIndexLabel(index.name)
                 Text(label)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -239,7 +243,7 @@ struct ArtistsView: View {
     private var artistGrid: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
-                ForEach(filteredIndexes, id: \.id) { index in
+                ForEach(cachedFilteredIndexes, id: \.id) { index in
                     Section {
                         LazyVGrid(columns: [
                             GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 16)
@@ -309,11 +313,16 @@ struct ArtistsView: View {
         defer { isLoading = false }
         do {
             indexes = try await client.getArtists()
+            recomputeFilteredIndexes()
         } catch {
             if indexes.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
         }
+    }
+
+    private func recomputeFilteredIndexes() {
+        cachedFilteredIndexes = computeFilteredIndexes()
     }
 
     #if os(macOS)
@@ -330,6 +339,7 @@ struct ArtistsView: View {
         let filter = appState.artistFilter
         guard filter.isActive else {
             localFilteredArtists = nil
+            recomputeFilteredIndexes()
             return
         }
 
@@ -380,6 +390,7 @@ struct ArtistsView: View {
             }
 
             localFilteredArtists = filtered
+            recomputeFilteredIndexes()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Artists")
                 .error("Failed to apply local filters: \(error)")

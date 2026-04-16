@@ -22,6 +22,7 @@ struct SongsView: View {
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage("songsViewStyle") private var showAsList = true
     @State private var sortBy: SongSortOption = .title
+    @State private var cachedDisplayedSongs: [Song] = []
 
     private let pageSize = 500
 
@@ -51,7 +52,7 @@ struct SongsView: View {
         filterYear != nil || filterGenre != nil || filterArtist != nil
     }
 
-    private var displayedSongs: [Song] {
+    private func computeDisplayedSongs() -> [Song] {
         var base: [Song]
         #if os(macOS)
         base = localFilteredSongs ?? (searchText.count >= 2 ? searchResults : songs)
@@ -104,6 +105,7 @@ struct SongsView: View {
         .onChange(of: searchText) { _, query in
             guard query.count >= 2 else {
                 searchResults = []
+                recomputeDisplayedSongs()
                 return
             }
             isSearching = true
@@ -114,6 +116,7 @@ struct SongsView: View {
                     let result = try await appState.subsonicClient.search(
                         query: query, artistCount: 0, albumCount: 0, songCount: 50)
                     searchResults = result.song ?? []
+                    recomputeDisplayedSongs()
                 } catch {}
                 isSearching = false
             }
@@ -248,7 +251,12 @@ struct SongsView: View {
             #if os(macOS)
             applyLocalFilters()
             #endif
+            recomputeDisplayedSongs()
         }
+        .onChange(of: sortBy) { recomputeDisplayedSongs() }
+        .onChange(of: filterYear) { recomputeDisplayedSongs() }
+        .onChange(of: filterGenre) { recomputeDisplayedSongs() }
+        .onChange(of: filterArtist) { recomputeDisplayedSongs() }
         .onChange(of: appState.libraryCache.generation) { _, _ in
             refreshTitleSongCount()
         }
@@ -400,16 +408,16 @@ struct SongsView: View {
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
 
-            if !displayedSongs.isEmpty {
+            if !cachedDisplayedSongs.isEmpty {
                 playShuffleBar
                     .listRowSeparator(.hidden)
             }
 
-            ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
+            ForEach(Array(cachedDisplayedSongs.enumerated()), id: \.element.id) { index, song in
                 songRow(song)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        AudioEngine.shared.play(song: song, from: displayedSongs, at: index)
+                        AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
                     }
                     .accessibilityIdentifier("songRow_\(song.id)")
                     .trackContextMenu(song: song)
@@ -427,6 +435,7 @@ struct SongsView: View {
                     Spacer()
                 }
             }
+
         }
     }
 
@@ -440,7 +449,7 @@ struct SongsView: View {
                         .padding(.horizontal, 16)
                 }
 
-                if !displayedSongs.isEmpty {
+                if !cachedDisplayedSongs.isEmpty {
                     playShuffleBar
                         .padding(.horizontal, 16)
                 }
@@ -448,11 +457,11 @@ struct SongsView: View {
                 LazyVGrid(columns: [
                     GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)
                 ], spacing: 20) {
-                    ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
+                    ForEach(Array(cachedDisplayedSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: displayedSongs, at: index)
+                                AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
                             }
                             .accessibilityIdentifier("songCard_\(song.id)")
                             .trackContextMenu(song: song)
@@ -468,6 +477,7 @@ struct SongsView: View {
                 if isLoading {
                     ProgressView().padding()
                 }
+
             }
         }
     }
@@ -475,7 +485,7 @@ struct SongsView: View {
     private var playShuffleBar: some View {
         HStack(spacing: 12) {
             Button {
-                let songs = displayedSongs
+                let songs = cachedDisplayedSongs
                 AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
             } label: {
                 Label("Play All", systemImage: "play.fill")
@@ -488,7 +498,7 @@ struct SongsView: View {
             .accessibilityIdentifier("songsPlayAllButton")
 
             Button {
-                let shuffled = displayedSongs.shuffled()
+                let shuffled = cachedDisplayedSongs.shuffled()
                 AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
@@ -559,6 +569,7 @@ struct SongsView: View {
             songs = result.song ?? []
             hasMore = (result.song?.count ?? 0) >= pageSize
             refreshTitleSongCount()
+            recomputeDisplayedSongs()
         } catch {}
     }
 
@@ -575,6 +586,7 @@ struct SongsView: View {
             songs.append(contentsOf: newSongs)
             hasMore = newSongs.count >= pageSize
             refreshTitleSongCount()
+            recomputeDisplayedSongs()
         } catch {}
     }
 
@@ -595,8 +607,12 @@ struct SongsView: View {
 
     private func shouldLoadMore(at index: Int) -> Bool {
         guard localFilteredSongs == nil, searchText.isEmpty, hasMore, !isLoading else { return false }
-        let prefetchThreshold = max(displayedSongs.count - 10, 0)
+        let prefetchThreshold = max(cachedDisplayedSongs.count - 10, 0)
         return index >= prefetchThreshold
+    }
+
+    private func recomputeDisplayedSongs() {
+        cachedDisplayedSongs = computeDisplayedSongs()
     }
 
     #if os(macOS)
@@ -613,6 +629,7 @@ struct SongsView: View {
         let filter = appState.songFilter
         guard filter.isActive else {
             localFilteredSongs = nil
+            recomputeDisplayedSongs()
             return
         }
 
@@ -628,6 +645,7 @@ struct SongsView: View {
 
             let recentSongIds = recentlyPlayedSongIds(for: filter)
             localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
+            recomputeDisplayedSongs()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
                 .error("Failed to apply local filters: \(error)")

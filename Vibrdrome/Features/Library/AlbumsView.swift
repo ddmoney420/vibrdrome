@@ -21,6 +21,7 @@ struct AlbumsView: View {
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
+    @State private var cachedFilteredAlbums: [Album] = []
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -47,7 +48,7 @@ struct AlbumsView: View {
         activeListType ?? listType
     }
 
-    private var filteredAlbums: [Album] {
+    private func computeFilteredAlbums() -> [Album] {
         let source = localFilteredAlbums ?? albums
         var result = source
         if !searchText.isEmpty {
@@ -175,7 +176,10 @@ struct AlbumsView: View {
             #if os(macOS)
             applyLocalFilters()
             #endif
+            recomputeFilteredAlbums()
         }
+        .onChange(of: searchText) { recomputeFilteredAlbums() }
+        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
         .refreshable {
             albums = []
             hasMore = true
@@ -196,7 +200,7 @@ struct AlbumsView: View {
 
     private var albumList: some View {
         List {
-            ForEach(filteredAlbums) { album in
+            ForEach(cachedFilteredAlbums) { album in
                 NavigationLink {
                     AlbumDetailView(albumId: album.id)
                 } label: {
@@ -225,7 +229,7 @@ struct AlbumsView: View {
             LazyVGrid(columns: [
                 GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
             ], spacing: 20) {
-                ForEach(filteredAlbums) { album in
+                ForEach(cachedFilteredAlbums) { album in
                     NavigationLink {
                         AlbumDetailView(albumId: album.id)
                     } label: {
@@ -340,6 +344,7 @@ struct AlbumsView: View {
                 fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
+            recomputeFilteredAlbums()
         } catch {
             if albums.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
@@ -357,9 +362,14 @@ struct AlbumsView: View {
                 fromYear: fromYear, toYear: toYear)
             albums.append(contentsOf: result)
             hasMore = result.count >= pageSize
+            recomputeFilteredAlbums()
         } catch {
             hasMore = false
         }
+    }
+
+    private func recomputeFilteredAlbums() {
+        cachedFilteredAlbums = computeFilteredAlbums()
     }
 
     #if os(macOS)
@@ -376,6 +386,7 @@ struct AlbumsView: View {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
+            recomputeFilteredAlbums()
             return
         }
 
@@ -399,6 +410,7 @@ struct AlbumsView: View {
                     selectedArtistNames: selectedArtistNames
                 )
             }
+            recomputeFilteredAlbums()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Albums")
                 .error("Failed to apply local filters: \(error)")

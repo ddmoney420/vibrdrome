@@ -11,6 +11,7 @@ struct GenresView: View {
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
+    @State private var cachedFilteredGenres: [Genre] = []
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -22,7 +23,7 @@ struct GenresView: View {
         }
     }
 
-    private var filteredGenres: [Genre] {
+    private func computeFilteredGenres() -> [Genre] {
         let base: [Genre]
         if searchText.isEmpty {
             base = genres
@@ -117,13 +118,15 @@ struct GenresView: View {
             }
         }
         .task { await loadGenres() }
+        .onChange(of: searchText) { recomputeFilteredGenres() }
+        .onChange(of: sortBy) { recomputeFilteredGenres() }
         .refreshable { await loadGenres() }
     }
 
     // MARK: - List view
 
     private var genreList: some View {
-        List(filteredGenres) { genre in
+        List(cachedFilteredGenres) { genre in
             NavigationLink {
                 AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
             } label: {
@@ -156,7 +159,7 @@ struct GenresView: View {
             LazyVGrid(columns: [
                 GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
             ], spacing: 20) {
-                ForEach(filteredGenres) { genre in
+                ForEach(cachedFilteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
                     } label: {
@@ -195,6 +198,10 @@ struct GenresView: View {
         }
     }
 
+    private func recomputeFilteredGenres() {
+        cachedFilteredGenres = computeFilteredGenres()
+    }
+
     private func loadGenres() async {
         let client = appState.subsonicClient
 
@@ -203,6 +210,7 @@ struct GenresView: View {
             let localGenres = deriveGenresFromCache()
             if !localGenres.isEmpty {
                 genres = localGenres
+                recomputeFilteredGenres()
             }
         }
 
@@ -211,6 +219,7 @@ struct GenresView: View {
            let cached = await client.cachedResponse(for: .getGenres, ttl: 3600) {
             genres = (cached.genres?.genre ?? [])
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
         }
         isLoading = genres.isEmpty
         error = nil
@@ -218,6 +227,7 @@ struct GenresView: View {
         do {
             genres = try await client.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
             await loadGenreArt(client: client)
         } catch {
             // If network fails but we have local data, load art from cache
