@@ -21,6 +21,7 @@ struct GenresView: View {
         )
     }
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
@@ -67,8 +68,12 @@ struct GenresView: View {
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Genres")
         #else
-        .searchable(text: $searchText, prompt: "Search Genres")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Genres")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif

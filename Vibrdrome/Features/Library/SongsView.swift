@@ -7,6 +7,7 @@ struct SongsView: View {
     @State private var isLoading = true
     @State private var hasMore = false
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var searchResults: [Song] = []
     @State private var isSearching = false
     @State private var availableGenres: [String] = []
@@ -89,8 +90,12 @@ struct SongsView: View {
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search songs")
         #else
-        .searchable(text: $searchText, prompt: "Search songs")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search songs")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         .onChange(of: searchText) { _, query in
             guard query.count >= 2 else {
                 searchResults = []
