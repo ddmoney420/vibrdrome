@@ -23,6 +23,8 @@ struct SongsView: View {
     @AppStorage("songsViewStyle") private var showAsList = true
     @State private var sortBy: SongSortOption = .title
     @State private var cachedDisplayedSongs: [Song] = []
+    @State private var scrollLoadTask: Task<Void, Never>?
+    @State private var pendingPageTarget: Int = 0
 
     private let pageSize = 500
 
@@ -423,9 +425,17 @@ struct SongsView: View {
                     .trackContextMenu(song: song)
                     .onAppear {
                         if shouldLoadMore(at: index) {
-                            Task { await loadMore() }
+                            pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
+                            Task { await loadPages() }
                         }
                     }
+            }
+
+            if remainingPlaceholderCount > 0 {
+                ForEach(0..<remainingPlaceholderCount, id: \.self) { placeholderIndex in
+                    songListPlaceholder
+                        .onAppear { scheduleScrollLoad(placeholderIndex: placeholderIndex) }
+                }
             }
 
             if isLoading {
@@ -467,9 +477,17 @@ struct SongsView: View {
                             .trackContextMenu(song: song)
                             .onAppear {
                                 if shouldLoadMore(at: index) {
-                                    Task { await loadMore() }
+                                    pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
+                                    Task { await loadPages() }
                                 }
                             }
+                    }
+
+                    if remainingPlaceholderCount > 0 {
+                        ForEach(0..<remainingPlaceholderCount, id: \.self) { placeholderIndex in
+                            songGridPlaceholder
+                                .onAppear { scheduleScrollLoad(placeholderIndex: placeholderIndex) }
+                        }
                     }
                 }
                 .padding(16)
@@ -559,6 +577,8 @@ struct SongsView: View {
     }
 
     private func loadSongs() async {
+        scrollLoadTask?.cancel()
+        pendingPageTarget = 0
         isLoading = true
         songs = []
         defer { isLoading = false }
@@ -573,21 +593,43 @@ struct SongsView: View {
         } catch {}
     }
 
-    private func loadMore() async {
+    private func loadPages() async {
         guard hasMore, !isLoading else { return }
         isLoading = true
-        defer { isLoading = false }
-        do {
-            let result = try await appState.subsonicClient.search(
-                query: "", artistCount: 0, albumCount: 0,
-                songCount: pageSize, songOffset: songs.count
-            )
-            let newSongs = result.song ?? []
-            songs.append(contentsOf: newSongs)
-            hasMore = newSongs.count >= pageSize
-            refreshTitleSongCount()
-            recomputeDisplayedSongs()
-        } catch {}
+        defer {
+            isLoading = false
+            if songs.count < pendingPageTarget, hasMore {
+                scrollLoadTask?.cancel()
+                scrollLoadTask = Task { await loadPages() }
+            }
+        }
+        while songs.count < pendingPageTarget, hasMore, !Task.isCancelled {
+            do {
+                let result = try await appState.subsonicClient.search(
+                    query: "", artistCount: 0, albumCount: 0,
+                    songCount: pageSize, songOffset: songs.count
+                )
+                let newSongs = result.song ?? []
+                songs.append(contentsOf: newSongs)
+                hasMore = newSongs.count >= pageSize
+            } catch {
+                hasMore = false
+                break
+            }
+        }
+        refreshTitleSongCount()
+        recomputeDisplayedSongs()
+    }
+
+    private func scheduleScrollLoad(placeholderIndex: Int) {
+        guard hasMore else { return }
+        pendingPageTarget = max(pendingPageTarget, songs.count + placeholderIndex + pageSize)
+        scrollLoadTask?.cancel()
+        scrollLoadTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            await loadPages()
+        }
     }
 
     private func refreshTitleSongCount() {
@@ -603,6 +645,43 @@ struct SongsView: View {
         }
 
         titleSongCount = songs.isEmpty ? nil : songs.count
+    }
+
+    private var songListPlaceholder: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 140, height: 14)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 100, height: 12)
+            }
+            Spacer()
+        }
+    }
+
+    private var songGridPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.quaternary)
+                .aspectRatio(1, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(height: 14)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(width: 80, height: 12)
+        }
+    }
+
+    private var remainingPlaceholderCount: Int {
+        guard hasMore, localFilteredSongs == nil, searchText.isEmpty else { return 0 }
+        guard let totalCount = appState.libraryCache.songs?.count else { return 0 }
+        return max(0, totalCount - songs.count)
     }
 
     private func shouldLoadMore(at index: Int) -> Bool {

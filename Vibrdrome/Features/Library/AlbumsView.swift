@@ -22,6 +22,8 @@ struct AlbumsView: View {
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
     @State private var cachedFilteredAlbums: [Album] = []
+    @State private var scrollLoadTask: Task<Void, Never>?
+    @State private var pendingPageTarget: Int = 0
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -211,6 +213,13 @@ struct AlbumsView: View {
                 .onAppear { paginateIfNeeded(album) }
             }
 
+            if remainingPlaceholderCount > 0 {
+                ForEach(0..<remainingPlaceholderCount, id: \.self) { index in
+                    albumListPlaceholder
+                        .onAppear { scheduleScrollLoad(placeholderIndex: index) }
+                }
+            }
+
             if isLoading && !albums.isEmpty {
                 HStack {
                     Spacer()
@@ -239,6 +248,13 @@ struct AlbumsView: View {
                     .accessibilityIdentifier("albumCard_\(album.id)")
                     .contextMenu { rowContextMenu(for: album) }
                     .onAppear { paginateIfNeeded(album) }
+                }
+
+                if remainingPlaceholderCount > 0 {
+                    ForEach(0..<remainingPlaceholderCount, id: \.self) { index in
+                        albumGridPlaceholder
+                            .onAppear { scheduleScrollLoad(placeholderIndex: index) }
+                    }
                 }
             }
             .padding(16)
@@ -317,14 +333,67 @@ struct AlbumsView: View {
         }
     }
 
+    private var albumListPlaceholder: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.quaternary)
+                .frame(width: 56, height: 56)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 120, height: 14)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 80, height: 12)
+            }
+            Spacer()
+        }
+    }
+
+    private var albumGridPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.quaternary)
+                .aspectRatio(1, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(height: 14)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(width: 80, height: 12)
+        }
+    }
+
+    private var remainingPlaceholderCount: Int {
+        guard hasMore, localFilteredAlbums == nil, searchText.isEmpty else { return 0 }
+        guard let totalCount = appState.libraryCache.albums?.count else { return 0 }
+        return max(0, totalCount - albums.count)
+    }
+
     private func paginateIfNeeded(_ album: Album) {
-        guard localFilteredAlbums == nil else { return }
-        if album.id == albums.last?.id && hasMore {
-            Task { await loadMore() }
+        guard localFilteredAlbums == nil, hasMore, !isLoading else { return }
+        guard let index = albums.firstIndex(where: { $0.id == album.id }) else { return }
+        let prefetchThreshold = max(albums.count - 30, 0)
+        if index >= prefetchThreshold {
+            pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
+            Task { await loadPages() }
+        }
+    }
+
+    private func scheduleScrollLoad(placeholderIndex: Int) {
+        guard hasMore else { return }
+        pendingPageTarget = max(pendingPageTarget, albums.count + placeholderIndex + pageSize)
+        scrollLoadTask?.cancel()
+        scrollLoadTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            await loadPages()
         }
     }
 
     private func loadAlbums() async {
+        scrollLoadTask?.cancel()
+        pendingPageTarget = 0
         let client = appState.subsonicClient
         let sortType = effectiveListType
         let endpoint = SubsonicEndpoint.getAlbumList2(
@@ -352,20 +421,30 @@ struct AlbumsView: View {
         }
     }
 
-    private func loadMore() async {
-        guard !isLoading else { return }
+    private func loadPages() async {
+        guard !isLoading, hasMore else { return }
         isLoading = true
-        defer { isLoading = false }
-        do {
-            let result = try await appState.subsonicClient.getAlbumList(
-                type: effectiveListType, size: pageSize, offset: albums.count, genre: genre,
-                fromYear: fromYear, toYear: toYear)
-            albums.append(contentsOf: result)
-            hasMore = result.count >= pageSize
-            recomputeFilteredAlbums()
-        } catch {
-            hasMore = false
+        defer {
+            isLoading = false
+            // If target moved while loading, schedule another batch
+            if albums.count < pendingPageTarget, hasMore {
+                scrollLoadTask?.cancel()
+                scrollLoadTask = Task { await loadPages() }
+            }
         }
+        while albums.count < pendingPageTarget, hasMore, !Task.isCancelled {
+            do {
+                let result = try await appState.subsonicClient.getAlbumList(
+                    type: effectiveListType, size: pageSize, offset: albums.count, genre: genre,
+                    fromYear: fromYear, toYear: toYear)
+                albums.append(contentsOf: result)
+                hasMore = result.count >= pageSize
+            } catch {
+                hasMore = false
+                break
+            }
+        }
+        recomputeFilteredAlbums()
     }
 
     private func recomputeFilteredAlbums() {
