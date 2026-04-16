@@ -60,6 +60,7 @@ struct PlayerSettingsView: View {
     // Controls / Now Playing Toolbar
     @AppStorage(UserDefaultsKeys.showVolumeSlider) private var showVolumeSlider: Bool = true
     @AppStorage(UserDefaultsKeys.showAudioQualityInfo) private var showAudioQualityInfo: Bool = true
+    @AppStorage(UserDefaultsKeys.showLosslessBadge) private var showLosslessBadge: Bool = true
     @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) private var showVisualizerInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showEQInToolbar) private var showEQInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) private var showAirPlayInToolbar: Bool = true
@@ -395,6 +396,12 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("showAudioQualityInfoToggle")
+
+            Toggle(isOn: $showLosslessBadge) {
+                Label("Lossless Badge", systemImage: "waveform.badge.plus")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showLosslessBadgeToggle")
 
             nowPlayingToolbarSubsection
         } header: {

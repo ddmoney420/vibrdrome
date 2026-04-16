@@ -98,6 +98,7 @@ enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
     case rediscover
     case randomPicks
     case recentlyPlayed
+    case topArtists
 
     var id: String { rawValue }
 
@@ -108,6 +109,7 @@ enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
         case .rediscover: "Rediscover"
         case .randomPicks: "Random Picks"
         case .recentlyPlayed: "Recently Played"
+        case .topArtists: "Your Top Artists"
         }
     }
 }

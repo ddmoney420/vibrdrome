@@ -111,6 +111,9 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.settings)
                 }
             }
+            #if os(iOS)
+            .contentMargins(.bottom, 80)
+            #endif
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)

@@ -49,7 +49,7 @@ jobs:
           xcodebuild build \
             -project Vibrdrome.xcodeproj \
             -scheme Vibrdrome \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_VERSION=5
@@ -115,7 +115,7 @@ jobs:
           xcodebuild test \
             -project Vibrdrome.xcodeproj \
             -scheme Vibrdrome \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             SWIFT_VERSION=5 \
             -resultBundlePath TestResults.xcresult || true

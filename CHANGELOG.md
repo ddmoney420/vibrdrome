@@ -4,6 +4,31 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 43 — April 15, 2026
+- Lossless badge in Now Playing for FLAC/ALAC/WAV/AIFF (toggleable in Settings > Player)
+- Your Top Artists carousel on Home with album art from play history
+- Search tab auto-focuses keyboard on open
+- iPad sidebar scrollable past mini player (Settings no longer blocked)
+- Delete all downloads crash fix (proper error handling)
+- CI fix: generic iOS Simulator destination
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Lossless badge, Top Artists carousel, search auto-focus, iPad sidebar fix,
+> download delete crash fix.
+
+### Build 42 — April 15, 2026
+- Tab bar reorder works instantly without kicking to Home
+- Queue layout: Recently Played on top, Now Playing in middle, Up Next below
+- Queue auto-scrolls to Now Playing on open
+- Play history records from all playback paths (gapless, skip, queue tap)
+- Recently Played falls back to queue position on fresh launch
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Tab reorder fixed (instant, no Home kick). Queue reordered: Recently Played,
+> Now Playing, Up Next. Play history tracks all playback paths.
+
 ### Build 40 — April 15, 2026
 - Tab bar drag-to-reorder restored in Settings
 - A-Z section index on Artists list with tap-to-jump (split X-Z into individual letters, [Unknown] as #)
