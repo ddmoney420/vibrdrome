@@ -149,7 +149,13 @@ struct FavoritesView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay {
-            if isEmpty {
+            if appState.librarySyncManager.lastSyncDate == nil && isEmpty {
+                ContentUnavailableView {
+                    Label("Loading Favorites", systemImage: "heart")
+                } description: {
+                    Text("Syncing your library...")
+                }
+            } else if isEmpty {
                 ContentUnavailableView {
                     Label("No Favorites", systemImage: "heart")
                 } description: {

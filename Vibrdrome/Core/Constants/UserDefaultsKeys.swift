@@ -111,7 +111,6 @@ enum UserDefaultsKeys {
     static let enableLiquidGlass = "enableLiquidGlass"
     static let enableMiniPlayerTint = "enableMiniPlayerTint"
     static let albumBackgroundStyle = "albumBackgroundStyle"
-    static let gridColumnsPerRow = "gridColumnsPerRow"
 
     // MARK: - Tab Bar Extended
 
@@ -143,5 +142,4 @@ enum UserDefaultsKeys {
     static let lastServerModified = "lastServerModified"
     static let backgroundSyncEnabled = "backgroundSyncEnabled"
     static let syncPollingInterval = "syncPollingInterval"
-    static let syncConflictPolicy = "syncConflictPolicy"
 }

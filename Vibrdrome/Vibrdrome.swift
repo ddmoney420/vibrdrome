@@ -117,7 +117,8 @@ struct VibrdromeApp: App {
                 .onAppear {
                     ImagePipeline.shared = ImagePipeline {
                         let dataCache = try? DataCache(name: "com.vibrdrome.images")
-                        dataCache?.sizeLimit = 5 * 1024 * 1024 * 1024 // 5 GB on macOS
+                        // macOS has more disk space; 1 GB covers most libraries
+                        dataCache?.sizeLimit = 1024 * 1024 * 1024 // 1 GB
                         if let dataCache { $0.dataCache = dataCache }
                     }
                     RemoteCommandManager.shared.setup()

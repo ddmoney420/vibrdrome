@@ -8,6 +8,7 @@ struct SongsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var songs: [Song] = []
     @State private var localFilteredSongs: [Song]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var hasMore = false
     @State private var searchText = ""
@@ -247,12 +248,12 @@ struct SongsView: View {
             #endif
         }
         #if os(macOS)
-        .onChange(of: appState.songFilter.isFavorited) { applyLocalFilters() }
-        .onChange(of: appState.songFilter.isRated) { applyLocalFilters() }
-        .onChange(of: appState.songFilter.isRecentlyPlayed) { applyLocalFilters() }
-        .onChange(of: appState.songFilter.selectedArtistIds) { applyLocalFilters() }
-        .onChange(of: appState.songFilter.selectedGenres) { applyLocalFilters() }
-        .onChange(of: appState.songFilter.year) { applyLocalFilters() }
+        .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -408,7 +409,7 @@ struct SongsView: View {
                     .accessibilityIdentifier("songRow_\(song.id)")
                     .trackContextMenu(song: song)
                     .onAppear {
-                        if localFilteredSongs == nil && searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
+                        if shouldLoadMore(at: index) {
                             Task { await loadMore() }
                         }
                     }
@@ -451,7 +452,7 @@ struct SongsView: View {
                             .accessibilityIdentifier("songCard_\(song.id)")
                             .trackContextMenu(song: song)
                             .onAppear {
-                                if localFilteredSongs == nil && searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
+                                if shouldLoadMore(at: index) {
                                     Task { await loadMore() }
                                 }
                             }
@@ -570,7 +571,22 @@ struct SongsView: View {
         } catch {}
     }
 
+    private func shouldLoadMore(at index: Int) -> Bool {
+        guard localFilteredSongs == nil, searchText.isEmpty, hasMore, !isLoading else { return false }
+        let prefetchThreshold = max(displayedSongs.count - 10, 0)
+        return index >= prefetchThreshold
+    }
+
     #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
     private func applyLocalFilters() {
         let filter = appState.songFilter
         guard filter.isActive else {
@@ -579,17 +595,17 @@ struct SongsView: View {
         }
 
         do {
-            var descriptor = FetchDescriptor<CachedSong>()
-            descriptor.sortBy = [SortDescriptor(\.title)]
-            let allSongs = try modelContext.fetch(descriptor)
+            let allSongs: [Song]
+            if let cachedSongs = appState.libraryCache.songs {
+                allSongs = cachedSongs
+            } else {
+                var descriptor = FetchDescriptor<CachedSong>()
+                descriptor.sortBy = [SortDescriptor(\.title)]
+                allSongs = try modelContext.fetch(descriptor).map { $0.toSong() }
+            }
 
-            let recentCutoff: Date? = filter.isRecentlyPlayed
-                ? Calendar.current.date(byAdding: .day, value: -30, to: Date())
-                : nil
-
-            let filtered = allSongs.filter { songMatchesFilter($0, filter: filter, recentCutoff: recentCutoff) }
-
-            localFilteredSongs = filtered.map { $0.toSong() }
+            let recentSongIds = recentlyPlayedSongIds(for: filter)
+            localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
                 .error("Failed to apply local filters: \(error)")
@@ -597,16 +613,22 @@ struct SongsView: View {
         }
     }
 
+    private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {
+        guard filter.isRecentlyPlayed else { return nil }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let descriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
+        )
+        let recentSongs = (try? modelContext.fetch(descriptor)) ?? []
+        return Set(recentSongs.map(\.id))
+    }
+
     private func songMatchesFilter(
-        _ song: CachedSong, filter: LibraryFilter, recentCutoff: Date?
+        _ song: Song, filter: LibraryFilter, recentIds: Set<String>?
     ) -> Bool {
-        guard filter.isFavorited.matches(song.isStarred) else { return false }
-        guard filter.isRated.matches(song.rating != 0) else { return false }
-        if let cutoff = recentCutoff {
-            guard let lastPlayed = song.lastPlayed, lastPlayed > cutoff else {
-                return false
-            }
-        }
+        guard filter.isFavorited.matches(song.starred != nil) else { return false }
+        guard filter.isRated.matches((song.userRating ?? 0) != 0) else { return false }
+        if let recentIds, !recentIds.contains(song.id) { return false }
         if !filter.selectedArtistIds.isEmpty {
             guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
                 return false

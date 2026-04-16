@@ -186,9 +186,9 @@ extension SearchView {
     }
 
     func loadGenres() async {
-        // Try local SwiftData first
-        let allSongs = (try? modelContext.fetch(FetchDescriptor<CachedSong>())) ?? []
-        let localGenres = Set(allSongs.compactMap(\.genre).filter { !$0.isEmpty })
+        // Try local SwiftData first — fetch album genres (much smaller than all songs)
+        let albums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        let localGenres = Set(albums.compactMap(\.genre).filter { !$0.isEmpty })
         if !localGenres.isEmpty {
             availableGenres = localGenres.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             return

@@ -503,9 +503,33 @@ final class LibrarySyncManager {
         let allLocal = try context.fetch(FetchDescriptor<CachedPlaylist>())
         let localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
 
-        for playlist in playlists {
-            serverPlaylistIds.insert(playlist.id)
-            let detail = try await client.getPlaylist(id: playlist.id)
+        // Fetch playlist details with bounded concurrency
+        let details = try await withThrowingTaskGroup(of: Playlist.self, returning: [Playlist].self) { group in
+            var results: [Playlist] = []
+            var inflight = 0
+            let maxConcurrency = 5
+
+            for playlist in playlists {
+                if inflight >= maxConcurrency {
+                    if let detail = try await group.next() {
+                        results.append(detail)
+                    }
+                    inflight -= 1
+                }
+                group.addTask {
+                    try await client.getPlaylist(id: playlist.id)
+                }
+                inflight += 1
+            }
+
+            for try await detail in group {
+                results.append(detail)
+            }
+            return results
+        }
+
+        for detail in details {
+            serverPlaylistIds.insert(detail.id)
             upsertPlaylist(detail, context: context, localMap: localMap)
             stats.playlistsSynced += 1
         }
@@ -555,14 +579,21 @@ final class LibrarySyncManager {
     private func prefetchCoverArt(client: SubsonicClient, context: ModelContext) async {
         syncProgress = "Prefetching cover art…"
 
+        // Collect cover art IDs from albums and artists without loading full objects
         var coverArtIds = Set<String>()
 
-        let albums = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        let albumDescriptor = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate<CachedAlbum> { $0.coverArtId != nil }
+        )
+        let albums = (try? context.fetch(albumDescriptor)) ?? []
         for album in albums {
             if let id = album.coverArtId { coverArtIds.insert(id) }
         }
 
-        let artists = (try? context.fetch(FetchDescriptor<CachedArtist>())) ?? []
+        let artistDescriptor = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate<CachedArtist> { $0.coverArtId != nil }
+        )
+        let artists = (try? context.fetch(artistDescriptor)) ?? []
         for artist in artists {
             if let id = artist.coverArtId { coverArtIds.insert(id) }
         }
@@ -627,10 +658,15 @@ final class LibrarySyncManager {
             sortBy: [SortDescriptor(\.syncDate, order: .reverse)]
         )
         descriptor.fetchOffset = 50
-        guard let old = try? context.fetch(descriptor), !old.isEmpty else { return }
-        for entry in old {
-            context.delete(entry)
+        do {
+            let old = try context.fetch(descriptor)
+            guard !old.isEmpty else { return }
+            for entry in old {
+                context.delete(entry)
+            }
+            try context.save()
+        } catch {
+            syncLog.warning("Failed to prune sync history: \(error.localizedDescription)")
         }
-        try? context.save()
     }
 }

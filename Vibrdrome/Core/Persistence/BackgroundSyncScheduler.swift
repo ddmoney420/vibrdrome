@@ -45,6 +45,7 @@ final class BackgroundSyncScheduler {
 
     /// Schedule the next background refresh. Call after each sync completes.
     func scheduleRefresh() {
+        guard AppState.shared.isConfigured else { return }
         guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.backgroundSyncEnabled) else {
             bgSyncLog.info("Background sync disabled, not scheduling refresh")
             return
@@ -64,6 +65,7 @@ final class BackgroundSyncScheduler {
 
     /// Schedule a longer background processing task for full sync.
     func scheduleFullSync() {
+        guard AppState.shared.isConfigured else { return }
         guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.backgroundSyncEnabled) else { return }
 
         let request = BGProcessingTaskRequest(identifier: Self.processingTaskId)

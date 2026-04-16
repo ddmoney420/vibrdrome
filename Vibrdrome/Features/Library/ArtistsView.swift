@@ -7,6 +7,7 @@ struct ArtistsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var indexes: [ArtistIndex] = []
     @State private var localFilteredArtists: [Artist]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
@@ -179,8 +180,8 @@ struct ArtistsView: View {
         }
         .refreshable { await loadArtists() }
         #if os(macOS)
-        .onChange(of: appState.artistFilter.isFavorited) { applyLocalFilters() }
-        .onChange(of: appState.artistFilter.selectedGenres) { applyLocalFilters() }
+        .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -316,6 +317,15 @@ struct ArtistsView: View {
     }
 
     #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
     private func applyLocalFilters() {
         let filter = appState.artistFilter
         guard filter.isActive else {
@@ -324,15 +334,25 @@ struct ArtistsView: View {
         }
 
         do {
-            var descriptor = FetchDescriptor<CachedArtist>()
-            descriptor.sortBy = [SortDescriptor(\.name)]
-            let allArtists = try modelContext.fetch(descriptor)
+            let allArtists: [Artist]
+            if let cachedArtists = appState.libraryCache.artists {
+                allArtists = cachedArtists
+            } else {
+                var descriptor = FetchDescriptor<CachedArtist>()
+                descriptor.sortBy = [SortDescriptor(\.name)]
+                allArtists = try modelContext.fetch(descriptor).map { $0.toArtist() }
+            }
 
             // Pre-compute artist IDs that have albums matching selected genres
             var artistIdsWithMatchingGenres: Set<String>?
             if !filter.selectedGenres.isEmpty {
-                let albumDescriptor = FetchDescriptor<CachedAlbum>()
-                let allAlbums = try modelContext.fetch(albumDescriptor)
+                let allAlbums: [Album]
+                if let cachedAlbums = appState.libraryCache.albums {
+                    allAlbums = cachedAlbums
+                } else {
+                    let albumDescriptor = FetchDescriptor<CachedAlbum>()
+                    allAlbums = try modelContext.fetch(albumDescriptor).map { $0.toAlbum() }
+                }
                 var ids = Set<String>()
                 for album in allAlbums {
                     if let genre = album.genre, filter.selectedGenres.contains(genre),
@@ -346,8 +366,8 @@ struct ArtistsView: View {
             let filtered = allArtists.filter { artist in
                 // Favorited filter
                 switch filter.isFavorited {
-                case .yes: if !artist.isStarred { return false }
-                case .no: if artist.isStarred { return false }
+                case .yes: if artist.starred == nil { return false }
+                case .no: if artist.starred != nil { return false }
                 case .none: break
                 }
 
@@ -359,16 +379,7 @@ struct ArtistsView: View {
                 return true
             }
 
-            localFilteredArtists = filtered.map { cached in
-                Artist(
-                    id: cached.id,
-                    name: cached.name,
-                    coverArt: cached.coverArtId,
-                    albumCount: cached.albumCount,
-                    starred: cached.isStarred ? "true" : nil,
-                    album: nil
-                )
-            }
+            localFilteredArtists = filtered
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Artists")
                 .error("Failed to apply local filters: \(error)")

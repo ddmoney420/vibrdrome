@@ -417,28 +417,37 @@ struct SearchView: View {
     }
 
     private func searchLocally(query: String) -> SearchResult3? {
-        let lowered = query.lowercased()
+        let q = query
 
-        // Search cached songs
-        let allSongs = (try? modelContext.fetch(FetchDescriptor<CachedSong>())) ?? []
-        let matchedSongs = allSongs.filter {
-            $0.title.localizedCaseInsensitiveContains(lowered)
-                || ($0.artist?.localizedCaseInsensitiveContains(lowered) ?? false)
-                || ($0.albumName?.localizedCaseInsensitiveContains(lowered) ?? false)
-        }.prefix(40).map { $0.toSong() }
+        // Search cached songs using predicate
+        var songDescriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate<CachedSong> {
+                $0.title.localizedStandardContains(q)
+                || ($0.artist?.localizedStandardContains(q) ?? false)
+                || ($0.albumName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        songDescriptor.fetchLimit = 40
+        let matchedSongs = ((try? modelContext.fetch(songDescriptor)) ?? []).map { $0.toSong() }
 
-        // Search cached albums
-        let allAlbums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
-        let matchedAlbums = allAlbums.filter {
-            $0.name.localizedCaseInsensitiveContains(lowered)
-                || ($0.artistName?.localizedCaseInsensitiveContains(lowered) ?? false)
-        }.prefix(20).map { $0.toAlbum() }
+        // Search cached albums using predicate
+        var albumDescriptor = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate<CachedAlbum> {
+                $0.name.localizedStandardContains(q)
+                || ($0.artistName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        albumDescriptor.fetchLimit = 20
+        let matchedAlbums = ((try? modelContext.fetch(albumDescriptor)) ?? []).map { $0.toAlbum() }
 
-        // Search cached artists
-        let allArtists = (try? modelContext.fetch(FetchDescriptor<CachedArtist>())) ?? []
-        let matchedArtists = allArtists.filter {
-            $0.name.localizedCaseInsensitiveContains(lowered)
-        }.prefix(20).map { $0.toArtist() }
+        // Search cached artists using predicate
+        var artistDescriptor = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate<CachedArtist> {
+                $0.name.localizedStandardContains(q)
+            }
+        )
+        artistDescriptor.fetchLimit = 20
+        let matchedArtists = ((try? modelContext.fetch(artistDescriptor)) ?? []).map { $0.toArtist() }
 
         guard !matchedSongs.isEmpty || !matchedAlbums.isEmpty || !matchedArtists.isEmpty else {
             return nil

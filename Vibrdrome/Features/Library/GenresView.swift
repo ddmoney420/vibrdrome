@@ -230,21 +230,19 @@ struct GenresView: View {
     }
 
     private func deriveGenresFromCache() -> [Genre] {
-        let allSongs = (try? modelContext.fetch(FetchDescriptor<CachedSong>())) ?? []
-        var genreMap: [String: (albumIds: Set<String>, songCount: Int)] = [:]
+        // Use albums (much fewer records) to derive genre counts
+        let allAlbums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        var genreAlbumCount: [String: Int] = [:]
+        var genreSongCount: [String: Int] = [:]
 
-        for song in allSongs {
-            guard let genre = song.genre, !genre.isEmpty else { continue }
-            var entry = genreMap[genre] ?? (albumIds: Set<String>(), songCount: 0)
-            entry.songCount += 1
-            if let albumId = song.albumId {
-                entry.albumIds.insert(albumId)
-            }
-            genreMap[genre] = entry
+        for album in allAlbums {
+            guard let genre = album.genre, !genre.isEmpty else { continue }
+            genreAlbumCount[genre, default: 0] += 1
+            genreSongCount[genre, default: 0] += album.songCount ?? 0
         }
 
-        return genreMap.map { key, value in
-            Genre(songCount: value.songCount, albumCount: value.albumIds.count, value: key)
+        return genreAlbumCount.map { key, albumCount in
+            Genre(songCount: genreSongCount[key] ?? 0, albumCount: albumCount, value: key)
         }.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
     }
 

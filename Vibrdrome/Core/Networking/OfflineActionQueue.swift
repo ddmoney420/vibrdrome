@@ -167,10 +167,7 @@ final class OfflineActionQueue {
 
         // Conflict resolution: collapse contradictory actions on the same target.
         // e.g., star + unstar on the same song → last one wins.
-        let policy = SyncConflictPolicy(
-            rawValue: UserDefaults.standard.string(forKey: UserDefaultsKeys.syncConflictPolicy) ?? ""
-        ) ?? .lastWriteWins
-        let resolved = resolveConflicts(actions: actions, policy: policy, context: context)
+        let resolved = resolveConflicts(actions: actions, context: context)
 
         var synced = 0
 
@@ -202,16 +199,9 @@ final class OfflineActionQueue {
 
     // MARK: - Conflict Resolution
 
-    /// Policy for resolving conflicting offline actions.
-    enum SyncConflictPolicy: String {
-        /// The most recent action wins (default).
-        case lastWriteWins
-        /// The server state takes precedence — discard conflicting local actions.
-        case serverWins
-    }
-
-    /// Collapse contradictory actions on the same target. Returns the surviving actions.
-    private func resolveConflicts(actions: [PendingAction], policy: SyncConflictPolicy,
+    /// Collapse contradictory actions on the same target.
+    /// Uses last-write-wins: the most recent action for each target survives.
+    private func resolveConflicts(actions: [PendingAction],
                                   context: ModelContext) -> [PendingAction] {
         // Group by target ID
         var grouped: [String: [PendingAction]] = [:]
@@ -242,7 +232,7 @@ final class OfflineActionQueue {
                 // Multiple star/unstar on same target — keep only the latest
                 let sorted = starActions.sorted { $0.createdAt < $1.createdAt }
                 let winner = sorted.last!
-                offlineLog.info("Conflict resolved (\(policy.rawValue)): \(winner.actionType) wins for \(winner.targetId)")
+                offlineLog.info("Conflict resolved (last-write-wins): \(winner.actionType) wins for \(winner.targetId)")
 
                 // Delete the losers
                 for action in sorted.dropLast() {

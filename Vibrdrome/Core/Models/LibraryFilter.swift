@@ -17,7 +17,8 @@ enum TriState: String, CaseIterable, Sendable, Equatable {
 /// Observable filter state for library filter sidebars (albums, artists, songs).
 /// All filtering is done locally against SwiftData.
 @Observable
-final class LibraryFilter: @unchecked Sendable {
+@MainActor
+final class LibraryFilter {
     var isFavorited: TriState = .none
     var isRated: TriState = .none
     var isRecentlyPlayed: Bool = false

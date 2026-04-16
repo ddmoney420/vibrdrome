@@ -15,6 +15,23 @@ struct LibraryFilterTests {
         #expect(TriState.no.rawValue == "no")
     }
 
+    // MARK: - TriState.matches
+
+    @Test func triStateNoneMatchesAnything() {
+        #expect(TriState.none.matches(true))
+        #expect(TriState.none.matches(false))
+    }
+
+    @Test func triStateYesMatchesTrueOnly() {
+        #expect(TriState.yes.matches(true))
+        #expect(!TriState.yes.matches(false))
+    }
+
+    @Test func triStateNoMatchesFalseOnly() {
+        #expect(TriState.no.matches(false))
+        #expect(!TriState.no.matches(true))
+    }
+
     // MARK: - LibraryFilter initial state
 
     @Test func initialStateIsInactive() {

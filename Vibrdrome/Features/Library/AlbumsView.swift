@@ -13,6 +13,7 @@ struct AlbumsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var albums: [Album] = []
     @State private var localFilteredAlbums: [Album]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var error: String?
     @State private var hasMore = true
@@ -181,13 +182,13 @@ struct AlbumsView: View {
             await loadAlbums()
         }
         #if os(macOS)
-        .onChange(of: appState.albumFilter.isFavorited) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.isRated) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.isRecentlyPlayed) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.selectedArtistIds) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.selectedGenres) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.selectedLabels) { applyLocalFilters() }
-        .onChange(of: appState.albumFilter.year) { applyLocalFilters() }
+        .onChange(of: appState.albumFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRated) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -362,6 +363,15 @@ struct AlbumsView: View {
     }
 
     #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
     private func applyLocalFilters() {
         let filter = appState.albumFilter
         guard filter.isActive else {
@@ -370,14 +380,19 @@ struct AlbumsView: View {
         }
 
         do {
-            var descriptor = FetchDescriptor<CachedAlbum>()
-            descriptor.sortBy = [SortDescriptor(\.name)]
-            let allAlbums = try modelContext.fetch(descriptor)
-
             let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
-            let filtered = allAlbums.filter { albumMatchesFilter($0, filter: filter, recentIds: recentlyPlayedAlbumIds) }
+            let allAlbums: [Album]
+            if let cachedAlbums = appState.libraryCache.albums {
+                allAlbums = cachedAlbums
+            } else {
+                var descriptor = FetchDescriptor<CachedAlbum>()
+                descriptor.sortBy = [SortDescriptor(\.name)]
+                allAlbums = try modelContext.fetch(descriptor).map { $0.toAlbum() }
+            }
 
-            localFilteredAlbums = filtered.map { $0.toAlbum() }
+            localFilteredAlbums = allAlbums.filter {
+                albumMatchesFilter($0, filter: filter, recentIds: recentlyPlayedAlbumIds)
+            }
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Albums")
                 .error("Failed to apply local filters: \(error)")
@@ -396,10 +411,10 @@ struct AlbumsView: View {
     }
 
     private func albumMatchesFilter(
-        _ album: CachedAlbum, filter: LibraryFilter, recentIds: Set<String>?
+        _ album: Album, filter: LibraryFilter, recentIds: Set<String>?
     ) -> Bool {
-        guard filter.isFavorited.matches(album.isStarred) else { return false }
-        guard filter.isRated.matches(album.userRating != 0) else { return false }
+        guard filter.isFavorited.matches(album.starred != nil) else { return false }
+        guard filter.isRated.matches((album.userRating ?? 0) != 0) else { return false }
         if let recentIds, !recentIds.contains(album.id) { return false }
         if !filter.selectedArtistIds.isEmpty {
             guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
