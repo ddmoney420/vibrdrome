@@ -114,6 +114,7 @@ struct SearchView: View {
                             artistBubble(artist)
                         }
                         .buttonStyle(.plain)
+                        .artistGetInfoContextMenu(artist: artist)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -137,6 +138,7 @@ struct SearchView: View {
                             albumTile(album)
                         }
                         .buttonStyle(.plain)
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(.horizontal, 16)

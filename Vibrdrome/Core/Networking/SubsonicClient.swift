@@ -191,6 +191,90 @@ final class SubsonicClient {
         return buildURL(path: "/rest/getCoverArt", extra: extra)
     }
 
+    // MARK: - Raw JSON Metadata
+
+    /// Returns the raw decoded JSON object under `subsonic-response` for an endpoint.
+    /// Useful for diagnostics and exposing metadata fields not modeled in typed structs.
+    func rawSubsonicResponse(for endpoint: SubsonicEndpoint) async throws -> [String: Any] {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent(endpoint.path),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SubsonicError.invalidURL
+        }
+        components.queryItems = auth.authParameters() + endpoint.queryItems
+
+        guard let url = components.url else {
+            throw SubsonicError.invalidURL
+        }
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw SubsonicError.httpError(statusCode)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let root = json as? [String: Any],
+              let subsonic = root["subsonic-response"] as? [String: Any] else {
+            let error = NSError(
+                domain: "SubsonicClient",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Unexpected JSON format"]
+            )
+            throw SubsonicError.decodingError(error)
+        }
+
+        if let status = subsonic["status"] as? String, status != "ok" {
+            if let error = subsonic["error"] as? [String: Any] {
+                let code = error["code"] as? Int ?? 0
+                let message = error["message"] as? String ?? "Unknown API error"
+                throw SubsonicError.apiError(code: code, message: message)
+            }
+            throw SubsonicError.apiError(code: 0, message: "Server returned status: \(status)")
+        }
+
+        return subsonic
+    }
+
+    /// Returns Navidrome inspect metadata for a media item ID when available.
+    /// This endpoint includes `rawTags` with full file tag key/value arrays.
+    func inspectMetadata(id: String) async throws -> [String: Any] {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/inspect"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SubsonicError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "id", value: id)] + auth.authParameters()
+
+        guard let url = components.url else {
+            throw SubsonicError.invalidURL
+        }
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw SubsonicError.httpError(statusCode)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let payload = json as? [String: Any] else {
+            let error = NSError(
+                domain: "SubsonicClient",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Unexpected inspect JSON format"]
+            )
+            throw SubsonicError.decodingError(error)
+        }
+
+        return payload
+    }
+
     func downloadURL(id: String) -> URL {
         buildURL(path: "/rest/download", extra: [URLQueryItem(name: "id", value: id)])
     }

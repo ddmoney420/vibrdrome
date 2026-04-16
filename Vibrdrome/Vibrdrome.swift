@@ -168,6 +168,19 @@ struct VibrdromeApp: App {
         }
         .defaultSize(width: 700, height: 500)
 
+        WindowGroup("Get Info", id: "get-info", for: GetInfoTarget.self) { $target in
+            if let target {
+                NavigationStack {
+                    GetInfoView(target: target)
+                }
+                .environment(appState)
+                .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+            }
+        }
+        .defaultSize(width: 560, height: 700)
+
         Window("Mini Player", id: "mini-player") {
             PopOutPlayerView()
                 .environment(appState)
