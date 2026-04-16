@@ -10,55 +10,9 @@ struct QueueView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
-                // Now playing
-                if let current = engine.currentSong {
-                    Section("Now Playing") {
-                        HStack(spacing: 12) {
-                            AlbumArtView(coverArtId: current.coverArt, size: 44)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Button {
-                                    appState.pendingNavigation = .song(id: current.id)
-                                    dismiss()
-                                } label: {
-                                    Text(current.title)
-                                        .font(.body)
-                                        .bold()
-                                        .lineLimit(1)
-                                }
-                                .buttonStyle(.plain)
-
-                                if let artist = current.artist {
-                                    Button {
-                                        if let artistId = current.artistId {
-                                            appState.pendingNavigation = .artist(id: artistId)
-                                            dismiss()
-                                        }
-                                    } label: {
-                                        Text(artist)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(current.artistId == nil)
-                                }
-                            }
-
-                            Spacer()
-
-                            if engine.isPlaying {
-                                Image(systemName: "waveform")
-                                    .foregroundStyle(Color.accentColor)
-                                    .symbolEffect(.variableColor)
-                                    .accessibilityLabel("Playing")
-                            }
-                        }
-                    }
-                }
-
-                // Recently played
+                // Recently played (top)
                 let history = engine.recentlyPlayed
                 if !history.isEmpty {
                     Section("Recently Played") {
@@ -77,6 +31,39 @@ struct QueueView: View {
                                 }
                             }
                             .opacity(0.6)
+                        }
+                    }
+                }
+
+                // Now playing (middle, fixed position)
+                if let current = engine.currentSong {
+                    Section("Now Playing") {
+                        EmptyView().id("nowPlayingAnchor")
+                        HStack(spacing: 12) {
+                            AlbumArtView(coverArtId: current.coverArt, size: 44)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(current.title)
+                                    .font(.body)
+                                    .bold()
+                                    .lineLimit(1)
+
+                                if let artist = current.artist {
+                                    Text(artist)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+
+                            Spacer()
+
+                            if engine.isPlaying {
+                                Image(systemName: "waveform")
+                                    .foregroundStyle(Color.accentColor)
+                                    .symbolEffect(.variableColor)
+                                    .accessibilityLabel("Playing")
+                            }
                         }
                     }
                 }
@@ -201,6 +188,12 @@ struct QueueView: View {
             #if os(iOS)
             .listStyle(.insetGrouped)
             #endif
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation { proxy.scrollTo("nowPlayingAnchor", anchor: .top) }
+                }
+            }
+            } // ScrollViewReader
             .navigationTitle("Queue")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

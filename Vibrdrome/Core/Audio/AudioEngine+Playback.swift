@@ -503,6 +503,12 @@ extension AudioEngine {
     func handleAutoAdvance() {
         submitScrobbleIfNeeded()
 
+        // Record outgoing song in play history
+        if let outgoing = currentSong {
+            playHistory.append(outgoing)
+            if playHistory.count > 50 { playHistory.removeFirst() }
+        }
+
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
             playbackLog.warning("Auto-advance but no valid lookahead index")
             return
@@ -543,6 +549,11 @@ extension AudioEngine {
     /// Unlike play(song:from:at:), this preserves the full queue intact.
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
+        // Record outgoing song in play history
+        if let outgoing = currentSong {
+            playHistory.append(outgoing)
+            if playHistory.count > 50 { playHistory.removeFirst() }
+        }
         let song = queue[index]
         currentIndex = index
         currentSong = song

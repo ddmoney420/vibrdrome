@@ -9,9 +9,14 @@ extension AudioEngine {
         return Array(queue[(currentIndex + 1)...])
     }
 
-    /// Songs actually played before the current track (most recent first, max 20)
+    /// Songs played before the current track (most recent first, max 20).
+    /// Uses actual play history if available, falls back to queue position.
     var recentlyPlayed: [Song] {
-        Array(playHistory.reversed().prefix(20))
+        if !playHistory.isEmpty {
+            return Array(playHistory.reversed().prefix(20))
+        }
+        guard currentIndex > 0 else { return [] }
+        return Array(queue[0..<currentIndex].reversed().prefix(20))
     }
 
     func addToQueue(_ song: Song) {
