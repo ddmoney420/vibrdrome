@@ -7,6 +7,7 @@ struct SongsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @State private var songs: [Song] = []
+    @State private var titleSongCount: Int?
     @State private var localFilteredSongs: [Song]?
     @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
@@ -91,7 +92,7 @@ struct SongsView: View {
                 songGrid
             }
         }
-        .navigationTitle(songs.isEmpty ? "Songs" : "Songs (\(songs.count))")
+        .navigationTitle(titleSongCount.map { "Songs (\($0))" } ?? "Songs")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -243,9 +244,13 @@ struct SongsView: View {
         .task {
             await loadSongs()
             await loadGenres()
+            refreshTitleSongCount()
             #if os(macOS)
             applyLocalFilters()
             #endif
+        }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            refreshTitleSongCount()
         }
         #if os(macOS)
         .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
@@ -553,6 +558,7 @@ struct SongsView: View {
             )
             songs = result.song ?? []
             hasMore = (result.song?.count ?? 0) >= pageSize
+            refreshTitleSongCount()
         } catch {}
     }
 
@@ -568,7 +574,23 @@ struct SongsView: View {
             let newSongs = result.song ?? []
             songs.append(contentsOf: newSongs)
             hasMore = newSongs.count >= pageSize
+            refreshTitleSongCount()
         } catch {}
+    }
+
+    private func refreshTitleSongCount() {
+        if let cachedSongs = appState.libraryCache.songs, !cachedSongs.isEmpty {
+            titleSongCount = cachedSongs.count
+            return
+        }
+
+        let descriptor = FetchDescriptor<CachedSong>()
+        if let cachedCount = try? modelContext.fetchCount(descriptor), cachedCount > 0 {
+            titleSongCount = cachedCount
+            return
+        }
+
+        titleSongCount = songs.isEmpty ? nil : songs.count
     }
 
     private func shouldLoadMore(at index: Int) -> Bool {
