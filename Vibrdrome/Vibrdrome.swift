@@ -134,6 +134,10 @@ struct VibrdromeApp: App {
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
                     }
                 }
                 .onOpenURL { url in
@@ -162,6 +166,10 @@ struct VibrdromeApp: App {
                         )
                         appState.libraryCache.rebuild(container: persistenceController.container)
                         appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )

@@ -580,6 +580,13 @@ final class LibrarySyncManager {
 
     // MARK: - Cover Art Prefetch
 
+    /// Warm the in-memory image cache on startup by loading all known cover art.
+    /// Images already in memory are skipped; images in disk cache load instantly.
+    func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
+        let context = ModelContext(container)
+        await prefetchCoverArt(client: client, context: context)
+    }
+
     private func prefetchCoverArt(client: SubsonicClient, context: ModelContext) async {
         syncProgress = "Prefetching cover art…"
 
