@@ -4,6 +4,18 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 42 — April 15, 2026
+- Tab bar reorder works instantly without kicking to Home
+- Queue layout: Recently Played on top, Now Playing in middle, Up Next below
+- Queue auto-scrolls to Now Playing on open
+- Play history records from all playback paths (gapless, skip, queue tap)
+- Recently Played falls back to queue position on fresh launch
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Tab reorder fixed (instant, no Home kick). Queue reordered: Recently Played,
+> Now Playing, Up Next. Play history tracks all playback paths.
+
 ### Build 40 — April 15, 2026
 - Tab bar drag-to-reorder restored in Settings
 - A-Z section index on Artists list with tap-to-jump (split X-Z into individual letters, [Unknown] as #)

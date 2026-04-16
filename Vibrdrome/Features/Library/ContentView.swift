@@ -172,7 +172,6 @@ struct ContentView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        .id(tabBarOrderJSON)
         .animation(.smooth, value: selectedTab)
         .onChange(of: selectedTab) { _, _ in
             #if os(iOS)
