@@ -580,9 +580,14 @@ final class LibrarySyncManager {
 
     // MARK: - Cover Art Prefetch
 
+    /// Whether a prefetch pass already ran this session (avoids duplicate work).
+    private var didPrefetchThisSession = false
+
     /// Warm the in-memory image cache on startup by loading all known cover art.
     /// Images already in memory are skipped; images in disk cache load instantly.
+    /// Skipped if a prefetch already ran during sync this session.
     func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
+        guard !didPrefetchThisSession else { return }
         let context = ModelContext(container)
         await prefetchCoverArt(client: client, context: context)
     }
@@ -610,7 +615,10 @@ final class LibrarySyncManager {
         }
 
         let total = coverArtIds.count
-        guard total > 0 else { return }
+        guard total > 0 else {
+            didPrefetchThisSession = true
+            return
+        }
         syncLog.info("Prefetching \(total) cover art images")
 
         let pipeline = ImagePipeline.shared
@@ -620,14 +628,28 @@ final class LibrarySyncManager {
 
         var fetched = 0
         let batchSize = 10
+        let perImageTimeout: UInt64 = 15_000_000_000 // 15 seconds
+
         for batchStart in stride(from: 0, to: urlMap.count, by: batchSize) {
+            guard !Task.isCancelled else { break }
             let batch = urlMap[batchStart..<min(batchStart + batchSize, urlMap.count)]
             await withTaskGroup(of: Void.self) { group in
                 for (_, url) in batch {
                     group.addTask {
                         let request = ImageRequest(url: url)
                         if pipeline.cache.containsCachedImage(for: request) { return }
-                        _ = try? await pipeline.image(for: request)
+                        // Timeout prevents a single stalled request from blocking the entire prefetch
+                        await withTaskGroup(of: Void.self) { inner in
+                            inner.addTask {
+                                _ = try? await pipeline.image(for: request)
+                            }
+                            inner.addTask {
+                                try? await Task.sleep(nanoseconds: perImageTimeout)
+                            }
+                            // Return as soon as the first child completes (image loaded or timeout)
+                            await inner.next()
+                            inner.cancelAll()
+                        }
                     }
                 }
             }
@@ -635,6 +657,7 @@ final class LibrarySyncManager {
             syncProgress = "Prefetching cover art… \(fetched)/\(total)"
         }
 
+        didPrefetchThisSession = true
         syncLog.info("Cover art prefetch complete: \(fetched) processed")
     }
 
