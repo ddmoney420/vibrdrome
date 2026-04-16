@@ -23,6 +23,7 @@ struct SearchView: View {
     @State var showGenrePicker = false
     @State var showYearPicker = false
     @State var showFormatPicker = false
+    @State private var searchIsActive = false
 
     let formatOptions = ["FLAC", "MP3", "AAC", "OGG", "OPUS", "WAV"]
 
@@ -47,7 +48,12 @@ struct SearchView: View {
         .padding(.bottom, 80)
         #endif
         .navigationTitle("Search")
-        .searchable(text: $query, prompt: "Artists, albums, songs...")
+        .searchable(text: $query, isPresented: $searchIsActive, prompt: "Artists, albums, songs...")
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                searchIsActive = true
+            }
+        }
         .onSubmit(of: .search) {
             saveRecentSearch(query)
         }

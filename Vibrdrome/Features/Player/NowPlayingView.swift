@@ -29,6 +29,7 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) var toolbarOrderJSON: String = "[]"
     @AppStorage(UserDefaultsKeys.showVolumeSlider) var showVolumeSlider: Bool = true
     @AppStorage(UserDefaultsKeys.showAudioQualityInfo) var showAudioQualityInfo: Bool = true
+    @AppStorage(UserDefaultsKeys.showLosslessBadge) var showLosslessBadge: Bool = true
     @AppStorage(UserDefaultsKeys.showHeartInPlayer) var showHeartInPlayer: Bool = true
     @AppStorage(UserDefaultsKeys.showRatingInPlayer) var showRatingInPlayer: Bool = true
     @AppStorage(UserDefaultsKeys.showQueueInPlayer) var showQueueInPlayer: Bool = true
@@ -669,6 +670,9 @@ struct NowPlayingView: View {
                             Image(systemName: "arrow.down.circle.fill")
                                 .font(.system(size: 9))
                             Text("Downloaded · \(suffix)")
+                            if showLosslessBadge && isHiRes(song) {
+                                hiResBadge
+                            }
                         }
                     } else {
                         let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
@@ -676,6 +680,9 @@ struct NowPlayingView: View {
                             Image(systemName: "wifi")
                                 .font(.system(size: 9))
                             Text("\(bitRate) · \(suffix)")
+                            if showLosslessBadge && isHiRes(song) {
+                                hiResBadge
+                            }
                         }
                     }
                     if let rg = song.replayGain {
@@ -702,6 +709,21 @@ struct NowPlayingView: View {
                 Text("RG " + parts.joined(separator: " · "))
             }
         }
+    }
+
+    private func isHiRes(_ song: Song) -> Bool {
+        let lossless: Set<String> = ["flac", "alac", "wav", "aiff", "dsf", "dff"]
+        guard let suffix = song.suffix?.lowercased() else { return false }
+        return lossless.contains(suffix)
+    }
+
+    private var hiResBadge: some View {
+        Text("Lossless")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(.white.opacity(0.2), in: Capsule())
     }
 
     var isCurrentSongDownloaded: Bool {
