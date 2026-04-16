@@ -415,37 +415,23 @@ struct SongsView: View {
                     .listRowSeparator(.hidden)
             }
 
-            ForEach(Array(cachedDisplayedSongs.enumerated()), id: \.element.id) { index, song in
-                songRow(song)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+            ForEach(0..<totalItemCount, id: \.self) { index in
+                Group {
+                    if index < cachedDisplayedSongs.count {
+                        let song = cachedDisplayedSongs[index]
+                        songRow(song)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                            }
+                            .accessibilityIdentifier("songRow_\(song.id)")
+                            .trackContextMenu(song: song)
+                    } else {
+                        songListPlaceholder
                     }
-                    .accessibilityIdentifier("songRow_\(song.id)")
-                    .trackContextMenu(song: song)
-                    .onAppear {
-                        if shouldLoadMore(at: index) {
-                            pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
-                            Task { await loadPages() }
-                        }
-                    }
-            }
-
-            if remainingPlaceholderCount > 0 {
-                ForEach(0..<remainingPlaceholderCount, id: \.self) { placeholderIndex in
-                    songListPlaceholder
-                        .onAppear { scheduleScrollLoad(placeholderIndex: placeholderIndex) }
                 }
+                .onAppear { triggerLoadIfNeeded(at: index) }
             }
-
-            if isLoading {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-            }
-
         }
     }
 
@@ -467,35 +453,25 @@ struct SongsView: View {
                 LazyVGrid(columns: [
                     GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)
                 ], spacing: 20) {
-                    ForEach(Array(cachedDisplayedSongs.enumerated()), id: \.element.id) { index, song in
-                        songCard(song)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                    ForEach(0..<totalItemCount, id: \.self) { index in
+                        Group {
+                            if index < cachedDisplayedSongs.count {
+                                let song = cachedDisplayedSongs[index]
+                                songCard(song)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                                    }
+                                    .accessibilityIdentifier("songCard_\(song.id)")
+                                    .trackContextMenu(song: song)
+                            } else {
+                                songGridPlaceholder
                             }
-                            .accessibilityIdentifier("songCard_\(song.id)")
-                            .trackContextMenu(song: song)
-                            .onAppear {
-                                if shouldLoadMore(at: index) {
-                                    pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
-                                    Task { await loadPages() }
-                                }
-                            }
-                    }
-
-                    if remainingPlaceholderCount > 0 {
-                        ForEach(0..<remainingPlaceholderCount, id: \.self) { placeholderIndex in
-                            songGridPlaceholder
-                                .onAppear { scheduleScrollLoad(placeholderIndex: placeholderIndex) }
                         }
+                        .onAppear { triggerLoadIfNeeded(at: index) }
                     }
                 }
                 .padding(16)
-
-                if isLoading {
-                    ProgressView().padding()
-                }
-
             }
         }
     }
@@ -596,39 +572,32 @@ struct SongsView: View {
     private func loadPages() async {
         guard hasMore, !isLoading else { return }
         isLoading = true
-        defer {
-            isLoading = false
-            if songs.count < pendingPageTarget, hasMore {
-                scrollLoadTask?.cancel()
-                scrollLoadTask = Task { await loadPages() }
-            }
-        }
-        while songs.count < pendingPageTarget, hasMore, !Task.isCancelled {
+        // Accumulate into local array to avoid multiple @State updates triggering re-renders
+        var accumulated = songs
+        var stillHasMore = hasMore
+        while accumulated.count < pendingPageTarget, stillHasMore, !Task.isCancelled {
             do {
                 let result = try await appState.subsonicClient.search(
                     query: "", artistCount: 0, albumCount: 0,
-                    songCount: pageSize, songOffset: songs.count
+                    songCount: pageSize, songOffset: accumulated.count
                 )
                 let newSongs = result.song ?? []
-                songs.append(contentsOf: newSongs)
-                hasMore = newSongs.count >= pageSize
+                accumulated.append(contentsOf: newSongs)
+                stillHasMore = newSongs.count >= pageSize
             } catch {
-                hasMore = false
+                stillHasMore = false
                 break
             }
         }
-        refreshTitleSongCount()
+        // Single state update instead of one per page
+        songs = accumulated
+        hasMore = stillHasMore
+        isLoading = false
         recomputeDisplayedSongs()
-    }
-
-    private func scheduleScrollLoad(placeholderIndex: Int) {
-        guard hasMore else { return }
-        pendingPageTarget = max(pendingPageTarget, songs.count + placeholderIndex + pageSize)
-        scrollLoadTask?.cancel()
-        scrollLoadTask = Task {
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
-            await loadPages()
+        refreshTitleSongCount()
+        if songs.count < pendingPageTarget, hasMore {
+            scrollLoadTask?.cancel()
+            scrollLoadTask = Task { await loadPages() }
         }
     }
 
@@ -678,16 +647,31 @@ struct SongsView: View {
         }
     }
 
-    private var remainingPlaceholderCount: Int {
-        guard hasMore, localFilteredSongs == nil, searchText.isEmpty else { return 0 }
-        guard let totalCount = appState.libraryCache.songs?.count else { return 0 }
-        return max(0, totalCount - songs.count)
+    private var totalItemCount: Int {
+        guard localFilteredSongs == nil, searchText.isEmpty else { return cachedDisplayedSongs.count }
+        guard hasMore, let totalCount = appState.libraryCache.songs?.count else { return cachedDisplayedSongs.count }
+        return max(songs.count, totalCount)
     }
 
-    private func shouldLoadMore(at index: Int) -> Bool {
-        guard localFilteredSongs == nil, searchText.isEmpty, hasMore, !isLoading else { return false }
-        let prefetchThreshold = max(cachedDisplayedSongs.count - 10, 0)
-        return index >= prefetchThreshold
+    private func triggerLoadIfNeeded(at index: Int) {
+        guard localFilteredSongs == nil, searchText.isEmpty, hasMore else { return }
+        if index >= songs.count {
+            // Scrolled into placeholder territory — always update target, debounce the load
+            pendingPageTarget = max(pendingPageTarget, songs.count + (index - songs.count) + pageSize)
+            scrollLoadTask?.cancel()
+            scrollLoadTask = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                await loadPages()
+            }
+        } else if !isLoading {
+            // Near end of loaded items — prefetch immediately
+            let prefetchThreshold = max(songs.count - 10, 0)
+            if index >= prefetchThreshold {
+                pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
+                Task { await loadPages() }
+            }
+        }
     }
 
     private func recomputeDisplayedSongs() {
