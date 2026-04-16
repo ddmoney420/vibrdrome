@@ -322,12 +322,16 @@ final class LibrarySyncManager {
     private func hasAlbumChanged(_ cached: CachedAlbum, _ server: Album) -> Bool {
         cached.name != server.name ||
         cached.artistName != server.artist ||
+        cached.artistId != server.artistId ||
         cached.year != server.year ||
         cached.genre != server.genre ||
         cached.songCount != server.songCount ||
         cached.duration != server.duration ||
         cached.isStarred != (server.starred != nil) ||
-        cached.coverArtId != server.coverArt
+        cached.coverArtId != server.coverArt ||
+        cached.created != server.created ||
+        cached.userRating != (server.userRating ?? 0) ||
+        cached.label != server.label
     }
 
     // MARK: - Artists

@@ -381,6 +381,7 @@ struct AlbumsView: View {
 
         do {
             let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
+            let selectedArtistNames = selectedArtistNames(for: filter)
             let allAlbums: [Album]
             if let cachedAlbums = appState.libraryCache.albums {
                 allAlbums = cachedAlbums
@@ -391,13 +392,27 @@ struct AlbumsView: View {
             }
 
             localFilteredAlbums = allAlbums.filter {
-                albumMatchesFilter($0, filter: filter, recentIds: recentlyPlayedAlbumIds)
+                albumMatchesFilter(
+                    $0,
+                    filter: filter,
+                    recentIds: recentlyPlayedAlbumIds,
+                    selectedArtistNames: selectedArtistNames
+                )
             }
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Albums")
                 .error("Failed to apply local filters: \(error)")
             localFilteredAlbums = nil
         }
+    }
+
+    private func selectedArtistNames(for filter: LibraryFilter) -> Set<String> {
+        guard !filter.selectedArtistIds.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<CachedArtist>()
+        let cachedArtists = (try? modelContext.fetch(descriptor)) ?? []
+        return Set(cachedArtists.compactMap { artist in
+            filter.selectedArtistIds.contains(artist.id) ? artist.name : nil
+        })
     }
 
     private func recentlyPlayedIds(for filter: LibraryFilter) -> Set<String>? {
@@ -411,13 +426,18 @@ struct AlbumsView: View {
     }
 
     private func albumMatchesFilter(
-        _ album: Album, filter: LibraryFilter, recentIds: Set<String>?
+        _ album: Album,
+        filter: LibraryFilter,
+        recentIds: Set<String>?,
+        selectedArtistNames: Set<String>
     ) -> Bool {
         guard filter.isFavorited.matches(album.starred != nil) else { return false }
         guard filter.isRated.matches((album.userRating ?? 0) != 0) else { return false }
         if let recentIds, !recentIds.contains(album.id) { return false }
         if !filter.selectedArtistIds.isEmpty {
-            guard let artistId = album.artistId, filter.selectedArtistIds.contains(artistId) else {
+            let matchesById = album.artistId.map { filter.selectedArtistIds.contains($0) } ?? false
+            let matchesByName = album.artist.map { selectedArtistNames.contains($0) } ?? false
+            guard matchesById || matchesByName else {
                 return false
             }
         }
