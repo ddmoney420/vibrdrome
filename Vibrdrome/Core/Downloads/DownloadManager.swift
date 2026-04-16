@@ -312,14 +312,26 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         Task { @MainActor in
             let modelContext = PersistenceController.shared.container.mainContext
             let descriptor = FetchDescriptor<DownloadedSong>()
-            guard let downloads = try? modelContext.fetch(descriptor) else { return }
 
-            for download in downloads {
-                let fileURL = Self.absoluteURL(for: download.localFilePath)
-                try? FileManager.default.removeItem(at: fileURL)
-                modelContext.delete(download)
+            do {
+                let downloads = try modelContext.fetch(descriptor)
+
+                // Delete files first (less likely to fail)
+                for download in downloads {
+                    let fileURL = Self.absoluteURL(for: download.localFilePath)
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+
+                // Then delete records in batches to avoid SwiftData pressure
+                for download in downloads {
+                    modelContext.delete(download)
+                }
+                try modelContext.save()
+            } catch {
+                downloadLog.error("Failed to delete downloads: \(error)")
+                // Try to save whatever deletions succeeded
+                try? modelContext.save()
             }
-            try? modelContext.save()
 
             try? FileManager.default.removeItem(at: Self.downloadsDirectory)
             DownloadProgress.shared.clear()

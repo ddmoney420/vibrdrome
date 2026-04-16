@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import NukeUI
 
@@ -9,6 +10,7 @@ struct LibraryView: View {
     @State private var randomAlbums: [Album] = []
     @State private var recentlyPlayedAlbums: [Album] = []
     @State private var starredSongs: [Song] = []
+    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?)] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
     @State private var isLoadingRandomAlbum = false
@@ -193,6 +195,10 @@ struct LibraryView: View {
                 albumSection("Recently Played", albums: recentlyPlayedAlbums) {
                     AlbumsView(listType: .recent, title: "Recently Played")
                 }
+            }
+        case .topArtists:
+            if !topArtistNames.isEmpty {
+                topArtistsCarousel
             }
         }
     }
@@ -650,6 +656,70 @@ struct LibraryView: View {
         if let result = try? await starred, var songs = result.song, !songs.isEmpty {
             songs.shuffle()
             starredSongs = Array(songs.prefix(15))
+        }
+
+        // Load top artists from local play history
+        loadTopArtists()
+    }
+
+    private func loadTopArtists() {
+        let context = PersistenceController.shared.container.mainContext
+        let descriptor = FetchDescriptor<PlayHistory>(
+            sortBy: [SortDescriptor(\.playedAt, order: .reverse)]
+        )
+        guard let plays = try? context.fetch(descriptor) else { return }
+        var counts: [String: Int] = [:]
+        var latestArt: [String: String] = [:]
+        for play in plays {
+            let artist = play.artistName ?? "Unknown"
+            counts[artist, default: 0] += 1
+            if latestArt[artist] == nil, let art = play.coverArtId {
+                latestArt[artist] = art
+            }
+        }
+        topArtistNames = counts.sorted { $0.value > $1.value }
+            .prefix(10)
+            .map { (name: $0.key, count: $0.value, coverArtId: latestArt[$0.key]) }
+    }
+
+    private var topArtistsCarousel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your Top Artists")
+                .font(.title3)
+                .bold()
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(topArtistNames, id: \.name) { artist in
+                        VStack(spacing: 6) {
+                            if let coverArtId = artist.coverArtId {
+                                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
+                            } else {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .frame(width: 80, height: 80)
+                                    .overlay {
+                                        Text(String(artist.name.prefix(1)).uppercased())
+                                            .font(.title)
+                                            .bold()
+                                            .foregroundStyle(.secondary)
+                                    }
+                            }
+
+                            Text(artist.name)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .frame(width: 80)
+
+                            Text("\(artist.count) plays")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
         }
     }
 }
