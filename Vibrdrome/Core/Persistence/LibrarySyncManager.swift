@@ -511,7 +511,7 @@ final class LibrarySyncManager {
         let details = try await withThrowingTaskGroup(of: Playlist.self, returning: [Playlist].self) { group in
             var results: [Playlist] = []
             var inflight = 0
-            let maxConcurrency = 5
+            let maxConcurrency = 2
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
