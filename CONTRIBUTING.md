@@ -24,25 +24,11 @@ The app uses a CarPlay audio entitlement (`com.apple.developer.carplay-audio`) w
 
 To build without CarPlay:
 
-1. Open `Vibrdrome/Vibrdrome.entitlements`
-2. Remove the `com.apple.developer.carplay-audio` key (keep the App Groups key)
-3. In Xcode, set your own Team under Signing & Capabilities
-4. Build and run -- everything except CarPlay will work
-
-Your entitlements file should look like:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>com.apple.security.application-groups</key>
-    <array>
-        <string>group.com.vibrdrome.app</string>
-    </array>
-</dict>
-</plist>
-```
+1. In `project.yml`, remove `CARPLAY_ENABLED` from the `SWIFT_ACTIVE_COMPILATION_CONDITIONS` line
+2. Open `Vibrdrome/Vibrdrome.entitlements` and remove the `com.apple.developer.carplay-audio` key
+3. Run `xcodegen generate` to regenerate the project
+4. In Xcode, set your own Team under Signing & Capabilities
+5. Build and run -- everything except CarPlay will work
 
 **Do not commit your signing changes.** Keep them local.
 
