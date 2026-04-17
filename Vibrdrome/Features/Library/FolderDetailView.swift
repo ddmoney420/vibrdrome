@@ -40,6 +40,10 @@ struct FolderDetailView: View {
                 contentList
             }
         }
+        .navigationDestination(for: String.self) { childId in
+            FolderDetailView(directoryId: childId)
+                .environment(appState)
+        }
         .navigationTitle(directory?.name ?? "Folder")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -75,10 +79,6 @@ struct FolderDetailView: View {
                     }
                 }
             }
-        }
-        .navigationDestination(for: String.self) { childId in
-            FolderDetailView(directoryId: childId)
-                .environment(appState)
         }
     }
 
