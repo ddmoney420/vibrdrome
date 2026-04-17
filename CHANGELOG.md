@@ -4,6 +4,19 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 45 -- April 17, 2026
+- Album Collections: save album filter presets to macOS/iPad sidebar
+- Genre filter in AlbumsView sort menu
+- 336 AI-generated genre icons (DALL-E 3) with SF Symbol fallback
+- Grid columns up to 10 on macOS (6 on iOS)
+- Auto-Suggest toggle in Settings > Player
+- navigationDestination fix (moved out of List container)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Album Collections in sidebar, 336 genre icons, genre filter on Albums,
+> grid columns up to 10, auto-suggest toggle, tech debt fix.
+
 ### Build 44 -- April 16, 2026
 - Queue overhaul: all tracks visible (passed-over tracks dimmed), tap plays without hiding others
 - Recently Played: records gapless auto-advance, filters brief skips (<30s or <30%)

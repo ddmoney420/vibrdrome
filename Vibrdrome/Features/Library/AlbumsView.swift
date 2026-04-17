@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import os.log
 
@@ -18,6 +19,11 @@ struct AlbumsView: View {
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.modelContext) private var modelContext
+    @State private var showSaveCollection = false
+    @State private var collectionName = ""
+    @State private var availableGenres: [String] = []
+    @State private var activeGenre: String?
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -41,7 +47,12 @@ struct AlbumsView: View {
     }
 
     private var effectiveListType: AlbumListType {
-        activeListType ?? listType
+        if activeGenre != nil && activeListType == nil { return .byGenre }
+        return activeListType ?? listType
+    }
+
+    private var effectiveGenre: String? {
+        activeGenre ?? genre
     }
 
     private var filteredAlbums: [Album] {
@@ -137,6 +148,40 @@ struct AlbumsView: View {
                         }
                     }
                     Divider()
+                    Menu {
+                        Button {
+                            activeGenre = nil
+                            albums = []
+                            hasMore = true
+                            Task { await loadAlbums() }
+                        } label: {
+                            HStack {
+                                Text("All Genres")
+                                if activeGenre == nil && genre == nil {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        Divider()
+                        ForEach(availableGenres, id: \.self) { g in
+                            Button {
+                                activeGenre = g
+                                albums = []
+                                hasMore = true
+                                Task { await loadAlbums() }
+                            } label: {
+                                HStack {
+                                    Text(g)
+                                    if effectiveGenre == g {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(effectiveGenre ?? "Genre", systemImage: "guitars")
+                    }
+                    Divider()
                     Button {
                         albums = []
                         hasMore = true
@@ -144,12 +189,43 @@ struct AlbumsView: View {
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    Divider()
+                    Button {
+                        let name = effectiveGenre ?? title
+                        collectionName = name
+                        showSaveCollection = true
+                    } label: {
+                        Label("Save as Collection", systemImage: "folder.badge.plus")
+                    }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
             }
         }
-        .task { await loadAlbums() }
+        .alert("Save Collection", isPresented: $showSaveCollection) {
+            TextField("Name", text: $collectionName)
+            Button("Save") {
+                let count = (try? modelContext.fetchCount(FetchDescriptor<AlbumCollection>())) ?? 0
+                let collection = AlbumCollection(
+                    name: collectionName,
+                    listType: effectiveListType,
+                    genre: effectiveGenre,
+                    fromYear: fromYear,
+                    toYear: toYear,
+                    order: count
+                )
+                modelContext.insert(collection)
+                try? modelContext.save()
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .task {
+            await loadAlbums()
+            if availableGenres.isEmpty {
+                availableGenres = (try? await appState.subsonicClient.getGenres()
+                    .map(\.value).sorted()) ?? []
+            }
+        }
         .refreshable {
             albums = []
             hasMore = true
@@ -186,7 +262,7 @@ struct AlbumsView: View {
     // MARK: - Grid view
 
     private var gridItems: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 16), count: max(2, min(4, gridColumns)))
+        Array(repeating: GridItem(.flexible(), spacing: 16), count: max(2, min(10, gridColumns)))
     }
 
     private var albumGrid: some View {
@@ -291,7 +367,7 @@ struct AlbumsView: View {
         let sortType = effectiveListType
         let endpoint = SubsonicEndpoint.getAlbumList2(
             type: sortType, size: pageSize, offset: 0,
-            fromYear: fromYear, toYear: toYear, genre: genre)
+            fromYear: fromYear, toYear: toYear, genre: effectiveGenre)
         // Show cached first page instantly
         if albums.isEmpty,
            let cached = await client.cachedResponse(for: endpoint, ttl: 600) {
@@ -302,7 +378,7 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await client.getAlbumList(
-                type: sortType, size: pageSize, offset: 0, genre: genre,
+                type: sortType, size: pageSize, offset: 0, genre: effectiveGenre,
                 fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
@@ -319,7 +395,7 @@ struct AlbumsView: View {
         defer { isLoading = false }
         do {
             let result = try await appState.subsonicClient.getAlbumList(
-                type: effectiveListType, size: pageSize, offset: albums.count, genre: genre,
+                type: effectiveListType, size: pageSize, offset: albums.count, genre: effectiveGenre,
                 fromYear: fromYear, toYear: toYear)
             albums.append(contentsOf: result)
             hasMore = result.count >= pageSize
