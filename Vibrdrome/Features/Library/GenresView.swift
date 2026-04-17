@@ -127,11 +127,9 @@ struct GenresView: View {
                 AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
             } label: {
                 HStack(spacing: 12) {
-                    AlbumArtView(
-                        coverArtId: genreArt[genre.value],
-                        size: 48,
-                        cornerRadius: 8
-                    )
+                    GenreIconView(genre: genre.value)
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(genre.value)
@@ -153,7 +151,7 @@ struct GenresView: View {
     private var genreGrid: some View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                     count: max(2, min(4, gridColumns))), spacing: 20) {
+                                     count: max(2, min(10, gridColumns))), spacing: 20) {
                 ForEach(filteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
@@ -170,15 +168,10 @@ struct GenresView: View {
 
     private func genreCard(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            GeometryReader { geo in
-                AlbumArtView(
-                    coverArtId: genreArt[genre.value],
-                    size: geo.size.width,
-                    cornerRadius: 10
-                )
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GenreIconView(genre: genre.value)
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(genre.value)
                 .font(.subheadline)

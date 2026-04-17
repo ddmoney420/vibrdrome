@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 import os.log
 
@@ -13,6 +14,9 @@ struct SidebarContentView: View {
     #endif
     @State private var detailPath = NavigationPath()
     @State private var randomActionInFlight = false
+    @State private var selectedCollectionId: String?
+    @Query(sort: \AlbumCollection.order) private var collections: [AlbumCollection]
+    @Environment(\.modelContext) private var modelContext
 
     #if os(macOS)
     private var sidePanelWidth: CGFloat {
@@ -24,11 +28,22 @@ struct SidebarContentView: View {
     }
     #endif
 
-    private var selection: Binding<SidebarItem?> {
+    private var selection: Binding<String?> {
         Binding(
-            get: { SidebarItem(rawValue: selectionRaw) },
-            set: { selectionRaw = $0?.rawValue ?? SidebarItem.artists.rawValue }
+            get: { selectionRaw },
+            set: {
+                selectionRaw = $0 ?? SidebarItem.artists.rawValue
+                if let val = $0, val.hasPrefix("collection:") {
+                    selectedCollectionId = String(val.dropFirst("collection:".count))
+                } else {
+                    selectedCollectionId = nil
+                }
+            }
         )
+    }
+
+    private var selectedSidebarItem: SidebarItem? {
+        SidebarItem(rawValue: selectionRaw)
     }
 
     private var engine: AudioEngine { AudioEngine.shared }
@@ -55,21 +70,21 @@ struct SidebarContentView: View {
             List(selection: selection) {
                 Section("Library") {
                     Label("Artists", systemImage: "music.mic")
-                        .tag(SidebarItem.artists)
+                        .tag(SidebarItem.artists.rawValue)
                     Label("Albums", systemImage: "square.stack")
-                        .tag(SidebarItem.albums)
+                        .tag(SidebarItem.albums.rawValue)
                     Label("Songs", systemImage: "music.note")
-                        .tag(SidebarItem.songs)
+                        .tag(SidebarItem.songs.rawValue)
                     Label("Genres", systemImage: "guitars")
-                        .tag(SidebarItem.genres)
+                        .tag(SidebarItem.genres.rawValue)
                     Label("Favorites", systemImage: "heart.fill")
-                        .tag(SidebarItem.favorites)
+                        .tag(SidebarItem.favorites.rawValue)
                     Label("Recently Added", systemImage: "clock")
-                        .tag(SidebarItem.recentlyAdded)
+                        .tag(SidebarItem.recentlyAdded.rawValue)
                     Label("Most Played", systemImage: "star")
-                        .tag(SidebarItem.mostPlayed)
+                        .tag(SidebarItem.mostPlayed.rawValue)
                     Label("Recently Played", systemImage: "play.circle")
-                        .tag(SidebarItem.recentlyPlayed)
+                        .tag(SidebarItem.recentlyPlayed.rawValue)
 
                     Button {
                         Task { await playRandomAlbum() }
@@ -90,25 +105,45 @@ struct SidebarContentView: View {
                     .accessibilityIdentifier("randomMixButton")
 
                     Label("Bookmarks", systemImage: "bookmark")
-                        .tag(SidebarItem.bookmarks)
+                        .tag(SidebarItem.bookmarks.rawValue)
                     Label("Folders", systemImage: "folder")
-                        .tag(SidebarItem.folders)
+                        .tag(SidebarItem.folders.rawValue)
                     Label("Downloads", systemImage: "arrow.down.circle")
-                        .tag(SidebarItem.downloads)
+                        .tag(SidebarItem.downloads.rawValue)
                 }
+                if !collections.isEmpty {
+                    Section("Collections") {
+                        ForEach(collections) { collection in
+                            Label(collection.name, systemImage: "line.3.horizontal.decrease.circle")
+                                .tag("collection:\(collection.id)")
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        modelContext.delete(collection)
+                                        try? modelContext.save()
+                                        if selectedCollectionId == collection.id {
+                                            selectedCollectionId = nil
+                                        }
+                                    } label: {
+                                        Label("Delete Collection", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                }
+
                 Section {
                     Label("Search", systemImage: "magnifyingglass")
-                        .tag(SidebarItem.search)
+                        .tag(SidebarItem.search.rawValue)
                     Label("Playlists", systemImage: "music.note.list")
-                        .tag(SidebarItem.playlists)
+                        .tag(SidebarItem.playlists.rawValue)
                     Label("Stations", systemImage: "antenna.radiowaves.left.and.right")
-                        .tag(SidebarItem.radio)
+                        .tag(SidebarItem.radio.rawValue)
                     #if os(macOS)
                     Label("Now Playing", systemImage: "play.circle")
-                        .tag(SidebarItem.nowPlaying)
+                        .tag(SidebarItem.nowPlaying.rawValue)
                     #endif
                     Label("Settings", systemImage: "gear")
-                        .tag(SidebarItem.settings)
+                        .tag(SidebarItem.settings.rawValue)
                 }
             }
             #if os(iOS)
@@ -182,7 +217,7 @@ struct SidebarContentView: View {
         VStack(spacing: 0) {
             splitView
             if (engine.currentSong != nil || engine.currentRadioStation != nil)
-                && selection.wrappedValue != .nowPlaying {
+                && selectedSidebarItem != .nowPlaying {
                 Divider()
                 MacMiniPlayerView()
             }
@@ -199,7 +234,23 @@ struct SidebarContentView: View {
 
     @ViewBuilder
     private var detailView: some View {
-        switch selection.wrappedValue {
+        if let collectionId = selectedCollectionId,
+           let collection = collections.first(where: { $0.id == collectionId }) {
+            AlbumsView(
+                listType: collection.albumListType,
+                title: collection.name,
+                genre: collection.genre,
+                fromYear: collection.fromYear,
+                toYear: collection.toYear
+            )
+        } else {
+            staticDetailView
+        }
+    }
+
+    @ViewBuilder
+    private var staticDetailView: some View {
+        switch selectedSidebarItem {
         case .artists:
             ArtistsView()
         case .albums:

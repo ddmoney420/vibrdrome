@@ -404,7 +404,7 @@ struct SongsView: View {
                 }
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: max(2, min(4, gridColumns))), spacing: 20) {
+                                         count: max(2, min(10, gridColumns))), spacing: 20) {
                     ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
                             .contentShape(Rectangle())

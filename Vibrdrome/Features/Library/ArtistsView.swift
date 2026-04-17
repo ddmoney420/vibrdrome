@@ -199,7 +199,7 @@ struct ArtistsView: View {
                 ForEach(filteredIndexes, id: \.id) { index in
                     Section {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                                 count: max(2, min(4, gridColumns))), spacing: 20) {
+                                                 count: max(2, min(10, gridColumns))), spacing: 20) {
                             ForEach(index.artists) { artist in
                                 NavigationLink {
                                     ArtistDetailView(artistId: artist.id)

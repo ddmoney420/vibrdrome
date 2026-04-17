@@ -247,7 +247,7 @@ struct RadioView: View {
 
     private var stationGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                 count: max(2, min(4, gridColumns))), spacing: 16) {
+                                 count: max(2, min(10, gridColumns))), spacing: 16) {
             ForEach(Array(filteredStations.enumerated()), id: \.element.id) { index, station in
                 stationCardView(station, colorIndex: index)
             }
