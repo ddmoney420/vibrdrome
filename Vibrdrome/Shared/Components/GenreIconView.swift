@@ -218,13 +218,33 @@ struct GenreIconView: View {
                                .init(red: 0.2, green: 0.2, blue: 0.3)])
     }
 
+    private var assetName: String {
+        "genre_" + genre.replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "-", with: "_")
+    }
+
+    private var hasAsset: Bool {
+        #if os(iOS)
+        UIImage(named: assetName) != nil
+        #else
+        NSImage(named: assetName) != nil
+        #endif
+    }
+
     var body: some View {
-        let s = style
-        ZStack {
-            LinearGradient(colors: s.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: s.icon)
-                .font(.system(size: 30, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
+        if hasAsset {
+            Image(assetName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        } else {
+            let s = style
+            ZStack {
+                LinearGradient(colors: s.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: s.icon)
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
         }
     }
 }
