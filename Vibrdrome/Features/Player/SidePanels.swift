@@ -55,11 +55,11 @@ struct QueuePanelView: View {
                     }
                 }
 
-                let upNext = engine.upNext
-                if !upNext.isEmpty {
-                    Section("Up Next — \(upNext.count) songs") {
-                        ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
-                            upNextRow(song, index: index)
+                let entries = engine.queueEntries
+                if !entries.isEmpty {
+                    Section("Queue -- \(entries.count) songs") {
+                        ForEach(Array(entries.enumerated()), id: \.element.song.id) { _, entry in
+                            queueRow(entry)
                         }
                     }
                 }
@@ -112,21 +112,21 @@ struct QueuePanelView: View {
         }
     }
 
-    private func upNextRow(_ song: Song, index: Int) -> some View {
+    private func queueRow(_ entry: (index: Int, song: Song)) -> some View {
         HStack(spacing: 12) {
-            AlbumArtView(coverArtId: song.coverArt, size: 40)
+            AlbumArtView(coverArtId: entry.song.coverArt, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Button {
-                    appState.pendingNavigation = .song(id: song.id)
+                    appState.pendingNavigation = .song(id: entry.song.id)
                 } label: {
-                    Text(song.title)
+                    Text(entry.song.title)
                         .font(.body)
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                if let artist = song.artist {
+                if let artist = entry.song.artist {
                     Button {
-                        if let artistId = song.artistId {
+                        if let artistId = entry.song.artistId {
                             appState.pendingNavigation = .artist(id: artistId)
                         }
                     } label: {
@@ -136,31 +136,30 @@ struct QueuePanelView: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
-                    .disabled(song.artistId == nil)
+                    .disabled(entry.song.artistId == nil)
                 }
             }
             Spacer()
-            if let duration = song.duration {
+            if let duration = entry.song.duration {
                 Text(formatDuration(duration))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
             }
         }
+        .opacity(entry.index < engine.currentIndex ? 0.5 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
-            let absoluteIndex = engine.currentIndex + 1 + index
-            engine.play(song: song, from: engine.queue, at: absoluteIndex)
+            engine.skipToIndex(entry.index)
         }
         .contextMenu {
             Button {
-                let absoluteIndex = engine.currentIndex + 1 + index
-                engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                engine.skipToIndex(entry.index)
             } label: {
                 Label("Play Now", systemImage: "play.fill")
             }
             Button(role: .destructive) {
-                engine.removeFromQueue(at: index)
+                engine.removeFromQueue(atAbsolute: entry.index)
             } label: {
                 Label("Remove from Queue", systemImage: "minus.circle")
             }

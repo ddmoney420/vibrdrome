@@ -170,12 +170,14 @@ struct GenresView: View {
 
     private func genreCard(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            AlbumArtView(
-                coverArtId: genreArt[genre.value],
-                size: Theme.albumCardSize,
-                cornerRadius: 10
-            )
-            .frame(maxWidth: .infinity)
+            GeometryReader { geo in
+                AlbumArtView(
+                    coverArtId: genreArt[genre.value],
+                    size: geo.size.width,
+                    cornerRadius: 10
+                )
+            }
+            .aspectRatio(1, contentMode: .fit)
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(genre.value)

@@ -31,13 +31,12 @@ extension AudioEngine {
             return
         }
 
-        submitScrobbleIfNeeded()
+        // Ensure audio session is active (may have been deactivated since app launch)
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
 
-        // Record outgoing song in play history (only if it actually played)
-        if let outgoing = currentSong, outgoing.id != song.id {
-            playHistory.append(outgoing)
-            if playHistory.count > 50 { playHistory.removeFirst() }
-        }
+        submitScrobbleIfNeeded()
 
         // Clear history when loading a brand new queue
         if newQueue != nil {
@@ -458,6 +457,8 @@ extension AudioEngine {
 
     func handleTrackEnd() {
         SleepTimer.shared.trackDidEnd()
+        // Record the outgoing song (it reached its end)
+        if let current = currentSong { recordSongAsPlayed(current) }
         if !isPlaying { return }
 
         switch repeatMode {
@@ -502,12 +503,8 @@ extension AudioEngine {
 
     func handleAutoAdvance() {
         submitScrobbleIfNeeded()
-
-        // Record outgoing song in play history
-        if let outgoing = currentSong {
-            playHistory.append(outgoing)
-            if playHistory.count > 50 { playHistory.removeFirst() }
-        }
+        // Explicitly record the outgoing song (it fully played to completion)
+        if let current = currentSong { recordSongAsPlayed(current) }
 
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
             playbackLog.warning("Auto-advance but no valid lookahead index")
@@ -549,11 +546,20 @@ extension AudioEngine {
     /// Unlike play(song:from:at:), this preserves the full queue intact.
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
-        // Record outgoing song in play history
-        if let outgoing = currentSong {
-            playHistory.append(outgoing)
-            if playHistory.count > 50 { playHistory.removeFirst() }
+        if isUITesting {
+            currentIndex = index
+            currentSong = queue[index]
+            return
         }
+
+        submitScrobbleIfNeeded()
+
+        if isCrossfading {
+            incrementGeneration()
+            crossfadeController.forceComplete()
+            isCrossfading = false
+        }
+
         let song = queue[index]
         currentIndex = index
         currentSong = song
@@ -565,10 +571,20 @@ extension AudioEngine {
         duration = 0
 
         let url = resolveURL(for: song)
-        replacePlayerItem(with: url)
-        activePlayer?.play()
-        isPlaying = true
+        currentReplayGainFactor = computeReplayGainFactor(for: song)
 
+        switch activeMode {
+        case .gapless:
+            replacePlayerItem(with: url)
+            applyEffectiveVolume()
+            gaplessPlayer?.rate = playbackRate
+            prepareLookahead()
+        case .crossfade:
+            startCrossfadePlayback(url: url)
+            applyEffectiveVolume()
+        }
+
+        isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
     }

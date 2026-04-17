@@ -461,9 +461,11 @@ struct SongsView: View {
 
     private func songCard(_ song: Song) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: song.coverArt, size: 160, cornerRadius: 10)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                AlbumArtView(coverArtId: song.coverArt, size: geo.size.width, cornerRadius: 10)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Button {
                 appState.pendingNavigation = .song(id: song.id)

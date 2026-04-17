@@ -88,82 +88,51 @@ struct QueueView: View {
                     }
                 }
 
-                // Up next
-                let upNext = engine.upNext
-                if !upNext.isEmpty {
-                    let totalSeconds = upNext.compactMap(\.duration).reduce(0, +)
-                    Section("Up Next — \(upNext.count) songs · \(formatDuration(totalSeconds))") {
-                        ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
+                // Queue (all tracks except currently playing)
+                let entries = engine.queueEntries
+                if !entries.isEmpty {
+                    let totalSeconds = entries.compactMap(\.song.duration).reduce(0, +)
+                    Section("Queue -- \(entries.count) songs -- \(formatDuration(totalSeconds))") {
+                        ForEach(Array(entries.enumerated()), id: \.element.song.id) { _, entry in
                             HStack(spacing: 12) {
-                                AlbumArtView(coverArtId: song.coverArt, size: 40)
+                                AlbumArtView(coverArtId: entry.song.coverArt, size: 40)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Button {
-                                        appState.pendingNavigation = .song(id: song.id)
-                                        dismiss()
-                                    } label: {
-                                        Text(song.title)
-                                            .font(.body)
-                                            .lineLimit(1)
-                                    }
-                                    .buttonStyle(.plain)
+                                    Text(entry.song.title)
+                                        .font(.body)
+                                        .lineLimit(1)
 
-                                    if let artist = song.artist {
-                                        Button {
-                                            if let artistId = song.artistId {
-                                                appState.pendingNavigation = .artist(id: artistId)
-                                                dismiss()
-                                            }
-                                        } label: {
-                                            Text(artist)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(song.artistId == nil)
+                                    if let artist = entry.song.artist {
+                                        Text(artist)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
                                     }
                                 }
 
                                 Spacer()
 
-                                if let duration = song.duration {
+                                if let duration = entry.song.duration {
                                     Text(formatDuration(duration))
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
                                         .monospacedDigit()
                                 }
                             }
+                            .opacity(entry.index < engine.currentIndex ? 0.5 : 1.0)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 #if os(iOS)
                                 Haptics.light()
                                 #endif
-                                let absoluteIndex = engine.currentIndex + 1 + index
-                                engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                                engine.skipToIndex(entry.index)
                             }
-                            .contextMenu {
-                                Button {
-                                    let absoluteIndex = engine.currentIndex + 1 + index
-                                    engine.play(song: song, from: engine.queue, at: absoluteIndex)
-                                } label: {
-                                    Label("Play Now", systemImage: "play.fill")
-                                }
-                                Button {
-                                    engine.addToQueueNext(song)
-                                } label: {
-                                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    engine.removeFromQueue(at: index)
-                                } label: {
-                                    Label("Remove from Queue", systemImage: "minus.circle")
-                                }
+                            .trackContextMenu(song: entry.song) {
+                                engine.removeFromQueue(atAbsolute: entry.index)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    engine.removeFromQueue(at: index)
+                                    engine.removeFromQueue(atAbsolute: entry.index)
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }

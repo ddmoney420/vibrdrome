@@ -215,9 +215,11 @@ struct AlbumsView: View {
 
     private func albumGridCard(_ album: Album) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            AlbumArtView(coverArtId: album.coverArt, size: Theme.albumCardSize, cornerRadius: 10)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                AlbumArtView(coverArtId: album.coverArt, size: geo.size.width, cornerRadius: 10)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(album.name)
                 .font(.subheadline)
