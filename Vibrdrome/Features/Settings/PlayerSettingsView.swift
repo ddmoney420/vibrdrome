@@ -27,6 +27,7 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
+    @AppStorage(UserDefaultsKeys.autoSuggestEnabled) private var autoSuggestEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
     @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
@@ -147,6 +148,12 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("gaplessPlaybackToggle")
+
+            Toggle(isOn: $autoSuggestEnabled) {
+                Label("Auto-Suggest", systemImage: "sparkles")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("autoSuggestToggle")
 
             Picker(selection: $crossfadeDuration) {
                 Text("Off").tag(0)

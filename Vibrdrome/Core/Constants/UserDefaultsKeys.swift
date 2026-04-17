@@ -18,6 +18,7 @@ enum UserDefaultsKeys {
     static let crossfadeCurve = "crossfadeCurve"
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
+    static let autoSuggestEnabled = "autoSuggestEnabled"
 
     // MARK: - Equalizer
 

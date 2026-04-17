@@ -72,6 +72,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Settings gear opens Quick Settings sheet
 - [ ] Quick Settings: sleep timer, speed, crossfade, download, share all work
 - [ ] Sleep timer: no volume pop on expire (smooth volume fade to silence)
+- [ ] Landscape layout: art left, controls right (iPhone and iPad)
 - [ ] EQ sheet opens from toolbar
 - [ ] Lyrics sheet opens (synced lyrics auto-scroll and tap-to-seek)
 - [ ] Lyrics with negative offset don't break sync
@@ -93,14 +94,18 @@ Run through this checklist before every TestFlight build. Each item should be ve
 
 ## Queue
 
-- [ ] Tap to jump to track
+- [ ] Tap to jump to track (plays audio, all other tracks remain visible)
+- [ ] Passed-over tracks shown dimmed (50% opacity)
+- [ ] After tapped track finishes, next track plays
 - [ ] Swipe left to remove
 - [ ] Drag to reorder
-- [ ] Long-press context menu works
+- [ ] Long-press context menu: full track menu with Remove from Queue
 - [ ] Save as Playlist from menu
-- [ ] Total duration shows in "Up Next" header
-- [ ] Recently Played section shows previous songs (dimmed)
+- [ ] Total duration shows in "Queue" header
+- [ ] Recently Played section shows songs that actually played
+- [ ] Brief skips (<30s) do not appear in Recently Played
 - [ ] Smart shuffle avoids consecutive same-artist tracks
+- [ ] Auto-Suggest toggle: when off, playback stops at end of queue
 
 ## Swipe Actions
 

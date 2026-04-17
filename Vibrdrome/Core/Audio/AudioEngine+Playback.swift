@@ -422,10 +422,13 @@ extension AudioEngine {
                 currentIndex = queue.count - 1
                 refillRadioIfNeeded()
                 return false
+            } else if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoSuggestEnabled) {
+                currentIndex = queue.count - 1
+                autoSuggestMore()
+                return false
             } else {
                 currentIndex = queue.count - 1
-                // Auto-continue with similar songs instead of stopping
-                autoSuggestMore()
+                pause()
                 return false
             }
         }

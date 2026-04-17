@@ -4,7 +4,24 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
-### Build 43 — April 15, 2026
+### Build 44 -- April 16, 2026
+- Queue overhaul: all tracks visible (passed-over tracks dimmed), tap plays without hiding others
+- Recently Played: records gapless auto-advance, filters brief skips (<30s or <30%)
+- Now Playing landscape layout (art left, controls right, auto-rotates)
+- Grid art scales to column count (3/4 columns no longer overlap)
+- Queue context menu: full track menu with Remove from Queue
+- Album detail: opaque row background for context menu preview
+- Watch album art: arrives with metadata (no stale art on track change)
+- Auto-Suggest toggle in Settings > Player (on by default)
+- Cold-start audio session fix (first play after fresh launch)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Queue fixed: tap plays without hiding tracks, all tracks stay visible.
+> Landscape Now Playing layout. Grid columns scale properly. Watch art
+> refreshes on track change. Auto-Suggest toggle added.
+
+### Build 43 -- April 15, 2026
 - Lossless badge in Now Playing for FLAC/ALAC/WAV/AIFF (toggleable in Settings > Player)
 - Your Top Artists carousel on Home with album art from play history
 - Search tab auto-focuses keyboard on open
