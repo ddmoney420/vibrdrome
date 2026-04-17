@@ -228,11 +228,16 @@ struct ArtistsView: View {
 
     private func artistGridCard(_ artist: Artist) -> some View {
         VStack(spacing: 8) {
-            AlbumArtView(
-                coverArtId: artist.coverArt,
-                size: Theme.artistBubbleSize,
-                cornerRadius: Theme.artistBubbleSize / 2
-            )
+            GeometryReader { geo in
+                let artSize = min(geo.size.width, geo.size.height)
+                AlbumArtView(
+                    coverArtId: artist.coverArt,
+                    size: artSize,
+                    cornerRadius: artSize / 2
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .aspectRatio(1, contentMode: .fit)
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(artist.name)

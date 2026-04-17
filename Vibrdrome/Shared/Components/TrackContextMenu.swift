@@ -5,6 +5,7 @@ struct TrackContextMenuModifier: ViewModifier {
     let song: Song
     var queue: [Song]?
     var index: Int?
+    var onRemove: (() -> Void)?
 
     @Environment(AppState.self) private var appState
     @State private var showAddToPlaylist = false
@@ -27,6 +28,14 @@ struct TrackContextMenuModifier: ViewModifier {
         jukeboxActions
         Divider()
         navigationActions
+        if let onRemove {
+            Divider()
+            Button(role: .destructive) {
+                onRemove()
+            } label: {
+                Label("Remove from Queue", systemImage: "minus.circle")
+            }
+        }
     }
 
     @ViewBuilder
@@ -158,5 +167,12 @@ struct TrackContextMenuModifier: ViewModifier {
 extension View {
     func trackContextMenu(song: Song, queue: [Song]? = nil, index: Int? = nil) -> some View {
         modifier(TrackContextMenuModifier(song: song, queue: queue, index: index))
+    }
+
+    func trackContextMenu(
+        song: Song, queue: [Song]? = nil, index: Int? = nil,
+        onRemove: @escaping () -> Void
+    ) -> some View {
+        modifier(TrackContextMenuModifier(song: song, queue: queue, index: index, onRemove: onRemove))
     }
 }

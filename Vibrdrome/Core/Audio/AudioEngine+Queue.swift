@@ -9,14 +9,18 @@ extension AudioEngine {
         return Array(queue[(currentIndex + 1)...])
     }
 
-    /// Songs played before the current track (most recent first, max 20).
-    /// Uses actual play history if available, falls back to queue position.
+    /// Songs actually played before the current track (most recent first, max 20).
     var recentlyPlayed: [Song] {
-        if !playHistory.isEmpty {
-            return Array(playHistory.reversed().prefix(20))
-        }
-        guard currentIndex > 0 else { return [] }
-        return Array(queue[0..<currentIndex].reversed().prefix(20))
+        Array(playHistory.reversed().prefix(20))
+    }
+
+    /// All queue tracks except the currently playing one, with absolute queue indices.
+    /// Used by QueueView and SidePanels for full-queue display.
+    var queueEntries: [(index: Int, song: Song)] {
+        guard !queue.isEmpty else { return [] }
+        return queue.enumerated()
+            .filter { $0.offset != currentIndex }
+            .map { (index: $0.offset, song: $0.element) }
     }
 
     func addToQueue(_ song: Song) {
@@ -42,18 +46,38 @@ extension AudioEngine {
         if activeMode == .gapless { prepareLookahead() }
     }
 
-    func removeFromQueue(at index: Int) {
-        let absoluteIndex = currentIndex + 1 + index
-        guard absoluteIndex > currentIndex, absoluteIndex < queue.count else { return }
-        queue.remove(at: absoluteIndex)
-        if index == 0 && activeMode == .gapless { prepareLookahead() }
+    /// Remove a track from the queue by its absolute queue index.
+    func removeFromQueue(atAbsolute index: Int) {
+        guard index >= 0, index < queue.count, index != currentIndex else { return }
+        queue.remove(at: index)
+        if index < currentIndex { currentIndex -= 1 }
+        if activeMode == .gapless { prepareLookahead() }
     }
 
+    /// Reorder tracks within the queue display (all tracks except currently playing).
+    /// Source/destination are relative to `queueEntries` (the all-except-current array).
     func moveInQueue(from source: IndexSet, to destination: Int) {
-        guard currentIndex + 1 < queue.count else { return }
-        var upNextSlice = Array(queue[(currentIndex + 1)...])
-        upNextSlice.move(fromOffsets: source, toOffset: destination)
-        queue.replaceSubrange((currentIndex + 1)..., with: upNextSlice)
+        guard queue.count > 1 else { return }
+        let savedSong = queue[currentIndex]
+        let afterCurrentId: String? = currentIndex + 1 < queue.count
+            ? queue[currentIndex + 1].id : nil
+
+        var items = Array(queue)
+        items.remove(at: currentIndex)
+        items.move(fromOffsets: source, toOffset: destination)
+
+        // Reinsert current song right before the track that was originally after it
+        let insertAt: Int
+        if let afterId = afterCurrentId,
+           let pos = items.firstIndex(where: { $0.id == afterId }) {
+            insertAt = pos
+        } else {
+            insertAt = items.count
+        }
+        items.insert(savedSong, at: insertAt)
+
+        queue = items
+        currentIndex = insertAt
         if activeMode == .gapless { prepareLookahead() }
     }
 

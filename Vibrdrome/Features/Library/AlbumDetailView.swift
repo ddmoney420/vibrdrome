@@ -50,36 +50,7 @@ struct AlbumDetailView: View {
                                 .background(.ultraThinMaterial)
                             }
 
-                            HStack(spacing: 0) {
-                                if isSelecting {
-                                    Button {
-                                        toggleSelection(song.id)
-                                    } label: {
-                                        Image(systemName: selectedSongs.contains(song.id)
-                                              ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(selectedSongs.contains(song.id)
-                                                             ? Color.accentColor : .secondary)
-                                            .font(.title3)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.leading, 16)
-                                    .padding(.trailing, 4)
-                                }
-
-                                TrackRow(song: song, showTrackNumber: true)
-                                    .padding(.horizontal, isSelecting ? 8 : 16)
-                                    .padding(.vertical, 8)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if isSelecting {
-                                            toggleSelection(song.id)
-                                        } else {
-                                            AudioEngine.shared.play(song: song, from: songs, at: index)
-                                        }
-                                    }
-                                    .accessibilityIdentifier("trackRow_\(index)")
-                                    .trackContextMenu(song: song, queue: songs, index: index)
-                            }
+                            trackRowContainer(song: song, songs: songs, index: index)
                             Divider()
                                 .padding(.leading, isSelecting ? 72 : 56)
                         }
@@ -469,6 +440,46 @@ struct AlbumDetailView: View {
         .disabled(album.song?.isEmpty ?? true)
         .accessibilityLabel("More Options")
         .accessibilityIdentifier("albumMoreButton")
+    }
+
+    @ViewBuilder
+    private func trackRowContainer(song: Song, songs: [Song], index: Int) -> some View {
+        #if os(iOS)
+        let bg = Color(.systemBackground)
+        #else
+        let bg = Color(.windowBackgroundColor)
+        #endif
+        HStack(spacing: 0) {
+            if isSelecting {
+                Button {
+                    toggleSelection(song.id)
+                } label: {
+                    Image(systemName: selectedSongs.contains(song.id)
+                          ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selectedSongs.contains(song.id)
+                                         ? Color.accentColor : .secondary)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 16)
+                .padding(.trailing, 4)
+            }
+
+            TrackRow(song: song, showTrackNumber: true)
+                .padding(.horizontal, isSelecting ? 8 : 16)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isSelecting {
+                        toggleSelection(song.id)
+                    } else {
+                        AudioEngine.shared.play(song: song, from: songs, at: index)
+                    }
+                }
+                .accessibilityIdentifier("trackRow_\(index)")
+                .trackContextMenu(song: song, queue: songs, index: index)
+        }
+        .background(bg)
     }
 
     @ViewBuilder

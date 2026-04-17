@@ -236,47 +236,19 @@ struct NowPlayingView: View {
         }
         #else
         GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
             let controlsNeeded: CGFloat = 460
             let maxArtFromWidth = geo.size.width - 60
             let maxArtFromHeight = geo.size.height - controlsNeeded
             let artSize = max(100, min(maxArtFromWidth, maxArtFromHeight))
 
-            VStack(spacing: 0) {
-                dismissHandle
-
-                Spacer(minLength: 4)
-
-                albumArt(size: artSize)
-
-                Spacer(minLength: 8)
-
-                iOSSongInfo
-                    .padding(.bottom, 10)
-
-                heartRow
-                    .padding(.bottom, 12)
-
-                progressSlider
-                    .padding(.bottom, 4)
-
-                if showAudioQualityInfo {
-                    streamingInfo
-                        .padding(.bottom, 16)
+            Group {
+                if isLandscape {
+                    iOSLandscapeLayout(geo: geo)
+                } else {
+                    iOSPortraitLayout(artSize: artSize, geo: geo)
                 }
-
-                iOSPlaybackRow
-                    .padding(.bottom, 16)
-
-                if showVolumeSlider {
-                    volumeSlider
-                        .padding(.bottom, 14)
-                }
-
-                bottomToolbar
-
-                Spacer(minLength: 6)
             }
-            .padding(.horizontal, 28)
             .frame(width: geo.size.width, height: geo.size.height)
             .background {
                 ZStack {
@@ -298,6 +270,83 @@ struct NowPlayingView: View {
         }
         #endif
     }
+
+    // MARK: - iOS Portrait Layout
+
+    #if os(iOS)
+    private func iOSPortraitLayout(artSize: CGFloat, geo: GeometryProxy) -> some View {
+        VStack(spacing: 0) {
+            dismissHandle
+
+            Spacer(minLength: 4)
+
+            albumArt(size: artSize)
+
+            Spacer(minLength: 8)
+
+            iOSSongInfo
+                .padding(.bottom, 10)
+
+            heartRow
+                .padding(.bottom, 12)
+
+            progressSlider
+                .padding(.bottom, 4)
+
+            if showAudioQualityInfo {
+                streamingInfo
+                    .padding(.bottom, 16)
+            }
+
+            iOSPlaybackRow
+                .padding(.bottom, 16)
+
+            if showVolumeSlider {
+                volumeSlider
+                    .padding(.bottom, 14)
+            }
+
+            bottomToolbar
+
+            Spacer(minLength: 6)
+        }
+        .padding(.horizontal, 28)
+    }
+
+    // MARK: - iOS Landscape Layout
+
+    private func iOSLandscapeLayout(geo: GeometryProxy) -> some View {
+        let artSize = min(geo.size.height - 40, geo.size.width * 0.4)
+
+        return HStack(spacing: 20) {
+            // Left: album art
+            VStack {
+                Spacer(minLength: 4)
+                albumArt(size: artSize)
+                Spacer(minLength: 4)
+            }
+
+            // Right: controls
+            VStack(spacing: 0) {
+                Spacer(minLength: 4)
+
+                iOSSongInfo
+                    .padding(.bottom, 8)
+
+                progressSlider
+                    .padding(.bottom, 4)
+
+                iOSPlaybackRow
+                    .padding(.bottom, 8)
+
+                bottomToolbar
+
+                Spacer(minLength: 4)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    #endif
 
     // MARK: - Image Loading
 

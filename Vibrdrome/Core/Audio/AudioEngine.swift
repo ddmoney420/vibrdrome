@@ -29,7 +29,13 @@ final class AudioEngine {
     // MARK: - State
 
     var isPlaying = false
-    var currentSong: Song?
+    var currentSong: Song? {
+        didSet {
+            if let old = oldValue, old.id != currentSong?.id {
+                recordSongIfPlayed(old)
+            }
+        }
+    }
     var currentRadioStation: InternetRadioStation?
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
@@ -152,6 +158,30 @@ final class AudioEngine {
     func resetScrobbleState() { scrobbleSubmitted = false; trackStartTime = Date() }
     func markScrobbleSubmitted() { scrobbleSubmitted = true; lastScrobbleTime = Date() }
     var hasLookahead: Bool { lookaheadItem != nil }
+
+    // MARK: - Play History Helpers
+
+    /// Record a song only if it was listened to meaningfully (>30s or >30% of duration).
+    /// Used by the currentSong didSet for manual skips/taps.
+    func recordSongIfPlayed(_ song: Song) {
+        let dominated = duration > 0 ? currentTime > duration * 0.3 : currentTime > 30
+        guard dominated || currentTime > 30 else { return }
+        guard playHistory.last?.id != song.id else { return }
+        var updated = playHistory
+        updated.append(song)
+        if updated.count > 50 { updated.removeFirst() }
+        playHistory = updated
+    }
+
+    /// Force-record a song in play history (track played to completion).
+    /// Used by handleAutoAdvance/handleTrackEnd where we know it fully played.
+    func recordSongAsPlayed(_ song: Song) {
+        guard playHistory.last?.id != song.id else { return }
+        var updated = playHistory
+        updated.append(song)
+        if updated.count > 50 { updated.removeFirst() }
+        playHistory = updated
+    }
 
     // Observer accessor methods for extensions
     func removeCurrentTimeObserver() {
