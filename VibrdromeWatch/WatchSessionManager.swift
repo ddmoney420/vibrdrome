@@ -124,6 +124,12 @@ final class WatchSessionManager: NSObject, ObservableObject {
     // MARK: - Apply Updates
 
     private func applySnapshot(_ snapshot: NowPlayingSnapshot) {
+        // Clear stale artwork when song changes (new art arrives async)
+        if let newTitle = snapshot.title, newTitle != self.title {
+            if snapshot.coverArtData == nil {
+                self.coverArtData = nil
+            }
+        }
         if let title = snapshot.title { self.title = title }
         if let artist = snapshot.artist { self.artist = artist }
         if let album = snapshot.album { self.album = album }

@@ -1,9 +1,12 @@
 import Foundation
 import MediaPlayer
 import WidgetKit
+import os.log
 #if os(macOS)
 import AppKit
 #endif
+
+private let npLog = Logger(subsystem: "com.vibrdrome.app", category: "NowPlaying")
 
 // Free function outside @MainActor class so the closure doesn't inherit MainActor isolation.
 // MPMediaItemArtwork calls its requestHandler on an internal background queue (*/accessQueue),
@@ -72,30 +75,39 @@ final class NowPlayingManager {
         }
         #endif
 
-        // Load cover art asynchronously
-        if let coverArtId = song.coverArt {
-            let songId = song.id
-            let url = AppState.shared.subsonicClient.coverArtURL(id: coverArtId, size: 600)
-            Task {
-                do {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    // Verify we're still on the same song before applying artwork
-                    guard AudioEngine.shared.currentSong?.id == songId else { return }
-                    #if os(iOS)
-                    guard let image = UIImage(data: data) else { return }
-                    #else
-                    guard let image = NSImage(data: data) else { return }
-                    #endif
-                    let artwork = makeArtwork(from: image)
-                    self.currentInfo[MPMediaItemPropertyArtwork] = artwork
-                    self.infoCenter.nowPlayingInfo = self.currentInfo
-                    #if os(iOS)
-                    self.sendArtworkToWatch(image: image, song: song)
-                    #endif
-                } catch {
-                    // Cover art loading failed, not critical
-                }
+        Task { await loadAndApplyArtwork(for: song) }
+    }
+
+    private func loadAndApplyArtwork(for song: Song) async {
+        guard let coverArtId = song.coverArt else {
+            npLog.warning("No coverArt ID for \(song.title)")
+            return
+        }
+        let songId = song.id
+        let url = AppState.shared.subsonicClient.coverArtURL(id: coverArtId, size: 600)
+        npLog.info("Loading cover art for \(song.title) (id: \(songId))")
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard AudioEngine.shared.currentSong?.id == songId else {
+                npLog.warning("Song changed during art load, skipping (was: \(songId))")
+                return
             }
+            #if os(iOS)
+            guard let image = UIImage(data: data) else {
+                npLog.error("Failed to create UIImage from \(data.count) bytes")
+                return
+            }
+            #else
+            guard let image = NSImage(data: data) else { return }
+            #endif
+            currentInfo[MPMediaItemPropertyArtwork] = makeArtwork(from: image)
+            infoCenter.nowPlayingInfo = currentInfo
+            #if os(iOS)
+            npLog.info("Sending artwork to watch (\(Int(image.size.width))x\(Int(image.size.height)))")
+            sendArtworkToWatch(image: image, song: song)
+            #endif
+        } catch {
+            npLog.error("Cover art load failed: \(error)")
         }
     }
 
@@ -155,8 +167,15 @@ final class NowPlayingManager {
 
     #if os(iOS)
     private func sendArtworkToWatch(image: UIImage, song: Song) {
-        guard let small = image.preparingThumbnail(of: CGSize(width: 120, height: 120)),
-              let jpegData = small.jpegData(compressionQuality: 0.6) else { return }
+        guard let small = image.preparingThumbnail(of: CGSize(width: 120, height: 120)) else {
+            npLog.error("Failed to create 120x120 thumbnail")
+            return
+        }
+        guard let jpegData = small.jpegData(compressionQuality: 0.6) else {
+            npLog.error("Failed to create JPEG from thumbnail")
+            return
+        }
+        npLog.info("Watch art ready: \(jpegData.count) bytes")
         WatchSessionManager.shared.sendNowPlayingUpdate(
             title: song.title,
             artist: song.artist ?? "Unknown Artist",
