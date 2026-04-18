@@ -5,6 +5,7 @@ struct PlaylistDetailView: View {
     let playlistId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var playlist: Playlist?
     @State private var isLoading = true
     @State private var error: String?
@@ -303,14 +304,53 @@ struct PlaylistDetailView: View {
     }
 
     private func loadPlaylist() async {
-        isLoading = true
+        // Show cached playlist data instantly while fetching fresh
+        if playlist == nil {
+            playlist = loadCachedPlaylist()
+        }
+        isLoading = playlist == nil
         error = nil
         defer { isLoading = false }
         do {
             playlist = try await appState.subsonicClient.getPlaylist(id: playlistId)
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            if playlist == nil {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
         }
+    }
+
+    private func loadCachedPlaylist() -> Playlist? {
+        let pid = playlistId
+        var descriptor = FetchDescriptor<CachedPlaylist>(
+            predicate: #Predicate { $0.id == pid }
+        )
+        descriptor.fetchLimit = 1
+        guard let cached = try? modelContext.fetch(descriptor).first else { return nil }
+
+        // Resolve entries to songs via CachedSong
+        let sortedEntries = cached.entries.sorted { $0.order < $1.order }
+        let songs: [Song] = sortedEntries.compactMap { entry in
+            let sid = entry.songId
+            var songDesc = FetchDescriptor<CachedSong>(
+                predicate: #Predicate { $0.id == sid }
+            )
+            songDesc.fetchLimit = 1
+            return try? modelContext.fetch(songDesc).first?.toSong()
+        }
+
+        return Playlist(
+            id: cached.id,
+            name: cached.name,
+            songCount: cached.songCount,
+            duration: cached.duration,
+            created: nil,
+            changed: nil,
+            coverArt: cached.coverArtId,
+            owner: cached.owner,
+            isPublic: cached.isPublic,
+            entry: songs.isEmpty ? nil : songs
+        )
     }
 
     private func toggleSelection(_ songId: String) {

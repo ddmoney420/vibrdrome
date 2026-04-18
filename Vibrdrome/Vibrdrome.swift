@@ -118,6 +118,22 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
@@ -134,6 +150,25 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    BackgroundSyncScheduler.shared.registerTasks()
+                    BackgroundSyncScheduler.shared.scheduleRefresh()
+                    BackgroundSyncScheduler.shared.scheduleFullSync()
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)

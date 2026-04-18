@@ -17,4 +17,15 @@ final class CachedArtist {
         self.albumCount = artist.albumCount
         self.isStarred = artist.starred != nil
     }
+
+    func toArtist() -> Artist {
+        Artist(
+            id: id,
+            name: name,
+            coverArt: coverArtId,
+            albumCount: albumCount,
+            starred: isStarred ? "true" : nil,
+            album: nil
+        )
+    }
 }
