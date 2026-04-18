@@ -509,27 +509,29 @@ final class LibrarySyncManager {
         let allLocal = try context.fetch(FetchDescriptor<CachedPlaylist>())
         let localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
 
-        // Fetch playlist details with bounded concurrency
-        let details = try await withThrowingTaskGroup(of: Playlist.self, returning: [Playlist].self) { group in
+        // Fetch playlist details with bounded concurrency (tolerates individual failures e.g. deleted playlists)
+        let details = await withTaskGroup(of: Playlist?.self, returning: [Playlist].self) { group in
             var results: [Playlist] = []
             var inflight = 0
             let maxConcurrency = 2
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
-                    if let detail = try await group.next() {
+                    if let detail = await group.next() ?? nil {
                         results.append(detail)
                     }
                     inflight -= 1
                 }
                 group.addTask {
-                    try await client.getPlaylist(id: playlist.id)
+                    try? await client.getPlaylist(id: playlist.id)
                 }
                 inflight += 1
             }
 
-            for try await detail in group {
-                results.append(detail)
+            for await detail in group {
+                if let detail {
+                    results.append(detail)
+                }
             }
             return results
         }
