@@ -30,7 +30,7 @@ struct TrackRow: View {
                     .frame(width: 28, alignment: .trailing)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(song.title)
                     .font(.body)
                     .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
@@ -38,21 +38,12 @@ struct TrackRow: View {
 
                 HStack(spacing: 4) {
                     if let artist = song.artist {
-                        Button {
-                            if let artistId = song.artistId {
-                                appState.pendingNavigation = .artist(id: artistId)
-                            }
-                        } label: {
-                            if let albumArtist = song.albumArtist,
-                               albumArtist != artist {
-                                Text("\(artist) (\(albumArtist))")
-                            } else {
-                                Text(artist)
-                            }
+                        if let albumArtist = song.albumArtist,
+                           albumArtist != artist {
+                            Text("\(artist) (\(albumArtist))")
+                        } else {
+                            Text(artist)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(song.artistId == nil)
-                        .accessibilityIdentifier("trackArtistButton_\(song.id)")
                     }
                     if let duration = song.duration {
                         Text("·")

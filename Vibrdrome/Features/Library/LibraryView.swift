@@ -152,7 +152,7 @@ struct LibraryView: View {
                 SongDetailView(songId: item.id)
             }
             .navigationDestination(for: GenreNavItem.self) { item in
-                AlbumsView(listType: .byGenre, title: item.name, genre: item.name)
+                AlbumsView(listType: .byGenre, title: item.name.cleanedGenreDisplay, genre: item.name)
             }
             .navigationDestination(for: PlaylistNavItem.self) { item in
                 PlaylistDetailView(playlistId: item.id)

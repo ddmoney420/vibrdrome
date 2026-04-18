@@ -13,19 +13,10 @@ struct AlbumCard: View {
                     .font(.body)
                     .lineLimit(1)
                 if let artist = album.artist {
-                    Button {
-                        if let artistId = album.artistId {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        }
-                    } label: {
-                        Text(artist)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(album.artistId == nil)
-                    .accessibilityIdentifier("albumCardArtistButton_\(album.id)")
+                    Text(artist)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 HStack(spacing: 4) {
                     if let year = album.year {

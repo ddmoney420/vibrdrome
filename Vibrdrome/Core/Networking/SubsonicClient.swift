@@ -87,6 +87,11 @@ final class SubsonicClient {
             throw SubsonicError.invalidURL
         }
         components.queryItems = auth.authParameters() + endpoint.queryItems
+        // URLComponents leaves ';' unencoded (it's a sub-delimiter per RFC 3986), but
+        // some servers parse ';' as an alternative query-parameter separator and reject
+        // the request. Force-encode it so genre values like "Hip Hop; Pop" work.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: ";", with: "%3B")
 
         guard let url = components.url else {
             throw SubsonicError.invalidURL
@@ -168,6 +173,8 @@ final class SubsonicClient {
             resolvingAgainstBaseURL: false
         ) else { return baseURL }
         components.queryItems = auth.authParameters() + extra
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: ";", with: "%3B")
         return components.url ?? baseURL
     }
 

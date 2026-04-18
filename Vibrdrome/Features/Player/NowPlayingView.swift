@@ -554,7 +554,7 @@ struct NowPlayingView: View {
                         appState.pendingNavigation = .genre(name: genre)
                         appState.showNowPlaying = false
                     } label: {
-                        badgeText(genre)
+                        badgeText(genre.cleanedGenreDisplay)
                     }
                     .buttonStyle(.plain)
                 }

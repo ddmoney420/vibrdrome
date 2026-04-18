@@ -179,7 +179,7 @@ struct SongDetailView: View {
                 metadataCell("Year", value: "\(year)")
             }
             if let genre = song.genre {
-                metadataCell("Genre", value: genre)
+                metadataCell("Genre", value: genre.cleanedGenreDisplay)
             }
             if let duration = song.duration {
                 metadataCell("Duration", value: formatDuration(duration))
