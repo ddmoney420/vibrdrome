@@ -58,10 +58,6 @@ struct SearchView: View {
             searchIsActive = false
             DispatchQueue.main.async { searchIsActive = true }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToSearch)) { _ in
-            searchIsActive = false
-            DispatchQueue.main.async { searchIsActive = true }
-        }
         .onSubmit(of: .search) {
             saveRecentSearch(query)
         }

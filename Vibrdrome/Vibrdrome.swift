@@ -42,8 +42,7 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
 
         // Intercept CMD+F before AppKit's responder chain (performFindPanelAction:) claims it
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.modifierFlags.contains(.command),
-                  event.modifierFlags.isDisjoint(with: [.shift, .option, .control]),
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
                   event.charactersIgnoringModifiers == "f" else {
                 return event
             }
