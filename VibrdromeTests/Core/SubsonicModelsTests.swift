@@ -142,6 +142,15 @@ struct SubsonicModelsTests {
         #expect(album.song?.count == 2)
         #expect(album.song?[0].title == "Airbag")
         #expect(album.song?[1].title == "Paranoid Android")
+        #expect(album.userRating == nil)
+    }
+
+    @Test func albumWithUserRating() throws {
+        let json = """
+        {"id":"al-r","name":"Rated Album","userRating":4}
+        """.data(using: .utf8)!
+        let album = try JSONDecoder().decode(Album.self, from: json)
+        #expect(album.userRating == 4)
     }
 
     @Test func albumWithSongArrayOmitted() throws {

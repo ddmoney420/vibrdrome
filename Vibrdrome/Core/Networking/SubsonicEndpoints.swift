@@ -51,7 +51,7 @@ enum SubsonicEndpoint: Sendable {
     case getSimilarSongs2(id: String, count: Int = 50)
     case getTopSongs(artist: String, count: Int = 50)
     case getMusicFolders
-    case getIndexes(musicFolderId: String? = nil)
+    case getIndexes(musicFolderId: String? = nil, ifModifiedSince: Int? = nil)
     case getMusicDirectory(id: String)
     case jukeboxControl(action: String, index: Int? = nil, offset: Int? = nil,
                         ids: [String]? = nil, gain: Float? = nil)
@@ -285,9 +285,10 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "count", value: "\(count)")
             ]
 
-        case .getIndexes(let musicFolderId):
+        case .getIndexes(let musicFolderId, let ifModifiedSince):
             var items: [URLQueryItem] = []
             if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
+            if let ifModifiedSince { items.append(URLQueryItem(name: "ifModifiedSince", value: "\(ifModifiedSince)")) }
             return items
 
         case .getMusicDirectory(let id):

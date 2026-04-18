@@ -58,6 +58,12 @@ final class AppState {
         case queue, lyrics, artistInfo
     }
     var activeSidePanel: SidePanel?
+
+    /// Library sync manager.
+    let librarySyncManager = LibrarySyncManager.shared
+
+    /// Pre-computed model arrays so library tabs are instant on first tap.
+    let libraryCache = LibraryDataCache()
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?
@@ -115,6 +121,8 @@ final class AppState {
         #if os(iOS)
         SubsonicClientProvider.shared.client = subsonicClient
         #endif
+        LibrarySyncManager.shared.client = subsonicClient
+        LibrarySyncManager.shared.container = PersistenceController.shared.container
     }
 
     func loadSavedCredentials() {
