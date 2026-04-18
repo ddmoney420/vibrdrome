@@ -16,7 +16,21 @@ xcodegen generate
 open Vibrdrome.xcodeproj
 ```
 
-After `xcodegen generate`, restore entitlements (see CLAUDE.md for the required values).
+After `xcodegen generate`, you'll need to configure signing (see below).
+
+### Signing & CarPlay Entitlement
+
+The app uses a CarPlay audio entitlement (`com.apple.developer.carplay-audio`) which requires Apple's explicit approval tied to a paid developer account. **Most contributors won't have this.**
+
+To build without CarPlay:
+
+1. In `project.yml`, remove `CARPLAY_ENABLED` from the `SWIFT_ACTIVE_COMPILATION_CONDITIONS` line
+2. Open `Vibrdrome/Vibrdrome.entitlements` and remove the `com.apple.developer.carplay-audio` key
+3. Run `xcodegen generate` to regenerate the project
+4. In Xcode, set your own Team under Signing & Capabilities
+5. Build and run -- everything except CarPlay will work
+
+**Do not commit your signing changes.** Keep them local.
 
 ### Requirements
 

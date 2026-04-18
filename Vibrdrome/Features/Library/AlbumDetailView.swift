@@ -312,7 +312,7 @@ struct AlbumDetailView: View {
             }
             if let genre = album.genre {
                 Text("·")
-                Text(genre)
+                Text(genre.cleanedGenreDisplay)
             }
             if let count = album.songCount {
                 Text("·")

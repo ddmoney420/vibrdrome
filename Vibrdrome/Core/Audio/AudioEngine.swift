@@ -152,6 +152,11 @@ final class AudioEngine {
     var lastScrobbleTime: Date?
     var generation: Int = 0
 
+    /// Debounce token for rapid play() calls. Spam-tapping different tracks or
+    /// play/pause would otherwise swap AVPlayer items faster than the audio
+    /// session can re-prime, producing audible glitches.
+    var playbackSwapTask: Task<Void, Never>?
+
     func incrementGeneration() { generation += 1 }
     var generationValue: Int { generation }
     var isScrobbleSubmitted: Bool { scrobbleSubmitted }

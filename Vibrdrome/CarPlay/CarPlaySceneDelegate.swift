@@ -1,4 +1,4 @@
-#if os(iOS)
+#if os(iOS) && CARPLAY_ENABLED
 import CarPlay
 
 @MainActor

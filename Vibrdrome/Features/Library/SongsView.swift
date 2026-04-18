@@ -156,7 +156,7 @@ struct SongsView: View {
                                 filterGenre = genre
                             } label: {
                                 HStack {
-                                    Text(genre)
+                                    Text(genre.cleanedGenreDisplay)
                                     if filterGenre == genre { Image(systemName: "checkmark") }
                                 }
                             }
@@ -281,44 +281,23 @@ struct SongsView: View {
 
     @ViewBuilder
     private func songRowTitleBlock(_ song: Song) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Button {
-                appState.pendingNavigation = .song(id: song.id)
-            } label: {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(song.title)
+                .font(.body)
+                .lineLimit(1)
 
             HStack(spacing: 4) {
                 if let artist = song.artist {
-                    Button {
-                        if let artistId = song.artistId {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        }
-                    } label: {
-                        Text(artist)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(song.artistId == nil)
+                    Text(artist)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 if let album = song.album {
-                    Button {
-                        if let albumId = song.albumId {
-                            appState.pendingNavigation = .album(id: albumId)
-                        }
-                    } label: {
-                        Text("· \(album)")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(song.albumId == nil)
+                    Text("· \(album)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
         }
@@ -467,30 +446,17 @@ struct SongsView: View {
             .aspectRatio(1, contentMode: .fit)
             .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
-            Button {
-                appState.pendingNavigation = .song(id: song.id)
-            } label: {
-                Text(song.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+            Text(song.title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
 
             if let artist = song.artist {
-                Button {
-                    if let artistId = song.artistId {
-                        appState.pendingNavigation = .artist(id: artistId)
-                    }
-                } label: {
-                    Text(artist)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .disabled(song.artistId == nil)
+                Text(artist)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
     }

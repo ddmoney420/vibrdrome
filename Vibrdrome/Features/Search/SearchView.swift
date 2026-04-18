@@ -238,39 +238,18 @@ struct SearchView: View {
 
     @ViewBuilder
     private func songRowTitleBlock(_ song: Song) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Button {
-                appState.pendingNavigation = .song(id: song.id)
-            } label: {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(song.title)
+                .font(.body)
+                .lineLimit(1)
 
             HStack(spacing: 4) {
                 if let artist = song.artist {
-                    Button {
-                        if let artistId = song.artistId {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        }
-                    } label: {
-                        Text(artist)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(song.artistId == nil)
+                    Text(artist)
                 }
                 if let album = song.album {
                     Text("·")
-                    Button {
-                        if let albumId = song.albumId {
-                            appState.pendingNavigation = .album(id: albumId)
-                        }
-                    } label: {
-                        Text(album)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(song.albumId == nil)
+                    Text(album)
                 }
             }
             .font(.caption)

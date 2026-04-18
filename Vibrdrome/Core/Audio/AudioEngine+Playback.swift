@@ -80,20 +80,11 @@ extension AudioEngine {
         let url = resolveURL(for: song)
         currentReplayGainFactor = computeReplayGainFactor(for: song)
 
-        switch activeMode {
-        case .gapless:
-            replacePlayerItem(with: url)
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            prepareLookahead()
-        case .crossfade:
-            startCrossfadePlayback(url: url)
-            applyEffectiveVolume()
-        }
-
         isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
+
+        scheduleDebouncedPlayerSwap(url: url, mode: activeMode)
     }
 
     /// UI testing path for play — updates observable state without AVPlayer
@@ -576,20 +567,32 @@ extension AudioEngine {
         let url = resolveURL(for: song)
         currentReplayGainFactor = computeReplayGainFactor(for: song)
 
-        switch activeMode {
-        case .gapless:
-            replacePlayerItem(with: url)
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            prepareLookahead()
-        case .crossfade:
-            startCrossfadePlayback(url: url)
-            applyEffectiveVolume()
-        }
-
         isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
+
+        scheduleDebouncedPlayerSwap(url: url, mode: activeMode)
+    }
+
+    /// Coalesce rapid play()/skipToIndex() calls. UI state updates immediately,
+    /// but the AVPlayer item swap is delayed briefly so spam-tapping collapses
+    /// into a single replacement rather than churning the audio session.
+    func scheduleDebouncedPlayerSwap(url: URL, mode: PlaybackMode) {
+        playbackSwapTask?.cancel()
+        playbackSwapTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled, let self else { return }
+            switch mode {
+            case .gapless:
+                self.replacePlayerItem(with: url)
+                self.applyEffectiveVolume()
+                self.gaplessPlayer?.rate = self.playbackRate
+                self.prepareLookahead()
+            case .crossfade:
+                self.startCrossfadePlayback(url: url)
+                self.applyEffectiveVolume()
+            }
+        }
     }
 
     /// Auto-suggest similar songs when the queue runs out

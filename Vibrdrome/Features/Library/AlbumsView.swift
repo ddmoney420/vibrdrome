@@ -24,6 +24,8 @@ struct AlbumsView: View {
     @State private var collectionName = ""
     @State private var availableGenres: [String] = []
     @State private var activeGenre: String?
+    @State private var searchResults: [Album] = []
+    @State private var searchTask: Task<Void, Never>?
     private let pageSize = 40
 
     enum AlbumSortOption: String, CaseIterable {
@@ -56,14 +58,14 @@ struct AlbumsView: View {
     }
 
     private var filteredAlbums: [Album] {
-        var result = albums
-        if !searchText.isEmpty {
+        // When searching, use server results (search3 searches the entire library,
+        // not just the paginated pages already loaded client-side).
+        var result = searchText.isEmpty ? albums : searchResults
+        if !searchText.isEmpty, let activeGenre = effectiveGenre {
             result = result.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+                $0.genre?.caseInsensitiveCompare(activeGenre) == .orderedSame
             }
         }
-        // Client-side sort for year (API doesn't support sort by year without range)
         if clientSideSort == .year {
             result.sort { ($0.year ?? 0) > ($1.year ?? 0) }
         }
@@ -87,6 +89,22 @@ struct AlbumsView: View {
         #else
         .searchable(text: $searchText, prompt: "Search in Albums")
         #endif
+        .onChange(of: searchText) { _, newValue in
+            searchTask?.cancel()
+            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+            guard trimmed.count >= 2 else {
+                searchResults = []
+                return
+            }
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                let results = try? await appState.subsonicClient.search(
+                    query: trimmed, artistCount: 0, albumCount: 50, songCount: 0)
+                guard !Task.isCancelled else { return }
+                searchResults = results?.album ?? []
+            }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -171,7 +189,7 @@ struct AlbumsView: View {
                                 Task { await loadAlbums() }
                             } label: {
                                 HStack {
-                                    Text(g)
+                                    Text(g.cleanedGenreDisplay)
                                     if effectiveGenre == g {
                                         Image(systemName: "checkmark")
                                     }
@@ -179,7 +197,7 @@ struct AlbumsView: View {
                             }
                         }
                     } label: {
-                        Label(effectiveGenre ?? "Genre", systemImage: "guitars")
+                        Label(effectiveGenre?.cleanedGenreDisplay ?? "Genre", systemImage: "guitars")
                     }
                     Divider()
                     Button {
@@ -191,7 +209,7 @@ struct AlbumsView: View {
                     }
                     Divider()
                     Button {
-                        let name = effectiveGenre ?? title
+                        let name = effectiveGenre?.cleanedGenreDisplay ?? title
                         collectionName = name
                         showSaveCollection = true
                     } label: {

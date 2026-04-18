@@ -124,7 +124,7 @@ struct GenresView: View {
     private var genreList: some View {
         List(filteredGenres) { genre in
             NavigationLink {
-                AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
+                AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
             } label: {
                 HStack(spacing: 12) {
                     GenreIconView(genre: genre.value)
@@ -132,7 +132,7 @@ struct GenresView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(genre.value)
+                        Text(genre.value.cleanedGenreDisplay)
                             .font(.body)
                         Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
                             .font(.caption)
@@ -154,7 +154,7 @@ struct GenresView: View {
                                      count: max(2, min(10, gridColumns))), spacing: 20) {
                 ForEach(filteredGenres) { genre in
                     NavigationLink {
-                        AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
+                        AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
                     } label: {
                         genreCard(genre)
                     }
@@ -173,7 +173,7 @@ struct GenresView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
-            Text(genre.value)
+            Text(genre.value.cleanedGenreDisplay)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundColor(.primary)
