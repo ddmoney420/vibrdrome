@@ -24,6 +24,7 @@ struct TrackContextMenuModifier: ViewModifier, Equatable {
             .contextMenu {
                 TrackContextMenuContent(
                     song: song, queue: queue, index: index,
+                    onRemove: onRemove,
                     showAddToPlaylist: $showAddToPlaylist
                 )
             }
@@ -51,6 +52,7 @@ private struct TrackContextMenuContent: View {
     let song: Song
     var queue: [Song]?
     var index: Int?
+    var onRemove: (() -> Void)?
     @Binding var showAddToPlaylist: Bool
 
     @Environment(AppState.self) private var appState
