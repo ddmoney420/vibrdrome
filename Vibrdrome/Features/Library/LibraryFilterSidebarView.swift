@@ -193,9 +193,11 @@ struct LibraryFilterSidebarView: View {
             case .album:
                 Toggle("", isOn: $state.albumFilter.isRecentlyPlayed)
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    .accessibilityLabel("Is recently played")
             case .song:
                 Toggle("", isOn: $state.songFilter.isRecentlyPlayed)
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    .accessibilityLabel("Is recently played")
             case .artist:
                 EmptyView()
             }
@@ -294,9 +296,11 @@ struct LibraryFilterSidebarView: View {
                 case .album:
                     TextField("e.g. 2024", value: $state.albumFilter.year, format: .number)
                         .textFieldStyle(.roundedBorder).font(.caption)
+                        .accessibilityLabel("Filter by year")
                 case .song:
                     TextField("e.g. 2024", value: $state.songFilter.year, format: .number)
                         .textFieldStyle(.roundedBorder).font(.caption)
+                        .accessibilityLabel("Filter by year")
                 case .artist:
                     EmptyView()
                 }
@@ -308,6 +312,7 @@ struct LibraryFilterSidebarView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear year filter")
                 }
             }
         }
@@ -382,6 +387,9 @@ struct StringFilterList: View {
                     }
                     .buttonStyle(.plain)
                     .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .accessibilityLabel(item)
+                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
         }

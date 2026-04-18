@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import SwiftData
 import os.log
 
 struct AlbumsView: View {
@@ -22,7 +21,6 @@ struct AlbumsView: View {
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
     @AppStorage("albumsViewStyle") private var showAsList = false
-    @Environment(\.modelContext) private var modelContext
     @State private var showSaveCollection = false
     @State private var collectionName = ""
     @State private var availableGenres: [String] = []
