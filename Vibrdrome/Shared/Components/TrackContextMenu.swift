@@ -1,26 +1,44 @@
 import SwiftUI
 import os.log
 
-struct TrackContextMenuModifier: ViewModifier {
+struct TrackContextMenuModifier: ViewModifier, Equatable {
     let song: Song
     var queue: [Song]?
     var index: Int?
     var onRemove: (() -> Void)?
 
-    @Environment(AppState.self) private var appState
     @State private var showAddToPlaylist = false
+
+    nonisolated static func == (lhs: TrackContextMenuModifier, rhs: TrackContextMenuModifier) -> Bool {
+        lhs.song == rhs.song && lhs.index == rhs.index
+    }
 
     func body(content: Content) -> some View {
         content
-            .contextMenu { contextMenuItems }
+            .contextMenu {
+                TrackContextMenuContent(
+                    song: song, queue: queue, index: index,
+                    onRemove: onRemove,
+                    showAddToPlaylist: $showAddToPlaylist
+                )
+            }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistView(songIds: [song.id])
-                    .environment(appState)
             }
     }
+}
 
-    @ViewBuilder
-    private var contextMenuItems: some View {
+/// Lazy inner view — `@Environment(AppState.self)` is only resolved when the context menu opens.
+private struct TrackContextMenuContent: View {
+    let song: Song
+    var queue: [Song]?
+    var index: Int?
+    var onRemove: (() -> Void)?
+    @Binding var showAddToPlaylist: Bool
+
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
         playbackActions
         Divider()
         libraryActions

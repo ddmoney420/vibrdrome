@@ -14,6 +14,11 @@ final class SubsonicClient {
     private static let maxRetries = 3
     private static let retryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000] // 1s, 2s, 4s
 
+    /// Internal marker for HTTP 429 so retry delay can honor Retry-After when present.
+    private struct RateLimitError: Error {
+        let retryAfterNanoseconds: UInt64?
+    }
+
     var isConnected: Bool = false
 
     init(baseURL: URL, username: String, password: String) {
@@ -33,6 +38,9 @@ final class SubsonicClient {
     // MARK: - Retry Logic
 
     private func isRetryable(_ error: Error) -> Bool {
+        if error is RateLimitError {
+            return true
+        }
         if let urlError = error as? URLError {
             switch urlError.code {
             case .timedOut, .networkConnectionLost, .notConnectedToInternet,
@@ -45,7 +53,7 @@ final class SubsonicClient {
         if let subsonicError = error as? SubsonicError {
             switch subsonicError {
             case .httpError(let code):
-                return code >= 500 // Only retry server errors, not 4xx
+                return code == 429 || code >= 500
             default:
                 return false
             }
@@ -53,30 +61,68 @@ final class SubsonicClient {
         return false
     }
 
+    private func retryDelayNanoseconds(for error: Error, attempt: Int) -> UInt64? {
+        guard isRetryable(error) else { return nil }
+
+        if let rateLimitError = error as? RateLimitError,
+           let retryAfter = rateLimitError.retryAfterNanoseconds {
+            return retryAfter
+        }
+
+        return Self.retryDelays[min(attempt, Self.retryDelays.count - 1)]
+    }
+
+    private func parseRetryAfterNanoseconds(from response: HTTPURLResponse) -> UInt64? {
+        guard let header = response.value(forHTTPHeaderField: "Retry-After")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !header.isEmpty else {
+            return nil
+        }
+
+        if let seconds = TimeInterval(header), seconds > 0 {
+            return UInt64(seconds * 1_000_000_000)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
+
+        guard let retryDate = formatter.date(from: header) else { return nil }
+        let seconds = max(0, retryDate.timeIntervalSinceNow)
+        guard seconds > 0 else { return nil }
+        return UInt64(seconds * 1_000_000_000)
+    }
+
     // MARK: - Core Request
 
     private func request(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
-        var lastError: Error?
-
         for attempt in 0...Self.maxRetries {
-            if attempt > 0 {
-                let delay = Self.retryDelays[min(attempt - 1, Self.retryDelays.count - 1)]
-                networkLog.info("Retry \(attempt)/\(Self.maxRetries) for \(endpoint.path) after \(delay / 1_000_000_000)s")
-                try await Task.sleep(nanoseconds: delay)
-            }
-
             do {
                 return try await performRequest(endpoint)
             } catch {
-                lastError = error
-                if !isRetryable(error) {
+                if attempt == Self.maxRetries {
+                    if error is RateLimitError {
+                        throw SubsonicError.httpError(429)
+                    }
                     throw error
                 }
-                networkLog.warning("Transient error on \(endpoint.path): \(error.localizedDescription)")
+
+                guard let delay = retryDelayNanoseconds(for: error, attempt: attempt) else {
+                    throw error
+                }
+
+                if error is RateLimitError {
+                    networkLog.warning("Rate limited on \(endpoint.path); retry \(attempt + 1)/\(Self.maxRetries) after \(delay / 1_000_000_000)s")
+                } else {
+                    networkLog.warning("Transient error on \(endpoint.path): \(error.localizedDescription)")
+                    networkLog.info("Retry \(attempt + 1)/\(Self.maxRetries) for \(endpoint.path) after \(delay / 1_000_000_000)s")
+                }
+
+                try await Task.sleep(nanoseconds: delay)
             }
         }
 
-        throw lastError!
+        throw SubsonicError.httpError(500)
     }
 
     private func performRequest(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
@@ -97,6 +143,9 @@ final class SubsonicClient {
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 429, let httpResponse = response as? HTTPURLResponse {
+                throw RateLimitError(retryAfterNanoseconds: parseRetryAfterNanoseconds(from: httpResponse))
+            }
             if statusCode == 401, !AppState.shared.requiresReAuth {
                 networkLog.warning("401 Unauthorized — triggering re-authentication prompt")
                 AppState.shared.requiresReAuth = true
@@ -389,8 +438,8 @@ final class SubsonicClient {
         return body.musicFolders?.musicFolder ?? []
     }
 
-    func getIndexes(musicFolderId: String? = nil) async throws -> IndexesResponse {
-        let body = try await request(.getIndexes(musicFolderId: musicFolderId))
+    func getIndexes(musicFolderId: String? = nil, ifModifiedSince: Int? = nil) async throws -> IndexesResponse {
+        let body = try await request(.getIndexes(musicFolderId: musicFolderId, ifModifiedSince: ifModifiedSince))
         guard let indexes = body.indexes else {
             throw SubsonicError.apiError(code: 70, message: "Indexes not found")
         }

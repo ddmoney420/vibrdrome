@@ -23,6 +23,7 @@ final class PersistenceController {
             CachedAlbum.self,
             CachedSong.self,
             CachedPlaylist.self,
+            CachedPlaylistEntry.self,
             DownloadedSong.self,
             PlayHistory.self,
             ServerConfig.self,
@@ -30,6 +31,7 @@ final class PersistenceController {
             PendingAction.self,
             SavedQueue.self,
             AlbumCollection.self,
+            SyncHistory.self,
         ])
 
         let config = ModelConfiguration(

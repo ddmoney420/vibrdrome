@@ -1,9 +1,11 @@
 import SwiftUI
+import SwiftData
 
 struct ArtistDetailView: View {
     let artistId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var artist: Artist?
     @State private var topSongs: [Song] = []
     @State private var similarArtists: [Artist] = []
@@ -151,7 +153,30 @@ struct ArtistDetailView: View {
     }
 
     private func loadArtist() async {
-        isLoading = true
+        // Show cached artist with album list instantly
+        if artist == nil {
+            let aid = artistId
+            let artistDesc = FetchDescriptor<CachedArtist>(
+                predicate: #Predicate { $0.id == aid }
+            )
+            if let cached = try? modelContext.fetch(artistDesc).first {
+                // Find this artist's albums in the cache
+                let albumDesc = FetchDescriptor<CachedAlbum>(
+                    predicate: #Predicate<CachedAlbum> { $0.artistId == aid },
+                    sortBy: [SortDescriptor(\CachedAlbum.year, order: .reverse)]
+                )
+                let cachedAlbums = (try? modelContext.fetch(albumDesc)) ?? []
+                let albums = cachedAlbums.map { $0.toAlbum() }
+                artist = Artist(
+                    id: cached.id, name: cached.name,
+                    coverArt: cached.coverArtId,
+                    albumCount: cached.albumCount,
+                    starred: cached.isStarred ? "true" : nil,
+                    album: albums.isEmpty ? nil : albums
+                )
+            }
+        }
+        isLoading = artist == nil
         error = nil
         defer { isLoading = false }
         do {
