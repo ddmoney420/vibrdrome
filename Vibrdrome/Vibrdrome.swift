@@ -115,7 +115,12 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = ImagePipeline {
+                        let dataCache = try? DataCache(name: "com.vibrdrome.images")
+                        // macOS has more disk space; 1 GB covers most libraries
+                        dataCache?.sizeLimit = 1024 * 1024 * 1024 // 1 GB
+                        if let dataCache { $0.dataCache = dataCache }
+                    }
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     Task {
