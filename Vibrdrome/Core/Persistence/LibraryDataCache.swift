@@ -17,6 +17,8 @@ final class LibraryDataCache {
     private(set) var songFilterGenres: [String]?
 
     /// Incremented after each successful rebuild so views can detect changes via `.onChange`.
+    /// Intentionally in-session only (not persisted) — resets to 0 on launch. Views only need
+    /// to detect changes *within* a session; cross-launch staleness is handled by `LibrarySyncManager`.
     private(set) var generation: Int = 0
 
     private var buildTask: Task<Void, Never>?
