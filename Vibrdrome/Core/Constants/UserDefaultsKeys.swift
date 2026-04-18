@@ -112,7 +112,6 @@ enum UserDefaultsKeys {
     static let enableLiquidGlass = "enableLiquidGlass"
     static let enableMiniPlayerTint = "enableMiniPlayerTint"
     static let albumBackgroundStyle = "albumBackgroundStyle"
-    static let gridColumnsPerRow = "gridColumnsPerRow"
     static let showLosslessBadge = "showLosslessBadge"
 
     // MARK: - Tab Bar Extended

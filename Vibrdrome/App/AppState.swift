@@ -52,12 +52,25 @@ final class AppState {
     }
     var pendingNowPlayingAction: NowPlayingAction?
 
-    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info).
+    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info / Album Filters).
     /// Mutually exclusive: setting one closes the others.
     enum SidePanel: String, Equatable {
-        case queue, lyrics, artistInfo
+        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters
     }
     var activeSidePanel: SidePanel?
+
+    /// Filter state for the macOS filter sidebars.
+    var albumFilter = LibraryFilter()
+    var artistFilter = LibraryFilter()
+    var songFilter = LibraryFilter()
+
+    /// Cached albums state for back-navigation, keyed by view configuration.
+    struct AlbumsViewSnapshot {
+        var albums: [Album]
+        var hasMore: Bool
+        var scrollIndex: Int?
+    }
+    var albumsViewSnapshots: [String: AlbumsViewSnapshot] = [:]
 
     /// Library sync manager.
     let librarySyncManager = LibrarySyncManager.shared
