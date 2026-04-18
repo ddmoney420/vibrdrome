@@ -157,4 +157,5 @@ enum UserDefaultsKeys {
     static let lastServerModified = "lastServerModified"
     static let backgroundSyncEnabled = "backgroundSyncEnabled"
     static let syncPollingInterval = "syncPollingInterval"
+    static let lastCoverArtPrefetchDate = "lastCoverArtPrefetchDate"
 }

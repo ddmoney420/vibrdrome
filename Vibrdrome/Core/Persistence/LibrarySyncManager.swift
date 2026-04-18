@@ -590,6 +590,12 @@ final class LibrarySyncManager {
     /// Skipped if a prefetch already ran during sync this session.
     func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
         guard !didPrefetchThisSession else { return }
+        // Skip if a full prefetch completed recently (within 24 hours)
+        if let lastPrefetch = UserDefaults.standard.object(forKey: UserDefaultsKeys.lastCoverArtPrefetchDate) as? Date,
+           Date().timeIntervalSince(lastPrefetch) < 86_400 {
+            didPrefetchThisSession = true
+            return
+        }
         let context = ModelContext(container)
         await prefetchCoverArt(client: client, context: context)
     }
@@ -624,22 +630,39 @@ final class LibrarySyncManager {
         syncLog.info("Prefetching \(total) cover art images")
 
         let pipeline = ImagePipeline.shared
-        let urlMap: [(String, URL)] = coverArtIds.map { id in
-            (id, client.coverArtURL(id: id, size: 600))
+
+        // Filter out images already in memory or disk cache so we only fetch what's missing
+        let dataCache = pipeline.configuration.dataCache as? DataCache
+        let uncachedUrls: [(String, URL)] = coverArtIds.compactMap { id in
+            let url = client.coverArtURL(id: id, size: 600)
+            let request = ImageRequest(url: url)
+            if pipeline.cache.containsCachedImage(for: request) { return nil }
+            let key = pipeline.cache.makeDataCacheKey(for: request)
+            if dataCache?.containsData(for: key) == true { return nil }
+            return (id, url)
         }
 
-        var fetched = 0
+        let alreadyCached = total - uncachedUrls.count
+        guard !uncachedUrls.isEmpty else {
+            didPrefetchThisSession = true
+            UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
+            syncLog.info("Cover art prefetch skipped — all \(total) images already cached")
+            return
+        }
+
+        syncLog.info("Prefetching \(uncachedUrls.count) cover art images (\(alreadyCached) already cached)")
+
+        var fetched = alreadyCached
         let batchSize = 10
         let perImageTimeout: UInt64 = 15_000_000_000 // 15 seconds
 
-        for batchStart in stride(from: 0, to: urlMap.count, by: batchSize) {
+        for batchStart in stride(from: 0, to: uncachedUrls.count, by: batchSize) {
             guard !Task.isCancelled else { break }
-            let batch = urlMap[batchStart..<min(batchStart + batchSize, urlMap.count)]
+            let batch = uncachedUrls[batchStart..<min(batchStart + batchSize, uncachedUrls.count)]
             await withTaskGroup(of: Void.self) { group in
                 for (_, url) in batch {
                     group.addTask {
                         let request = ImageRequest(url: url)
-                        if pipeline.cache.containsCachedImage(for: request) { return }
                         // Timeout prevents a single stalled request from blocking the entire prefetch
                         await withTaskGroup(of: Void.self) { inner in
                             inner.addTask {
@@ -660,7 +683,8 @@ final class LibrarySyncManager {
         }
 
         didPrefetchThisSession = true
-        syncLog.info("Cover art prefetch complete: \(fetched) processed")
+        UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
+        syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
     }
 
     // MARK: - Sync History
