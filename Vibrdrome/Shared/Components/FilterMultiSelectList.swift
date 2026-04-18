@@ -53,6 +53,7 @@ struct FilterMultiSelectList<T: Identifiable & Hashable>: View {
             TextField("Search \(title.lowercased())…", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .font(.caption)
+                .accessibilityLabel("Search \(title.lowercased())")
 
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -97,6 +98,9 @@ struct FilterMultiSelectList<T: Identifiable & Hashable>: View {
                         }
                         .buttonStyle(.plain)
                         .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                        .accessibilityLabel(item[keyPath: label])
+                        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
             }

@@ -23,7 +23,6 @@ struct AlbumsView: View {
     @State private var clientSideSort: AlbumSortOption?
     @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("albumsViewStyle") private var showAsList = false
-    @Environment(\.modelContext) private var modelContext
     @State private var showSaveCollection = false
     @State private var collectionName = ""
     @State private var availableGenres: [String] = []
