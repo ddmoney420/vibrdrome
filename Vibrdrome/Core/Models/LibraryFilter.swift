@@ -16,6 +16,7 @@ enum TriState: String, CaseIterable, Sendable, Equatable {
 
 /// Observable filter state for library filter sidebars (albums, artists, songs).
 /// All filtering is done locally against SwiftData.
+/// Note: Sendable conformance is implicit via @MainActor isolation (Swift 6 strict concurrency).
 @Observable
 @MainActor
 final class LibraryFilter {

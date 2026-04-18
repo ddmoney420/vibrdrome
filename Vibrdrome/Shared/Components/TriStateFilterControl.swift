@@ -37,5 +37,8 @@ struct TriStateFilterControl: View {
                 .foregroundStyle(isActive ? .white : .secondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(label) \(title)")
+        .accessibilityValue(isActive ? "Active" : "Inactive")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
