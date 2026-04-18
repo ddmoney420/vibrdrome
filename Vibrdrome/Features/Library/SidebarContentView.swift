@@ -49,7 +49,7 @@ struct SidebarContentView: View {
     private var engine: AudioEngine { AudioEngine.shared }
 
     enum SidebarItem: String, CaseIterable, Hashable {
-        case artists, albums, songs, genres, favorites, recentlyAdded, mostPlayed, recentlyPlayed
+        case artists, albums, songs, genres, labels, favorites, recentlyAdded, mostPlayed, recentlyPlayed
         case bookmarks, folders
         case search
         case playlists
@@ -77,6 +77,10 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.songs.rawValue)
                     Label("Genres", systemImage: "guitars")
                         .tag(SidebarItem.genres.rawValue)
+                    #if os(macOS)
+                    Label("Labels", systemImage: "tag")
+                        .tag(SidebarItem.labels.rawValue)
+                    #endif
                     Label("Favorites", systemImage: "heart.fill")
                         .tag(SidebarItem.favorites.rawValue)
                     Label("Recently Added", systemImage: "clock")
@@ -277,6 +281,12 @@ struct SidebarContentView: View {
             SongsView()
         case .genres:
             GenresView()
+        case .labels:
+            #if os(macOS)
+            LabelsView()
+            #else
+            EmptyView()
+            #endif
         case .favorites:
             FavoritesView()
         case .recentlyAdded:

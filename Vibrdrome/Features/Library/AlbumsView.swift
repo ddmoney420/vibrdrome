@@ -8,6 +8,7 @@ struct AlbumsView: View {
     var genre: String?
     var fromYear: Int?
     var toYear: Int?
+    var label: String?
 
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
@@ -62,17 +63,18 @@ struct AlbumsView: View {
     }
 
     private var cacheKey: String {
-        "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+        "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)_\(label ?? "")"
     }
 
-    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) {
+    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil, label: String? = nil) {
         self.listType = listType
         self.title = title
         self.genre = genre
         self.fromYear = fromYear
         self.toYear = toYear
+        self.label = label
 
-        let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+        let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)_\(label ?? "")"
         if let snapshot = AppState.shared.albumsViewSnapshots[key] {
             _albums = State(initialValue: snapshot.albums)
             _hasMore = State(initialValue: snapshot.hasMore)
@@ -492,6 +494,26 @@ struct AlbumsView: View {
     }
 
     private func loadAlbums() async {
+        // Label-based loading: fetch from SwiftData cache (no API endpoint for labels)
+        if let label {
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                var descriptor = FetchDescriptor<CachedAlbum>()
+                descriptor.sortBy = [SortDescriptor(\.name)]
+                let allAlbums = try modelContext.fetch(descriptor)
+                albums = allAlbums
+                    .filter { $0.label == label }
+                    .map { $0.toAlbum() }
+                hasMore = false
+                recomputeFilteredAlbums()
+                saveSnapshot()
+            } catch {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
+            return
+        }
+
         scrollLoadTask?.cancel()
         pendingPageTarget = 0
         let client = appState.subsonicClient
