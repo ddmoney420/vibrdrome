@@ -3,14 +3,12 @@ import SwiftUI
 
 struct ArtistsView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.openWindow) private var openWindow
     @State private var indexes: [ArtistIndex] = []
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
     @State private var sortReversed = false
     @State private var favoritedArtistIds: Set<String> = []
-    @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("artistsViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @SceneStorage("artistsFilter") private var filterRaw: String = ArtistFilter.all.rawValue
@@ -192,19 +190,6 @@ struct ArtistsView: View {
         .task { await loadArtists() }
         .task { await loadFavorites() }
         .refreshable { await loadArtists() }
-        #if os(iOS)
-        .sheet(item: $getInfoTarget) { target in
-            NavigationStack {
-                GetInfoView(target: target)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { getInfoTarget = nil }
-                        }
-                    }
-            }
-            .environment(appState)
-        }
-        #endif
     }
 
     private func loadFavorites() async {
@@ -229,15 +214,7 @@ struct ArtistsView: View {
                                 ArtistRow(artist: artist)
                             }
                             .accessibilityIdentifier("artistRow_\(artist.id)")
-                            .contextMenu {
-                                Button {
-                                    #if os(macOS)
-                                    openWindow(id: "get-info", value: GetInfoTarget(type: .artist, id: artist.id))
-                                    #else
-                                    getInfoTarget = GetInfoTarget(type: .artist, id: artist.id)
-                                    #endif
-                                } label: { Label("Get Info", systemImage: "doc.text.magnifyingglass") }
-                            }
+                            .artistGetInfoContextMenu(artist: artist)
                         }
                     }
                 }
@@ -290,15 +267,7 @@ struct ArtistsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("artistCard_\(artist.id)")
-                                .contextMenu {
-                                    Button {
-                                        #if os(macOS)
-                                        openWindow(id: "get-info", value: GetInfoTarget(type: .artist, id: artist.id))
-                                        #else
-                                        getInfoTarget = GetInfoTarget(type: .artist, id: artist.id)
-                                        #endif
-                                    } label: { Label("Get Info", systemImage: "doc.text.magnifyingglass") }
-                                }
+                                .artistGetInfoContextMenu(artist: artist)
                             }
                         }
                         .padding(.horizontal, 16)

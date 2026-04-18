@@ -4,7 +4,7 @@ import os.log
 // MARK: - GetInfoTarget
 
 /// Identifies which item to show info for. Codable so it can be used with openWindow(id:value:).
-struct GetInfoTarget: Codable, Hashable {
+struct GetInfoTarget: Codable, Hashable, Identifiable {
     enum ItemType: String, Codable { case song, album, artist }
     let type: ItemType
     let id: String
@@ -108,8 +108,10 @@ struct GetInfoView: View {
                 TabView {
                     overviewTab
                         .tabItem { Text("Overview") }
+                        .accessibilityLabel("Overview tab")
                     rawMetadataTab
                         .tabItem { Text("Raw metadata") }
+                        .accessibilityLabel("Raw metadata tab")
                 }
             }
         }
@@ -157,8 +159,25 @@ struct GetInfoView: View {
                         Text("No raw metadata is available for this item.")
                     }
                 } else {
-                    Text("Raw metadata")
-                        .font(.headline)
+                    HStack {
+                        Text("Raw metadata")
+                            .font(.headline)
+                        Spacer()
+                        Button {
+                            let text = rawMetadataRows.map { "\($0.key)\t\($0.value)" }.joined(separator: "\n")
+                            #if os(macOS)
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(text, forType: .string)
+                            #else
+                            UIPasteboard.general.string = text
+                            #endif
+                        } label: {
+                            Label("Copy All", systemImage: "doc.on.doc")
+                                .font(.callout)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
 
                     rawMetadataTable
                 }
@@ -307,35 +326,6 @@ struct GetInfoView: View {
         }
 
         externalLinksSection(mbid: vm.albumInfo?.musicBrainzId, lastFmUrl: vm.albumInfo?.lastFmUrl)
-
-        if let songs = album.song, !songs.isEmpty {
-            sectionHeader("Tracks (\(songs.count))")
-            VStack(spacing: 0) {
-                ForEach(Array(songs.enumerated()), id: \.element.id) { idx, track in
-                    HStack {
-                        Text("\(track.track ?? idx + 1)")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .frame(width: 28, alignment: .trailing)
-                        Text(track.title)
-                            .font(.callout)
-                            .lineLimit(1)
-                        Spacer()
-                        if let dur = track.duration {
-                            Text(formatDuration(dur))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 7)
-                    .padding(.horizontal, 12)
-                    if idx < songs.count - 1 {
-                        Divider().padding(.leading, 52)
-                    }
-                }
-            }
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-        }
     }
     // swiftlint:enable cyclomatic_complexity function_body_length
 
@@ -386,24 +376,6 @@ struct GetInfoView: View {
                     }
                     .padding(8)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
-        }
-
-        if let albums = artist.album, !albums.isEmpty {
-            sectionHeader("Albums (\(albums.count))")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
-                ForEach(albums) { alb in
-                    VStack(spacing: 6) {
-                        AlbumArtView(coverArtId: alb.coverArt, size: 100, cornerRadius: 8)
-                        Text(alb.name)
-                            .font(.caption2)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                        if let year = alb.year {
-                            Text("\(year)").font(.caption2).foregroundStyle(.tertiary)
-                        }
-                    }
                 }
             }
         }
@@ -500,6 +472,14 @@ struct GetInfoView: View {
         var id: String { "\(key)=\(value)" }
     }
 
+    /// Keys that hold nested child-entity arrays — excluded to keep raw metadata focused on the entity itself.
+    private static let childArrayKeyPrefixes = [
+        "album.song[", "artist.album[",
+        "artistInfo.similarArtist[",
+        "rawApi.getAlbum.album.song[", "rawApi.getArtist.artist.album[",
+        "rawApi.getArtistInfo2.artistInfo2.similarArtist["
+    ]
+
     private var rawMetadataRows: [RawMetadataRow] {
         var rows: [RawMetadataRow] = []
 
@@ -531,7 +511,9 @@ struct GetInfoView: View {
             }
         }
 
-        return rows.sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+        return rows
+            .filter { row in !Self.childArrayKeyPrefixes.contains(where: { row.key.hasPrefix($0) }) }
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
     }
 
     @ViewBuilder
@@ -568,6 +550,7 @@ struct GetInfoView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .accessibilityLabel("\(row.key): \(row.value)")
 
                 if row.id != rawMetadataRows.last?.id {
                     Divider()
