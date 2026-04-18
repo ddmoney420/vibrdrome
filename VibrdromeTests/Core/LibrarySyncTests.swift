@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftData
 @testable import Vibrdrome
 
 /// Tests for library sync infrastructure: SyncMode, SyncStats,
@@ -234,5 +235,70 @@ struct LibrarySyncTests {
             id: id, name: name, coverArt: coverArt,
             albumCount: albumCount, starred: starred, album: nil
         )
+    }
+
+    // MARK: - SwiftData Schema Migration
+
+    @Test func migrationFromBuild45SchemaSucceeds() throws {
+        // Use a temp file-backed store so data persists across containers
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("migration-test-\(UUID().uuidString).store")
+        defer { try? FileManager.default.removeItem(at: storeURL) }
+
+        // Build 45 schema — the entities that existed before 7a
+        let oldSchema = Schema([
+            DownloadedSong.self,
+            PlayHistory.self,
+            ServerConfig.self,
+            OfflinePlaylist.self,
+            PendingAction.self,
+            SavedQueue.self,
+            AlbumCollection.self,
+        ])
+        let oldConfig = ModelConfiguration(schema: oldSchema, url: storeURL)
+
+        // Phase 1: create store with old schema and seed data
+        do {
+            let oldContainer = try ModelContainer(for: oldSchema, configurations: [oldConfig])
+            let ctx = ModelContext(oldContainer)
+            let collection = AlbumCollection(name: "Test Collection", listType: .alphabeticalByName)
+            ctx.insert(collection)
+            try ctx.save()
+        }
+        // oldContainer deallocated — store is on disk
+
+        // Phase 2: reopen same store with expanded schema (7a)
+        let newSchema = Schema([
+            CachedArtist.self,
+            CachedAlbum.self,
+            CachedSong.self,
+            CachedPlaylist.self,
+            CachedPlaylistEntry.self,
+            DownloadedSong.self,
+            PlayHistory.self,
+            ServerConfig.self,
+            OfflinePlaylist.self,
+            PendingAction.self,
+            SavedQueue.self,
+            AlbumCollection.self,
+            SyncHistory.self,
+        ])
+        let newConfig = ModelConfiguration(schema: newSchema, url: storeURL)
+
+        // Lightweight migration: adding entities should not throw
+        let newContainer = try ModelContainer(for: newSchema, configurations: [newConfig])
+        let newCtx = ModelContext(newContainer)
+
+        // Verify old data survived the migration
+        let collections = try newCtx.fetch(FetchDescriptor<AlbumCollection>())
+        #expect(collections.count == 1)
+        #expect(collections.first?.name == "Test Collection")
+
+        // Verify new entities are accessible and empty
+        let albums = try newCtx.fetch(FetchDescriptor<CachedAlbum>())
+        #expect(albums.isEmpty)
+
+        let syncHistory = try newCtx.fetch(FetchDescriptor<SyncHistory>())
+        #expect(syncHistory.isEmpty)
     }
 }
