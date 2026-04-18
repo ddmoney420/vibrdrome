@@ -150,7 +150,7 @@ final class OfflineActionQueue {
 
     // MARK: - Flush
 
-    /// Sync all pending actions to server
+    /// Sync all pending actions to server, with conflict detection and resolution.
     func flushPending() async {
         guard !isSyncing else { return }
         isSyncing = true
@@ -164,9 +164,14 @@ final class OfflineActionQueue {
 
         guard let actions = try? context.fetch(descriptor), !actions.isEmpty else { return }
         let client = AppState.shared.subsonicClient
+
+        // Conflict resolution: collapse contradictory actions on the same target.
+        // e.g., star + unstar on the same song → last one wins.
+        let resolved = resolveConflicts(actions: actions, context: context)
+
         var synced = 0
 
-        for action in actions {
+        for action in resolved {
             do {
                 try await executeAction(action, client: client)
                 context.delete(action)
@@ -190,6 +195,56 @@ final class OfflineActionQueue {
         if synced > 0 {
             offlineLog.info("Synced \(synced) pending actions")
         }
+    }
+
+    // MARK: - Conflict Resolution
+
+    /// Collapse contradictory actions on the same target.
+    /// Uses last-write-wins: the most recent action for each target survives.
+    private func resolveConflicts(actions: [PendingAction],
+                                  context: ModelContext) -> [PendingAction] {
+        // Group by target ID
+        var grouped: [String: [PendingAction]] = [:]
+        for action in actions {
+            grouped[action.targetId, default: []].append(action)
+        }
+
+        var resolved: [PendingAction] = []
+
+        for (_, group) in grouped {
+            // Separate star/unstar pairs from other action types
+            let starActions = group.filter {
+                $0.actionType == "star" || $0.actionType == "unstar" ||
+                $0.actionType == "starAlbum" || $0.actionType == "unstarAlbum" ||
+                $0.actionType == "starArtist" || $0.actionType == "unstarArtist"
+            }
+            let otherActions = group.filter {
+                !($0.actionType == "star" || $0.actionType == "unstar" ||
+                  $0.actionType == "starAlbum" || $0.actionType == "unstarAlbum" ||
+                  $0.actionType == "starArtist" || $0.actionType == "unstarArtist")
+            }
+
+            // Other actions (scrobbles etc.) always go through
+            resolved.append(contentsOf: otherActions)
+
+            // For star/unstar, check for contradictions
+            if starActions.count > 1 {
+                // Multiple star/unstar on same target — keep only the latest
+                let sorted = starActions.sorted { $0.createdAt < $1.createdAt }
+                let winner = sorted.last!
+                offlineLog.info("Conflict resolved (last-write-wins): \(winner.actionType) wins for \(winner.targetId)")
+
+                // Delete the losers
+                for action in sorted.dropLast() {
+                    context.delete(action)
+                }
+                resolved.append(winner)
+            } else {
+                resolved.append(contentsOf: starActions)
+            }
+        }
+
+        return resolved
     }
 
     private func executeAction(_ action: PendingAction, client: SubsonicClient) async throws {
