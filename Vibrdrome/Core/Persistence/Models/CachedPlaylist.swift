@@ -13,7 +13,7 @@ final class CachedPlaylist {
     var changed: String?
     var cachedAt: Date = Date()
 
-    var entries: [CachedPlaylistEntry] = []
+    @Relationship(deleteRule: .cascade) var entries: [CachedPlaylistEntry] = []
 
     init(from playlist: Playlist) {
         self.id = playlist.id
