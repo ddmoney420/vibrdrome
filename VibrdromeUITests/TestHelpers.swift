@@ -240,12 +240,12 @@ extension XCUIApplication {
         sleep(1)
     }
 
-    /// Tap the Library tab (iPhone) or Artists sidebar item (iPad).
+    /// Tap the Home tab (iPhone) or Artists sidebar item (iPad).
     func goToLibrary() {
         if isSidebarLayout {
             tapSidebarItem("Artists")
         } else {
-            tabBars.buttons["Library"].tap()
+            tabBars.buttons["Home"].tap()
         }
     }
 
