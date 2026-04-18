@@ -6,7 +6,7 @@ private let maxRecentSearches = 10
 
 struct SearchView: View {
     @Environment(AppState.self) var appState
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) var modelContext
     @State private var query = ""
     @State private var results: SearchResult3?
     @State private var isSearching = false
@@ -351,6 +351,12 @@ struct SearchView: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
 
+        // Show local results instantly while waiting for network
+        let localResults = searchLocally(query: query)
+        if let localResults, resultCount(localResults) > 0, results == nil {
+            results = localResults
+        }
+
         isSearching = true
         defer { isSearching = false }
 
@@ -386,16 +392,63 @@ struct SearchView: View {
             results = searchResults
         } catch {
             guard !Task.isCancelled else { return }
-            // Offline fallback: search downloaded songs locally
-            let offlineResults = searchDownloadsLocally(query: query)
-            if let songs = offlineResults, !songs.isEmpty {
+            // Offline fallback: search cached library locally
+            let offlineResults = searchLocally(query: query)
+                ?? searchDownloadsLocally(query: query).map {
+                    SearchResult3(artist: nil, album: nil, song: $0)
+                }
+            if let offlineResults, resultCount(offlineResults) > 0 {
                 searchError = nil
-                results = SearchResult3(artist: nil, album: nil, song: songs)
+                results = offlineResults
             } else {
                 searchError = ErrorPresenter.userMessage(for: error)
                 results = nil
             }
         }
+    }
+
+    private func searchLocally(query: String) -> SearchResult3? {
+        let q = query
+
+        // Search cached songs using predicate
+        var songDescriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate<CachedSong> {
+                $0.title.localizedStandardContains(q)
+                || ($0.artist?.localizedStandardContains(q) ?? false)
+                || ($0.albumName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        songDescriptor.fetchLimit = 40
+        let matchedSongs = ((try? modelContext.fetch(songDescriptor)) ?? []).map { $0.toSong() }
+
+        // Search cached albums using predicate
+        var albumDescriptor = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate<CachedAlbum> {
+                $0.name.localizedStandardContains(q)
+                || ($0.artistName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        albumDescriptor.fetchLimit = 20
+        let matchedAlbums = ((try? modelContext.fetch(albumDescriptor)) ?? []).map { $0.toAlbum() }
+
+        // Search cached artists using predicate
+        var artistDescriptor = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate<CachedArtist> {
+                $0.name.localizedStandardContains(q)
+            }
+        )
+        artistDescriptor.fetchLimit = 20
+        let matchedArtists = ((try? modelContext.fetch(artistDescriptor)) ?? []).map { $0.toArtist() }
+
+        guard !matchedSongs.isEmpty || !matchedAlbums.isEmpty || !matchedArtists.isEmpty else {
+            return nil
+        }
+
+        return SearchResult3(
+            artist: matchedArtists.isEmpty ? nil : Array(matchedArtists),
+            album: matchedAlbums.isEmpty ? nil : Array(matchedAlbums),
+            song: matchedSongs.isEmpty ? nil : Array(matchedSongs)
+        )
     }
 
     private func searchDownloadsLocally(query: String) -> [Song]? {

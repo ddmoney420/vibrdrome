@@ -1,9 +1,15 @@
 import NukeUI
 import SwiftUI
+import SwiftData
+import os.log
 
 struct SongsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var songs: [Song] = []
+    @State private var titleSongCount: Int?
+    @State private var localFilteredSongs: [Song]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var hasMore = false
     @State private var searchText = ""
@@ -16,12 +22,13 @@ struct SongsView: View {
     @State private var filterArtist: String?
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage("songsViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var sortBy: SongSortOption = .title
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "songs")
     #endif
+    @State private var cachedDisplayedSongs: [Song] = []
+    @State private var scrollLoadTask: Task<Void, Never>?
+    @State private var pendingPageTarget: Int = 0
 
     private let pageSize = 500
 
@@ -51,8 +58,13 @@ struct SongsView: View {
         filterYear != nil || filterGenre != nil || filterArtist != nil
     }
 
-    private var displayedSongs: [Song] {
-        var base = searchText.count >= 2 ? searchResults : songs
+    private func computeDisplayedSongs() -> [Song] {
+        var base: [Song]
+        #if os(macOS)
+        base = localFilteredSongs ?? (searchText.count >= 2 ? searchResults : songs)
+        #else
+        base = searchText.count >= 2 ? searchResults : songs
+        #endif
         if let filterYear {
             base = base.filter { $0.year == filterYear }
         }
@@ -87,7 +99,7 @@ struct SongsView: View {
                 songGrid
             }
         }
-        .navigationTitle(songs.isEmpty ? "Songs" : "Songs (\(songs.count))")
+        .navigationTitle(titleSongCount.map { "Songs (\($0))" } ?? "Songs")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
@@ -103,6 +115,7 @@ struct SongsView: View {
         .onChange(of: searchText) { _, query in
             guard query.count >= 2 else {
                 searchResults = []
+                recomputeDisplayedSongs()
                 return
             }
             isSearching = true
@@ -113,11 +126,29 @@ struct SongsView: View {
                     let result = try await appState.subsonicClient.search(
                         query: query, artistCount: 0, albumCount: 0, songCount: 50)
                     searchResults = result.song ?? []
+                    recomputeDisplayedSongs()
                 } catch {}
                 isSearching = false
             }
         }
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .songFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .songFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.songFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Song Filters")
+                .accessibilityIdentifier("songFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -226,7 +257,27 @@ struct SongsView: View {
         .task {
             await loadSongs()
             await loadGenres()
+            refreshTitleSongCount()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+            recomputeDisplayedSongs()
         }
+        .onChange(of: sortBy) { recomputeDisplayedSongs() }
+        .onChange(of: filterYear) { recomputeDisplayedSongs() }
+        .onChange(of: filterGenre) { recomputeDisplayedSongs() }
+        .onChange(of: filterArtist) { recomputeDisplayedSongs() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            refreshTitleSongCount()
+        }
+        #if os(macOS)
+        .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        #endif
     }
 
     // MARK: - Active Filter Chips
@@ -349,32 +400,27 @@ struct SongsView: View {
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
 
-            if !displayedSongs.isEmpty {
+            if !cachedDisplayedSongs.isEmpty {
                 playShuffleBar
                     .listRowSeparator(.hidden)
             }
 
-            ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
-                songRow(song)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        AudioEngine.shared.play(song: song, from: displayedSongs, at: index)
+            ForEach(0..<totalItemCount, id: \.self) { index in
+                Group {
+                    if index < cachedDisplayedSongs.count {
+                        let song = cachedDisplayedSongs[index]
+                        songRow(song)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                            }
+                            .accessibilityIdentifier("songRow_\(song.id)")
+                            .trackContextMenu(song: song)
+                    } else {
+                        songListPlaceholder
                     }
-                    .accessibilityIdentifier("songRow_\(song.id)")
-                    .trackContextMenu(song: song)
-                    .onAppear {
-                        if searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
-                            Task { await loadMore() }
-                        }
-                    }
-            }
-
-            if isLoading {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
                 }
+                .onAppear { triggerLoadIfNeeded(at: index) }
             }
         }
         #endif
@@ -390,34 +436,33 @@ struct SongsView: View {
                         .padding(.horizontal, 16)
                 }
 
-                if !displayedSongs.isEmpty {
+                if !cachedDisplayedSongs.isEmpty {
                     playShuffleBar
                         .padding(.horizontal, 16)
                 }
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                          spacing: 20) {
-                    ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
-                        songCard(song)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: displayedSongs, at: index)
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 16)
+                ], spacing: 20) {
+                    ForEach(0..<totalItemCount, id: \.self) { index in
+                        Group {
+                            if index < cachedDisplayedSongs.count {
+                                let song = cachedDisplayedSongs[index]
+                                songCard(song)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                                    }
+                                    .accessibilityIdentifier("songCard_\(song.id)")
+                                    .trackContextMenu(song: song)
+                            } else {
+                                songGridPlaceholder
                             }
-                            .accessibilityIdentifier("songCard_\(song.id)")
-                            .trackContextMenu(song: song)
-                            .onAppear {
-                                if searchText.isEmpty && hasMore && !isLoading && song.id == songs.last?.id {
-                                    Task { await loadMore() }
-                                }
-                            }
+                        }
+                        .onAppear { triggerLoadIfNeeded(at: index) }
                     }
                 }
                 .padding(16)
-
-                if isLoading {
-                    ProgressView().padding()
-                }
             }
         }
     }
@@ -425,7 +470,7 @@ struct SongsView: View {
     private var playShuffleBar: some View {
         HStack(spacing: 12) {
             Button {
-                let songs = displayedSongs
+                let songs = cachedDisplayedSongs
                 AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
             } label: {
                 Label("Play All", systemImage: "play.fill")
@@ -438,7 +483,7 @@ struct SongsView: View {
             .accessibilityIdentifier("songsPlayAllButton")
 
             Button {
-                let shuffled = displayedSongs.shuffled()
+                let shuffled = cachedDisplayedSongs.shuffled()
                 AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
@@ -486,6 +531,8 @@ struct SongsView: View {
     }
 
     private func loadSongs() async {
+        scrollLoadTask?.cancel()
+        pendingPageTarget = 0
         isLoading = true
         songs = []
         defer { isLoading = false }
@@ -495,21 +542,188 @@ struct SongsView: View {
             )
             songs = result.song ?? []
             hasMore = (result.song?.count ?? 0) >= pageSize
+            refreshTitleSongCount()
+            recomputeDisplayedSongs()
         } catch {}
     }
 
-    private func loadMore() async {
+    private func loadPages() async {
         guard hasMore, !isLoading else { return }
         isLoading = true
-        defer { isLoading = false }
-        do {
-            let result = try await appState.subsonicClient.search(
-                query: "", artistCount: 0, albumCount: 0,
-                songCount: pageSize, songOffset: songs.count
-            )
-            let newSongs = result.song ?? []
-            songs.append(contentsOf: newSongs)
-            hasMore = newSongs.count >= pageSize
-        } catch {}
+        // Accumulate into local array to avoid multiple @State updates triggering re-renders
+        var accumulated = songs
+        var stillHasMore = hasMore
+        while accumulated.count < pendingPageTarget, stillHasMore, !Task.isCancelled {
+            do {
+                let result = try await appState.subsonicClient.search(
+                    query: "", artistCount: 0, albumCount: 0,
+                    songCount: pageSize, songOffset: accumulated.count
+                )
+                let newSongs = result.song ?? []
+                accumulated.append(contentsOf: newSongs)
+                stillHasMore = newSongs.count >= pageSize
+            } catch {
+                stillHasMore = false
+                break
+            }
+        }
+        // Single state update instead of one per page
+        songs = accumulated
+        hasMore = stillHasMore
+        isLoading = false
+        recomputeDisplayedSongs()
+        refreshTitleSongCount()
+        if songs.count < pendingPageTarget, hasMore {
+            scrollLoadTask?.cancel()
+            scrollLoadTask = Task { await loadPages() }
+        }
     }
+
+    private func refreshTitleSongCount() {
+        if let cachedSongs = appState.libraryCache.songs, !cachedSongs.isEmpty {
+            titleSongCount = cachedSongs.count
+            return
+        }
+
+        let descriptor = FetchDescriptor<CachedSong>()
+        if let cachedCount = try? modelContext.fetchCount(descriptor), cachedCount > 0 {
+            titleSongCount = cachedCount
+            return
+        }
+
+        titleSongCount = songs.isEmpty ? nil : songs.count
+    }
+
+    private var songListPlaceholder: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 140, height: 14)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 100, height: 12)
+            }
+            Spacer()
+        }
+    }
+
+    private var songGridPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.quaternary)
+                .aspectRatio(1, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(height: 14)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(width: 80, height: 12)
+        }
+    }
+
+    private var totalItemCount: Int {
+        guard localFilteredSongs == nil, searchText.isEmpty else { return cachedDisplayedSongs.count }
+        guard hasMore, let totalCount = appState.libraryCache.songs?.count else { return cachedDisplayedSongs.count }
+        return max(songs.count, totalCount)
+    }
+
+    private func triggerLoadIfNeeded(at index: Int) {
+        guard localFilteredSongs == nil, searchText.isEmpty, hasMore else { return }
+        if index >= songs.count {
+            // Scrolled into placeholder territory — always update target, debounce the load
+            pendingPageTarget = max(pendingPageTarget, songs.count + (index - songs.count) + pageSize)
+            scrollLoadTask?.cancel()
+            scrollLoadTask = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                await loadPages()
+            }
+        } else if !isLoading {
+            // Near end of loaded items — prefetch immediately
+            let prefetchThreshold = max(songs.count - 10, 0)
+            if index >= prefetchThreshold {
+                pendingPageTarget = max(pendingPageTarget, songs.count + pageSize)
+                Task { await loadPages() }
+            }
+        }
+    }
+
+    private func recomputeDisplayedSongs() {
+        cachedDisplayedSongs = computeDisplayedSongs()
+    }
+
+    #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
+    private func applyLocalFilters() {
+        let filter = appState.songFilter
+        guard filter.isActive else {
+            localFilteredSongs = nil
+            recomputeDisplayedSongs()
+            return
+        }
+
+        do {
+            let allSongs: [Song]
+            if let cachedSongs = appState.libraryCache.songs {
+                allSongs = cachedSongs
+            } else {
+                var descriptor = FetchDescriptor<CachedSong>()
+                descriptor.sortBy = [SortDescriptor(\.title)]
+                allSongs = try modelContext.fetch(descriptor).map { $0.toSong() }
+            }
+
+            let recentSongIds = recentlyPlayedSongIds(for: filter)
+            localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
+            recomputeDisplayedSongs()
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Songs")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredSongs = nil
+        }
+    }
+
+    private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {
+        guard filter.isRecentlyPlayed else { return nil }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let descriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
+        )
+        let recentSongs = (try? modelContext.fetch(descriptor)) ?? []
+        return Set(recentSongs.map(\.id))
+    }
+
+    private func songMatchesFilter(
+        _ song: Song, filter: LibraryFilter, recentIds: Set<String>?
+    ) -> Bool {
+        guard filter.isFavorited.matches(song.starred != nil) else { return false }
+        guard filter.isRated.matches((song.userRating ?? 0) != 0) else { return false }
+        if let recentIds, !recentIds.contains(song.id) { return false }
+        if !filter.selectedArtistIds.isEmpty {
+            guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
+                return false
+            }
+        }
+        if !filter.selectedGenres.isEmpty {
+            guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
+                return false
+            }
+        }
+        if let yearFilter = filter.year {
+            guard song.year == yearFilter else { return false }
+        }
+        return true
+    }
+    #endif
 }
