@@ -4,6 +4,20 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 46 -- April 18, 2026
+- Fix: semicolon-containing genres like "Hip Hop; Pop" no longer error on tap; now render as "Hip Hop Pop" while the underlying server query is preserved
+- Fix: first tap on a song or album row now plays / navigates reliably instead of sometimes landing on the artist page (removed nested artist/album Buttons from list rows — "Go to Artist" still available via long-press menu)
+- Fix: Album search now hits the entire library via server search3 instead of only client-side filtering the loaded pages (finds albums like "Beats, Rhymes and Life" regardless of pagination)
+- Fix: Audio glitching when spam-tapping tracks or play/pause (AVPlayer item swap debounced 50ms with cancellation so rapid taps collapse into a single swap instead of churning the audio session)
+- TrackRow title/artist spacing bumped from 2pt to 6pt for clearer touch separation
+- Contributor CARPLAY_ENABLED build flag + CONTRIBUTING.md signing guide
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Fixes: semicolon genre error, first-tap play reliability, album search
+> across entire library, audio glitch on rapid track changes. Contributor
+> build flag for CarPlay.
+
 ### Build 45 -- April 17, 2026
 - Album Collections: save album filter presets to macOS/iPad sidebar
 - Genre filter in AlbumsView sort menu

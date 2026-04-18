@@ -23,6 +23,8 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Playback rate (speed) changes work
 - [ ] Sleep timer "End of Track": after it pauses, pressing play advances to next track
 - [ ] Recently Played in Queue shows only songs actually listened to (not unplayed queue entries)
+- [ ] Spam-tap play/pause rapidly — no audio glitching or dropouts
+- [ ] Spam-tap different track rows rapidly — audio settles on the last-tapped track without churn
 
 ## Library & Navigation
 
@@ -33,6 +35,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Search filter chips (Genre, Year, Format) appear and filter results
 - [ ] Navigate to artist detail (from search, album, or Now Playing)
 - [ ] Navigate to album detail
+- [ ] Tap album card in artist detail → opens album detail (no bounce back to artist)
+- [ ] Search "beats" in Albums tab returns matches anywhere in the library (e.g. "Beats, Rhymes and Life"), not just loaded pages
+- [ ] Genre containing a semicolon (e.g. "Hip Hop; Pop") renders without the semicolon, and tapping loads albums without error
 - [ ] Artist detail shows biography (About section)
 - [ ] Artist detail shows Similar Artists carousel
 - [ ] Genre list shows artwork
@@ -133,7 +138,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Per-track download icon (bigger, .callout size)
 - [ ] Per-track inline "..." menu (Play Next, Add to Queue, Start Radio, Share)
 - [ ] Text contrast readable in light mode
-- [ ] Tappable artist name navigates to artist page
+- [ ] Tappable artist name in album header navigates to artist page
+- [ ] Tapping any part of a song row (title, artist text, whitespace) plays the track — does NOT navigate to artist
+- [ ] Long-press on song row shows "Go to Album" and "Go to Artist" in context menu
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
 - [ ] Album sort: Name, Artist, Year, Recently Added all work
