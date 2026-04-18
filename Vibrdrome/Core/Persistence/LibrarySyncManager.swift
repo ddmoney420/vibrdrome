@@ -40,6 +40,8 @@ final class LibrarySyncManager {
     /// Polling timer for change detection while app is active.
     private var pollingTask: Task<Void, Never>?
 
+    // Page sizes for paginated API calls. 500 is a safe default for most Subsonic servers;
+    // could be made configurable per-server if needed for very large or constrained instances.
     private let albumPageSize = 500
     private let songPageSize = 500
 
