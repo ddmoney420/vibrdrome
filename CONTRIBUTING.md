@@ -18,19 +18,32 @@ open Vibrdrome.xcodeproj
 
 After `xcodegen generate`, you'll need to configure signing (see below).
 
-### Signing & CarPlay Entitlement
+### Signing, Bundle ID, and Entitlements
 
-The app uses a CarPlay audio entitlement (`com.apple.developer.carplay-audio`) which requires Apple's explicit approval tied to a paid developer account. **Most contributors won't have this.**
+The repo's bundle IDs (`com.vibrdrome.app`, `com.vibrdrome.app.widget`, `com.vibrdrome.app.watchkitapp`) and the CarPlay / App Groups entitlements are all tied to the maintainer's Apple Developer account. To run on your own phone, you'll need to rewrite these locally. **Keep these changes in your fork only -- do not commit them.**
 
-To build without CarPlay:
+**1. Change the bundle IDs** in `project.yml` to something under your own identifier prefix:
 
-1. In `project.yml`, remove `CARPLAY_ENABLED` from the `SWIFT_ACTIVE_COMPILATION_CONDITIONS` line
-2. Open `Vibrdrome/Vibrdrome.entitlements` and remove the `com.apple.developer.carplay-audio` key
-3. Run `xcodegen generate` to regenerate the project
-4. In Xcode, set your own Team under Signing & Capabilities
-5. Build and run -- everything except CarPlay will work
+- Line 3: `bundleIdPrefix: com.yourname`
+- `PRODUCT_BUNDLE_IDENTIFIER: com.yourname.vibrdrome`
+- `PRODUCT_BUNDLE_IDENTIFIER: com.yourname.vibrdrome.widget`
+- `PRODUCT_BUNDLE_IDENTIFIER: com.yourname.vibrdrome.watchkitapp`
 
-**Do not commit your signing changes.** Keep them local.
+**2. Remove or replace entitlements** you don't have approval for:
+
+- In `project.yml`, remove `CARPLAY_ENABLED` from the `SWIFT_ACTIVE_COMPILATION_CONDITIONS` line so CarPlay code stops compiling.
+- In `Vibrdrome/Vibrdrome.entitlements`, remove the `com.apple.developer.carplay-audio` key (CarPlay audio requires Apple's explicit per-account approval).
+- In both `Vibrdrome/Vibrdrome.entitlements` and `VibrdromeWidget/VibrdromeWidget.entitlements`, either remove the `com.apple.security.application-groups` array or change the group ID to one you register under your own team. Without App Groups, the widget won't share playback state with the app but everything else works.
+
+**3. Regenerate the Xcode project** to pick up the `project.yml` changes:
+
+```bash
+xcodegen generate
+```
+
+**4. Set your Team** in Xcode. Open the project, click the project name at the top of the file tree, and for each target (Vibrdrome, VibrdromeWidget, VibrdromeWatch) under Signing & Capabilities, pick your personal team. Xcode will handle provisioning automatically.
+
+**5. Build and run.** Plug in your phone, select it as the Run destination, Cmd+R. If Xcode complains about a capability after that, the editor will tell you which one -- just remove it.
 
 ### Requirements
 
