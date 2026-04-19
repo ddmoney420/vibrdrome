@@ -17,6 +17,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         )
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
+        config.httpMaximumConnectionsPerHost = 3
         // Security hardening: disable cookies and credential caching
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never

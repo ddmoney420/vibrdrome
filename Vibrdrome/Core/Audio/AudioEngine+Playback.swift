@@ -295,7 +295,7 @@ extension AudioEngine {
 
         // Manual next always advances — reset repeat-one state
         repeatOneUsed = false
-        guard advanceIndex() else { return }
+        guard advanceIndex(), currentIndex < queue.count else { return }
         play(song: queue[currentIndex])
         refillRadioIfNeeded()
     }

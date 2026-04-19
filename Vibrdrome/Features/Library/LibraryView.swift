@@ -71,9 +71,6 @@ struct LibraryView: View {
                     .accessibilityIdentifier("createPlaylistButton")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    profileMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
                     if settingsInNavBar {
                         NavigationLink {
                             SettingsView()
@@ -85,12 +82,7 @@ struct LibraryView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCustomize = true
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                    }
-                    .accessibilityLabel("Customize Library")
+                    profileMenu
                 }
                 #else
                 ToolbarItem(placement: .automatic) {
@@ -514,8 +506,14 @@ struct LibraryView: View {
                         appState.switchToServer(id: server.id)
                         Task { await reloadSections() }
                     } label: {
-                        HStack {
+                        HStack(spacing: 6) {
+                            if appState.activeServerId == server.id {
+                                Circle()
+                                    .fill(appState.isConfigured ? .green : .red)
+                                    .frame(width: 8, height: 8)
+                            }
                             Text(server.name)
+                            Spacer()
                             if appState.activeServerId == server.id {
                                 Image(systemName: "checkmark")
                             }
@@ -550,21 +548,21 @@ struct LibraryView: View {
                 }
             }
 
-            // Downloads section
+            // Downloads & Customize
             Section {
                 NavigationLink {
                     DownloadsView()
                 } label: {
                     Label("Downloaded", systemImage: "arrow.down.circle")
                 }
+                Button {
+                    showCustomize = true
+                } label: {
+                    Label("Customize Library", systemImage: "slider.horizontal.3")
+                }
             }
         } label: {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(appState.isConfigured ? .green : .red)
-                    .frame(width: 8, height: 8)
-                Image(systemName: "person.circle")
-            }
+            Image(systemName: "person.circle")
         }
         .accessibilityLabel("Profile")
         .accessibilityValue(appState.isConfigured ? "Connected" : "Disconnected")

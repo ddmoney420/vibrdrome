@@ -4,6 +4,33 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 37 — April 11, 2026
+- CarPlay: Now Playing template with shuffle, repeat, Up Next queue
+- CarPlay: progress slider and time tracking now update in real-time
+- CarPlay: auto-navigates to Now Playing when starting a track
+- CarPlay: reconnection restores playback state and album art
+- CarPlay: crash-safe array access, navigation guard race fix
+- Apple Music-style dock: Artists, Albums, Songs, Genres, Favorites as optional tabs
+- Toolbar cleanup: 2 buttons only, customize moved to profile menu
+- Green dot moved to server name inside profile menu
+- Tappable artist on album detail navigates to artist page
+- Offline scrobble queue for ListenBrainz and Last.fm
+- Last.fm auth: URL encoding fix for special characters, error messages shown in UI
+- Visualizer audio stutter eliminated (audio tap always active)
+- Fix: Playlist delete swipe now targets correct song when search is active
+- Fix: Download concurrency capped at 3 to prevent network saturation
+- Fix: Sleep timer volume pop on expire (delay before restoring volume)
+- Fix: Lyrics negative offset clamped to prevent sync failure
+- Fix: Smart shuffle force unwrap removed
+- Fix: SubsonicAuth salt generation force unwrap removed
+- Fix: next() bounds check on currentIndex
+- 512 unit tests in 37 suites
+
+**TestFlight Notes:**
+> CarPlay overhaul: Now Playing, Up Next, progress tracking, auto-navigate.
+> Apple Music-style dock tabs. Toolbar cleanup. Tappable artist. Offline
+> scrobble queue. Last.fm fix. 8 bug fixes from full app audit.
+
 ### Build 36 — April 10, 2026
 - Tappable artist name on album detail — navigates to artist page
 - Offline scrobble queue for ListenBrainz and Last.fm (queued when offline, flushed on reconnect)

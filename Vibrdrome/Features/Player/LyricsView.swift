@@ -135,7 +135,7 @@ private struct SyncedLyricsContent: View {
 
     private func updateActiveLine() {
         guard lyrics.synced else { return }
-        let currentMs = Int(engine.currentTime * 1000) + (lyrics.offset ?? 0)
+        let currentMs = max(0, Int(engine.currentTime * 1000) + (lyrics.offset ?? 0))
         let lines = lyrics.line ?? []
 
         var newIndex = 0

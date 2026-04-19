@@ -2,7 +2,7 @@
 import CarPlay
 
 @MainActor
-final class CarPlayManager {
+final class CarPlayManager: NSObject {
     private let interfaceController: CPInterfaceController
     private var searchHandler: CarPlaySearchHandler?
     private var isNavigating = false
@@ -13,9 +13,12 @@ final class CarPlayManager {
 
     init(interfaceController: CPInterfaceController) {
         self.interfaceController = interfaceController
+        super.init()
+        configureNowPlayingTemplate()
     }
 
     func tearDown() {
+        CPNowPlayingTemplate.shared.remove(self)
         // C2: Reset navigation flag explicitly
         isNavigating = false
         // Cancel all active tasks
@@ -76,6 +79,58 @@ final class CarPlayManager {
         interfaceController.setRootTemplate(tabBar, animated: false) { _, _ in }
     }
 
+    // MARK: - Now Playing Template
+
+    private func configureNowPlayingTemplate() {
+        let nowPlaying = CPNowPlayingTemplate.shared
+        nowPlaying.add(self)
+
+        let shuffle = CPNowPlayingShuffleButton { _ in
+            AudioEngine.shared.toggleShuffle()
+        }
+        let repeatBtn = CPNowPlayingRepeatButton { _ in
+            AudioEngine.shared.cycleRepeatMode()
+        }
+        nowPlaying.updateNowPlayingButtons([shuffle, repeatBtn])
+        nowPlaying.isUpNextButtonEnabled = true
+        nowPlaying.upNextTitle = "Up Next"
+
+        // Refresh MPNowPlayingInfoCenter in case music is already playing
+        if let song = AudioEngine.shared.currentSong {
+            NowPlayingManager.shared.update(song: song, isPlaying: AudioEngine.shared.isPlaying)
+            NowPlayingManager.shared.updateElapsedTime(AudioEngine.shared.currentTime)
+        }
+    }
+
+    private func showUpNext() {
+        let engine = AudioEngine.shared
+        let upcoming = engine.upNext
+        guard !upcoming.isEmpty else {
+            let empty = CPListTemplate(title: "Up Next", sections: [
+                CPListSection(items: [CPListItem(text: "Queue is empty", detailText: nil)])
+            ])
+            interfaceController.pushTemplate(empty, animated: true) { _, _ in }
+            return
+        }
+
+        let items = upcoming.prefix(30).enumerated().map { offset, song in
+            let item = CPListItem(text: song.title, detailText: song.artist ?? "")
+            if let coverArtId = song.coverArt {
+                loadImage(id: coverArtId, size: 120, into: item)
+            }
+            item.handler = { _, completion in
+                engine.skipToIndex(engine.currentIndex + 1 + offset)
+                completion()
+            }
+            return item
+        }
+
+        let template = CPListTemplate(
+            title: "Up Next", sections: [CPListSection(items: items)]
+        )
+        interfaceController.pushTemplate(template, animated: true) { _, _ in }
+    }
+
     // MARK: - Task Tracking (C1)
 
     /// Track a task that auto-removes itself on completion
@@ -102,13 +157,11 @@ final class CarPlayManager {
             guard let self else { return }
             defer { self.isNavigating = false }
             do {
-                // C2: Check cancellation before pushing
                 guard !Task.isCancelled else { return }
                 guard let template = try await builder() else { return }
                 guard !Task.isCancelled else { return }
                 self.interfaceController.pushTemplate(template, animated: true) { _, _ in }
             } catch {
-                // C2: Don't push error template if task was cancelled (disconnect)
                 guard !Task.isCancelled else { return }
                 let errorTemplate = CPListTemplate(
                     title: "Error",
@@ -164,6 +217,19 @@ final class CarPlayManager {
             }
             items.insert(genreItem, at: 3)
         }
+
+        // Now Playing item
+        let nowPlayingItem = CPListItem(
+            text: "Now Playing", detailText: nil,
+            image: UIImage(systemName: "play.circle.fill")
+        )
+        nowPlayingItem.handler = { [weak self] _, completion in
+            self?.interfaceController.pushTemplate(
+                CPNowPlayingTemplate.shared, animated: true
+            ) { _, _ in }
+            completion()
+        }
+        items.append(nowPlayingItem)
 
         // Search item at the end
         let searchItem = CPListItem(text: "Search", detailText: nil, image: UIImage(systemName: "magnifyingglass"))
@@ -286,11 +352,12 @@ final class CarPlayManager {
                 if let coverArtId = song.coverArt ?? album.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
-                item.handler = { _, completion in
+                item.handler = { [weak self] _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
+                    self?.pushNowPlaying()
                 }
                 item.playingIndicatorLocation = .trailing
                 return item
@@ -299,18 +366,20 @@ final class CarPlayManager {
             let playAll = CPListItem(text: "Play All",
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
-            playAll.handler = { _, completion in
-                AudioEngine.shared.play(song: songs[0], from: songs)
+            playAll.handler = { [weak self] _, completion in
+                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
                 completion()
+                self?.pushNowPlaying()
             }
 
             let shuffle = CPListItem(text: "Shuffle", detailText: nil,
                                      image: UIImage(systemName: "shuffle"))
-            shuffle.handler = { _, completion in
+            shuffle.handler = { [weak self] _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
-                AudioEngine.shared.play(song: shuffled[0], from: shuffled)
+                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
                 completion()
+                self?.pushNowPlaying()
             }
 
             let sections = [
@@ -365,11 +434,12 @@ final class CarPlayManager {
                     if let coverArtId = song.coverArt {
                         self?.loadImage(id: coverArtId, size: 120, into: item)
                     }
-                    item.handler = { _, completion in
+                    item.handler = { [weak self] _, completion in
                         AudioEngine.shared.play(
                             song: song, from: visibleSongs,
                             at: visibleSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
                         completion()
+                        self?.pushNowPlaying()
                     }
                     return item
                 }
@@ -474,11 +544,12 @@ final class CarPlayManager {
                 if let coverArtId = song.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
-                item.handler = { _, completion in
+                item.handler = { [weak self] _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
+                    self?.pushNowPlaying()
                 }
                 return item
             }
@@ -486,18 +557,20 @@ final class CarPlayManager {
             let playAll = CPListItem(text: "Play All",
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
-            playAll.handler = { _, completion in
-                AudioEngine.shared.play(song: songs[0], from: songs)
+            playAll.handler = { [weak self] _, completion in
+                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
                 completion()
+                self?.pushNowPlaying()
             }
 
             let shuffle = CPListItem(text: "Shuffle", detailText: nil,
                                      image: UIImage(systemName: "shuffle"))
-            shuffle.handler = { _, completion in
+            shuffle.handler = { [weak self] _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
-                AudioEngine.shared.play(song: shuffled[0], from: shuffled)
+                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
                 completion()
+                self?.pushNowPlaying()
             }
 
             let sections = [
@@ -557,6 +630,17 @@ final class CarPlayManager {
         interfaceController.pushTemplate(template, animated: true) { _, _ in }
     }
 
+    // MARK: - Now Playing Navigation
+
+    /// Push the Now Playing template after starting playback from a track list
+    private func pushNowPlaying() {
+        let nowPlaying = CPNowPlayingTemplate.shared
+        // Only push if not already showing
+        if interfaceController.topTemplate !== nowPlaying {
+            interfaceController.pushTemplate(nowPlaying, animated: true) { _, _ in }
+        }
+    }
+
     // MARK: - Helpers
 
     private func loadImage(id: String, size: Int, into item: CPListItem) {
@@ -578,5 +662,19 @@ final class CarPlayManager {
             }
         }
     }
+}
+
+// MARK: - Now Playing Observer
+
+extension CarPlayManager: CPNowPlayingTemplateObserver {
+    nonisolated func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
+        Task { @MainActor in
+            showUpNext()
+        }
+    }
+
+    nonisolated func nowPlayingTemplateAlbumArtistButtonTapped(
+        _ nowPlayingTemplate: CPNowPlayingTemplate
+    ) {}
 }
 #endif

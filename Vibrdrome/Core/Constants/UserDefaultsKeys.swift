@@ -113,6 +113,11 @@ enum UserDefaultsKeys {
 
     static let settingsInNavBar = "settingsInNavBar"
     static let showDownloadsTab = "showDownloadsTab"
+    static let showArtistsTab = "showArtistsTab"
+    static let showAlbumsTab = "showAlbumsTab"
+    static let showSongsTab = "showSongsTab"
+    static let showGenresTab = "showGenresTab"
+    static let showFavoritesTab = "showFavoritesTab"
     static let tabBarOrder = "tabBarOrder"
 
     // MARK: - Library Layout

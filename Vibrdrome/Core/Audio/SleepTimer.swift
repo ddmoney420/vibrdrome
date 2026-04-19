@@ -84,9 +84,13 @@ final class SleepTimer {
     private func expire() {
         timerLog.info("Sleep timer expired")
         fadeFactor = 0
+        AudioEngine.shared.applyEffectiveVolume()
         AudioEngine.shared.pause()
-        // Restore volume factor after pausing
-        fadeFactor = 1.0
         stop()
+        // Restore volume factor after a delay so the pause has fully taken effect
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.5))
+            self.fadeFactor = 1.0
+        }
     }
 }
