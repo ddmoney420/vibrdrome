@@ -2,7 +2,7 @@
 //  AudioEngine+Predownload.swift
 //  Vibrdrome
 //
-//  Created by Al Bastien on 2026-04-15.
+//  Created by Bigalmann on 2026-04-15.
 //
 
 
@@ -61,7 +61,7 @@ actor PredownloadManager {
         
         isRunning = true
         status = .idle
-        predownloadLog.info("aldebug: Starting long-running predownload task")
+        predownloadLog.debug("aldebug: Starting long-running predownload task")
         
         task = Task {
             await processPredownloadQueue()
@@ -78,7 +78,7 @@ actor PredownloadManager {
         currentDownloadSong = nil
         lastProgressUpdate = nil
         lastProgressValue = 0.0
-        predownloadLog.info("aldebug: Stopped long-running predownload task")
+        predownloadLog.debug("aldebug: Stopped long-running predownload task")
     }
     
     /// Add songs to predownload queue
@@ -94,6 +94,9 @@ actor PredownloadManager {
         while !pendingSongs.isEmpty && !Task.isCancelled {
             guard let song = pendingSongs.first else { continue }
             
+            // Check if song is already downloaded before downloading
+            let wasAlreadyDownloaded = await isSongAlreadyDownloaded(song)
+            
             await downloadSong(song)
             
             // Call prepareLookahead after first song is downloaded if needed
@@ -102,25 +105,31 @@ actor PredownloadManager {
                     AudioEngine.shared.prepareLookahead()
                 }
                 hasCalledPrepareLookahead = true
-                predownloadLog.info("aldebug: Called prepareLookahead after first song download")
+                predownloadLog.debug("aldebug: Called prepareLookahead after first song download")
             }
             
             // Remove completed song from queue
             if let index = pendingSongs.firstIndex(where: { $0.id == song.id }) {
                 pendingSongs.remove(at: index)
             }
+            
+            // Sleep for 20 seconds between downloads, but only if song was actually downloaded and there's a next song
+            if !wasAlreadyDownloaded && !pendingSongs.isEmpty && !Task.isCancelled {
+                predownloadLog.debug("aldebug: Sleeping 20 seconds before next download")
+                try? await Task.sleep(nanoseconds: 20_000_000_000) // 20 seconds
+            }
         }
         
         isRunning = false
         status = .idle
-        predownloadLog.info("aldebug: Predownload task completed")
+        predownloadLog.debug("aldebug: Predownload task completed")
     }
     
     /// Download a single song with progress monitoring
     private func downloadSong(_ song: Song) async {
         // Check if song is already downloaded
         if await isSongAlreadyDownloaded(song) {
-            predownloadLog.info("aldebug: Song \(song.title) is already downloaded, skipping")
+            predownloadLog.debug("aldebug: Song \(song.title) is already downloaded, skipping")
             return
         }
         
@@ -129,7 +138,7 @@ actor PredownloadManager {
         lastProgressUpdate = Date()
         lastProgressValue = 0.0
         
-        predownloadLog.info("aldebug: Starting download for \(song.title)")
+        predownloadLog.debug("aldebug: Starting download for \(song.title)")
         
         // Start download using DownloadManager
         let downloadManager = DownloadManager.shared
@@ -143,7 +152,7 @@ actor PredownloadManager {
         // Monitor progress until completion
         await monitorDownloadProgress(songId: song.id)
         
-        predownloadLog.info("aldebug: Completed download for \(song.title)")
+        predownloadLog.debug("aldebug: Completed download for \(song.title)")
         
         // Add recently downloaded song to AudioEngine's tracking to avoid immediate re-selection
         Task { @MainActor in
@@ -162,7 +171,7 @@ actor PredownloadManager {
         var startupTimeout = false
         let startupTimeoutDuration: TimeInterval = 30.0 // 30 seconds startup timeout
         
-        predownloadLog.info("aldebug: Starting monitorDownloadProgress for \(songId)")
+        predownloadLog.debug("aldebug: Starting monitorDownloadProgress for \(songId)")
         
         while !Task.isCancelled && !downloadStarted {
             let currentProgress = await MainActor.run {
@@ -204,7 +213,7 @@ actor PredownloadManager {
             }
             
             if isComplete {
-                predownloadLog.info("aldebug: Download completed for songId: \(songId), final progress: \(currentProgress)")
+                predownloadLog.debug("aldebug: Download completed for songId: \(songId)")
                 return
             }
             
@@ -280,6 +289,7 @@ extension AudioEngine {
     }
     
     /// Get a random downloaded song, avoiding duplicates from last maxRandomSongsPlayed returned songs
+    @MainActor
     func getRandomDownloadedSong() -> Song? {
         let modelContext = PersistenceController.shared.container.mainContext
         let descriptor = FetchDescriptor<DownloadedSong>(
@@ -338,32 +348,36 @@ extension AudioEngine {
     
     /// Start predownload for current song if needed
     /// - Parameters: startIndex - index of first song to play, queue - current song queue
+    @MainActor
     func startPredownloadIfNeeded(startIndex: Int, queue: [Song]) {
         guard startIndex < queue.count else {
             predownloadLog.debug("startPredownloadIfNeeded: No next song to predownload")
             return
         }
         
+        let hv = hashSongs(queue)
+
         let startSong = queue[startIndex]
         var nextSong = startSong
         let nextIndex = startIndex + 1
         if (nextIndex < queue.count) {
             nextSong = queue[nextIndex]
         } else {
-            predownloadLog.info("aldebug: startPredownloadIfNeeded: Last Song no predownloading \(startSong.title)")
+            predownloadLog.debug("aldebug: startPredownloadIfNeeded: Last Song no predownloading \(startSong.title)")
             return
         }
-        predownloadLog.info("aldebug: startPredownloadIfNeeded: Starting predownload for \(nextSong.title)")
+        predownloadLog.debug("aldebug: startPredownloadIfNeeded: Starting predownload for \(nextSong.title),  queuehash:\(hv)")
         
         // Get downloaded random song
         if (predownloadStatus == .stalled) {
+            DownloadManager.shared.resumeIncompleteDownloads() //Kick downloads on song changes
             if (!AudioEngine.isSongDownloaded(nextSong)) {
                 if let randomSong = getRandomDownloadedSong() {
                     insertSongNext(for: randomSong, at: nextIndex)
                     prepareLookahead()
                 }
             } else {
-                predownloadLog.info("aldebug: Download stalled but \(nextSong.title) is already downloaded")
+                predownloadLog.debug("aldebug: Download stalled but \(nextSong.title) is already downloaded")
             }
         } else {
             performPredownload(song: nextSong, nextIndex: nextIndex, queue: queue, needsPrepareLookahead: true)
@@ -372,6 +386,7 @@ extension AudioEngine {
        
     /// Perform actual predownload of songs starting from specified index
     /// - Parameters: song - starting song to predownload, nextIndex - index of song in queue, queue - current song queue, needsPrepareLookahead - whether prepareLookahead should be called
+    @MainActor
     private func performPredownload(song: Song, nextIndex: Int, queue: [Song], needsPrepareLookahead: Bool) {
         predownloadLog.debug("aldebug: performPredownload: Starting predownload for \(song.title) at index \(nextIndex)")
         
@@ -391,7 +406,7 @@ extension AudioEngine {
             return
         }
             
-        predownloadLog.info("aldebug: performPredownload: Starting download of \(songsToDownload.count) songs from index \(nextIndex)")
+        predownloadLog.debug("aldebug: performPredownload: Starting download of \(songsToDownload.count) songs from index \(nextIndex)")
             
         // Start predownload manager with songs
         Task {

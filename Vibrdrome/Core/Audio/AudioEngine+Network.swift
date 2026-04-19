@@ -16,7 +16,7 @@ extension AudioEngine {
                 let t1 = self?.isOnCellular
                 self?.isNetworkConstrained = path.isConstrained || path.isExpensive
                 let t2 = String(describing: path.status)
-                networkLog.info("aldebug: networkMonitor \(t1.debugDescription) \(t2)")
+                networkLog.debug("aldebug: networkMonitor \(t1.debugDescription) \(t2)")
             }
         }
         networkMonitor.start(queue: DispatchQueue(label: "com.vibrdrome.network"))

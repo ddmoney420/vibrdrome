@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+import os.log
+
+private let downloadProgressLog = Logger(subsystem: "com.vibrdrome.app", category: "DownloadProgress")
 
 @Observable
 @MainActor
@@ -12,8 +15,15 @@ final class DownloadProgress {
         progressBySongId[songId] = progress
     }
 
-    func remove(songId: String) {
+    func remove(songId: String)  {
         progressBySongId.removeValue(forKey: songId)
+        downloadProgressLog.debug("aldebug: Download removed \(songId)")
+    }
+
+    func removeAsync(songId: String) async {
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
+        progressBySongId.removeValue(forKey: songId)
+        downloadProgressLog.debug("aldebug: Download removed async \(songId)")
     }
 
     func progress(for songId: String) -> Double {

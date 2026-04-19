@@ -41,7 +41,7 @@ final class AudioEngine {
     
     /// Track last N random songs played to avoid duplicates
     var randomSongsPlayedIds: [String] = []
-    static let maxRandomSongsPlayed = 20 // Maximum songs to track for duplicate avoidance
+    static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
 
     // MARK: - Playback Mode
 

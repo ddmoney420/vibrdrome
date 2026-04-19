@@ -24,6 +24,14 @@ private let playbackLog = Logger(subsystem: "com.vibrdrome.app", category: "Audi
 
 extension AudioEngine {
 
+    func hashSongs(_ newQueue: [Song]) -> Int {
+        var hasher = Hasher()
+        for song in newQueue {
+            hasher.combine(song.title)
+        }
+        return hasher.finalize()
+    }
+    
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
@@ -31,7 +39,11 @@ extension AudioEngine {
             return
         }
 
-        playbackLog.debug("aldebug: play called \(song.title) \(index) q_empty:\(newQueue == nil)")
+        var hv = 0
+        if (newQueue != nil) {
+            hv = hashSongs(newQueue!)
+        }
+        playbackLog.debug("aldebug: play called \(song.title) \(index) queue:\(hv)")
         
         submitScrobbleIfNeeded()
 
