@@ -31,6 +31,8 @@ extension AudioEngine {
             return
         }
 
+        playbackLog.debug("aldebug: play called \(song.title) \(index) q_empty:\(newQueue == nil)")
+        
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -79,6 +81,12 @@ extension AudioEngine {
         isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
+        
+        if (newQueue == nil) {
+            startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
+        } else {
+            startPredownloadIfNeeded(startIndex: index, queue: newQueue!)
+        }
     }
 
     /// UI testing path for play — updates observable state without AVPlayer
@@ -112,6 +120,18 @@ extension AudioEngine {
             queue = [song]
             currentIndex = 0
         }
+    }
+    
+    func insertSongNext(for song: Song, at atSong: Int) {
+        guard atSong >= 0 && atSong <= queue.count else {
+            playbackLog.debug("aldebug: insertSongNext: Invalid index \(atSong) for queue of size \(self.queue.count)")
+            return
+        }
+        
+        // Insert song at specified index
+        queue.insert(song, at: atSong)
+        
+        playbackLog.debug("aldebug: insertSongNext: Inserted '\(song.title)' at index \(atSong), current index now \(self.currentIndex)")
     }
 
     func playRadio(station: InternetRadioStation) {
@@ -264,6 +284,7 @@ extension AudioEngine {
 
     func next() {
         guard !queue.isEmpty else { return }
+        playbackLog.debug("aldebug: next called \(self.currentIndex)")
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -478,6 +499,7 @@ extension AudioEngine {
     }
 
     func handleAutoAdvance() {
+        playbackLog.debug("aldebug: handleAutoAdvance called")
         submitScrobbleIfNeeded()
 
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
@@ -514,6 +536,7 @@ extension AudioEngine {
         scrobbleNowPlaying(songId: nextSong.id)
         refillRadioIfNeeded()
         playbackLog.info("Gapless auto-advance to: \(nextSong.title) (index \(nextIndex))")
+        startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
     }
 
     /// Jump to a specific index in the existing queue without replacing it.

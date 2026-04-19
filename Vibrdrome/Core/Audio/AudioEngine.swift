@@ -35,6 +35,13 @@ final class AudioEngine {
     var duration: TimeInterval = 0
     var isBuffering = false
     var isSeeking = false
+    
+    /// Current predownload status from PredownloadManager
+    var predownloadStatus: PredownloadStatus = .idle
+    
+    /// Track last N random songs played to avoid duplicates
+    var randomSongsPlayedIds: [String] = []
+    static let maxRandomSongsPlayed = 20 // Maximum songs to track for duplicate avoidance
 
     // MARK: - Playback Mode
 
@@ -128,6 +135,9 @@ final class AudioEngine {
     var lookaheadItem: AVPlayerItem?
     var lookaheadSongId: String?
     var lookaheadIndex: Int?
+
+    /// Predownload manager for long-running download operations
+    internal let predownloadManager = PredownloadManager()
 
     /// Observer tokens — accessed by +Observers and +Crossfade extensions
     private var timeObserver: Any?
@@ -381,19 +391,34 @@ final class AudioEngine {
     }
 
     func prepareLookahead() {
+        audioLog.debug("aldebug: prepareLookahead called \(self.activeMode == .gapless) \(self.gaplessEnabled)")
+        
         guard activeMode == .gapless,
               gaplessEnabled,
               let nextIdx = nextSongIndex() else {
             clearLookahead()
+            audioLog.debug("aldebug: prepareLookahead - clearLookahead")
             return
         }
 
         let nextSong = queue[nextIdx]
-        if lookaheadSongId == nextSong.id { return }
+
+        let url = resolveURL(for: nextSong)
+
+        // Check if this URL is already in use by current player items
+        if (lookaheadItem != nil) {
+           let oldLookaheadAsset = lookaheadItem!.asset as? AVURLAsset
+            audioLog.debug("aldebug: old url: \(oldLookaheadAsset?.url.absoluteString ?? "nil")")
+            if (oldLookaheadAsset?.url == url) {
+                audioLog.debug("aldebug: prepareLookahead - SAME look ahead item url")
+                return
+            } else {
+                audioLog.debug("aldebug: prepareLookahead - CHANGING look ahead item url")
+            }
+        }
 
         clearLookahead()
 
-        let url = resolveURL(for: nextSong)
         let item = Self.makePlayerItem(url: url)
         lookaheadItem = item
         lookaheadSongId = nextSong.id
@@ -427,6 +452,7 @@ final class AudioEngine {
     /// Create an AVPlayerItem with HTTP headers that improve reverse proxy compatibility.
     /// Prevents proxies from gzip-compressing audio streams, which corrupts transcoded audio.
     static func makePlayerItem(url: URL) -> AVPlayerItem {
+        audioLog.debug("aldebug: makePlayerItem called \(url)")
         let asset = AVURLAsset(url: url, options: [
             "AVURLAssetHTTPHeaderFieldsKey": ["Accept-Encoding": "identity"],
         ])
@@ -436,6 +462,7 @@ final class AudioEngine {
     }
 
     func replacePlayerItem(with url: URL) {
+        audioLog.debug("aldebug: replacePlayerItem called \(url)")
         tearDownObservers()
         clearLookahead()
         generation += 1

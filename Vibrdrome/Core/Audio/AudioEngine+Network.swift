@@ -13,7 +13,10 @@ extension AudioEngine {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isOnCellular = path.usesInterfaceType(.cellular)
+                let t1 = self?.isOnCellular
                 self?.isNetworkConstrained = path.isConstrained || path.isExpensive
+                let t2 = String(describing: path.status)
+                networkLog.info("aldebug: networkMonitor \(t1.debugDescription) \(t2)")
             }
         }
         networkMonitor.start(queue: DispatchQueue(label: "com.vibrdrome.network"))
@@ -58,8 +61,19 @@ extension AudioEngine {
                 )
             }
         }
+    
         return AppState.shared.subsonicClient.streamURL(
             id: song.id, maxBitRate: currentMaxBitRate
         )
+    }
+    
+    static func isSongDownloaded(_ song: Song) -> Bool {
+        let modelContext = PersistenceController.shared.container.mainContext
+        let songId = song.id
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+        )
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        return count > 0
     }
 }

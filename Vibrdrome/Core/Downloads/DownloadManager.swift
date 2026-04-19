@@ -7,6 +7,9 @@ private let downloadLog = Logger(subsystem: "com.vibrdrome.app", category: "Down
 
 final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     static let shared = DownloadManager()
+    // Move the observer storage here. NSHashTable.weakObjects()
+    // prevents retain cycles automatically.
+    internal var observers = NSHashTable<AnyObject>.weakObjects()
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(
@@ -56,6 +59,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         session.getAllTasks { [weak self] tasks in
             guard let self else { return }
 
+            downloadLog.info("aldebug: \(tasks.count) resumeIncompleteDownloads")
             // Build a set of songIds that have active background session tasks
             var activeSongIds = Set<String>()
             for task in tasks {
@@ -131,6 +135,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         task.taskDescription = song.id
         lock.withLock { activeDownloads[song.id] = task }
         task.resume()
+        downloadLog.info("aldebug: \(song.title) download started")
 
         let localPath = Self.localPath(for: song)
         let modelContext = PersistenceController.shared.container.mainContext
@@ -357,6 +362,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         didFinishDownloadingTo location: URL
     ) {
         guard let songId = downloadTask.taskDescription else { return }
+        downloadLog.info("aldebug: \(songId) urlSession line 362")
 
         // D3: Always clean up activeDownloads, even on failure
         defer {
@@ -393,6 +399,8 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
                 withIntermediateDirectories: true
             )
 
+            downloadLog.info("aldebug: \(songId) urlSession line 399 - downloading finished")
+            
             // Remove existing file if re-downloading
             try? FileManager.default.removeItem(at: destURL)
 
@@ -427,6 +435,11 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription,
               totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        let progress10 = Int(progress*10)
+        if (progress10 == 2 || progress10 == 4 || progress10 == 8 ) {
+            downloadLog.info("aldebug: \(progress) urlSession line 437 - progress")
+        }
+        
         Task { @MainActor in
             DownloadProgress.shared.update(songId: songId, progress: progress)
         }
@@ -449,6 +462,8 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
             print("Download failed for songId: \(songId)")
         }
 
+        downloadLog.info("aldebug: isCancelled: \(isCancelled) urlSession line 461")
+        
         // Clean up incomplete SwiftData record for failed (non-cancelled) downloads
         // Cancelled downloads are cleaned up in cancelDownload()
         if !isCancelled {
@@ -467,6 +482,9 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        
+        downloadLog.info("aldebug: urlSessionDidFinishEvents: urlSession line 482")
+        
         let handler = self.completionHandler
         self.completionHandler = nil
         DispatchQueue.main.async {

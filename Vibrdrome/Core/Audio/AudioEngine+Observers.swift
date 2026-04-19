@@ -57,6 +57,7 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 guard let self, self.generationValue == observerGeneration else { return }
+                observerLog.debug("aldebug: Player item status: \(status.rawValue)")
                 if status == .failed {
                     let errorDesc = item.error?.localizedDescription ?? "unknown"
                     observerLog.warning("Player item failed: \(errorDesc) — attempting resume retry")
