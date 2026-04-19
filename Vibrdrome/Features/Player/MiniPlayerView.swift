@@ -112,6 +112,7 @@ struct MiniPlayerView: View {
         #if os(iOS)
         .modifier(ConditionalGlassModifier(enabled: enableLiquidGlass))
         #endif
+        .frame(maxWidth: 560)
         .padding(.horizontal, 20)
         .accessibilityIdentifier("MiniPlayer")
         #if os(iOS)

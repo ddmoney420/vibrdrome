@@ -43,7 +43,7 @@ struct GenerationsView: View {
         }
         .navigationTitle("Generations")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .contentMargins(.bottom, 80)
         #endif
         .task { await loadDecadeArt() }

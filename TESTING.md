@@ -38,6 +38,15 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Tap album card in artist detail → opens album detail (no bounce back to artist)
 - [ ] Search "beats" in Albums tab returns matches anywhere in the library (e.g. "Beats, Rhymes and Life"), not just loaded pages
 - [ ] Genre containing a semicolon (e.g. "Hip Hop; Pop") renders without the semicolon, and tapping loads albums without error
+- [ ] Library tab shows Playlists / Artists / Albums / Songs / Genres / Downloaded list + Recently Added carousel
+- [ ] Favorites tab has Songs / Albums / Artists segmented picker and grid-list toggle on Albums/Artists
+- [ ] Heart button on Album Detail toolbar favorites the album (verify in Favorites tab)
+- [ ] Heart button on Artist Detail toolbar favorites the artist (verify in Favorites tab)
+- [ ] Artists and Albums toolbar filter menu (All / Favorites / Downloaded) filters the list correctly
+- [ ] Genres list shows real album artwork (not AI icons); no flickering when new artwork loads
+- [ ] Home tab shows Favorite Albums and Featured Genre carousels when data is available
+- [ ] CarPlay genres list shows album art
+- [ ] After phone call or Siri-read text, CarPlay playback resumes automatically
 - [ ] Artist detail shows biography (About section)
 - [ ] Artist detail shows Similar Artists carousel
 - [ ] Genre list shows artwork

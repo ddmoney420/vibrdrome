@@ -26,7 +26,38 @@ struct AlbumsView: View {
     @State private var activeGenre: String?
     @State private var searchResults: [Album] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var favoritedAlbumIds: Set<String> = []
+    @SceneStorage("albumsFilter") private var filterRaw: String = AlbumFilter.all.rawValue
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var downloadedSongs: [DownloadedSong]
     private let pageSize = 40
+
+    enum AlbumFilter: String, CaseIterable, Identifiable {
+        case all, favorites, downloaded
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: "All"
+            case .favorites: "Favorites"
+            case .downloaded: "Downloaded"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .all: "line.3.horizontal.decrease.circle"
+            case .favorites: "heart.fill"
+            case .downloaded: "arrow.down.circle.fill"
+            }
+        }
+    }
+
+    private var activeFilter: AlbumFilter {
+        AlbumFilter(rawValue: filterRaw) ?? .all
+    }
+
+    private var downloadedAlbumNames: Set<String> {
+        Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
+    }
 
     enum AlbumSortOption: String, CaseIterable {
         case name, artist, year, recentlyAdded
@@ -66,6 +97,15 @@ struct AlbumsView: View {
                 $0.genre?.caseInsensitiveCompare(activeGenre) == .orderedSame
             }
         }
+        switch activeFilter {
+        case .all:
+            break
+        case .favorites:
+            result = result.filter { favoritedAlbumIds.contains($0.id) }
+        case .downloaded:
+            let downloaded = downloadedAlbumNames
+            result = result.filter { downloaded.contains($0.name.lowercased()) }
+        }
         if clientSideSort == .year {
             result.sort { ($0.year ?? 0) > ($1.year ?? 0) }
         }
@@ -86,6 +126,7 @@ struct AlbumsView: View {
         .navigationTitle(title)
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
+        .navigationBarTitleDisplayMode(.large)
         #else
         .searchable(text: $searchText, prompt: "Search in Albums")
         #endif
@@ -105,9 +146,6 @@ struct AlbumsView: View {
                 searchResults = results?.album ?? []
             }
         }
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
         .overlay {
             if isLoading && albums.isEmpty {
                 ProgressView("Loading albums...")
@@ -200,6 +238,12 @@ struct AlbumsView: View {
                         Label(effectiveGenre?.cleanedGenreDisplay ?? "Genre", systemImage: "guitars")
                     }
                     Divider()
+                    Picker("Filter", selection: $filterRaw) {
+                        ForEach(AlbumFilter.allCases) { option in
+                            Label(option.label, systemImage: option.icon).tag(option.rawValue)
+                        }
+                    }
+                    Divider()
                     Button {
                         albums = []
                         hasMore = true
@@ -243,11 +287,20 @@ struct AlbumsView: View {
                 availableGenres = (try? await appState.subsonicClient.getGenres()
                     .map(\.value).sorted()) ?? []
             }
+            await loadFavoritedAlbumIds()
         }
         .refreshable {
             albums = []
             hasMore = true
             await loadAlbums()
+        }
+    }
+
+    private func loadFavoritedAlbumIds() async {
+        guard favoritedAlbumIds.isEmpty else { return }
+        if let starred = try? await appState.subsonicClient.getStarred(),
+           let albums = starred.album {
+            favoritedAlbumIds = Set(albums.map(\.id))
         }
     }
 

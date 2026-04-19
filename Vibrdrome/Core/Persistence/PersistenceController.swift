@@ -30,6 +30,7 @@ final class PersistenceController {
             PendingAction.self,
             SavedQueue.self,
             AlbumCollection.self,
+            GenreArtwork.self,
         ])
 
         let config = ModelConfiguration(

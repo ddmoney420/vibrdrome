@@ -77,6 +77,15 @@ struct SettingsView: View {
             }
             .accessibilityIdentifier("appearanceSettingsLink")
 
+            #if os(iOS)
+            NavigationLink {
+                TabBarSettingsView()
+            } label: {
+                Label("Tab Bar", systemImage: "dock.rectangle")
+            }
+            .accessibilityIdentifier("tabBarSettingsLink")
+            #endif
+
             #if os(macOS)
             NavigationLink {
                 LayoutSettingsView()
@@ -89,13 +98,6 @@ struct SettingsView: View {
             downloadsSection
 
             #if os(iOS)
-            NavigationLink {
-                TabBarSettingsView()
-            } label: {
-                Label("Tab Bar", systemImage: "dock.rectangle")
-            }
-            .accessibilityIdentifier("tabBarSettingsLink")
-
             carPlaySection
             #endif
 
