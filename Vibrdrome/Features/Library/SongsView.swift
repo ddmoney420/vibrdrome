@@ -84,7 +84,7 @@ struct SongsView: View {
         }
         .navigationTitle(songs.isEmpty ? "Songs" : "Songs (\(songs.count))")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         #endif
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search songs")

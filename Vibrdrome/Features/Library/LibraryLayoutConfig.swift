@@ -94,22 +94,26 @@ enum LibraryPill: String, CaseIterable, Codable, Identifiable {
 
 enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
     case recentlyAdded
+    case favoriteAlbums
     case mostPlayed
     case rediscover
     case randomPicks
     case recentlyPlayed
     case topArtists
+    case featuredGenre
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .recentlyAdded: "Recently Added"
+        case .favoriteAlbums: "Favorite Albums"
         case .mostPlayed: "Most Played"
         case .rediscover: "Rediscover"
         case .randomPicks: "Random Picks"
         case .recentlyPlayed: "Recently Played"
         case .topArtists: "Your Top Artists"
+        case .featuredGenre: "Featured Genre"
         }
     }
 }

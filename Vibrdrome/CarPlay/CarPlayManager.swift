@@ -1,6 +1,7 @@
 #if os(iOS) && CARPLAY_ENABLED
 import CarPlay
 import os.log
+import SwiftData
 
 @MainActor
 final class CarPlayManager: NSObject {
@@ -248,12 +249,28 @@ final class CarPlayManager: NSObject {
             let client = AppState.shared.subsonicClient
             let genres = try await client.getGenres()
             let sorted = genres.sorted { ($0.songCount ?? 0) > ($1.songCount ?? 0) }
-            let items = sorted.prefix(30).map { genre in
+            let context = PersistenceController.shared.container.mainContext
+            let cached = (try? context.fetch(FetchDescriptor<GenreArtwork>())) ?? []
+            let coverArtByGenre = Dictionary(uniqueKeysWithValues: cached.map { ($0.genre, $0.coverArtId) })
+
+            let items = sorted.prefix(30).map { genre -> CPListItem in
                 let detail = genre.songCount.map { "\($0) songs" }
-                let item = CPListItem(text: genre.value, detailText: detail)
+                let fallback = GenreIconView.uiImage(for: genre.value)
+                let item = CPListItem(text: genre.value, detailText: detail, image: fallback)
                 item.handler = { [weak self] _, completion in
                     self?.playGenre(genre.value)
                     completion()
+                }
+                // Swap in real album art once it loads; keeps the template
+                // responsive while images fetch in the background.
+                if let coverArtId = coverArtByGenre[genre.value] {
+                    let url = client.coverArtURL(id: coverArtId, size: 200)
+                    Task {
+                        if let (data, _) = try? await URLSession.shared.data(from: url),
+                           let image = UIImage(data: data) {
+                            item.setImage(image)
+                        }
+                    }
                 }
                 return item
             }

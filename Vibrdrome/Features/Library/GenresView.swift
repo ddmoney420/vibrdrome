@@ -1,11 +1,17 @@
+import SwiftData
 import SwiftUI
 
 struct GenresView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Query private var genreArtworks: [GenreArtwork]
     @State private var genres: [Genre] = []
     @State private var isLoading = true
     @State private var error: String?
-    @State private var genreArt: [String: String] = [:] // genre → coverArtId
+
+    private var genreArtworkMap: [String: String] {
+        Dictionary(uniqueKeysWithValues: genreArtworks.map { ($0.genre, $0.coverArtId) })
+    }
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
@@ -56,7 +62,7 @@ struct GenresView: View {
         .searchable(text: $searchText, prompt: "Search Genres")
         #endif
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         #endif
         .overlay {
             if isLoading && genres.isEmpty {
@@ -127,7 +133,7 @@ struct GenresView: View {
                 AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
             } label: {
                 HStack(spacing: 12) {
-                    GenreIconView(genre: genre.value)
+                    GenreIconView(genre: genre.value, coverArtId: genreArtworkMap[genre.value])
                         .frame(width: 48, height: 48)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -168,7 +174,7 @@ struct GenresView: View {
 
     private func genreCard(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            GenreIconView(genre: genre.value)
+            GenreIconView(genre: genre.value, coverArtId: genreArtworkMap[genre.value])
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
@@ -209,11 +215,12 @@ struct GenresView: View {
     }
 
     private func loadGenreArt(client: SubsonicClient) async {
-        for genre in genres.prefix(30) where genreArt[genre.value] == nil {
-            if let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
-               let coverArt = albums.first?.coverArt {
-                genreArt[genre.value] = coverArt
-            }
+        let existing = Set(genreArtworks.map(\.genre))
+        for genre in genres where !existing.contains(genre.value) {
+            guard let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
+                  let coverArt = albums.first?.coverArt else { continue }
+            modelContext.insert(GenreArtwork(genre: genre.value, coverArtId: coverArt))
         }
+        try? modelContext.save()
     }
 }

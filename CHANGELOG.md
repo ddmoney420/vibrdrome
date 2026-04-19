@@ -4,6 +4,30 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 47 -- April 18, 2026
+- New Library tab (Apple Music-style): single entry point with Playlists / Artists / Albums / Songs / Genres / Downloaded + Recently Added carousel
+- Default tab bar layout: Home, Favorites, Library, Search, Radio (applies to new installs; existing users can rearrange in Settings > Tab Bar)
+- Favorites tab reworked: Songs / Albums / Artists segmented picker, grid-list toggle per category
+- New Home carousels: Favorite Albums and Featured Genre (daily rotating)
+- Album detail and Artist detail now have a heart button to favorite/unfavorite
+- Artists and Albums views: filter menu for All / Favorites / Downloaded
+- Genre list now uses real album artwork (cover art of a representative album per genre) instead of generated icons
+- CarPlay genre list shows matching album art
+- CarPlay random-pause fix: audio resumes after interruptions (Siri, calls, messages) even when iOS omits the shouldResume hint
+- CarPlay route-change fix: no longer pauses on transient head-unit route hiccups
+- Large section headings across Home, Genres, Artists, Albums, Songs, Favorites, Generations
+- Tab Bar settings moved to the same level as Player and Appearance
+- Home tab's header: tighter spacing between Settings gear and profile icon; tab-bar settings label corrected from "Library" to "Home"
+- macOS: window title removed from next to traffic lights
+- iPad landscape mini player no longer stretches full-width
+- Initial server setup screen now has a Server Name field (previously only available when editing an existing server)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Apple Music-style Library tab, favorite albums/artists, favorites segments
+> and grid view, album art on genres and CarPlay, CarPlay audio resume fix,
+> home carousels, filter menus, iPad landscape mini-player width.
+
 ### Build 46 -- April 18, 2026
 - Fix: semicolon-containing genres like "Hip Hop; Pop" no longer error on tap; now render as "Hip Hop Pop" while the underlying server query is preserved
 - Fix: first tap on a song or album row now plays / navigates reliably instead of sometimes landing on the artist page (removed nested artist/album Buttons from list rows — "Go to Artist" still available via long-press menu)

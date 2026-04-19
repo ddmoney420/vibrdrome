@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct ArtistsView: View {
@@ -7,8 +8,39 @@ struct ArtistsView: View {
     @State private var error: String?
     @State private var searchText = ""
     @State private var sortReversed = false
+    @State private var favoritedArtistIds: Set<String> = []
     @AppStorage("artistsViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @SceneStorage("artistsFilter") private var filterRaw: String = ArtistFilter.all.rawValue
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var downloadedSongs: [DownloadedSong]
+
+    enum ArtistFilter: String, CaseIterable, Identifiable {
+        case all, favorites, downloaded
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: "All"
+            case .favorites: "Favorites"
+            case .downloaded: "Downloaded"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .all: "line.3.horizontal.decrease.circle"
+            case .favorites: "heart.fill"
+            case .downloaded: "arrow.down.circle.fill"
+            }
+        }
+    }
+
+    private var activeFilter: ArtistFilter {
+        ArtistFilter(rawValue: filterRaw) ?? .all
+    }
+
+    private var downloadedArtistNames: Set<String> {
+        Set(downloadedSongs.compactMap { $0.artistName?.lowercased() })
+    }
 
     enum ArtistSortOption: String, CaseIterable {
         case nameAZ, nameZA
@@ -22,12 +54,25 @@ struct ArtistsView: View {
 
     private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
         var raw: [(id: String, name: String, artists: [Artist])]
+        let downloaded = downloadedArtistNames
+        let favorited = favoritedArtistIds
+        func passesFilter(_ artist: Artist) -> Bool {
+            switch activeFilter {
+            case .all: return true
+            case .favorites: return favorited.contains(artist.id)
+            case .downloaded: return downloaded.contains(artist.name.lowercased())
+            }
+        }
         if searchText.isEmpty {
-            raw = indexes.map { (id: $0.id, name: $0.name, artists: $0.artist ?? []) }
+            raw = indexes.compactMap { index in
+                let artists = (index.artist ?? []).filter(passesFilter)
+                guard !artists.isEmpty else { return nil }
+                return (id: index.id, name: index.name, artists: artists)
+            }
         } else {
             raw = indexes.compactMap { index in
                 let filtered = (index.artist ?? []).filter {
-                    $0.name.localizedCaseInsensitiveContains(searchText)
+                    $0.name.localizedCaseInsensitiveContains(searchText) && passesFilter($0)
                 }
                 guard !filtered.isEmpty else { return nil }
                 return (id: index.id, name: index.name, artists: filtered)
@@ -73,11 +118,9 @@ struct ArtistsView: View {
         .navigationTitle("Artists")
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Artists")
+        .navigationBarTitleDisplayMode(.large)
         #else
         .searchable(text: $searchText, prompt: "Search Artists")
-        #endif
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
         #endif
         .overlay {
             if isLoading && indexes.isEmpty {
@@ -107,6 +150,12 @@ struct ArtistsView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Picker("Filter", selection: $filterRaw) {
+                        ForEach(ArtistFilter.allCases) { option in
+                            Label(option.label, systemImage: option.icon).tag(option.rawValue)
+                        }
+                    }
+                    Divider()
                     Button {
                         sortReversed = false
                     } label: {
@@ -134,12 +183,21 @@ struct ArtistsView: View {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: activeFilter == .all ? "arrow.up.arrow.down" : "line.3.horizontal.decrease.circle.fill")
                 }
             }
         }
         .task { await loadArtists() }
+        .task { await loadFavorites() }
         .refreshable { await loadArtists() }
+    }
+
+    private func loadFavorites() async {
+        guard favoritedArtistIds.isEmpty else { return }
+        if let starred = try? await appState.subsonicClient.getStarred(),
+           let artists = starred.artist {
+            favoritedArtistIds = Set(artists.map(\.id))
+        }
     }
 
     // MARK: - List view

@@ -259,11 +259,18 @@ extension XCUIApplication {
     }
 
     /// Tap the Playlists tab (iPhone) or Playlists sidebar item (iPad).
+    /// On iPhone, Playlists moved out of the default tab bar in Build 47 —
+    /// reach it through the Library tab (tap the "Library" tab first, then
+    /// the Playlists row). Falls back to the Playlists tab if still visible.
     func goToPlaylists() {
         if isSidebarLayout {
             tapSidebarItem("Playlists")
-        } else {
+        } else if tabBars.buttons["Playlists"].waitForExistence(timeout: 1) {
             tabBars.buttons["Playlists"].tap()
+        } else {
+            tabBars.buttons["Library"].tap()
+            let row = buttons["libraryHomeRow_Playlists"]
+            if row.waitForExistence(timeout: 2) { row.tap() }
         }
     }
 
@@ -272,16 +279,23 @@ extension XCUIApplication {
         if isSidebarLayout {
             tapSidebarItem("Stations")
         } else {
-            tabBars.buttons["Radio"].tap()
+            let radio = tabBars.buttons["Radio"]
+            if radio.waitForExistence(timeout: 2) { radio.tap() }
         }
     }
 
     /// Tap the Settings tab (iPhone) or Settings sidebar item (iPad).
+    /// Build 47 default hides the Settings tab (it's reachable via the gear
+    /// icon in the Home toolbar). Fall back to that when the tab is absent.
     func goToSettings() {
         if isSidebarLayout {
             tapSidebarItem("Settings")
-        } else {
+        } else if tabBars.buttons["Settings"].waitForExistence(timeout: 1) {
             tabBars.buttons["Settings"].tap()
+        } else {
+            tabBars.buttons["Home"].tap()
+            let gear = buttons["settingsNavBarButton"]
+            if gear.waitForExistence(timeout: 2) { gear.tap() }
         }
     }
 

@@ -142,6 +142,7 @@ struct VibrdromeApp: App {
         }
         #if os(macOS)
         .defaultSize(width: 1100, height: 750)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandMenu("Playback") {
                 PlaybackCommands()

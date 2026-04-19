@@ -161,11 +161,13 @@ struct LibraryCustomizeView: View {
     private func carouselIcon(_ carousel: LibraryCarousel) -> String {
         switch carousel {
         case .recentlyAdded: "clock"
+        case .favoriteAlbums: "heart.square.fill"
         case .mostPlayed: "star"
         case .rediscover: "heart"
         case .randomPicks: "shuffle"
         case .recentlyPlayed: "play.circle"
         case .topArtists: "person.2"
+        case .featuredGenre: "guitars.fill"
         }
     }
 

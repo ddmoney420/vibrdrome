@@ -11,6 +11,7 @@ struct ArtistDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showFullBio = false
+    @State private var isStarred = false
 
     var body: some View {
         List {
@@ -135,6 +136,18 @@ struct ArtistDetailView: View {
             }
         }
         .toolbar {
+            if artist != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        toggleArtistStar()
+                    } label: {
+                        Image(systemName: isStarred ? "heart.fill" : "heart")
+                            .foregroundStyle(isStarred ? Color.pink : Color.accentColor)
+                    }
+                    .accessibilityLabel(isStarred ? "Unfavorite Artist" : "Favorite Artist")
+                    .accessibilityIdentifier("artistFavoriteButton")
+                }
+            }
             if let artist {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -157,6 +170,7 @@ struct ArtistDetailView: View {
         do {
             let loadedArtist = try await appState.subsonicClient.getArtist(id: artistId)
             artist = loadedArtist
+            isStarred = loadedArtist.starred != nil
             // Load top songs and similar artists in parallel
             async let topSongsResult = appState.subsonicClient.getTopSongs(
                 artist: loadedArtist.name, count: 10
@@ -175,5 +189,24 @@ struct ArtistDetailView: View {
     private func cleanBiography(_ text: String) -> String {
         text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func toggleArtistStar() {
+        let wasStarred = isStarred
+        isStarred.toggle()
+        #if os(iOS)
+        Haptics.light()
+        #endif
+        Task {
+            do {
+                if wasStarred {
+                    try await OfflineActionQueue.shared.unstar(artistId: artistId)
+                } else {
+                    try await OfflineActionQueue.shared.star(artistId: artistId)
+                }
+            } catch {
+                isStarred = wasStarred
+            }
+        }
     }
 }

@@ -10,15 +10,16 @@ struct ContentView: View {
     @State private var isOffline = false
     @AppStorage(UserDefaultsKeys.tabBarOrder) private var tabBarOrderJSON = "[]"
     @AppStorage(UserDefaultsKeys.showSearchTab) private var showSearchTab = true
-    @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab = true
+    @AppStorage(UserDefaultsKeys.showPlaylistsTab) private var showPlaylistsTab = false
     @AppStorage(UserDefaultsKeys.showRadioTab) private var showRadioTab = true
+    @AppStorage(UserDefaultsKeys.showLibraryHomeTab) private var showLibraryHomeTab = true
     @AppStorage(UserDefaultsKeys.settingsInNavBar) private var settingsInNavBar = false
     @AppStorage(UserDefaultsKeys.showDownloadsTab) private var showDownloadsTab = false
     @AppStorage(UserDefaultsKeys.showArtistsTab) private var showArtistsTab = false
     @AppStorage(UserDefaultsKeys.showAlbumsTab) private var showAlbumsTab = false
     @AppStorage(UserDefaultsKeys.showSongsTab) private var showSongsTab = false
     @AppStorage(UserDefaultsKeys.showGenresTab) private var showGenresTab = false
-    @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab = false
+    @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab = true
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -122,25 +123,26 @@ struct ContentView: View {
     }
 
     private var orderedTabIds: [String] {
+        let allIds = ["library", "favorites", "library-home", "search", "radio",
+                      "artists", "albums", "songs", "genres",
+                      "playlists", "downloads", "settings"]
         if let data = tabBarOrderJSON.data(using: .utf8),
            let saved = try? JSONDecoder().decode([String].self, from: data),
            !saved.isEmpty {
             // Ensure all known tabs are in the list (append missing ones)
-            let allIds = ["library", "artists", "albums", "songs", "genres",
-                          "favorites", "search", "playlists", "radio", "downloads", "settings"]
             var result = saved.filter { allIds.contains($0) }
             for id in allIds where !result.contains(id) {
                 result.append(id)
             }
             return result
         }
-        return ["library", "artists", "albums", "songs", "genres",
-                "favorites", "search", "playlists", "radio", "downloads", "settings"]
+        return allIds
     }
 
     private func isTabVisible(_ id: String) -> Bool {
         switch id {
         case "library": return true
+        case "library-home": return showLibraryHomeTab
         case "artists": return showArtistsTab
         case "albums": return showAlbumsTab
         case "songs": return showSongsTab
@@ -188,6 +190,7 @@ struct ContentView: View {
 
     private func tabLabel(_ id: String) -> String {
         switch id {
+        case "library-home": return "Library"
         case "artists": return "Artists"
         case "albums": return "Albums"
         case "songs": return "Songs"
@@ -204,6 +207,7 @@ struct ContentView: View {
 
     private func tabIcon(_ id: String) -> String {
         switch id {
+        case "library-home": return "music.note.house.fill"
         case "artists": return "music.mic"
         case "albums": return "square.stack.fill"
         case "songs": return "music.note"
@@ -221,6 +225,7 @@ struct ContentView: View {
     @ViewBuilder
     private func tabView(for id: String) -> some View {
         switch id {
+        case "library-home": NavigationStack { LibraryHomeView() }
         case "artists": NavigationStack { ArtistsView() }
         case "albums": NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
         case "songs": NavigationStack { SongsView() }
@@ -240,6 +245,11 @@ struct ContentView: View {
             LibraryView(navPath: $libraryNavPath)
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag("library")
+            if showLibraryHomeTab {
+                NavigationStack { LibraryHomeView() }
+                    .tabItem { Label("Library", systemImage: "music.note.house.fill") }
+                    .tag("library-home")
+            }
             if showArtistsTab {
                 NavigationStack { ArtistsView() }
                     .tabItem { Label("Artists", systemImage: "music.mic") }

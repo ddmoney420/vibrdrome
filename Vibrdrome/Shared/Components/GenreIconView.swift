@@ -1,7 +1,15 @@
 import SwiftUI
+import NukeUI
 
 struct GenreIconView: View {
     let genre: String
+    let coverArtId: String?
+    @Environment(AppState.self) private var appState
+
+    init(genre: String, coverArtId: String? = nil) {
+        self.genre = genre
+        self.coverArtId = coverArtId
+    }
 
     private var style: (icon: String, colors: [Color]) {
         let key = genre.lowercased()
@@ -218,33 +226,49 @@ struct GenreIconView: View {
                                .init(red: 0.2, green: 0.2, blue: 0.3)])
     }
 
-    private var assetName: String {
-        "genre_" + genre.replacingOccurrences(of: " ", with: "_")
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: "-", with: "_")
-    }
-
-    private var hasAsset: Bool {
-        #if os(iOS)
-        UIImage(named: assetName) != nil
-        #else
-        NSImage(named: assetName) != nil
-        #endif
-    }
-
     var body: some View {
-        if hasAsset {
-            Image(assetName)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            let s = style
-            ZStack {
-                LinearGradient(colors: s.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: s.icon)
-                    .font(.system(size: 30, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
+        if let coverArtId {
+            LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 300)) { state in
+                if let image = state.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    fallbackIcon
+                }
             }
+        } else {
+            fallbackIcon
+        }
+    }
+
+    private var fallbackIcon: some View {
+        let s = style
+        return ZStack {
+            LinearGradient(colors: s.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Image(systemName: s.icon)
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
         }
     }
 }
+
+#if os(iOS)
+import UIKit
+
+extension GenreIconView {
+    /// Rasterized icon for surfaces that can't host SwiftUI (e.g. CarPlay CPListItem).
+    /// Uses the gradient + SF Symbol fallback — the album-art path is only
+    /// visible in SwiftUI contexts because ImageRenderer here doesn't get the
+    /// model container. Callers wanting real album art (CarPlay) should fetch
+    /// the cover art URL via SubsonicClient.coverArtURL(id:) and load the image
+    /// themselves, falling back to this method if no artwork is cached yet.
+    @MainActor
+    static func uiImage(for genre: String, size: CGSize = CGSize(width: 80, height: 80)) -> UIImage? {
+        let view = GenreIconView(genre: genre)
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: size.width * 0.15))
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = UIScreen.main.scale
+        return renderer.uiImage
+    }
+}
+#endif

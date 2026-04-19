@@ -10,6 +10,9 @@ struct LibraryView: View {
     @State private var randomAlbums: [Album] = []
     @State private var recentlyPlayedAlbums: [Album] = []
     @State private var starredSongs: [Song] = []
+    @State private var favoriteAlbums: [Album] = []
+    @State private var featuredGenreAlbums: [Album] = []
+    @State private var featuredGenreName: String = ""
     @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?)] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
@@ -50,7 +53,7 @@ struct LibraryView: View {
             }
             .navigationTitle(activeServerName)
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             #endif
             .toolbar {
                 #if os(iOS)
@@ -73,18 +76,18 @@ struct LibraryView: View {
                     .accessibilityIdentifier("createPlaylistButton")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if settingsInNavBar {
-                        NavigationLink {
-                            SettingsView()
-                        } label: {
-                            Image(systemName: "gear")
+                    HStack(spacing: 14) {
+                        if settingsInNavBar {
+                            NavigationLink {
+                                SettingsView()
+                            } label: {
+                                Image(systemName: "gear")
+                            }
+                            .accessibilityLabel("Settings")
+                            .accessibilityIdentifier("settingsNavBarButton")
                         }
-                        .accessibilityLabel("Settings")
-                        .accessibilityIdentifier("settingsNavBarButton")
+                        profileMenu
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    profileMenu
                 }
                 #else
                 ToolbarItem(placement: .automatic) {
@@ -166,6 +169,7 @@ struct LibraryView: View {
     // MARK: - Dynamic Carousel
 
     @ViewBuilder
+    // swiftlint:disable:next cyclomatic_complexity
     private func carouselView(for carousel: LibraryCarousel) -> some View {
         switch carousel {
         case .recentlyAdded:
@@ -199,6 +203,18 @@ struct LibraryView: View {
         case .topArtists:
             if !topArtistNames.isEmpty {
                 topArtistsCarousel
+            }
+        case .favoriteAlbums:
+            if !favoriteAlbums.isEmpty {
+                albumSection("Favorite Albums", albums: favoriteAlbums) {
+                    FavoritesView()
+                }
+            }
+        case .featuredGenre:
+            if !featuredGenreAlbums.isEmpty && !featuredGenreName.isEmpty {
+                albumSection("Featured: \(featuredGenreName)", albums: featuredGenreAlbums) {
+                    AlbumsView(listType: .byGenre, title: featuredGenreName, genre: featuredGenreName)
+                }
             }
         }
     }
@@ -653,13 +669,37 @@ struct LibraryView: View {
         randomAlbums = (try? await random) ?? randomAlbums
         recentlyPlayedAlbums = (try? await recentlyPlayed) ?? recentlyPlayedAlbums
 
-        if let result = try? await starred, var songs = result.song, !songs.isEmpty {
-            songs.shuffle()
-            starredSongs = Array(songs.prefix(15))
+        if let result = try? await starred {
+            if var songs = result.song, !songs.isEmpty {
+                songs.shuffle()
+                starredSongs = Array(songs.prefix(15))
+            }
+            if let albums = result.album {
+                favoriteAlbums = Array(albums.prefix(15))
+            }
         }
+
+        // Featured genre: pick a random genre with enough albums and load 10
+        await loadFeaturedGenre(client: client, folder: folder)
 
         // Load top artists from local play history
         loadTopArtists()
+    }
+
+    private func loadFeaturedGenre(client: SubsonicClient, folder: String?) async {
+        guard featuredGenreAlbums.isEmpty else { return }
+        guard let genres = try? await client.getGenres() else { return }
+        // Rotate daily: pick a genre using day-of-year seed so the featured
+        // carousel feels fresh without hitting the server every launch.
+        let seeded = genres.filter { ($0.albumCount ?? 0) >= 5 }
+        guard !seeded.isEmpty else { return }
+        let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
+        let pick = seeded[dayOfYear % seeded.count]
+        featuredGenreName = pick.value.cleanedGenreDisplay
+        if let albums = try? await client.getAlbumList(
+            type: .byGenre, size: 10, genre: pick.value, musicFolderId: folder) {
+            featuredGenreAlbums = albums
+        }
     }
 
     private func loadTopArtists() {

@@ -164,18 +164,27 @@ final class AppState {
         return true
     }
 
-    func saveCredentials(url: String, username: String, password: String) {
+    func saveCredentials(url: String, username: String, password: String, name: String? = nil) {
         configure(url: url, username: username, password: password)
         guard isConfigured else { return }
+
+        let trimmedName = name?.trimmingCharacters(in: .whitespaces)
+        let resolvedName: String = {
+            if let trimmedName, !trimmedName.isEmpty { return trimmedName }
+            return extractServerName(from: serverURL)
+        }()
 
         // Update or create server config
         if let activeId = activeServerId,
            let index = servers.firstIndex(where: { $0.id == activeId }) {
             servers[index].url = serverURL
             servers[index].username = username
+            if let trimmedName, !trimmedName.isEmpty {
+                servers[index].name = trimmedName
+            }
             keychain["server_\(activeId)"] = password
         } else {
-            let config = SavedServer(name: extractServerName(from: serverURL), url: serverURL, username: username)
+            let config = SavedServer(name: resolvedName, url: serverURL, username: username)
             servers.append(config)
             activeServerId = config.id
             keychain["server_\(config.id)"] = password

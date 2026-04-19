@@ -14,6 +14,7 @@ struct AlbumDetailView: View {
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
+    @State private var isStarred = false
 
     var body: some View {
         ScrollView {
@@ -81,6 +82,16 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    toggleAlbumStar()
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .foregroundStyle(isStarred ? Color.pink : Color.accentColor)
+                }
+                .accessibilityLabel(isStarred ? "Unfavorite Album" : "Favorite Album")
+                .accessibilityIdentifier("albumFavoriteButton")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -597,6 +608,7 @@ struct AlbumDetailView: View {
         defer { isLoading = false }
         do {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
+            isStarred = album?.starred != nil
             // Load album notes (info2) in background — non-fatal if it fails
             if let info = try? await appState.subsonicClient.getAlbumInfo(id: albumId) {
                 albumNotes = info.notes
@@ -619,6 +631,25 @@ struct AlbumDetailView: View {
             }
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+
+    private func toggleAlbumStar() {
+        let wasStarred = isStarred
+        isStarred.toggle()
+        #if os(iOS)
+        Haptics.light()
+        #endif
+        Task {
+            do {
+                if wasStarred {
+                    try await OfflineActionQueue.shared.unstar(albumId: albumId)
+                } else {
+                    try await OfflineActionQueue.shared.star(albumId: albumId)
+                }
+            } catch {
+                isStarred = wasStarred
+            }
         }
     }
 }
