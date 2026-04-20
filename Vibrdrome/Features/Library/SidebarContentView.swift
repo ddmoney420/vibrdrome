@@ -227,6 +227,7 @@ struct SidebarContentView: View {
             .safeAreaInset(edge: .bottom) {
                 if engine.currentSong != nil || engine.currentRadioStation != nil {
                     MiniPlayerView()
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
             }
         #endif
