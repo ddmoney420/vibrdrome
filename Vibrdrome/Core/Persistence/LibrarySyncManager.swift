@@ -117,7 +117,7 @@ final class LibrarySyncManager {
         } else {
             // Server unchanged — just update the stale check timestamp
             lastSyncDate = Date()
-            syncLog.info("Server data unchanged, skipping sync")
+            syncLog.info("Server data unchanged, skipping sync (trigger: auto-stale-check)")
         }
     }
 
@@ -136,7 +136,7 @@ final class LibrarySyncManager {
 
                 let changed = await self.hasServerChanged(client: client)
                 if changed {
-                    syncLog.info("Polling detected server changes, triggering incremental sync")
+                    syncLog.info("Polling detected server changes, triggering incremental sync (trigger: auto-poll)")
                     await self.performSync(mode: .incremental, client: client, container: container)
                 }
             }
@@ -517,6 +517,7 @@ final class LibrarySyncManager {
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
+                    // swiftlint:disable:next redundant_nil_coalescing
                     if let detail = await group.next() ?? nil {
                         results.append(detail)
                     }
@@ -654,6 +655,16 @@ final class LibrarySyncManager {
 
         syncLog.info("Prefetching \(uncachedUrls.count) cover art images (\(alreadyCached) already cached)")
 
+        let fetched = await prefetchBatches(uncachedUrls: uncachedUrls, total: total, alreadyCached: alreadyCached)
+
+        didPrefetchThisSession = true
+        UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
+        syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
+    }
+
+    /// Fetch cover art in batches of 10 with per-image timeouts. Returns total processed count.
+    private func prefetchBatches(uncachedUrls: [(String, URL)], total: Int, alreadyCached: Int) async -> Int {
+        let pipeline = ImagePipeline.shared
         var fetched = alreadyCached
         let batchSize = 10
         let perImageTimeout: UInt64 = 15_000_000_000 // 15 seconds
@@ -683,10 +694,7 @@ final class LibrarySyncManager {
             fetched += batch.count
             syncProgress = "Prefetching cover art… \(fetched)/\(total)"
         }
-
-        didPrefetchThisSession = true
-        UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
-        syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
+        return fetched
     }
 
     // MARK: - Sync History

@@ -26,6 +26,7 @@ final class CachedPlaylist {
         self.changed = playlist.changed
     }
 
+    /// Converts to a lightweight Playlist with `entry: nil`; songs are loaded separately in PlaylistDetailView.
     func toPlaylist() -> Playlist {
         Playlist(
             id: id,
