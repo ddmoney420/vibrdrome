@@ -251,9 +251,12 @@ final class CarPlayManager: NSObject {
             let sorted = genres.sorted { ($0.songCount ?? 0) > ($1.songCount ?? 0) }
             let context = PersistenceController.shared.container.mainContext
             let cached = (try? context.fetch(FetchDescriptor<GenreArtwork>())) ?? []
-            let coverArtByGenre = Dictionary(uniqueKeysWithValues: cached.map { ($0.genre, $0.coverArtId) })
+            let coverArtByGenre = Dictionary(
+                cached.map { ($0.genre, $0.coverArtId) },
+                uniquingKeysWith: { first, _ in first }
+            )
 
-            let items = sorted.prefix(30).map { genre -> CPListItem in
+            let items = sorted.map { genre -> CPListItem in
                 let detail = genre.songCount.map { "\($0) songs" }
                 let fallback = GenreIconView.uiImage(for: genre.value)
                 let item = CPListItem(text: genre.value, detailText: detail, image: fallback)
@@ -442,7 +445,9 @@ final class CarPlayManager: NSObject {
             var sections: [CPListSection] = []
 
             if let songs = starred.song, !songs.isEmpty {
-                let visibleSongs = Array(songs.prefix(20))
+                // Cap at 200 to stay under CPListTemplate's ~500-item ceiling
+                // when combined with the Albums section below.
+                let visibleSongs = Array(songs.prefix(200))
                 let songItems = visibleSongs.map { [weak self] song in
                     let item = CPListItem(text: song.title,
                                           detailText: song.artist ?? "")
@@ -463,7 +468,7 @@ final class CarPlayManager: NSObject {
             }
 
             if let albums = starred.album, !albums.isEmpty {
-                let albumItems = albums.prefix(20).map { [weak self] album in
+                let albumItems = albums.prefix(200).map { [weak self] album in
                     let item = CPListItem(text: album.name,
                                           detailText: album.artist ?? "")
                     if let coverArtId = album.coverArt {
@@ -609,33 +614,25 @@ final class CarPlayManager: NSObject {
                 let stations = try await client.getRadioStations()
                 guard !Task.isCancelled else { return }
 
-                // Group into sections of 20 to avoid CarPlay head unit item limits
-                let chunkSize = 20
-                var sections: [CPListSection] = []
-                for start in stride(from: 0, to: stations.count, by: chunkSize) {
-                    let end = min(start + chunkSize, stations.count)
-                    let chunk = stations[start..<end]
-                    let items = chunk.map { station in
-                        let item = CPListItem(text: station.name, detailText: nil,
-                                              image: UIImage(systemName: "radio"))
-                        if let artId = station.radioCoverArtId {
-                            self?.loadImage(id: artId, size: 120, into: item)
-                        } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }) {
-                            self?.loadFavicon(host: host, into: item)
-                        }
-                        item.handler = { _, completion in
-                            AudioEngine.shared.playRadio(station: station)
-                            completion()
-                        }
-                        return item
+                // Single flat list — CarPlay's CPListTemplate supports up to
+                // ~500 items across a template. Earlier multi-section chunking
+                // with "1-20 of N" headers didn't scroll past the first section
+                // on some head units, hiding stations from the user.
+                let items = stations.map { station -> CPListItem in
+                    let item = CPListItem(text: station.name, detailText: nil,
+                                          image: UIImage(systemName: "radio"))
+                    if let artId = station.radioCoverArtId {
+                        self?.loadImage(id: artId, size: 120, into: item)
+                    } else if let host = station.homePageUrl.flatMap({ URL(string: $0)?.host }) {
+                        self?.loadFavicon(host: host, into: item)
                     }
-                    let header = stations.count > chunkSize
-                        ? "\(start + 1)–\(end) of \(stations.count)"
-                        : nil
-                    sections.append(CPListSection(items: items, header: header,
-                                                  sectionIndexTitle: nil))
+                    item.handler = { _, completion in
+                        AudioEngine.shared.playRadio(station: station)
+                        completion()
+                    }
+                    return item
                 }
-                template.updateSections(sections)
+                template.updateSections([CPListSection(items: items)])
             } catch {
                 guard !Task.isCancelled else { return }
                 template.updateSections([CPListSection(items: [

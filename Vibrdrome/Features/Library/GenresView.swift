@@ -10,7 +10,15 @@ struct GenresView: View {
     @State private var error: String?
 
     private var genreArtworkMap: [String: String] {
-        Dictionary(uniqueKeysWithValues: genreArtworks.map { ($0.genre, $0.coverArtId) })
+        // `uniqueKeysWithValues:` crashes on duplicate keys. Even with
+        // `@Attribute(.unique)` on GenreArtwork.genre, a single stray
+        // duplicate (concurrent insert race, pre-existing data, migration
+        // edge case) would fatalError every time the user opens Genres.
+        // `uniquingKeysWith:` keeps the first entry and moves on.
+        Dictionary(
+            genreArtworks.map { ($0.genre, $0.coverArtId) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
     @State private var searchText = ""
     @State private var sortBy: GenreSortOption = .name
