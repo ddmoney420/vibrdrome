@@ -439,20 +439,36 @@ struct AddStationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Station Details") {
+                Section("Name") {
                     TextField("Station Name", text: $name, prompt: Text("My Radio Station"))
+                }
+
+                Section {
                     TextField("Stream URL", text: $streamUrl, prompt: Text("https://stream.example.com/live"))
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
-                    TextField("Homepage (optional)", text: $homepageUrl, prompt: Text("https://example.com"))
+                } header: {
+                    Text("Stream URL")
+                } footer: {
+                    Text("Direct audio stream URL (MP3, AAC, or OGG). This is what actually plays.")
+                        .font(.caption)
+                }
+
+                Section {
+                    TextField("Homepage URL", text: $homepageUrl, prompt: Text("https://example.com"))
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
+                } header: {
+                    Text("Homepage (optional)")
+                } footer: {
+                    Text("Optional website for the station. Used to fetch a favicon as the station's icon. Leave blank to skip.")
+                        .font(.caption)
                 }
 
                 if let error {
@@ -461,12 +477,6 @@ struct AddStationView: View {
                             .foregroundStyle(.red)
                             .font(.caption)
                     }
-                }
-
-                Section {
-                    Text("Enter a direct stream URL (MP3, AAC, OGG). The station will be saved to your Navidrome server.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Add Station")
