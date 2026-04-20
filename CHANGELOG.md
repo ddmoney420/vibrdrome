@@ -4,6 +4,13 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 49 -- April 20, 2026 (Hotfix)
+- Fix: CarPlay Genres crash on tap. Crash log showed `ImageRenderer._uiImage.getter` triggering `EnvironmentValues.subscript.getter` assertion — SwiftUI was eagerly evaluating `GenreIconView`'s `@Environment(AppState.self)` during rasterization and asserting because the CarPlay-side ImageRenderer had no environment chain. Replaced the per-row rasterized fallback with a plain SF Symbol. Album art still loads async and replaces the symbol when available.
+- Removed the now-unused `GenreIconView.uiImage(for:)` rasterization helper.
+
+**TestFlight Notes:**
+> Hotfix for Build 48: CarPlay Genres crash on open fixed. Was caused by SwiftUI rasterization asserting on a missing environment; now uses a plain SF Symbol and loads real album art async.
+
 ### Build 48 -- April 19, 2026 (Hotfix)
 - Fix: Genres tab crash on open (`uniqueKeysWithValues:` fatalError on duplicate `GenreArtwork` entries). Replaced with `uniquingKeysWith:` which keeps the first entry and moves on.
 - Fix: same crash surface in CarPlay's genre list.

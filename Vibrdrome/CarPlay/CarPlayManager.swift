@@ -256,16 +256,21 @@ final class CarPlayManager: NSObject {
                 uniquingKeysWith: { first, _ in first }
             )
 
+            // Use an SF Symbol as the instant fallback instead of rendering
+            // GenreIconView through ImageRenderer for every row. For large
+            // genre libraries (50+) the per-row SwiftUI render was blocking
+            // the CarPlay main actor long enough to trip the scene watchdog
+            // and crash the app on Genres tap. The real album art still
+            // loads async below and replaces the symbol when ready.
+            let symbolFallback = UIImage(systemName: "guitars")
             let items = sorted.map { genre -> CPListItem in
                 let detail = genre.songCount.map { "\($0) songs" }
-                let fallback = GenreIconView.uiImage(for: genre.value)
-                let item = CPListItem(text: genre.value, detailText: detail, image: fallback)
+                let item = CPListItem(text: genre.value, detailText: detail,
+                                      image: symbolFallback)
                 item.handler = { [weak self] _, completion in
                     self?.playGenre(genre.value)
                     completion()
                 }
-                // Swap in real album art once it loads; keeps the template
-                // responsive while images fetch in the background.
                 if let coverArtId = coverArtByGenre[genre.value] {
                     let url = client.coverArtURL(id: coverArtId, size: 200)
                     Task {
