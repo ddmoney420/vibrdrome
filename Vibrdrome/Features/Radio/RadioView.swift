@@ -292,6 +292,13 @@ struct RadioView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                deleteStation(station)
+            } label: {
+                Label("Delete Station", systemImage: "trash")
+            }
+        }
     }
 
     private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool, size: CGFloat = 48) -> some View {
