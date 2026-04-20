@@ -4,6 +4,16 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 48 -- April 19, 2026 (Hotfix)
+- Fix: Genres tab crash on open (`uniqueKeysWithValues:` fatalError on duplicate `GenreArtwork` entries). Replaced with `uniquingKeysWith:` which keeps the first entry and moves on.
+- Fix: same crash surface in CarPlay's genre list.
+- Fix: CarPlay Radio now a flat scrollable list instead of 20-per-section chunks, so all stations are reachable (some head units wouldn't scroll past the first section).
+- Fix: CarPlay Now Playing showed the previous track's title / artwork while a radio station was streaming. `playRadio` wrote station metadata directly to `MPNowPlayingInfoCenter` but `NowPlayingManager` held the old song's info and overwrote it on the next time-tick. Routed radio metadata and artwork through `NowPlayingManager` so it sticks.
+- CarPlay item caps raised: Genres now uncapped, Favorite Songs 20 -> 200, Favorite Albums 20 -> 200 (under CPListTemplate's ~500-item ceiling).
+
+**TestFlight Notes:**
+> Hotfix: Genres tab crash fixed. CarPlay Radio scrolls through all stations now and the Now Playing display shows the correct station info. Favorite Songs/Albums and Genres no longer truncated in CarPlay.
+
 ### Build 47 -- April 18, 2026
 - New Library tab (Apple Music-style): single entry point with Playlists / Artists / Albums / Songs / Genres / Downloaded + Recently Added carousel
 - Default tab bar layout: Home, Favorites, Library, Search, Radio (applies to new installs; existing users can rearrange in Settings > Tab Bar)

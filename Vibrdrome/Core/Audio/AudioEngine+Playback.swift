@@ -151,14 +151,11 @@ extension AudioEngine {
         gaplessPlayer?.play()
         isPlaying = true
 
-        var info = [String: Any]()
-        info[MPMediaItemPropertyTitle] = station.name
-        info[MPMediaItemPropertyArtist] = "Internet Radio"
-        info[MPNowPlayingInfoPropertyIsLiveStream] = true
-        info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-        // Clear previous artwork immediately to prevent stale album art
-        info[MPMediaItemPropertyArtwork] = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // Seed NowPlayingManager's currentInfo with station metadata so
+        // subsequent updateElapsedTime / updatePlaybackState ticks don't
+        // overwrite with the previous song's info. Previously we wrote to
+        // MPNowPlayingInfoCenter directly, which got clobbered within ~500ms.
+        NowPlayingManager.shared.update(station: station, isPlaying: true)
 
         loadRadioArtwork(for: station)
     }
@@ -177,9 +174,7 @@ extension AudioEngine {
             guard let image = NSImage(data: data) else { return }
             #endif
             let artwork = makeRadioArtwork(from: image)
-            var nowInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            nowInfo[MPMediaItemPropertyArtwork] = artwork
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowInfo
+            NowPlayingManager.shared.setCurrentArtwork(artwork)
         }
     }
 
