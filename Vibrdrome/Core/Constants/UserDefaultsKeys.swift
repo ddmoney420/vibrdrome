@@ -68,6 +68,8 @@ enum UserDefaultsKeys {
     static let showAirPlayInToolbar = "showAirPlayInToolbar"
     static let showLyricsInToolbar = "showLyricsInToolbar"
     static let showSettingsInToolbar = "showSettingsInToolbar"
+    static let showRadioMixInToolbar = "showRadioMixInToolbar"
+    static let nowPlayingToolbarBackground = "nowPlayingToolbarBackground"
     static let nowPlayingToolbarOrder = "nowPlayingToolbarOrder"
 
     // MARK: - Discord

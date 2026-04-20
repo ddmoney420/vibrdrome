@@ -298,6 +298,7 @@ extension NowPlayingView {
 
     // MARK: - Bottom Toolbar (6 icons)
 
+    @ViewBuilder
     var bottomToolbar: some View {
         let orderedItems = NowPlayingToolbarItem.decodeOrder(from: toolbarOrderJSON)
         let visibleItems = orderedItems.filter { item in
@@ -307,24 +308,42 @@ extension NowPlayingView {
             case .airplay: return showAirPlayInToolbar
             case .lyrics: return showLyricsInToolbar
             case .settings: return showSettingsInToolbar
+            case .radioMix: return showRadioMixInToolbar
             }
         }
-        return HStack(spacing: 0) {
-            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                toolbarButton(for: item)
-                if index < visibleItems.count - 1 {
-                    Spacer()
+        // Hide the entire row when the user has disabled every item --
+        // previously the empty pill still rendered.
+        if !visibleItems.isEmpty {
+            HStack(spacing: 0) {
+                ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                    toolbarButton(for: item)
+                    if index < visibleItems.count - 1 {
+                        Spacer()
+                    }
                 }
             }
+            .font(.title3)
+            .fontWeight(.semibold)
+            .buttonStyle(.plain)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .modifier(ToolbarBackgroundModifier(enabled: nowPlayingToolbarBackground))
         }
-        .font(.title3)
-        .fontWeight(.semibold)
-        .buttonStyle(.plain)
-        .foregroundColor(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .modifier(GlassEffectToolbarModifier())
+    }
+
+    /// Toggles the pill background + glass effect on the bottom toolbar.
+    private struct ToolbarBackgroundModifier: ViewModifier {
+        let enabled: Bool
+        func body(content: Content) -> some View {
+            if enabled {
+                content
+                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    .modifier(GlassEffectToolbarModifier())
+            } else {
+                content
+            }
+        }
     }
 
     @ViewBuilder
@@ -374,6 +393,19 @@ extension NowPlayingView {
             }
             .accessibilityLabel("Quick Settings")
             .accessibilityIdentifier("quickSettingsButton")
+
+        case .radioMix:
+            Button {
+                guard let song = engine.currentSong else { return }
+                Haptics.light()
+                AudioEngine.shared.startSongSimilarityMix(song)
+            } label: {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .disabled(engine.currentSong == nil)
+            .accessibilityLabel("Start Radio Mix")
+            .accessibilityIdentifier("radioMixButton")
         }
     }
 

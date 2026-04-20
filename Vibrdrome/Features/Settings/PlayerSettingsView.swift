@@ -67,6 +67,8 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) private var showAirPlayInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showLyricsInToolbar) private var showLyricsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSettingsInToolbar) private var showSettingsInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showRadioMixInToolbar) private var showRadioMixInToolbar: Bool = false
+    @AppStorage(UserDefaultsKeys.nowPlayingToolbarBackground) private var nowPlayingToolbarBackground: Bool = true
     @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) private var toolbarOrderJSON: String = "[]"
 
     // Song Display
@@ -410,6 +412,17 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("showLosslessBadgeToggle")
 
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $nowPlayingToolbarBackground) {
+                    Label("Toolbar Background", systemImage: "rectangle.fill")
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("nowPlayingToolbarBackgroundToggle")
+                Text("Rounded pill + translucent backdrop behind the bottom icon row. Turn off for a cleaner look.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             nowPlayingToolbarSubsection
         } header: {
             settingSectionHeader("Controls", icon: "slider.horizontal.3", color: .blue)
@@ -443,6 +456,7 @@ struct PlayerSettingsView: View {
         case .airplay: return $showAirPlayInToolbar
         case .lyrics: return $showLyricsInToolbar
         case .settings: return $showSettingsInToolbar
+        case .radioMix: return $showRadioMixInToolbar
         }
     }
 
@@ -453,6 +467,7 @@ struct PlayerSettingsView: View {
         case .airplay: return "AirPlay"
         case .lyrics: return "Lyrics"
         case .settings: return "Quick Settings"
+        case .radioMix: return "Radio Mix"
         }
     }
 
@@ -463,6 +478,7 @@ struct PlayerSettingsView: View {
         case .airplay: return "airplayaudio"
         case .lyrics: return "quote.bubble"
         case .settings: return "gearshape"
+        case .radioMix: return "dot.radiowaves.left.and.right"
         }
     }
 
