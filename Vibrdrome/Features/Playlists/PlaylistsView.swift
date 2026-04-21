@@ -11,6 +11,7 @@ struct PlaylistsView: View {
     @AppStorage("playlistViewStyle") private var showAsList = false
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var sortBy: PlaylistSortOption = .name
 
     enum PlaylistSortOption: String, CaseIterable {
@@ -70,8 +71,12 @@ struct PlaylistsView: View {
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Playlists")
         #else
-        .searchable(text: $searchText, prompt: "Search Playlists")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Playlists")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

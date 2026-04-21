@@ -16,6 +16,7 @@ struct AlbumsView: View {
     @State private var error: String?
     @State private var hasMore = true
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
     @State private var getInfoTarget: GetInfoTarget?
@@ -130,7 +131,7 @@ struct AlbumsView: View {
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
         .navigationBarTitleDisplayMode(.large)
         #else
-        .searchable(text: $searchText, prompt: "Search in Albums")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search in Albums")
         #endif
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
@@ -147,6 +148,10 @@ struct AlbumsView: View {
                 guard !Task.isCancelled else { return }
                 searchResults = results?.album ?? []
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
         }
         .overlay {
             if isLoading && albums.isEmpty {

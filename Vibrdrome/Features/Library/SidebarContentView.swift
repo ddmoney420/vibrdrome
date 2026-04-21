@@ -210,6 +210,9 @@ struct SidebarContentView: View {
                 break
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToSearch)) { _ in
+            selectionRaw = SidebarItem.search.rawValue
+        }
     }
 
     var body: some View {

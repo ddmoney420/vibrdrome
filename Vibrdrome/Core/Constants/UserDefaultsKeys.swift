@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// Posted to navigate to the Search view and focus its search bar.
+    static let navigateToSearch = Notification.Name("com.vibrdrome.navigateToSearch")
+    /// Posted to focus the search bar in the currently visible view.
+    static let focusSearchBar = Notification.Name("com.vibrdrome.focusSearchBar")
+}
+
 /// Centralized UserDefaults key constants.
 /// Use with both `UserDefaults.standard` and `@AppStorage`.
 enum UserDefaultsKeys {

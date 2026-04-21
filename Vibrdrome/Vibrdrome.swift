@@ -19,6 +19,8 @@ class VibrdromeAppDelegate: NSObject, UIApplicationDelegate {
 }
 #elseif os(macOS)
 class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
+    private var eventMonitor: Any?
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
@@ -36,6 +38,22 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
                 app.activate()
             }
             NSApp.terminate(nil)
+        }
+
+        // Intercept CMD+F before AppKit's responder chain (performFindPanelAction:) claims it
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers == "f" else {
+                return event
+            }
+            NotificationCenter.default.post(name: .focusSearchBar, object: nil)
+            return nil
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 }
@@ -146,6 +164,17 @@ struct VibrdromeApp: App {
         .commands {
             CommandMenu("Playback") {
                 PlaybackCommands()
+            }
+            CommandMenu("Navigate") {
+                Button("Go to Search") {
+                    NotificationCenter.default.post(name: .navigateToSearch, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
+                Button("Focus Search") {
+                    NotificationCenter.default.post(name: .focusSearchBar, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
             }
         }
         #endif

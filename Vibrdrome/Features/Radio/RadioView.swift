@@ -7,6 +7,7 @@ struct RadioView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var showAddSheet = false
     @State private var showSearchSheet = false
     @AppStorage("radioViewStyle") private var showAsList = false
@@ -98,7 +99,15 @@ struct RadioView: View {
             #endif
         }
         .navigationTitle("Radio")
+        #if os(macOS)
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Filter stations...")
+        #else
         .searchable(text: $searchText, prompt: "Filter stations...")
+        #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .automatic) {
