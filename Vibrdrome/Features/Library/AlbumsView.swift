@@ -10,6 +10,7 @@ struct AlbumsView: View {
     var toYear: Int?
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @State private var albums: [Album] = []
     @State private var isLoading = true
     @State private var error: String?
@@ -17,6 +18,7 @@ struct AlbumsView: View {
     @State private var searchText = ""
     @State private var activeListType: AlbumListType?
     @State private var clientSideSort: AlbumSortOption?
+    @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("albumsViewStyle") private var showAsList = false
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @Environment(\.modelContext) private var modelContext
@@ -294,6 +296,19 @@ struct AlbumsView: View {
             hasMore = true
             await loadAlbums()
         }
+        #if os(iOS)
+        .sheet(item: $getInfoTarget) { target in
+            NavigationStack {
+                GetInfoView(target: target)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { getInfoTarget = nil }
+                        }
+                    }
+            }
+            .environment(appState)
+        }
+        #endif
     }
 
     private func loadFavoritedAlbumIds() async {
@@ -412,6 +427,16 @@ struct AlbumsView: View {
                     DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
                 }
             } label: { Label("Download", systemImage: "arrow.down.circle") }
+
+            Divider()
+
+            Button {
+                #if os(macOS)
+                openWindow(id: "get-info", value: GetInfoTarget(type: .album, id: album.id))
+                #else
+                getInfoTarget = GetInfoTarget(type: .album, id: album.id)
+                #endif
+            } label: { Label("Get Info", systemImage: "doc.text.magnifyingglass") }
         }
     }
 

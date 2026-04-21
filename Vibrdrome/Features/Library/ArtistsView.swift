@@ -214,6 +214,7 @@ struct ArtistsView: View {
                                 ArtistRow(artist: artist)
                             }
                             .accessibilityIdentifier("artistRow_\(artist.id)")
+                            .artistGetInfoContextMenu(artist: artist)
                         }
                     }
                 }
@@ -266,6 +267,7 @@ struct ArtistsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("artistCard_\(artist.id)")
+                                .artistGetInfoContextMenu(artist: artist)
                             }
                         }
                         .padding(.horizontal, 16)

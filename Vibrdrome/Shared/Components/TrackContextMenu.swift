@@ -8,7 +8,9 @@ struct TrackContextMenuModifier: ViewModifier {
     var onRemove: (() -> Void)?
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @State private var showAddToPlaylist = false
+    @State private var showGetInfo = false
 
     func body(content: Content) -> some View {
         content
@@ -17,6 +19,19 @@ struct TrackContextMenuModifier: ViewModifier {
                 AddToPlaylistView(songIds: [song.id])
                     .environment(appState)
             }
+            #if os(iOS)
+            .sheet(isPresented: $showGetInfo) {
+                NavigationStack {
+                    GetInfoView(target: GetInfoTarget(type: .song, id: song.id))
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showGetInfo = false }
+                            }
+                        }
+                }
+                .environment(appState)
+            }
+            #endif
     }
 
     @ViewBuilder
@@ -130,6 +145,16 @@ struct TrackContextMenuModifier: ViewModifier {
             appState.pendingNavigation = .song(id: song.id)
         } label: {
             Label("Song Info", systemImage: "info.circle")
+        }
+
+        Button {
+            #if os(macOS)
+            openWindow(id: "get-info", value: GetInfoTarget(type: .song, id: song.id))
+            #else
+            showGetInfo = true
+            #endif
+        } label: {
+            Label("Get Info", systemImage: "doc.text.magnifyingglass")
         }
 
         if let albumId = song.albumId {

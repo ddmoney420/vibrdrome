@@ -575,6 +575,7 @@ struct AlbumDetailView: View {
                                 .frame(width: Theme.albumCardSize)
                             }
                             .buttonStyle(.plain)
+                            .albumGetInfoContextMenu(album: similar)
                         }
                     }
                     .padding(.horizontal, 16)
