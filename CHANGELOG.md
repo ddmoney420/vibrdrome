@@ -4,6 +4,23 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 50 -- April 21, 2026
+- Get Info window (from PR #13): long-press songs/albums/artists -> "Get Info" for a detail sheet with Overview and Raw metadata tabs. macOS opens in a separate window; iOS/iPad uses a sheet.
+- Search keyboard shortcuts on macOS (from PR #14): `CMD+K` jumps to the Search tab and focuses the field, `CMD+F` focuses the search bar in the current view. Discoverable via the new Navigate menu.
+- NowPlaying toolbar: hide the entire row when all items are disabled (previously left an empty rounded pill).
+- New Settings -> Player -> Toolbar Background toggle. Off for plain icons directly on the artwork; on keeps the pill + glass effect.
+- New Radio Mix toolbar item -- plays a mix of songs similar to the current track via Subsonic getSimilarSongs. Off by default, enable in Settings -> Player -> Controls.
+- Radio: grid cards now support long-press -> Delete Station (previously only list view).
+- Add Station form clarified with three labeled sections: Name, Stream URL, and Homepage (optional) each with explainer text.
+- Settings -> Appearance: subtitle under Liquid Glass toggle explains what it does.
+- iPad: mini player stays pinned at the bottom when the floating keyboard appears instead of riding up.
+- 536 unit tests in 40 suites; 12 UI rotation tests.
+
+**TestFlight Notes:**
+> Get Info window, CMD+K/CMD+F shortcuts on macOS, Now Playing toolbar
+> polish, Radio Mix button, Radio grid Delete Station, Add Station
+> clarity, Liquid Glass hint, iPad mini player keyboard fix.
+
 ### Build 49 -- April 20, 2026 (Hotfix)
 - Fix: CarPlay Genres crash on tap. Crash log showed `ImageRenderer._uiImage.getter` triggering `EnvironmentValues.subscript.getter` assertion — SwiftUI was eagerly evaluating `GenreIconView`'s `@Environment(AppState.self)` during rasterization and asserting because the CarPlay-side ImageRenderer had no environment chain. Replaced the per-row rasterized fallback with a plain SF Symbol. Album art still loads async and replaces the symbol when available.
 - Removed the now-unused `GenreIconView.uiImage(for:)` rasterization helper.

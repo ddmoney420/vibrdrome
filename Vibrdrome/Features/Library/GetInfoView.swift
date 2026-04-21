@@ -272,7 +272,6 @@ struct GetInfoView: View {
 
     // MARK: - Album Content
 
-    // swiftlint:disable cyclomatic_complexity function_body_length
     @ViewBuilder
     private func albumContent(_ album: Album) -> some View {
         VStack(spacing: 16) {
@@ -327,7 +326,6 @@ struct GetInfoView: View {
 
         externalLinksSection(mbid: vm.albumInfo?.musicBrainzId, lastFmUrl: vm.albumInfo?.lastFmUrl)
     }
-    // swiftlint:enable cyclomatic_complexity function_body_length
 
     // MARK: - Artist Content
 
