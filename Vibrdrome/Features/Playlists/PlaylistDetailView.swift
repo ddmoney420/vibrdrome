@@ -17,6 +17,9 @@ struct PlaylistDetailView: View {
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
     @Query private var downloadedSongs: [DownloadedSong]
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "playlist")
+    #endif
 
     private var filteredSongs: [Song] {
         guard let songs = playlist?.entry else { return [] }
@@ -108,6 +111,11 @@ struct PlaylistDetailView: View {
 
                 // Songs
                 Section {
+                    #if os(macOS)
+                    MacTrackTableView(songs: filteredSongs, settings: columnSettings)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                    #else
                     ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
                         HStack(spacing: 0) {
                             if isSelecting {
@@ -149,6 +157,7 @@ struct PlaylistDetailView: View {
                             at: IndexSet(originalIndices), songs: allSongs
                         )
                     }
+                    #endif
                 }
 
                 // Batch action bar

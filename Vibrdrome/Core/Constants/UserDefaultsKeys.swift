@@ -143,6 +143,11 @@ enum UserDefaultsKeys {
     static let libraryLayout = "libraryLayout"
     static let activeMusicFolderId = "activeMusicFolderId"
 
+    // MARK: - macOS Track Table Columns
+
+    /// Key prefix for per-view column config. Full key = prefix + viewKey (e.g. "songs", "album").
+    static let trackTableColumnsPrefix = "trackTableColumns_"
+
     // MARK: - macOS Layout
 
     static let macNowPlayingPlacement = "macNowPlayingPlacement"

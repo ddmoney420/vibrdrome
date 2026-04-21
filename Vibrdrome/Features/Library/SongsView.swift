@@ -18,6 +18,9 @@ struct SongsView: View {
     @AppStorage("songsViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
     @State private var sortBy: SongSortOption = .title
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "songs")
+    #endif
 
     private let pageSize = 500
 
@@ -335,6 +338,9 @@ struct SongsView: View {
     // MARK: - List view
 
     private var songList: some View {
+        #if os(macOS)
+        MacTrackTableView(songs: displayedSongs, settings: columnSettings)
+        #else
         List {
             if hasActiveFilters {
                 activeFilterChips
@@ -370,6 +376,7 @@ struct SongsView: View {
                 }
             }
         }
+        #endif
     }
 
     // MARK: - Grid view

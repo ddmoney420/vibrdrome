@@ -13,6 +13,9 @@ struct FavoritesView: View {
     @State private var selectedCategory: FavoriteCategory = .songs
     @AppStorage("favoritesViewAsList") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "favorites")
+    #endif
 
     enum FavoriteCategory: String, CaseIterable, Identifiable {
         case songs, albums, artists
@@ -163,6 +166,9 @@ struct FavoritesView: View {
         if songs.isEmpty {
             emptyCategory("No Favorited Songs")
         } else {
+            #if os(macOS)
+            MacTrackTableView(songs: songs, settings: columnSettings)
+            #else
             List {
                 HStack(spacing: 12) {
                     Button {
@@ -231,6 +237,7 @@ struct FavoritesView: View {
                 }
             }
             .listStyle(.plain)
+            #endif
         }
     }
 
