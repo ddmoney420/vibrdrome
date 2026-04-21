@@ -250,25 +250,3 @@ struct GenreIconView: View {
         }
     }
 }
-
-#if os(iOS)
-import UIKit
-
-extension GenreIconView {
-    /// Rasterized icon for surfaces that can't host SwiftUI (e.g. CarPlay CPListItem).
-    /// Uses the gradient + SF Symbol fallback — the album-art path is only
-    /// visible in SwiftUI contexts because ImageRenderer here doesn't get the
-    /// model container. Callers wanting real album art (CarPlay) should fetch
-    /// the cover art URL via SubsonicClient.coverArtURL(id:) and load the image
-    /// themselves, falling back to this method if no artwork is cached yet.
-    @MainActor
-    static func uiImage(for genre: String, size: CGSize = CGSize(width: 80, height: 80)) -> UIImage? {
-        let view = GenreIconView(genre: genre)
-            .frame(width: size.width, height: size.height)
-            .clipShape(RoundedRectangle(cornerRadius: size.width * 0.15))
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = UIScreen.main.scale
-        return renderer.uiImage
-    }
-}
-#endif
