@@ -80,7 +80,7 @@ final class CacheManager {
         
         //First Evict Pre-Downloaded
         for download in candidates {
-            guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) else { break }
+            guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) else { break }
 
             // Skip pinned songs
             if pinned.contains(download.songId) { continue }
@@ -90,7 +90,7 @@ final class CacheManager {
                 if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
                     let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
                     try? FileManager.default.removeItem(at: fileURL)
-                    cacheLog.debug("aldebug: Evicted \(download.songTitle) more than 15 minutes Old")
+                    cacheLog.debug("aldebug: Evicted \(download.songTitle) as it is old pre-downloaded")
                     
                     total -= download.fileSize
                     context.delete(download)
