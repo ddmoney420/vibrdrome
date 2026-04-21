@@ -155,7 +155,7 @@ private struct DownloadedSongRow: View {
 
             Spacer()
 
-            if (download.category == AudioEngine.predownloadedCategory) {
+            if (download.category == AudioEngine.predownloadedCategory && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback)) {
                 // Delete the file if X minutes * 60 seconds old
                 if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
                     VStack(alignment: .trailing, spacing: 2) {

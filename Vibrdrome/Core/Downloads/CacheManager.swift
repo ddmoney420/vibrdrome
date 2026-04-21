@@ -80,7 +80,7 @@ final class CacheManager {
         
         //First Evict Pre-Downloaded
         for download in candidates {
-            //guard total > limit else { break }
+            guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) else { break }
 
             // Skip pinned songs
             if pinned.contains(download.songId) { continue }
