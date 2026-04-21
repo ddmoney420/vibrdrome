@@ -7,7 +7,7 @@ import NukeUI
 
 struct MacTrackTableRow: View {
     let song: Song
-    let visibleColumns: [TrackTableColumn]
+    let settings: TrackTableColumnSettings
     let queue: [Song]
     let index: Int
     /// Binding to the parent-managed selected song id for single-click selection.
@@ -28,7 +28,7 @@ struct MacTrackTableRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(visibleColumns) { col in
+            ForEach(settings.visibleColumns) { col in
                 columnCell(col)
             }
             trailingActions
@@ -74,6 +74,9 @@ struct MacTrackTableRow: View {
     @ViewBuilder
     private func columnCell(_ col: TrackTableColumn) -> some View {
         let content = cellContent(col)
+        let cellWidth: CGFloat = col.isUserResizable
+            ? settings.columnWidth(for: col)
+            : col.minWidth
         content
             .font(col == .trackNumber ? .subheadline : .body)
             .foregroundStyle(cellForegroundStyle(col))
@@ -81,8 +84,8 @@ struct MacTrackTableRow: View {
             .truncationMode(.tail)
             .padding(.horizontal, 4)
             .frame(
-                minWidth: col.minWidth,
-                maxWidth: col.isFlexible ? .infinity : col.minWidth,
+                minWidth: col == .title ? col.minWidth : cellWidth,
+                maxWidth: col == .title ? .infinity : cellWidth,
                 alignment: col == .trackNumber ? .trailing : .leading
             )
     }
@@ -90,62 +93,101 @@ struct MacTrackTableRow: View {
     @ViewBuilder
     private func cellContent(_ col: TrackTableColumn) -> some View {
         switch col {
-        case .trackNumber:
-            if isCurrentlyPlaying {
-                Image(systemName: "waveform")
-                    .symbolEffect(.variableColor)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: col.minWidth, alignment: .trailing)
-            } else if let track = song.track {
-                Text("\(track)")
-            } else {
-                Text("—").foregroundStyle(.quaternary)
-            }
-        case .title:
-            if showAlbumArt {
-                HStack(spacing: 8) {
-                    AlbumArtView(coverArtId: song.coverArt, size: 28, cornerRadius: 3)
-                    Text(song.title)
-                        .fontWeight(isCurrentlyPlaying ? .semibold : .regular)
-                        .lineLimit(1)
-                }
-            } else {
+        case .trackNumber: trackNumberCell
+        case .title:       titleCell
+        case .artist:      artistCell
+        case .album:       albumCell
+        case .duration:    durationCell
+        case .year:        yearCell
+        case .genre:       genreCell
+        case .bitRate:     bitRateCell
+        case .format:      formatCell
+        case .bpm:         bpmCell
+        case .dateAdded:   dateAddedCell
+        }
+    }
+
+    @ViewBuilder private var trackNumberCell: some View {
+        if isCurrentlyPlaying {
+            Image(systemName: "waveform")
+                .symbolEffect(.variableColor)
+                .font(.subheadline)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: TrackTableColumn.trackNumber.minWidth, alignment: .trailing)
+        } else if let track = song.track {
+            Text("\(track)")
+        } else {
+            Text("—").foregroundStyle(.quaternary)
+        }
+    }
+
+    @ViewBuilder private var titleCell: some View {
+        if showAlbumArt {
+            HStack(spacing: 8) {
+                AlbumArtView(coverArtId: song.coverArt, size: 28, cornerRadius: 3)
                 Text(song.title)
                     .fontWeight(isCurrentlyPlaying ? .semibold : .regular)
+                    .lineLimit(1)
             }
-        case .artist:
-            Text(song.artist ?? "—")
-                .foregroundStyle(song.artist != nil ? .primary : .quaternary)
-        case .album:
-            Text(song.album ?? "—")
-                .foregroundStyle(song.album != nil ? .primary : .quaternary)
-        case .duration:
-            Text(song.duration.map { formatDuration($0) } ?? "—")
-                .foregroundStyle(.secondary)
-        case .year:
-            Text(song.year.map { String($0) } ?? "—")
-                .foregroundStyle(song.year != nil ? .secondary : .quaternary)
-        case .genre:
-            Text(song.genre ?? "—")
-                .foregroundStyle(song.genre != nil ? .secondary : .quaternary)
-        case .bitRate:
-            if let br = song.bitRate {
-                Text("\(br) kbps")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("—").foregroundStyle(.quaternary)
-            }
-        case .format:
-            Text(song.suffix?.uppercased() ?? "—")
-                .foregroundStyle(song.suffix != nil ? .secondary : .quaternary)
-        case .bpm:
-            Text(song.bpm.map { String($0) } ?? "—")
-                .foregroundStyle(song.bpm != nil ? .secondary : .quaternary)
-        case .dateAdded:
-            Text(formattedDateAdded)
-                .foregroundStyle(.secondary)
+        } else {
+            Text(song.title)
+                .fontWeight(isCurrentlyPlaying ? .semibold : .regular)
         }
+    }
+
+    @ViewBuilder private var artistCell: some View {
+        if let artistId = song.artistId, let name = song.artist {
+            NavigableCellText(text: name) { appState.pendingNavigation = .artist(id: artistId) }
+        } else {
+            Text(song.artist ?? "—").foregroundStyle(song.artist != nil ? .primary : .quaternary)
+        }
+    }
+
+    @ViewBuilder private var albumCell: some View {
+        if let albumId = song.albumId, let name = song.album {
+            NavigableCellText(text: name) { appState.pendingNavigation = .album(id: albumId) }
+        } else {
+            Text(song.album ?? "—").foregroundStyle(song.album != nil ? .primary : .quaternary)
+        }
+    }
+
+    @ViewBuilder private var durationCell: some View {
+        Text(song.duration.map { formatDuration($0) } ?? "—").foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder private var yearCell: some View {
+        Text(song.year.map { String($0) } ?? "—")
+            .foregroundStyle(song.year != nil ? .secondary : .quaternary)
+    }
+
+    @ViewBuilder private var genreCell: some View {
+        if let genre = song.genre {
+            NavigableCellText(text: genre) { appState.pendingNavigation = .genre(name: genre) }
+        } else {
+            Text("—").foregroundStyle(.quaternary)
+        }
+    }
+
+    @ViewBuilder private var bitRateCell: some View {
+        if let br = song.bitRate {
+            Text("\(br) kbps").foregroundStyle(.secondary)
+        } else {
+            Text("—").foregroundStyle(.quaternary)
+        }
+    }
+
+    @ViewBuilder private var formatCell: some View {
+        Text(song.suffix?.uppercased() ?? "—")
+            .foregroundStyle(song.suffix != nil ? .secondary : .quaternary)
+    }
+
+    @ViewBuilder private var bpmCell: some View {
+        Text(song.bpm.map { String($0) } ?? "—")
+            .foregroundStyle(song.bpm != nil ? .secondary : .quaternary)
+    }
+
+    @ViewBuilder private var dateAddedCell: some View {
+        Text(formattedDateAdded).foregroundStyle(.secondary)
     }
 
     private func cellForegroundStyle(_ col: TrackTableColumn) -> some ShapeStyle {
@@ -254,6 +296,26 @@ struct MacTrackTableRow: View {
             .accessibilityLabel("Song Options")
         }
         .frame(width: 80, alignment: .trailing)
+    }
+}
+
+// MARK: - Navigable cell text
+
+/// A tappable text cell that underlines and accents on hover, used for artist / album / genre.
+private struct NavigableCellText: View {
+    let text: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .underline(isHovered)
+                .foregroundStyle(isHovered ? Color.accentColor : .primary)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 #endif

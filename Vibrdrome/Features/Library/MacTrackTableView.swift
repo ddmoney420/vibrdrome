@@ -20,21 +20,45 @@ struct MacTrackTableView: View {
 
     private var displayedSongs: [Song] {
         guard let col = sortColumn else { return songs }
-        return songs.sorted {
-            compareSongs($0, $1, by: col, ascending: sortAscending)
+        // When disc separators are shown, sort within each disc group so that
+        // disc ordering is preserved and separators don't get scattered.
+        if showDiscSeparators {
+            let discNumbers = songs.compactMap(\.discNumber)
+            let hasDiscs = !discNumbers.isEmpty
+            if hasDiscs {
+                // Group by disc number (preserving disc order), sort within each group.
+                let orderedDiscs = songs
+                    .compactMap(\.discNumber)
+                    .reduce(into: [Int]()) { acc, d in
+                        if !acc.contains(d) { acc.append(d) }
+                    }
+                let noDisc = songs.filter { $0.discNumber == nil }
+                let grouped: [[Song]] = orderedDiscs.map { disc in
+                    songs
+                        .filter { $0.discNumber == disc }
+                        .sorted { compareSongs($0, $1, by: col, ascending: sortAscending) }
+                }
+                let sortedNoDisc = noDisc.sorted { compareSongs($0, $1, by: col, ascending: sortAscending) }
+                return grouped.flatMap { $0 } + sortedNoDisc
+            }
         }
+        return songs.sorted { compareSongs($0, $1, by: col, ascending: sortAscending) }
     }
 
     // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
-            MacTrackTableHeader(
-                visibleColumns: settings.visibleColumns,
-                sortColumn: $sortColumn,
-                sortAscending: $sortAscending,
-                showCustomizer: $showCustomizer
-            )
+            GeometryReader { geo in
+                MacTrackTableHeader(
+                    settings: settings,
+                    availableWidth: geo.size.width,
+                    sortColumn: $sortColumn,
+                    sortAscending: $sortAscending,
+                    showCustomizer: $showCustomizer
+                )
+            }
+            .frame(height: 26)
             .popover(isPresented: $showCustomizer, arrowEdge: .top) {
                 MacColumnCustomizerView(settings: settings)
             }
@@ -75,7 +99,7 @@ struct MacTrackTableView: View {
 
                             MacTrackTableRow(
                                 song: song,
-                                visibleColumns: settings.visibleColumns,
+                                settings: settings,
                                 queue: ordered,
                                 index: index,
                                 selectedSongId: $selectedSongId

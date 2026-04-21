@@ -15,6 +15,9 @@ final class TrackTableColumnSettings {
     /// Ordered list of all columns with their current visibility.
     private(set) var entries: [TrackTableColumnEntry]
 
+    /// Per-column user-preferred widths (keyed by `TrackTableColumn.rawValue`).
+    private(set) var columnWidths: [String: CGFloat]
+
     /// Ordered list of currently visible columns (for rendering).
     var visibleColumns: [TrackTableColumn] {
         entries.filter(\.visible).map(\.column)
@@ -23,11 +26,13 @@ final class TrackTableColumnSettings {
     // MARK: - Private
 
     private let storageKey: String
+    private let widthsKey: String
 
     // MARK: - Init
 
     init(viewKey: String) {
         self.storageKey = UserDefaultsKeys.trackTableColumnsPrefix + viewKey
+        self.widthsKey = UserDefaultsKeys.trackTableColumnsPrefix + viewKey + ".widths"
         if let data = UserDefaults.standard.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([TrackTableColumnEntry].self, from: data) {
             // Merge saved prefs: honour saved order/visibility, append any new columns at end
@@ -41,6 +46,13 @@ final class TrackTableColumnSettings {
             self.entries = TrackTableColumn.allCases.map {
                 TrackTableColumnEntry(column: $0, visible: $0.isOnByDefault)
             }
+        }
+        let wKey = UserDefaultsKeys.trackTableColumnsPrefix + viewKey + ".widths"
+        if let data = UserDefaults.standard.data(forKey: wKey),
+           let decoded = try? JSONDecoder().decode([String: CGFloat].self, from: data) {
+            self.columnWidths = decoded
+        } else {
+            self.columnWidths = [:]
         }
     }
 
@@ -65,11 +77,27 @@ final class TrackTableColumnSettings {
         save()
     }
 
+    // MARK: - Column widths
+
+    func columnWidth(for column: TrackTableColumn) -> CGFloat {
+        columnWidths[column.rawValue] ?? column.defaultWidth
+    }
+
+    func setWidth(_ width: CGFloat, for column: TrackTableColumn) {
+        columnWidths[column.rawValue] = max(column.minWidth, width)
+        saveWidths()
+    }
+
     // MARK: - Persistence
 
     private func save() {
         guard let data = try? JSONEncoder().encode(entries) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    private func saveWidths() {
+        guard let data = try? JSONEncoder().encode(columnWidths) else { return }
+        UserDefaults.standard.set(data, forKey: widthsKey)
     }
 }
 #endif

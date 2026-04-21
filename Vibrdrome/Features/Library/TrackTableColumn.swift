@@ -72,9 +72,31 @@ enum TrackTableColumn: String, CaseIterable, Codable, Identifiable, Sendable {
 
     /// `true` → clicking the column header cycles sort on this field.
     var isSortable: Bool {
+        self != .format
+    }
+
+    /// `true` → the user can drag the column header edge to resize this column.
+    var isUserResizable: Bool {
         switch self {
-        case .trackNumber, .format: return false
-        default: return true
+        case .artist, .album, .genre: return true
+        default: return false
+        }
+    }
+
+    /// Starting width when no user preference has been saved.
+    var defaultWidth: CGFloat {
+        switch self {
+        case .trackNumber: return 40
+        case .title:       return 220
+        case .artist:      return 180
+        case .album:       return 180
+        case .duration:    return 60
+        case .year:        return 52
+        case .genre:       return 130
+        case .bitRate:     return 80
+        case .format:      return 65
+        case .bpm:         return 52
+        case .dateAdded:   return 120
         }
     }
 }
