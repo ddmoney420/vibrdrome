@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Pre-commit guard for Vibrdrome version bumps.
+#
+# If a commit changes CURRENT_PROJECT_VERSION in project.yml, it MUST also
+# touch every doc file listed in REQUIRED_DOCS. This exists because the
+# human owner got burned repeatedly by version bumps that shipped without
+# the corresponding changelog/feature/testing/metadata updates.
+#
+# Install with: scripts/hooks/install-hooks.sh
+# Bypass (--no-verify) is explicitly not tolerated -- if you think the bump
+# really doesn't need a doc touch, update the file with a dated "no-op"
+# note so the thought is at least recorded.
+
+set -euo pipefail
+
+REQUIRED_DOCS=(
+    "CHANGELOG.md"
+    "docs/changelog.html"
+    "docs/features.html"
+    "docs/index.html"
+    "docs/User-Guide.md"
+    "docs/TESTING-CHECKLIST.md"
+    "docs/APPSTORE-METADATA.md"
+    "TESTING.md"
+)
+
+# Files staged in this commit
+STAGED=$(git diff --cached --name-only)
+
+# Nothing to do if project.yml isn't staged
+if ! printf '%s\n' "$STAGED" | grep -qx "project.yml"; then
+    exit 0
+fi
+
+# Check if CURRENT_PROJECT_VERSION actually changed in the staged diff
+if ! git diff --cached -- project.yml | grep -qE '^\+\s*CURRENT_PROJECT_VERSION:'; then
+    exit 0
+fi
+
+# At this point: the commit bumps the build number. Enforce doc touches.
+MISSING=()
+for doc in "${REQUIRED_DOCS[@]}"; do
+    if ! printf '%s\n' "$STAGED" | grep -qx "$doc"; then
+        MISSING+=("$doc")
+    fi
+done
+
+if [ ${#MISSING[@]} -eq 0 ]; then
+    exit 0
+fi
+
+cat <<EOF >&2
+pre-commit: version bump detected in project.yml but these doc files
+were NOT touched in the same commit:
+
+EOF
+for doc in "${MISSING[@]}"; do
+    printf '  - %s\n' "$doc" >&2
+done
+cat <<EOF >&2
+
+Every version bump must carry corresponding doc updates. If a file has
+genuinely no content change, touch it anyway with a dated "no-op" note
+so the thought was recorded.
+
+Aborting commit. Do not bypass with --no-verify.
+EOF
+
+exit 1
