@@ -42,6 +42,8 @@ final class AudioEngine {
     /// Track last N random songs played to avoid duplicates
     var randomSongsPlayedIds: [String] = []
     static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
+    static let predownloadedCategory = "pre-downloaded"
+    static let predownloadedCacheTimeMins = 30.0
 
     // MARK: - Playback Mode
 

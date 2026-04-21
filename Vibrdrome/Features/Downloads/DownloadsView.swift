@@ -155,14 +155,43 @@ private struct DownloadedSongRow: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
+            if (download.category == AudioEngine.predownloadedCategory) {
+                // Delete the file if X minutes * 60 seconds old
+                if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Image(systemName: "arrow.down.app.dashed.trianglebadge.exclamationmark")
+                            .symbolRenderingMode(.multicolor)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        
+                        Text(formatBytes(download.fileSize))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                } else {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Image(systemName: "arrow.down.app.dashed.trianglebadge.exclamationmark")
+                            .symbolRenderingMode(.multicolor)
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        
+                        Text(formatBytes(download.fileSize))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
 
-                Text(formatBytes(download.fileSize))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                }
+
+            } else {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                    
+                    Text(formatBytes(download.fileSize))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
     }

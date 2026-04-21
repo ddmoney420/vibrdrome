@@ -53,10 +53,8 @@ final class CacheManager {
     /// Evict oldest non-pinned downloads if over the cache limit
     func evictIfNeeded() {
         let limit = cacheLimitBytes
-        guard limit > 0 else { return }
 
         var total = totalCacheSize
-        guard total > limit else { return }
 
         let pinned = pinnedSongIds()
         let context = PersistenceController.shared.container.mainContext
@@ -79,6 +77,41 @@ final class CacheManager {
         }
 
         var evictedCount = 0
+        
+        //First Evict Pre-Downloaded
+        for download in candidates {
+            //guard total > limit else { break }
+
+            // Skip pinned songs
+            if pinned.contains(download.songId) { continue }
+
+            if (download.category == AudioEngine.predownloadedCategory) {
+                // Delete the file if X minutes * 60 seconds old
+                if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
+                    let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
+                    try? FileManager.default.removeItem(at: fileURL)
+                    cacheLog.debug("aldebug: Evicted \(download.songTitle) more than 15 minutes Old")
+                    
+                    total -= download.fileSize
+                    context.delete(download)
+                    evictedCount += 1
+                }
+            }
+        }
+
+        guard limit > 0 else { return }
+        guard total > limit else { return }
+
+        if evictedCount > 0 {
+            do {
+                try context.save()
+            } catch {
+                cacheLog.error("Failed to save after cache eviction: \(error)")
+            }
+            cacheLog.info("Evicted \(evictedCount) cached tracks to meet \(limit) byte limit")
+        }
+
+        // Then Others
         for download in candidates {
             guard total > limit else { break }
 
@@ -88,6 +121,7 @@ final class CacheManager {
             // Delete the file
             let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
             try? FileManager.default.removeItem(at: fileURL)
+            cacheLog.debug("aldebug: Evicted \(download.songTitle)")
 
             total -= download.fileSize
             context.delete(download)

@@ -114,6 +114,7 @@ actor PredownloadManager {
             }
             
             // Sleep for 20 seconds between downloads, but only if song was actually downloaded and there's a next song
+            // Sleep so that network is not overwhelmed
             if !wasAlreadyDownloaded && !pendingSongs.isEmpty && !Task.isCancelled {
                 predownloadLog.debug("aldebug: Sleeping 20 seconds before next download")
                 try? await Task.sleep(nanoseconds: 20_000_000_000) // 20 seconds
@@ -146,7 +147,7 @@ actor PredownloadManager {
         
         // Start the download (runs async on MainActor)
         Task { @MainActor in
-            downloadManager.download(song: song, client: client)
+            downloadManager.download(song: song, client: client, category: AudioEngine.predownloadedCategory)
         }
         
         // Monitor progress until completion
@@ -393,7 +394,7 @@ extension AudioEngine {
         // Get number of songs to preload from settings
         let preloadCount = UserDefaults.standard.integer(forKey: UserDefaultsKeys.preloadSongs)
         guard preloadCount > 0 else {
-            predownloadLog.debug("aldebug: performPredownload: Preload songs is set to 0, skipping")
+            predownloadLog.debug("aldebug: performPredownload: Preload songs is set to 0, exiting")
             return
         }
         

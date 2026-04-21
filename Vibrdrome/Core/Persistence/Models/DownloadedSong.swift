@@ -14,11 +14,11 @@ final class DownloadedSong {
     var downloadedAt: Date = Date()
     var lastAccessedAt: Date?
     var isComplete: Bool = false
-
     var song: CachedSong?
+    var category: String = ""
 
     init(songId: String, songTitle: String, artistName: String?, albumName: String?,
-         coverArtId: String?, duration: Int?, localFilePath: String) {
+         coverArtId: String?, duration: Int?, localFilePath: String, category: String) {
         self.songId = songId
         self.songTitle = songTitle
         self.artistName = artistName
@@ -26,6 +26,7 @@ final class DownloadedSong {
         self.coverArtId = coverArtId
         self.duration = duration
         self.localFilePath = localFilePath
+        self.category = category
     }
 
     convenience init(from song: Song, localFilePath: String) {
@@ -36,10 +37,24 @@ final class DownloadedSong {
             albumName: song.album,
             coverArtId: song.coverArt,
             duration: song.duration,
-            localFilePath: localFilePath
+            localFilePath: localFilePath,
+            category: ""
         )
     }
 
+    convenience init(from song: Song, localFilePath: String, category: String) {
+        self.init(
+            songId: song.id,
+            songTitle: song.title,
+            artistName: song.artist,
+            albumName: song.album,
+            coverArtId: song.coverArt,
+            duration: song.duration,
+            localFilePath: localFilePath,
+            category: category
+        )
+    }
+    
     func toSong() -> Song {
         Song(
             id: songId, parent: nil, title: songTitle,

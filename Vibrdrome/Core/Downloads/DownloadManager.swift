@@ -121,7 +121,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     // MARK: - Public API
 
     @MainActor
-    func download(song: Song, client: SubsonicClient) {
+    func download(song: Song, client: SubsonicClient, category: String = "") {
         // Block downloads over cellular if setting is off
         if isOnCellular && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.downloadOverCellular) {
             return
@@ -147,7 +147,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if (try? modelContext.fetch(descriptor).first) != nil {
             return
         }
-        let download = DownloadedSong(from: song, localFilePath: localPath)
+        let download = DownloadedSong(from: song, localFilePath: localPath, category: category)
         modelContext.insert(download)
         try? modelContext.save()
     }
