@@ -27,6 +27,7 @@ struct MacColumnCustomizerView: View {
                         Image(systemName: "line.3.horizontal")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
 
                         // Toggle
                         Toggle(isOn: Binding(

@@ -57,6 +57,8 @@ struct MacTrackTableRow: View {
             AudioEngine.shared.play(song: song, from: queue, at: index)
         }
         .trackContextMenu(song: song, queue: queue, index: index)
+        .accessibilityLabel("\(song.title), \(song.artist ?? "Unknown Artist")")
+        .accessibilityHint("Double-tap to play")
         .onAppear {
             isStarred = song.starred != nil
             let songId = song.id
