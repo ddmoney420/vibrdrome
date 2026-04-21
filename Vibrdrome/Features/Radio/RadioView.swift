@@ -7,6 +7,7 @@ struct RadioView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var showAddSheet = false
     @State private var showSearchSheet = false
     @AppStorage("radioViewStyle") private var showAsList = false
@@ -98,7 +99,15 @@ struct RadioView: View {
             #endif
         }
         .navigationTitle("Radio")
+        #if os(macOS)
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Filter stations...")
+        #else
         .searchable(text: $searchText, prompt: "Filter stations...")
+        #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .automatic) {
@@ -292,6 +301,13 @@ struct RadioView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                deleteStation(station)
+            } label: {
+                Label("Delete Station", systemImage: "trash")
+            }
+        }
     }
 
     private func stationIcon(_ station: InternetRadioStation, color: Color, isPlaying: Bool, size: CGFloat = 48) -> some View {
@@ -432,20 +448,36 @@ struct AddStationView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Station Details") {
+                Section("Name") {
                     TextField("Station Name", text: $name, prompt: Text("My Radio Station"))
+                }
+
+                Section {
                     TextField("Stream URL", text: $streamUrl, prompt: Text("https://stream.example.com/live"))
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
-                    TextField("Homepage (optional)", text: $homepageUrl, prompt: Text("https://example.com"))
+                } header: {
+                    Text("Stream URL")
+                } footer: {
+                    Text("Direct audio stream URL (MP3, AAC, or OGG). This is what actually plays.")
+                        .font(.caption)
+                }
+
+                Section {
+                    TextField("Homepage URL", text: $homepageUrl, prompt: Text("https://example.com"))
                         .autocorrectionDisabled()
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
+                } header: {
+                    Text("Homepage (optional)")
+                } footer: {
+                    Text("Optional website for the station. Used to fetch a favicon as the station's icon. Leave blank to skip.")
+                        .font(.caption)
                 }
 
                 if let error {
@@ -454,12 +486,6 @@ struct AddStationView: View {
                             .foregroundStyle(.red)
                             .font(.caption)
                     }
-                }
-
-                Section {
-                    Text("Enter a direct stream URL (MP3, AAC, OGG). The station will be saved to your Navidrome server.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Add Station")

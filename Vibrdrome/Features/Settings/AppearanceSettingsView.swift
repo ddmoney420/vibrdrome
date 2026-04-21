@@ -49,11 +49,16 @@ struct AppearanceSettingsView: View {
             }
             .accessibilityIdentifier("themePicker")
 
-            Toggle(isOn: $enableLiquidGlass) {
-                Label("Liquid Glass", systemImage: "drop.fill")
-                    .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $enableLiquidGlass) {
+                    Label("Liquid Glass", systemImage: "drop.fill")
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("enableLiquidGlassToggle")
+                Text("Tinted pill backgrounds and translucent tab bar. Turn off for plain icons.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .accessibilityIdentifier("enableLiquidGlassToggle")
 
             // Accent color picker
             VStack(alignment: .leading, spacing: 10) {

@@ -184,6 +184,10 @@ struct ContentView: View {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
                     .padding(.bottom, 54)
+                    // Pin to the screen bottom regardless of keyboard presence.
+                    // Without this, iPad floating keyboards drag the mini
+                    // player up to where a docked keyboard would sit.
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
     }
@@ -311,6 +315,10 @@ struct ContentView: View {
             if engine.currentSong != nil || engine.currentRadioStation != nil {
                 MiniPlayerView()
                     .padding(.bottom, 54)
+                    // Pin to the screen bottom regardless of keyboard presence.
+                    // Without this, iPad floating keyboards drag the mini
+                    // player up to where a docked keyboard would sit.
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
             }
         }
     }

@@ -19,6 +19,8 @@ class VibrdromeAppDelegate: NSObject, UIApplicationDelegate {
 }
 #elseif os(macOS)
 class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
+    private var eventMonitor: Any?
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
@@ -36,6 +38,22 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
                 app.activate()
             }
             NSApp.terminate(nil)
+        }
+
+        // Intercept CMD+F before AppKit's responder chain (performFindPanelAction:) claims it
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers == "f" else {
+                return event
+            }
+            NotificationCenter.default.post(name: .focusSearchBar, object: nil)
+            return nil
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 }
@@ -147,6 +165,17 @@ struct VibrdromeApp: App {
             CommandMenu("Playback") {
                 PlaybackCommands()
             }
+            CommandMenu("Navigate") {
+                Button("Go to Search") {
+                    NotificationCenter.default.post(name: .navigateToSearch, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
+                Button("Focus Search") {
+                    NotificationCenter.default.post(name: .focusSearchBar, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
         }
         #endif
 
@@ -167,6 +196,19 @@ struct VibrdromeApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 700, height: 500)
+
+        WindowGroup("Get Info", id: "get-info", for: GetInfoTarget.self) { $target in
+            if let target {
+                NavigationStack {
+                    GetInfoView(target: target)
+                }
+                .environment(appState)
+                .modelContainer(persistenceController.container)
+                .preferredColorScheme(colorScheme)
+                .tint(accentColor)
+            }
+        }
+        .defaultSize(width: 560, height: 700)
 
         Window("Mini Player", id: "mini-player") {
             PopOutPlayerView()

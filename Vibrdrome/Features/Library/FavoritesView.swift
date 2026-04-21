@@ -6,6 +6,7 @@ struct FavoritesView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
@@ -73,8 +74,12 @@ struct FavoritesView: View {
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Favorites")
         .navigationBarTitleDisplayMode(.large)
         #else
-        .searchable(text: $searchText, prompt: "Search Favorites")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Favorites")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         .overlay {
             if isLoading && starred == nil {
                 ProgressView("Loading favorites...")
@@ -244,6 +249,7 @@ struct FavoritesView: View {
                     AlbumCard(album: album)
                 }
                 .accessibilityIdentifier("favAlbumRow_\(album.id)")
+                .albumGetInfoContextMenu(album: album)
             }
             .listStyle(.plain)
         } else {
@@ -272,6 +278,7 @@ struct FavoritesView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("favAlbumCard_\(album.id)")
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(16)
@@ -294,6 +301,7 @@ struct FavoritesView: View {
                     ArtistRow(artist: artist)
                 }
                 .accessibilityIdentifier("favArtistRow_\(artist.id)")
+                .artistGetInfoContextMenu(artist: artist)
             }
             .listStyle(.plain)
         } else {
@@ -317,6 +325,7 @@ struct FavoritesView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("favArtistCard_\(artist.id)")
+                        .artistGetInfoContextMenu(artist: artist)
                     }
                 }
                 .padding(16)

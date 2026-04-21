@@ -65,6 +65,7 @@ struct ArtistDetailView: View {
                             AlbumCard(album: album)
                         }
                         .accessibilityIdentifier("artistAlbumRow_\(album.id)")
+                        .albumGetInfoContextMenu(album: album)
                     }
                 } header: {
                     Text("Albums (\(albums.count))")
@@ -96,6 +97,7 @@ struct ArtistDetailView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("similarArtist_\(similar.id)")
+                                .artistGetInfoContextMenu(artist: similar)
                             }
                         }
                         .padding(.horizontal, 16)

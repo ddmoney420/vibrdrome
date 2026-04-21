@@ -24,6 +24,8 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) var showVisualizerInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showEQInToolbar) var showEQInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) var showAirPlayInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showRadioMixInToolbar) var showRadioMixInToolbar: Bool = false
+    @AppStorage(UserDefaultsKeys.nowPlayingToolbarBackground) var nowPlayingToolbarBackground: Bool = true
     @AppStorage(UserDefaultsKeys.showLyricsInToolbar) var showLyricsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSettingsInToolbar) var showSettingsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) var toolbarOrderJSON: String = "[]"
@@ -852,10 +854,11 @@ enum NowPlayingToolbarItem: String, CaseIterable, Identifiable {
     case airplay
     case lyrics
     case settings
+    case radioMix
 
     var id: String { rawValue }
 
-    static let defaultOrder: [NowPlayingToolbarItem] = [.visualizer, .eq, .airplay, .lyrics, .settings]
+    static let defaultOrder: [NowPlayingToolbarItem] = [.visualizer, .eq, .airplay, .lyrics, .settings, .radioMix]
 
     static func decodeOrder(from json: String) -> [NowPlayingToolbarItem] {
         guard let data = json.data(using: .utf8),

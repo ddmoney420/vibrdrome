@@ -25,6 +25,15 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Recently Played in Queue shows only songs actually listened to (not unplayed queue entries)
 - [ ] Spam-tap play/pause rapidly — no audio glitching or dropouts
 - [ ] Spam-tap different track rows rapidly — audio settles on the last-tapped track without churn
+- [ ] Now Playing: disable all toolbar items in Settings -> Player -> Controls; bottom row hides entirely (no empty pill)
+- [ ] Settings -> Player -> Toolbar Background toggle: off = no pill behind bottom icons; on = pill visible
+- [ ] Settings -> Player -> Controls -> Radio Mix toggle on; Now Playing shows the radio tower icon; tapping plays similar songs to current track
+- [ ] iPad Radio tab (landscape grid view): long-press any station card -> "Delete Station" menu appears
+- [ ] Radio -> Add URL: three labeled sections (Name, Stream URL, Homepage) with explainer footers
+- [ ] Settings -> Appearance: Liquid Glass toggle shows subtitle "Tinted pill backgrounds and translucent tab bar..."
+- [ ] iPad: with mini player visible, switch keyboard to floating mode; mini player stays pinned at screen bottom
+- [ ] macOS: menu bar shows Navigate menu with "Go to Search ⌘K" and "Focus Search ⌘F"; both shortcuts fire without beeping
+- [ ] Long-press any song/album/artist -> "Get Info" item; opens sheet (iOS) or window (macOS) with Overview and Raw metadata tabs
 
 ## Library & Navigation
 

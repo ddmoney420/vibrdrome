@@ -422,6 +422,7 @@ struct LibraryView: View {
                             albumCard(album)
                         }
                         .buttonStyle(.plain)
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -471,8 +472,9 @@ struct LibraryView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    ForEach(starredSongs) { song in
+                    ForEach(Array(starredSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
+                            .trackContextMenu(song: song, queue: starredSongs, index: index)
                             .onTapGesture {
                                 AudioEngine.shared.play(song: song, from: starredSongs, at: starredSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
                             }

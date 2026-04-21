@@ -7,6 +7,7 @@ struct ArtistsView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var sortReversed = false
     @State private var favoritedArtistIds: Set<String> = []
     @AppStorage("artistsViewStyle") private var showAsList = true
@@ -120,8 +121,12 @@ struct ArtistsView: View {
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Artists")
         .navigationBarTitleDisplayMode(.large)
         #else
-        .searchable(text: $searchText, prompt: "Search Artists")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Artists")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         .overlay {
             if isLoading && indexes.isEmpty {
                 ProgressView("Loading artists...")
@@ -214,6 +219,7 @@ struct ArtistsView: View {
                                 ArtistRow(artist: artist)
                             }
                             .accessibilityIdentifier("artistRow_\(artist.id)")
+                            .artistGetInfoContextMenu(artist: artist)
                         }
                     }
                 }
@@ -266,6 +272,7 @@ struct ArtistsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("artistCard_\(artist.id)")
+                                .artistGetInfoContextMenu(artist: artist)
                             }
                         }
                         .padding(.horizontal, 16)

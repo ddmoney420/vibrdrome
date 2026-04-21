@@ -54,6 +54,10 @@ struct SearchView: View {
                 searchIsActive = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         .onSubmit(of: .search) {
             saveRecentSearch(query)
         }
@@ -114,6 +118,7 @@ struct SearchView: View {
                             artistBubble(artist)
                         }
                         .buttonStyle(.plain)
+                        .artistGetInfoContextMenu(artist: artist)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -137,6 +142,7 @@ struct SearchView: View {
                             albumTile(album)
                         }
                         .buttonStyle(.plain)
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(.horizontal, 16)

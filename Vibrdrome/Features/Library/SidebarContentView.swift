@@ -210,6 +210,9 @@ struct SidebarContentView: View {
                 break
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToSearch)) { _ in
+            selectionRaw = SidebarItem.search.rawValue
+        }
     }
 
     var body: some View {
@@ -227,6 +230,7 @@ struct SidebarContentView: View {
             .safeAreaInset(edge: .bottom) {
                 if engine.currentSong != nil || engine.currentRadioStation != nil {
                     MiniPlayerView()
+                        .ignoresSafeArea(.keyboard, edges: .bottom)
                 }
             }
         #endif
