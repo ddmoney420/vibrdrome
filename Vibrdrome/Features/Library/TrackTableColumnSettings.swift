@@ -47,8 +47,7 @@ final class TrackTableColumnSettings {
                 TrackTableColumnEntry(column: $0, visible: $0.isOnByDefault)
             }
         }
-        let wKey = UserDefaultsKeys.trackTableColumnsPrefix + viewKey + ".widths"
-        if let data = UserDefaults.standard.data(forKey: wKey),
+        if let data = UserDefaults.standard.data(forKey: self.widthsKey),
            let decoded = try? JSONDecoder().decode([String: CGFloat].self, from: data) {
             self.columnWidths = decoded
         } else {
@@ -74,13 +73,16 @@ final class TrackTableColumnSettings {
         entries = TrackTableColumn.allCases.map {
             TrackTableColumnEntry(column: $0, visible: $0.isOnByDefault)
         }
+        columnWidths = [:]
         save()
+        saveWidths()
     }
 
     // MARK: - Column widths
 
     func columnWidth(for column: TrackTableColumn) -> CGFloat {
-        columnWidths[column.rawValue] ?? column.defaultWidth
+        let stored = columnWidths[column.rawValue] ?? column.defaultWidth
+        return max(stored, column.minWidth)
     }
 
     func setWidth(_ width: CGFloat, for column: TrackTableColumn) {

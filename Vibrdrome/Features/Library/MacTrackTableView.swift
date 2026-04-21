@@ -27,11 +27,7 @@ struct MacTrackTableView: View {
             let hasDiscs = !discNumbers.isEmpty
             if hasDiscs {
                 // Group by disc number (preserving disc order), sort within each group.
-                let orderedDiscs = songs
-                    .compactMap(\.discNumber)
-                    .reduce(into: [Int]()) { acc, d in
-                        if !acc.contains(d) { acc.append(d) }
-                    }
+                let orderedDiscs = Set(songs.compactMap((\.discNumber))).sorted()
                 let noDisc = songs.filter { $0.discNumber == nil }
                 let grouped: [[Song]] = orderedDiscs.map { disc in
                     songs
