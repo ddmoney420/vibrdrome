@@ -610,7 +610,7 @@ struct GetInfoView: View {
                 let childPath = keyPath.isEmpty ? childLabel : "\(keyPath).\(childLabel)"
                 flattenMetadata(value: child.value, keyPath: childPath, rows: &rows)
             }
-        case .enum:
+        case .enum, .optional, .foreignReference:
             rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
         case .none:
             rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
