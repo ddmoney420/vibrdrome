@@ -201,13 +201,18 @@ extension AudioEngine {
         // Route through play()/playRadio() for full setup.
         if gaplessPlayer == nil {
             if let station = currentRadioStation {
+                playbackLog.info("resume path=coldStart.radio station=\(station.name)")
                 playRadio(station: station)
                 return
             }
             if let song = currentSong {
                 let savedTime = currentTime
+                playbackLog.info("resume path=coldStart.song savedTime=\(savedTime)")
                 play(song: song)
-                if savedTime > 1 { seek(to: savedTime) }
+                // Always seek if we have any saved position. Previously a >1s
+                // guard meant interruptions in the first second of a track
+                // silently restarted from 0.
+                if savedTime > 0 { seek(to: savedTime) }
                 return
             }
         }
@@ -215,6 +220,7 @@ extension AudioEngine {
         // If track is at or past its end (e.g. after sleep timer "end of track"),
         // advance to next track instead of resuming dead audio
         if duration > 0 && currentTime >= duration - 0.5 {
+            playbackLog.info("resume path=atEndAdvance currentTime=\(self.currentTime) duration=\(self.duration)")
             next()
             return
         }
@@ -234,15 +240,31 @@ extension AudioEngine {
             || gaplessPlayer?.currentItem?.status == .failed
         if let song = currentSong, itemNeedsReload {
             let savedTime = currentTime
+            let statusRaw = gaplessPlayer?.currentItem?.status.rawValue ?? -1
+            playbackLog.info("resume path=gapless.reload savedTime=\(savedTime) itemStatus=\(statusRaw)")
             let url = resolveURL(for: song)
             replacePlayerItem(with: url)
-            if savedTime > 0 { seek(to: savedTime) }
+            // Seek BEFORE setting rate so the player doesn't audibly play from
+            // position 0 for a few hundred ms while the async seek completes.
+            // On slow/streaming sources, that gap is what users perceive as
+            // "the song restarted" after a CarPlay call/text interruption.
+            let targetRate = playbackRate
+            if savedTime > 0 {
+                seekInternal(to: savedTime) { [weak self] in
+                    self?.gaplessPlayer?.rate = targetRate
+                }
+            } else {
+                gaplessPlayer?.rate = targetRate
+            }
             prepareLookahead()
-        } else if eqEnabled, let item = gaplessPlayer?.currentItem {
-            // Reapply EQ tap after interruption to reset stale delay buffers
-            applyEQTapIfNeeded(to: item)
+        } else {
+            playbackLog.info("resume path=gapless.normal currentTime=\(self.currentTime)")
+            if eqEnabled, let item = gaplessPlayer?.currentItem {
+                // Reapply EQ tap after interruption to reset stale delay buffers
+                applyEQTapIfNeeded(to: item)
+            }
+            gaplessPlayer?.rate = playbackRate
         }
-        gaplessPlayer?.rate = playbackRate
     }
 
     private func resumeCrossfadeMode() {
