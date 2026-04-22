@@ -306,8 +306,8 @@ final class CarPlayManager: NSObject {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
             let indexes = try await client.getArtists()
-            let sections = indexes.map { index in
-                let items = (index.artist ?? []).map { artist in
+            let buckets: [(letter: String, items: [CPListItem])] = indexes.map { index in
+                let items = (index.artist ?? []).map { artist -> CPListItem in
                     let item = CPListItem(text: artist.name,
                                           detailText: "\(artist.albumCount ?? 0) albums")
                     item.handler = { [weak self] _, completion in
@@ -316,9 +316,9 @@ final class CarPlayManager: NSObject {
                     }
                     return item
                 }
-                return CPListSection(items: items, header: index.name,
-                                     sectionIndexTitle: index.name)
+                return (letter: index.name, items: items)
             }
+            let sections = self?.fitAlphabetSections(buckets: buckets) ?? []
             return CPListTemplate(title: "Artists", sections: sections)
         }
     }
@@ -419,11 +419,53 @@ final class CarPlayManager: NSObject {
     private func showAlbums(type: AlbumListType) {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
-            let size = type == .newest
-                ? max(10, UserDefaults.standard.integer(forKey: UserDefaultsKeys.carPlayRecentCount))
-                : 50
-            let albums = try await client.getAlbumList(type: type, size: size == 0 ? 25 : size)
-            let items = albums.map { album in
+            let maxItems = max(1, Int(CPListTemplate.maximumItemCount))
+
+            if type == .newest {
+                let recent = max(10, UserDefaults.standard.integer(forKey: UserDefaultsKeys.carPlayRecentCount))
+                let size = min(recent == 0 ? 25 : recent, maxItems)
+                let albums = try await client.getAlbumList(type: type, size: size)
+                let items = albums.map { album -> CPListItem in
+                    let item = CPListItem(text: album.name,
+                                          detailText: album.artist ?? "")
+                    if let coverArtId = album.coverArt {
+                        self?.loadImage(id: coverArtId, size: 120, into: item)
+                    }
+                    item.handler = { [weak self] _, completion in
+                        self?.showAlbumDetail(id: album.id)
+                        completion()
+                    }
+                    return item
+                }
+                return CPListTemplate(title: "Recently Added",
+                                      sections: [CPListSection(items: items)])
+            }
+
+            // Alphabetical albums: paginate Subsonic's 500-per-call limit up to
+            // CarPlay's maximumItemCount, then bucket by first letter so the
+            // sidebar gives a usable A-Z jump instead of a flat 50-album wall.
+            var albums: [Album] = []
+            let pageSize = 500
+            var offset = 0
+            while albums.count < maxItems {
+                let page = try await client.getAlbumList(type: type,
+                                                         size: pageSize,
+                                                         offset: offset)
+                if page.isEmpty { break }
+                albums.append(contentsOf: page)
+                if page.count < pageSize { break }
+                offset += pageSize
+            }
+            albums = Array(albums.prefix(maxItems))
+
+            var letterOrder: [String] = []
+            var byLetter: [String: [CPListItem]] = [:]
+            for album in albums {
+                let letter = Self.bucketLetter(for: album.name)
+                if byLetter[letter] == nil {
+                    byLetter[letter] = []
+                    letterOrder.append(letter)
+                }
                 let item = CPListItem(text: album.name,
                                       detailText: album.artist ?? "")
                 if let coverArtId = album.coverArt {
@@ -433,15 +475,31 @@ final class CarPlayManager: NSObject {
                     self?.showAlbumDetail(id: album.id)
                     completion()
                 }
-                return item
+                byLetter[letter]?.append(item)
             }
-            let title = type == .newest ? "Recently Added" : "Albums"
-            return CPListTemplate(title: title,
-                                  sections: [CPListSection(items: items)])
+            let buckets = letterOrder.map { (letter: $0, items: byLetter[$0] ?? []) }
+            let sections = self?.fitAlphabetSections(buckets: buckets) ?? []
+            return CPListTemplate(title: "Albums", sections: sections)
         }
     }
 
     // MARK: - Favorites
+
+    /// Split CarPlay's total-item budget between Favorites' songs and albums
+    /// sections. When both are present each gets half; when only one is present
+    /// it claims the whole budget. Avoids silent truncation at the prior 200
+    /// hard cap.
+    private static func starredBudgets(
+        songCount: Int, albumCount: Int
+    ) -> (songs: Int, albums: Int) {
+        let total = max(1, Int(CPListTemplate.maximumItemCount))
+        switch (songCount > 0, albumCount > 0) {
+        case (true, true): return (total / 2, total - total / 2)
+        case (true, false): return (total, 0)
+        case (false, true): return (0, total)
+        case (false, false): return (0, 0)
+        }
+    }
 
     private func showStarred() {
         navigateTo { [weak self] in
@@ -449,10 +507,14 @@ final class CarPlayManager: NSObject {
             let starred = try await client.getStarred()
             var sections: [CPListSection] = []
 
+            let budgets = Self.starredBudgets(
+                songCount: starred.song?.count ?? 0,
+                albumCount: starred.album?.count ?? 0)
+            let songsBudget = budgets.songs
+            let albumsBudget = budgets.albums
+
             if let songs = starred.song, !songs.isEmpty {
-                // Cap at 200 to stay under CPListTemplate's ~500-item ceiling
-                // when combined with the Albums section below.
-                let visibleSongs = Array(songs.prefix(200))
+                let visibleSongs = Array(songs.prefix(songsBudget))
                 let songItems = visibleSongs.map { [weak self] song in
                     let item = CPListItem(text: song.title,
                                           detailText: song.artist ?? "")
@@ -473,7 +535,7 @@ final class CarPlayManager: NSObject {
             }
 
             if let albums = starred.album, !albums.isEmpty {
-                let albumItems = albums.prefix(200).map { [weak self] album in
+                let albumItems = albums.prefix(albumsBudget).map { [weak self] album in
                     let item = CPListItem(text: album.name,
                                           detailText: album.artist ?? "")
                     if let coverArtId = album.coverArt {
@@ -710,6 +772,70 @@ final class CarPlayManager: NSObject {
                 item.setImage(image)
             }
         }
+    }
+
+    // MARK: - Alphabet bucketing
+
+    /// Build CPListSections from already-letter-grouped buckets, respecting
+    /// CarPlay's runtime caps on sections and total items. When the number of
+    /// letter buckets exceeds `maximumSectionCount`, consecutive letters are
+    /// merged into ranges (e.g. "A-F") so the first-letter sidebar still covers
+    /// the whole alphabet. Total items are clamped to `maximumItemCount` across
+    /// all sections -- CarPlay silently drops overflow otherwise.
+    private func fitAlphabetSections(
+        buckets: [(letter: String, items: [CPListItem])]
+    ) -> [CPListSection] {
+        let maxSections = max(1, Int(CPListTemplate.maximumSectionCount))
+        let maxItems = max(1, Int(CPListTemplate.maximumItemCount))
+
+        var clamped: [(letter: String, items: [CPListItem])] = []
+        var running = 0
+        for bucket in buckets {
+            let remaining = maxItems - running
+            if remaining <= 0 { break }
+            if bucket.items.count <= remaining {
+                clamped.append(bucket)
+                running += bucket.items.count
+            } else {
+                clamped.append((letter: bucket.letter,
+                                items: Array(bucket.items.prefix(remaining))))
+                break
+            }
+        }
+
+        guard !clamped.isEmpty else { return [] }
+
+        if clamped.count <= maxSections {
+            return clamped.map { bucket in
+                CPListSection(items: bucket.items, header: bucket.letter,
+                              sectionIndexTitle: bucket.letter)
+            }
+        }
+
+        let groupSize = Int((Double(clamped.count) / Double(maxSections)).rounded(.up))
+        var merged: [CPListSection] = []
+        var index = 0
+        while index < clamped.count {
+            let upper = min(index + groupSize, clamped.count)
+            let slice = clamped[index..<upper]
+            let firstLetter = slice.first!.letter
+            let lastLetter = slice.last!.letter
+            let header = firstLetter == lastLetter
+                ? firstLetter
+                : "\(firstLetter)-\(lastLetter)"
+            let items = slice.flatMap { $0.items }
+            merged.append(CPListSection(items: items, header: header,
+                                        sectionIndexTitle: firstLetter))
+            index = upper
+        }
+        return merged
+    }
+
+    /// Normalize a string's first character into an alphabet bucket label.
+    /// Letters are uppercased; anything else (digits, symbols, empty) goes to "#".
+    private static func bucketLetter(for name: String) -> String {
+        guard let first = name.first, first.isLetter else { return "#" }
+        return String(first).uppercased()
     }
 }
 
