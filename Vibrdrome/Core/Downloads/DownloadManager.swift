@@ -27,6 +27,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }()
 
     private let lock = NSLock()
+    private var taskStartTimes: [Int: Date] = [:]
     private var activeDownloads: [String: URLSessionDownloadTask] = [:]
     private let networkMonitor = NWPathMonitor()
     private var _isOnCellular = false
@@ -60,7 +61,6 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         session.getAllTasks { [weak self] tasks in
             guard let self else { return }
 
-            downloadLog.debug("aldebug: \(tasks.count) resumeIncompleteDownloads")
             // Build a set of songIds that have active background session tasks
             var activeSongIds = Set<String>()
             for task in tasks {
@@ -136,7 +136,6 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         task.taskDescription = song.id
         lock.withLock { activeDownloads[song.id] = task }
         task.resume()
-        downloadLog.debug("aldebug: \(song.title) download started")
 
         let localPath = Self.localPath(for: song)
         let modelContext = PersistenceController.shared.container.mainContext
@@ -363,7 +362,10 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         didFinishDownloadingTo location: URL
     ) {
         guard let songId = downloadTask.taskDescription else { return }
-        downloadLog.debug("aldebug: \(songId) urlSession line 362")
+
+        Task { @MainActor in
+            DownloadProgress.shared.update(songId: songId, progress: 100.0)
+        }
 
         // D3: Always clean up activeDownloads, even on failure
         defer {
@@ -399,8 +401,6 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
                 at: destURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-
-            downloadLog.debug("aldebug: \(songId) urlSession line 399 - downloading finished")
             
             // Remove existing file if re-downloading
             try? FileManager.default.removeItem(at: destURL)
@@ -436,14 +436,35 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription,
               totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        let progress10 = Int(progress*10)
-        if (progress10 == 2 || progress10 == 4 || progress10 == 8 ) {
-            downloadLog.debug("aldebug: \(progress) urlSession line 437 - progress")
+               
+        let taskId = downloadTask.taskIdentifier
+        
+        lock.lock()
+        // If this is the first chunk of data, record the start time
+        if taskStartTimes[taskId] == nil {
+            taskStartTimes[taskId] = Date()
+        }
+        let startTime = taskStartTimes[taskId]
+        lock.unlock()
+
+        var mbs = 0.0
+        guard let start = startTime else {
+            Task { @MainActor in
+                DownloadProgress.shared.update(songId: songId, progress: progress, speed: mbs)
+            }
+            return
+        }
+        
+        let elapsed = Date().timeIntervalSince(start)
+        if elapsed > 0 && totalBytesWritten > 500000 {
+            let bytesPerSecond = Double(totalBytesWritten) / elapsed
+            mbs = bytesPerSecond / (1024 * 1024)
         }
         
         Task { @MainActor in
-            DownloadProgress.shared.update(songId: songId, progress: progress)
+            DownloadProgress.shared.update(songId: songId, progress: progress, speed: mbs)
         }
+
     }
 
     func urlSession(
@@ -462,8 +483,6 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if !isCancelled {
             print("Download failed for songId: \(songId)")
         }
-
-        downloadLog.debug("aldebug: isCancelled: \(isCancelled) urlSession line 461")
         
         // Clean up incomplete SwiftData record for failed (non-cancelled) downloads
         // Cancelled downloads are cleaned up in cancelDownload()
@@ -483,8 +502,6 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        
-        downloadLog.debug("aldebug: urlSessionDidFinishEvents: urlSession line 482")
         
         let handler = self.completionHandler
         self.completionHandler = nil

@@ -59,6 +59,8 @@ struct DebugView: View {
             row("Shuffle", value: engine.shuffleEnabled ? "On" : "Off")
             row("Repeat", value: repeatLabel(engine.repeatMode))
             row("Pre-download Status", value: predownloadStatusLabel(engine.predownloadStatus))
+            row("Pre-download Speed", value: String(format: "%.1f Mbs", engine.predownloadSpeed))
+            row("Pre-download Pending", value: "\(engine.predownloadsPending)")
             row("Duration", value: formatDuration(engine.duration))
             row("Position", value: formatDuration(engine.currentTime))
 
@@ -158,6 +160,7 @@ struct DebugView: View {
         case .idle: "Idle"
         case .active: "Active"
         case .stalled: "Stalled"
+        case .waiting: "Waiting"
         }
     }
 

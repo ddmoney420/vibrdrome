@@ -90,7 +90,7 @@ final class CacheManager {
                 if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
                     let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
                     try? FileManager.default.removeItem(at: fileURL)
-                    cacheLog.debug("aldebug: Evicted \(download.songTitle) as it is old pre-downloaded")
+                    cacheLog.debug("Evicted \(download.songTitle) as it is old pre-downloaded")
                     
                     total -= download.fileSize
                     context.delete(download)
@@ -102,15 +102,6 @@ final class CacheManager {
         guard limit > 0 else { return }
         guard total > limit else { return }
 
-        if evictedCount > 0 {
-            do {
-                try context.save()
-            } catch {
-                cacheLog.error("Failed to save after cache eviction: \(error)")
-            }
-            cacheLog.info("Evicted \(evictedCount) cached tracks to meet \(limit) byte limit")
-        }
-
         // Then Others
         for download in candidates {
             guard total > limit else { break }
@@ -121,7 +112,7 @@ final class CacheManager {
             // Delete the file
             let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
             try? FileManager.default.removeItem(at: fileURL)
-            cacheLog.debug("aldebug: Evicted \(download.songTitle)")
+            cacheLog.debug("Evicted \(download.songTitle)")
 
             total -= download.fileSize
             context.delete(download)

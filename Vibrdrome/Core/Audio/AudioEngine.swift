@@ -38,7 +38,9 @@ final class AudioEngine {
     
     /// Current predownload status from PredownloadManager
     var predownloadStatus: PredownloadStatus = .idle
-    
+    var predownloadSpeed: Double = 0.0
+    var predownloadsPending: Int = 0
+
     /// Track last N random songs played to avoid duplicates
     var randomSongsPlayedIds: [String] = []
     static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
@@ -393,13 +395,10 @@ final class AudioEngine {
     }
 
     func prepareLookahead() {
-        audioLog.debug("aldebug: prepareLookahead called \(self.activeMode == .gapless) \(self.gaplessEnabled)")
-        
         guard activeMode == .gapless,
               gaplessEnabled,
               let nextIdx = nextSongIndex() else {
             clearLookahead()
-            audioLog.debug("aldebug: prepareLookahead - clearLookahead")
             return
         }
 
@@ -410,12 +409,11 @@ final class AudioEngine {
         // Check if this URL is already in use by current player items
         if (lookaheadItem != nil) {
            let oldLookaheadAsset = lookaheadItem!.asset as? AVURLAsset
-            audioLog.debug("aldebug: old url: \(oldLookaheadAsset?.url.absoluteString ?? "nil")")
             if (oldLookaheadAsset?.url == url) {
-                audioLog.debug("aldebug: prepareLookahead - SAME look ahead item url")
+                audioLog.debug("prepareLookahead - SAME look ahead item url")
                 return
             } else {
-                audioLog.debug("aldebug: prepareLookahead - CHANGING look ahead item url")
+                audioLog.debug("prepareLookahead - CHANGING look ahead item url")
             }
         }
 
@@ -454,7 +452,6 @@ final class AudioEngine {
     /// Create an AVPlayerItem with HTTP headers that improve reverse proxy compatibility.
     /// Prevents proxies from gzip-compressing audio streams, which corrupts transcoded audio.
     static func makePlayerItem(url: URL) -> AVPlayerItem {
-        audioLog.debug("aldebug: makePlayerItem called \(url)")
         let asset = AVURLAsset(url: url, options: [
             "AVURLAssetHTTPHeaderFieldsKey": ["Accept-Encoding": "identity"],
         ])
@@ -464,7 +461,6 @@ final class AudioEngine {
     }
 
     func replacePlayerItem(with url: URL) {
-        audioLog.debug("aldebug: replacePlayerItem called \(url)")
         tearDownObservers()
         clearLookahead()
         generation += 1

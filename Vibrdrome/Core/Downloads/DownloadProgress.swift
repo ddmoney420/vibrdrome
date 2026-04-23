@@ -10,29 +10,40 @@ final class DownloadProgress {
     static let shared = DownloadProgress()
 
     var progressBySongId: [String: Double] = [:]
+    var speedBySongId: [String: Double] = [:]
 
     func update(songId: String, progress: Double) {
         progressBySongId[songId] = progress
     }
 
+    func update(songId: String, progress: Double, speed: Double) {
+        progressBySongId[songId] = progress
+        speedBySongId[songId] = speed
+    }
+
     func remove(songId: String)  {
         progressBySongId.removeValue(forKey: songId)
-        downloadProgressLog.debug("aldebug: Download removed \(songId)")
+        speedBySongId.removeValue(forKey: songId)
     }
 
     func removeAsync(songId: String) async {
         try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
         progressBySongId.removeValue(forKey: songId)
-        downloadProgressLog.debug("aldebug: Download removed async \(songId)")
+        speedBySongId.removeValue(forKey: songId)
     }
 
     func progress(for songId: String) -> Double {
         progressBySongId[songId] ?? 0
     }
 
+    func speed(for songId: String) -> Double {
+        speedBySongId[songId] ?? 0
+    }
+
     func clear() {
         progressBySongId.removeAll()
         playlistSongIds.removeAll()
+        speedBySongId.removeAll()
     }
 
     // MARK: - Playlist Progress

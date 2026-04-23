@@ -39,12 +39,6 @@ extension AudioEngine {
             return
         }
 
-        var hv = 0
-        if (newQueue != nil) {
-            hv = hashSongs(newQueue!)
-        }
-        playbackLog.debug("aldebug: play called \(song.title) \(index) queue:\(hv)")
-        
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -136,14 +130,12 @@ extension AudioEngine {
     
     func insertSongNext(for song: Song, at atSong: Int) {
         guard atSong >= 0 && atSong <= queue.count else {
-            playbackLog.debug("aldebug: insertSongNext: Invalid index \(atSong) for queue of size \(self.queue.count)")
             return
         }
         
         // Insert song at specified index
         queue.insert(song, at: atSong)
         
-        playbackLog.debug("aldebug: insertSongNext: Inserted '\(song.title)' at index \(atSong), current index now \(self.currentIndex)")
     }
 
     func playRadio(station: InternetRadioStation) {
@@ -296,7 +288,6 @@ extension AudioEngine {
 
     func next() {
         guard !queue.isEmpty else { return }
-        playbackLog.debug("aldebug: next called \(self.currentIndex)")
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -511,7 +502,6 @@ extension AudioEngine {
     }
 
     func handleAutoAdvance() {
-        playbackLog.debug("aldebug: handleAutoAdvance called")
         submitScrobbleIfNeeded()
 
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
