@@ -302,24 +302,64 @@ final class CarPlayManager: NSObject {
 
     // MARK: - Artists drill-down
 
+    /// Artists root now shows a letter directory rather than a flat list. Each
+    /// row is one letter (or alphabet-merged range on tight head units) with
+    /// the count of artists under it; tapping drills into a filtered list.
+    /// Previously the root was a 10k-artist flat scroll with a sidebar index
+    /// that only covered letters that fit under CPListTemplate.maximumSectionCount.
     private func showArtists() {
         navigateTo { [weak self] in
             let client = AppState.shared.subsonicClient
             let indexes = try await client.getArtists()
-            let buckets: [(letter: String, items: [CPListItem])] = indexes.map { index in
-                let items = (index.artist ?? []).map { artist -> CPListItem in
-                    let item = CPListItem(text: artist.name,
-                                          detailText: "\(artist.albumCount ?? 0) albums")
-                    item.handler = { [weak self] _, completion in
-                        self?.showArtistDetail(id: artist.id)
-                        completion()
-                    }
-                    return item
+                .filter { !($0.artist ?? []).isEmpty }
+            let letterItems: [CPListItem] = indexes.map { index in
+                let count = index.artist?.count ?? 0
+                let item = CPListItem(text: index.name,
+                                      detailText: "\(count) artist\(count == 1 ? "" : "s")")
+                item.accessoryType = .disclosureIndicator
+                item.handler = { [weak self] _, completion in
+                    self?.showArtistsInLetter(index: index)
+                    completion()
                 }
-                return (letter: index.name, items: items)
+                return item
             }
+            return CPListTemplate(title: "Artists",
+                                  sections: [CPListSection(items: letterItems)])
+        }
+    }
+
+    /// Drill target: show every artist whose first letter is `index.name`,
+    /// with the second character as the sidebar jump index so users with
+    /// hundreds of "S" artists can still skip to the Sl's. Keeps template
+    /// stack depth at 3 (TabBar -> Letter root -> Filtered list).
+    private func showArtistsInLetter(index: ArtistIndex) {
+        navigateTo { [weak self] in
+            let artists = index.artist ?? []
+            var letterOrder: [String] = []
+            var byLetter: [String: [CPListItem]] = [:]
+            for artist in artists {
+                let chars = Array(artist.name)
+                let second: String
+                if chars.count >= 2, chars[1].isLetter {
+                    second = String(chars[1]).uppercased()
+                } else {
+                    second = "#"
+                }
+                if byLetter[second] == nil {
+                    byLetter[second] = []
+                    letterOrder.append(second)
+                }
+                let item = CPListItem(text: artist.name,
+                                      detailText: "\(artist.albumCount ?? 0) albums")
+                item.handler = { [weak self] _, completion in
+                    self?.showArtistDetail(id: artist.id)
+                    completion()
+                }
+                byLetter[second]?.append(item)
+            }
+            let buckets = letterOrder.map { (letter: $0, items: byLetter[$0] ?? []) }
             let sections = self?.fitAlphabetSections(buckets: buckets) ?? []
-            return CPListTemplate(title: "Artists", sections: sections)
+            return CPListTemplate(title: index.name, sections: sections)
         }
     }
 
@@ -375,12 +415,11 @@ final class CarPlayManager: NSObject {
                 if let coverArtId = song.coverArt ?? album.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
-                item.handler = { [weak self] _, completion in
+                item.handler = { _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
-                    self?.pushNowPlaying()
                 }
                 item.playingIndicatorLocation = .trailing
                 return item
@@ -389,20 +428,18 @@ final class CarPlayManager: NSObject {
             let playAll = CPListItem(text: "Play All",
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
-            playAll.handler = { [weak self] _, completion in
+            playAll.handler = { _, completion in
                 if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
                 completion()
-                self?.pushNowPlaying()
             }
 
             let shuffle = CPListItem(text: "Shuffle", detailText: nil,
                                      image: UIImage(systemName: "shuffle"))
-            shuffle.handler = { [weak self] _, completion in
+            shuffle.handler = { _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
                 if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
                 completion()
-                self?.pushNowPlaying()
             }
 
             let sections = [
@@ -442,8 +479,11 @@ final class CarPlayManager: NSObject {
             }
 
             // Alphabetical albums: paginate Subsonic's 500-per-call limit up to
-            // CarPlay's maximumItemCount, then bucket by first letter so the
-            // sidebar gives a usable A-Z jump instead of a flat 50-album wall.
+            // CarPlay's maximumItemCount, then show a letter directory at the
+            // root. Tapping a letter drills into the filtered album list with
+            // second-letter sectionIndexTitle for further narrowing. Two-step
+            // navigation stays within the 5-template depth cap once the
+            // redundant auto-push of Now Playing was removed.
             var albums: [Album] = []
             let pageSize = 500
             var offset = 0
@@ -459,12 +499,51 @@ final class CarPlayManager: NSObject {
             albums = Array(albums.prefix(maxItems))
 
             var letterOrder: [String] = []
-            var byLetter: [String: [CPListItem]] = [:]
+            var byLetter: [String: [Album]] = [:]
             for album in albums {
                 let letter = Self.bucketLetter(for: album.name)
                 if byLetter[letter] == nil {
                     byLetter[letter] = []
                     letterOrder.append(letter)
+                }
+                byLetter[letter]?.append(album)
+            }
+            let letterItems: [CPListItem] = letterOrder.map { letter in
+                let count = byLetter[letter]?.count ?? 0
+                let item = CPListItem(text: letter,
+                                      detailText: "\(count) album\(count == 1 ? "" : "s")")
+                item.accessoryType = .disclosureIndicator
+                item.handler = { [weak self] _, completion in
+                    self?.showAlbumsInLetter(letter: letter,
+                                             albums: byLetter[letter] ?? [])
+                    completion()
+                }
+                return item
+            }
+            return CPListTemplate(title: "Albums",
+                                  sections: [CPListSection(items: letterItems)])
+        }
+    }
+
+    /// Drill target for the alphabet-first Albums root. Groups the passed
+    /// albums by their second character so the sidebar index can jump to
+    /// sub-prefixes, mirroring how showArtistsInLetter narrows large letter
+    /// buckets.
+    private func showAlbumsInLetter(letter: String, albums: [Album]) {
+        navigateTo { [weak self] in
+            var letterOrder: [String] = []
+            var byLetter: [String: [CPListItem]] = [:]
+            for album in albums {
+                let chars = Array(album.name)
+                let second: String
+                if chars.count >= 2, chars[1].isLetter {
+                    second = String(chars[1]).uppercased()
+                } else {
+                    second = "#"
+                }
+                if byLetter[second] == nil {
+                    byLetter[second] = []
+                    letterOrder.append(second)
                 }
                 let item = CPListItem(text: album.name,
                                       detailText: album.artist ?? "")
@@ -475,11 +554,11 @@ final class CarPlayManager: NSObject {
                     self?.showAlbumDetail(id: album.id)
                     completion()
                 }
-                byLetter[letter]?.append(item)
+                byLetter[second]?.append(item)
             }
             let buckets = letterOrder.map { (letter: $0, items: byLetter[$0] ?? []) }
             let sections = self?.fitAlphabetSections(buckets: buckets) ?? []
-            return CPListTemplate(title: "Albums", sections: sections)
+            return CPListTemplate(title: letter, sections: sections)
         }
     }
 
@@ -521,12 +600,11 @@ final class CarPlayManager: NSObject {
                     if let coverArtId = song.coverArt {
                         self?.loadImage(id: coverArtId, size: 120, into: item)
                     }
-                    item.handler = { [weak self] _, completion in
+                    item.handler = { _, completion in
                         AudioEngine.shared.play(
                             song: song, from: visibleSongs,
                             at: visibleSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
                         completion()
-                        self?.pushNowPlaying()
                     }
                     return item
                 }
@@ -631,12 +709,11 @@ final class CarPlayManager: NSObject {
                 if let coverArtId = song.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
-                item.handler = { [weak self] _, completion in
+                item.handler = { _, completion in
                     AudioEngine.shared.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
-                    self?.pushNowPlaying()
                 }
                 return item
             }
@@ -644,20 +721,18 @@ final class CarPlayManager: NSObject {
             let playAll = CPListItem(text: "Play All",
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
-            playAll.handler = { [weak self] _, completion in
+            playAll.handler = { _, completion in
                 if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
                 completion()
-                self?.pushNowPlaying()
             }
 
             let shuffle = CPListItem(text: "Shuffle", detailText: nil,
                                      image: UIImage(systemName: "shuffle"))
-            shuffle.handler = { [weak self] _, completion in
+            shuffle.handler = { _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
                 if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
                 completion()
-                self?.pushNowPlaying()
             }
 
             let sections = [
@@ -738,17 +813,6 @@ final class CarPlayManager: NSObject {
                 title: "Recently Played",
                 sections: [CPListSection(items: items)]
             )
-        }
-    }
-
-    // MARK: - Now Playing Navigation
-
-    /// Push the Now Playing template after starting playback from a track list
-    private func pushNowPlaying() {
-        let nowPlaying = CPNowPlayingTemplate.shared
-        // Only push if not already showing
-        if interfaceController.topTemplate !== nowPlaying {
-            interfaceController.pushTemplate(nowPlaying, animated: true) { _, _ in }
         }
     }
 
