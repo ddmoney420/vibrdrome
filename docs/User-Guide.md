@@ -102,6 +102,22 @@ Access settings from the **Settings** tab:
 - **Appearance** -- Choose a theme (light, dark, or system), pick an accent color, and adjust text size via Dynamic Type. On iOS 26, enable **Liquid Glass** to give the Now Playing toolbar and mini player a frosted, glass-like background.
 - **Cache** -- Clear the image or audio cache to free storage.
 
+## CarPlay
+
+When your iPhone is connected to CarPlay, Vibrdrome shows a dedicated CarPlay interface.
+
+- **Artists and Albums** use two-letter drill-down for large collections: pick a first letter, then a second letter to jump straight to that slice instead of scrolling a long list.
+- **Now Playing** shows shuffle, repeat, progress, and Up Next. It no longer auto-pushes on track start, so the list you were browsing stays visible.
+- Playback keeps its position through short call or text interruptions: when audio resumes it seeks back to where it was before the interruption rather than restarting from 0.
+
+## Visualizer
+
+Open the visualizer from the Now Playing screen (waveform icon). Swipe sideways to cycle presets, swipe down to dismiss, tap once to toggle controls.
+
+- **Spectrum / Waveform / Aurora** react to the real frequency content of the audio: bass on the left of the screen, treble on the right. Spectrum shows classic peak-hold caps floating above each bar.
+- Other presets animate from an overall energy curve and still pulse with the music.
+- See **Settings > Accessibility** for photosensitivity controls.
+
 ## Multi-Server Support
 
 Vibrdrome supports multiple Navidrome servers:

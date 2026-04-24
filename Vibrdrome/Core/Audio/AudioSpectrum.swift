@@ -1,14 +1,20 @@
 import Accelerate
 import Foundation
+import QuartzCore
 import os.log
+
+private let spectrumLog = Logger(subsystem: "com.vibrdrome.app", category: "Spectrum")
 
 /// Thread-safe storage for real-time FFT spectrum data extracted from the audio tap.
 /// Updated on the audio render thread, read by the visualizer on the main thread at 60fps.
 final class AudioSpectrum: @unchecked Sendable {
     static let shared = AudioSpectrum()
 
-    /// Number of FFT bins (must be power of 2)
-    static let fftSize = 1024
+    /// Number of FFT bins (must be power of 2).
+    /// 2048 at 44.1kHz gives ~21.5Hz bin width — fine enough that each of the
+    /// 32 log-spaced bands gets its own bin at the low end instead of multiple
+    /// bass bands collapsing onto the same bin.
+    static let fftSize = 2048
     /// Number of output frequency bands for visualization
     static let bandCount = 32
 
@@ -20,6 +26,14 @@ final class AudioSpectrum: @unchecked Sendable {
     private var _treble: Float = 0
     private var _energy: Float = 0
     private var _bands: [Float] = Array(repeating: 0, count: bandCount)
+
+    // Diagnostic counters so we can tell why the visualizer falls back to
+    // the simulated beat. All updated on the audio render thread, so int
+    // writes are atomic on 64-bit. Read + logged every ~1s from the tap.
+    private var _pcmCallCount: UInt64 = 0
+    private var _fftComputeCount: UInt64 = 0
+    private var _lastEnergy: Float = 0
+    private var _lastLogTime: CFTimeInterval = 0
 
     // Sample accumulator — collects incoming tap samples until we have a
     // full FFT window. Audio taps can deliver variable buffer sizes; gating
@@ -68,6 +82,8 @@ final class AudioSpectrum: @unchecked Sendable {
     func processPCM(_ samples: UnsafePointer<Float>, count: Int, sampleRate: Float) {
         guard let fftSetup, count > 0 else { return }
 
+        _pcmCallCount &+= 1
+
         var remaining = count
         var sourceOffset = 0
 
@@ -94,9 +110,23 @@ final class AudioSpectrum: @unchecked Sendable {
                 if !magnitudes.isEmpty {
                     let newBands = bucketIntoBands(magnitudes: magnitudes, sampleRate: sampleRate)
                     smoothAndStore(newBands)
+                    _fftComputeCount &+= 1
                 }
                 _accumFill = 0
             }
+        }
+
+        // Throttled diagnostic: once per ~1s while the tap is firing, log the
+        // raw PCM call count, FFT compute count, last energy, and sample rate
+        // so we can tell whether the audio pipeline stopped delivering samples,
+        // stopped computing FFTs, or is computing FFTs but with silent input.
+        let now = CACurrentMediaTime()
+        if now - _lastLogTime > 1.0 {
+            _lastLogTime = now
+            let pcm = _pcmCallCount
+            let fft = _fftComputeCount
+            let energy = _lastEnergy
+            spectrumLog.info("Spectrum diag: pcmCalls=\(pcm) fftComputes=\(fft) lastEnergy=\(energy) sampleRate=\(sampleRate) accumFill=\(self._accumFill)")
         }
     }
 
@@ -140,9 +170,11 @@ final class AudioSpectrum: @unchecked Sendable {
         for band in 0..<Self.bandCount {
             let lowFreq = 20.0 * pow(1000.0, Float(band) / Float(Self.bandCount))
             let highFreq = 20.0 * pow(1000.0, Float(band + 1) / Float(Self.bandCount))
-            let lowBin = max(1, Int(lowFreq / binFreqWidth))
-            let highBin = min(magnitudes.count - 1, Int(highFreq / binFreqWidth))
-            guard highBin > lowBin else { continue }
+            // The lowest ~7 log bands each span less than one FFT bin at 44.1kHz/1024
+            // so without clamping they'd collapse to an empty range. Force each band
+            // to include at least the nearest bin; low bands then share bin 1.
+            let lowBin = max(1, min(Int(lowFreq / binFreqWidth), magnitudes.count - 1))
+            let highBin = max(lowBin, min(Int(highFreq / binFreqWidth), magnitudes.count - 1))
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
@@ -169,6 +201,7 @@ final class AudioSpectrum: @unchecked Sendable {
                 _bands[i] = smooth(old: _bands[i], new: newBands[i])
             }
         }
+        _lastEnergy = newEnergy
     }
 
     private func smooth(old: Float, new: Float) -> Float {

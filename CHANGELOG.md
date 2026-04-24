@@ -4,6 +4,21 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 51 -- April 24, 2026
+- Visualizer: real 32-band FFT now drives Spectrum, Waveform, and Aurora presets. Bass shows on the left, treble on the right; Spectrum gains classic peak-hold caps that snap up to each bar's recent max and decay slowly. The remaining 15 presets receive the full spectrum data but continue to animate from the scalar bass/mid/treble values for now. FFT window bumped 1024 -> 2048 so every log-spaced band gets its own bin at the low end (previously bars 0-5 and 7 were always zero).
+- Visualizer diagnostic logging (#34): one `Spectrum diag` line per second during playback with pcmCalls / fftComputes / lastEnergy / sampleRate so the FFT pipeline is observable from Console.
+- CarPlay: letter-drill root for Artists and Albums (#33). Two-letter navigation makes long collections reachable without endless scrolling. Auto-push to Now Playing on playback start has also been dropped so the current list stays visible.
+- CarPlay: alphabet index fit and hard caps lifted on Albums and Starred (#32). Letter strip now fits the screen without clipping.
+- Audio: CarPlay interruption resume tightened. A call or text interruption near the top of a track previously restarted playback silently from 0; the saved position is now seeked before rate is set, eliminating the audible "song restarted" gap. Path logging added for interruption debugging.
+- GetInfoView: handles SwiftData's `.optional` and `.foreignReference` Mirror display styles in the Raw tab (previously fell through and dropped the row).
+- 536 unit tests in 40 suites; 12 UI rotation tests.
+
+**TestFlight Notes:**
+> Visualizer now reacts to real frequency bands (Spectrum, Waveform, Aurora)
+> with peak-hold caps on Spectrum. CarPlay letter-drill navigation for
+> Artists and Albums. Call or text interruptions no longer restart the
+> track from 0 after resume.
+
 ### Build 50 -- April 21, 2026
 - Get Info window (from PR #13): long-press songs/albums/artists -> "Get Info" for a detail sheet with Overview and Raw metadata tabs. macOS opens in a separate window; iOS/iPad uses a sheet.
 - Search keyboard shortcuts on macOS (from PR #14): `CMD+K` jumps to the Search tab and focuses the field, `CMD+F` focuses the search bar in the current view. Discoverable via the new Navigate menu.
