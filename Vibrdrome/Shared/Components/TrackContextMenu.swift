@@ -14,6 +14,13 @@ struct TrackContextMenuModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Opaque backer so the system's context-menu preview snapshot has
+            // a solid background. Without it, when iOS has to reposition the
+            // preview to fit the menu on screen the lifted row is transparent
+            // and adjacent rows' text bleeds through (reported Apr 16).
+            #if os(iOS)
+            .background(Color(.systemBackground))
+            #endif
             .contextMenu { contextMenuItems }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistView(songIds: [song.id])
