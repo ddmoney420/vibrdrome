@@ -38,7 +38,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 1. Plasma
 
 [[ stitchable ]] half4 plasma(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = position / size;
     float t = time * (0.5 + energy * 0.8);
 
@@ -67,20 +67,24 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 2. Aurora
 
 [[ stitchable ]] half4 aurora(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = position / size;
     float t = time * 0.3;
 
     float y = uv.y;
-    float wave = 0.0;
 
-    for (int i = 0; i < 5; i++) {
-        float fi = float(i);
-        float freq = 1.5 + fi * 0.8;
-        float amp = 0.08 / (fi * 0.5 + 1.0);
-        amp *= (0.5 + bass * 0.8);
-        wave += sin(uv.x * freq * 6.0 + t * (1.0 + fi * 0.3) + fi * 1.7) * amp;
-    }
+    // Sample the 32 FFT bands across x so the aurora ribbon bends with the
+    // actual spectrum — bass on the left, treble on the right.
+    float bandPos = uv.x * 31.0;
+    int bIdx0 = int(floor(bandPos));
+    int bIdx1 = min(bIdx0 + 1, 31);
+    float bFrac = bandPos - float(bIdx0);
+    float b = mix(bands[bIdx0], bands[bIdx1], bFrac);
+
+    // A little drift keeps the ribbon alive even when the FFT is silent;
+    // band magnitude then warps it by the real frequency content.
+    float drift = sin(uv.x * 6.0 + t) * 0.03 + sin(uv.x * 10.0 - t * 0.7) * 0.02;
+    float wave = drift + (b - 0.15) * 0.22;
 
     float band1 = smoothstep(0.08 + mid * 0.04, 0.0, abs(y - 0.35 - wave));
     float band2 = smoothstep(0.06 + mid * 0.03, 0.0, abs(y - 0.5 - wave * 0.7));
@@ -109,7 +113,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 3. Nebula
 
 [[ stitchable ]] half4 nebula(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     float t = time * (0.3 + bass * 0.3);
 
@@ -151,38 +155,41 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 4. Waveform
 
 [[ stitchable ]] half4 waveform(float2 position, half4 color, float2 size, float time, float energy,
-                                 float bass, float mid, float treble) {
+                                 float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = position / size;
     float t = time;
     float3 col = float3(0.02, 0.02, 0.05);
 
-    for (int i = 0; i < 8; i++) {
-        float fi = float(i);
-        float freq = 2.0 + fi * 1.5;
-        float phase = fi * 1.047;
-        float speed = 1.0 + fi * 0.4;
+    // Sample the 32 FFT bands along the x axis; linear interp between adjacent
+    // bins gives a continuous curve rather than a stepped bar chart.
+    float bandPos = uv.x * 31.0;
+    int bIdx0 = int(floor(bandPos));
+    int bIdx1 = min(bIdx0 + 1, 31);
+    float bFrac = bandPos - float(bIdx0);
+    float b = mix(bands[bIdx0], bands[bIdx1], bFrac);
 
-        // Strong frequency-band response per layer
-        float bandEnergy = (i < 3) ? bass : (i < 6) ? mid : treble;
-        float amp = (0.04 + bandEnergy * 0.15) / (fi * 0.25 + 1.0);
+    // Mirrored ribbon: the higher the band magnitude, the further the two
+    // lines pull apart from the center. When the FFT is silent the ribbon
+    // collapses to a flat line — honest feedback.
+    float deflect = b * 0.42;
+    float topLine = 0.5 - deflect;
+    float botLine = 0.5 + deflect;
 
-        float wave = sin(uv.x * freq * 6.28 + t * speed + phase + bandEnergy * 4.0) * amp;
-        wave += sin(uv.x * freq * 3.14 + t * speed * 0.7 + bandEnergy * 2.0) * amp * 0.6;
+    float dTop = abs(uv.y - topLine);
+    float dBot = abs(uv.y - botLine);
+    float glow = 0.004 / (dTop + 0.0008) + 0.004 / (dBot + 0.0008);
+    glow = min(glow, 6.0);
+    glow *= (0.4 + energy * 0.8);
 
-        float y = 0.5 + wave;
-        float d = abs(uv.y - y);
+    // Ribbon fill between the two lines
+    float fill = smoothstep(0.008, 0.0, abs(uv.y - 0.5) - deflect);
 
-        // Thicker, brighter glow
-        float glowWidth = 0.004 + bandEnergy * 0.003;
-        float glow = glowWidth / (d + 0.0005);
-        glow = min(glow, 5.0);
-        glow *= (0.4 + energy * 0.8);
+    // Colour walks across the x-axis so bass (left) and treble (right) differ
+    float hue = fract(uv.x * 0.8 + t * 0.05);
+    float3 waveColor = hsv2rgb(float3(hue, 0.85, 1.0));
 
-        float hue = fract(fi / 8.0 + t * 0.04 + bandEnergy * 0.2);
-        float3 waveColor = hsv2rgb(float3(hue, 0.8, 1.0));
-
-        col += waveColor * glow * 0.1;
-    }
+    col += waveColor * glow * 0.12;
+    col += waveColor * fill * (0.2 + b * 0.6);
 
     // Bass pulse behind waves
     float bassPulse = (0.5 + 0.5 * sin(t * 4.0)) * bass * 0.15;
@@ -198,7 +205,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 5. Tunnel
 
 [[ stitchable ]] half4 tunnel(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time * (0.5 + bass * 0.8);
@@ -235,7 +242,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 6. Kaleidoscope
 
 [[ stitchable ]] half4 kaleidoscope(float2 position, half4 color, float2 size, float time, float energy,
-                                     float bass, float mid, float treble) {
+                                     float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time * (0.3 + bass * 0.3);
@@ -270,7 +277,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 7. Particles
 
 [[ stitchable ]] half4 particles(float2 position, half4 color, float2 size, float time, float energy,
-                                  float bass, float mid, float treble) {
+                                  float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -316,7 +323,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 8. Fractal
 
 [[ stitchable ]] half4 fractal(float2 position, half4 color, float2 size, float time, float energy,
-                                float bass, float mid, float treble) {
+                                float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
 
@@ -355,7 +362,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 9. Fluid
 
 [[ stitchable ]] half4 fluid(float2 position, half4 color, float2 size, float time, float energy,
-                              float bass, float mid, float treble) {
+                              float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -408,7 +415,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 10. Rings
 
 [[ stitchable ]] half4 rings(float2 position, half4 color, float2 size, float time, float energy,
-                              float bass, float mid, float treble) {
+                              float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -462,28 +469,22 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 11. Spectrum Visualizer
 
 [[ stitchable ]] half4 spectrumVis(float2 position, half4 color, float2 size, float time, float energy,
-                                    float bass, float mid, float treble) {
+                                    float bass, float mid, float treble,
+                                    device const float *bands, int bandCount,
+                                    device const float *peaks, int peakCount) {
     float2 uv = position / size;
     float3 col = float3(0.02, 0.02, 0.04);
 
-    // Create bars across the screen
+    // 32 bars, one per FFT band (matches AudioSpectrum.bandCount).
     float barCount = 32.0;
     float barIndex = floor(uv.x * barCount);
     float barCenter = (barIndex + 0.5) / barCount;
     float barWidth = 0.8 / barCount;
 
-    // Simulate frequency magnitude per bar using bass/mid/treble interpolation
     float normalizedPos = barIndex / barCount;
-    float barHeight;
-    if (normalizedPos < 0.33) {
-        barHeight = bass * (0.8 + 0.4 * sin(barIndex * 1.7 + time * 3.0));
-    } else if (normalizedPos < 0.66) {
-        barHeight = mid * (0.7 + 0.3 * sin(barIndex * 2.3 + time * 2.5));
-    } else {
-        barHeight = treble * (0.6 + 0.4 * sin(barIndex * 3.1 + time * 4.0));
-    }
-
-    barHeight = clamp(barHeight, 0.02, 0.95);
+    int idx = clamp(int(barIndex), 0, 31);
+    float barHeight = clamp(bands[idx], 0.02, 0.95);
+    float peakHeight = clamp(peaks[idx], 0.02, 0.97);
 
     // Draw bar from bottom
     float inBar = step(abs(uv.x - barCenter), barWidth * 0.5) * step(1.0 - uv.y, barHeight);
@@ -499,6 +500,13 @@ float3 hsv2rgb(float3 c) {
     col += barColor * inBar * (0.6 + energy * 0.4);
     col += barColor * barGlow * 0.3;
 
+    // Peak-hold cap: bright horizontal tick at the recent-max height of each bar.
+    float peakY = 1.0 - peakHeight;
+    float capHalfThickness = 0.0045;
+    float inCap = step(abs(uv.y - peakY), capHalfThickness) *
+                   step(abs(uv.x - barCenter), barWidth * 0.5);
+    col += float3(1.0, 1.0, 1.0) * inCap * 0.9;
+
     // Reflection at bottom
     float reflection = step(1.0 - uv.y, barHeight * 0.3) * step(uv.y, 0.15);
     col += barColor * reflection * 0.15;
@@ -509,7 +517,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 12. Vortex
 
 [[ stitchable ]] half4 vortex(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -554,7 +562,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 13. Lava Lamp
 
 [[ stitchable ]] half4 lavaLamp(float2 position, half4 color, float2 size, float time, float energy,
-                                 float bass, float mid, float treble) {
+                                 float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time * 0.25;
@@ -620,7 +628,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 14. Starfield
 
 [[ stitchable ]] half4 starfield(float2 position, half4 color, float2 size, float time, float energy,
-                                  float bass, float mid, float treble) {
+                                  float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -659,7 +667,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 15. Ripple
 
 [[ stitchable ]] half4 ripple(float2 position, half4 color, float2 size, float time, float energy,
-                               float bass, float mid, float treble) {
+                               float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -694,7 +702,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 16. Fireflies
 
 [[ stitchable ]] half4 fireflies(float2 position, half4 color, float2 size, float time, float energy,
-                                  float bass, float mid, float treble) {
+                                  float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time;
@@ -793,7 +801,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 17. Prism
 
 [[ stitchable ]] half4 prism(float2 position, half4 color, float2 size, float time, float energy,
-                              float bass, float mid, float treble) {
+                              float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = (position / size - 0.5) * 2.0;
     uv.x *= size.x / size.y;
     float t = time * 0.5;
@@ -836,7 +844,7 @@ float3 hsv2rgb(float3 c) {
 // MARK: - 18. Ocean
 
 [[ stitchable ]] half4 ocean(float2 position, half4 color, float2 size, float time, float energy,
-                              float bass, float mid, float treble) {
+                              float bass, float mid, float treble, device const float *bands, int bandCount) {
     float2 uv = position / size;
     float t = time * 0.6;
     float3 col = float3(0.0);

@@ -10,8 +10,11 @@ private let spectrumLog = Logger(subsystem: "com.vibrdrome.app", category: "Spec
 final class AudioSpectrum: @unchecked Sendable {
     static let shared = AudioSpectrum()
 
-    /// Number of FFT bins (must be power of 2)
-    static let fftSize = 1024
+    /// Number of FFT bins (must be power of 2).
+    /// 2048 at 44.1kHz gives ~21.5Hz bin width — fine enough that each of the
+    /// 32 log-spaced bands gets its own bin at the low end instead of multiple
+    /// bass bands collapsing onto the same bin.
+    static let fftSize = 2048
     /// Number of output frequency bands for visualization
     static let bandCount = 32
 
@@ -167,9 +170,11 @@ final class AudioSpectrum: @unchecked Sendable {
         for band in 0..<Self.bandCount {
             let lowFreq = 20.0 * pow(1000.0, Float(band) / Float(Self.bandCount))
             let highFreq = 20.0 * pow(1000.0, Float(band + 1) / Float(Self.bandCount))
-            let lowBin = max(1, Int(lowFreq / binFreqWidth))
-            let highBin = min(magnitudes.count - 1, Int(highFreq / binFreqWidth))
-            guard highBin > lowBin else { continue }
+            // The lowest ~7 log bands each span less than one FFT bin at 44.1kHz/1024
+            // so without clamping they'd collapse to an empty range. Force each band
+            // to include at least the nearest bin; low bands then share bin 1.
+            let lowBin = max(1, min(Int(lowFreq / binFreqWidth), magnitudes.count - 1))
+            let highBin = max(lowBin, min(Int(highFreq / binFreqWidth), magnitudes.count - 1))
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
