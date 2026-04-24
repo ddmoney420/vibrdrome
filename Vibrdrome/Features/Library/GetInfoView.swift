@@ -610,13 +610,16 @@ struct GetInfoView: View {
                 let childPath = keyPath.isEmpty ? childLabel : "\(keyPath).\(childLabel)"
                 flattenMetadata(value: child.value, keyPath: childPath, rows: &rows)
             }
+        #if compiler(>=6.2)
+        case .enum, .optional, .foreignReference:
+            rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
+        #else
         case .enum, .optional:
             rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
+        #endif
         case .none:
             rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
         @unknown default:
-            // Covers newer DisplayStyle cases (e.g. .foreignReference on Swift 6+)
-            // without making the file require the newer stdlib to compile.
             rows.append(RawMetadataRow(key: keyPath, value: scalarDescription(value)))
         }
     }
