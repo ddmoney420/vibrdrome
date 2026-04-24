@@ -321,9 +321,13 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            PlaylistMosaicView(playlist: playlist, size: Theme.playlistCardSize, cornerRadius: 12)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            // GeometryReader + aspectRatio so the mosaic scales with grid
+            // column count instead of being stuck at the 2-column cell size.
+            GeometryReader { geo in
+                PlaylistMosaicView(playlist: playlist, size: geo.size.width, cornerRadius: 12)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(playlist.name)
                 .font(.subheadline)
