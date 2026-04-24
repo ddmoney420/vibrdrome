@@ -1,6 +1,9 @@
 import Accelerate
 import Foundation
+import QuartzCore
 import os.log
+
+private let spectrumLog = Logger(subsystem: "com.vibrdrome.app", category: "Spectrum")
 
 /// Thread-safe storage for real-time FFT spectrum data extracted from the audio tap.
 /// Updated on the audio render thread, read by the visualizer on the main thread at 60fps.
@@ -20,6 +23,14 @@ final class AudioSpectrum: @unchecked Sendable {
     private var _treble: Float = 0
     private var _energy: Float = 0
     private var _bands: [Float] = Array(repeating: 0, count: bandCount)
+
+    // Diagnostic counters so we can tell why the visualizer falls back to
+    // the simulated beat. All updated on the audio render thread, so int
+    // writes are atomic on 64-bit. Read + logged every ~1s from the tap.
+    private var _pcmCallCount: UInt64 = 0
+    private var _fftComputeCount: UInt64 = 0
+    private var _lastEnergy: Float = 0
+    private var _lastLogTime: CFTimeInterval = 0
 
     // Sample accumulator — collects incoming tap samples until we have a
     // full FFT window. Audio taps can deliver variable buffer sizes; gating
@@ -68,6 +79,8 @@ final class AudioSpectrum: @unchecked Sendable {
     func processPCM(_ samples: UnsafePointer<Float>, count: Int, sampleRate: Float) {
         guard let fftSetup, count > 0 else { return }
 
+        _pcmCallCount &+= 1
+
         var remaining = count
         var sourceOffset = 0
 
@@ -94,9 +107,23 @@ final class AudioSpectrum: @unchecked Sendable {
                 if !magnitudes.isEmpty {
                     let newBands = bucketIntoBands(magnitudes: magnitudes, sampleRate: sampleRate)
                     smoothAndStore(newBands)
+                    _fftComputeCount &+= 1
                 }
                 _accumFill = 0
             }
+        }
+
+        // Throttled diagnostic: once per ~1s while the tap is firing, log the
+        // raw PCM call count, FFT compute count, last energy, and sample rate
+        // so we can tell whether the audio pipeline stopped delivering samples,
+        // stopped computing FFTs, or is computing FFTs but with silent input.
+        let now = CACurrentMediaTime()
+        if now - _lastLogTime > 1.0 {
+            _lastLogTime = now
+            let pcm = _pcmCallCount
+            let fft = _fftComputeCount
+            let energy = _lastEnergy
+            spectrumLog.info("Spectrum diag: pcmCalls=\(pcm) fftComputes=\(fft) lastEnergy=\(energy) sampleRate=\(sampleRate) accumFill=\(self._accumFill)")
         }
     }
 
@@ -169,6 +196,7 @@ final class AudioSpectrum: @unchecked Sendable {
                 _bands[i] = smooth(old: _bands[i], new: newBands[i])
             }
         }
+        _lastEnergy = newEnergy
     }
 
     private func smooth(old: Float, new: Float) -> Float {
