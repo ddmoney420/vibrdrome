@@ -10,6 +10,7 @@ struct PlaylistsView: View {
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var searchText = ""
     @State private var searchIsActive = false
     @State private var sortBy: PlaylistSortOption = .name
@@ -255,8 +256,9 @@ struct PlaylistsView: View {
     // MARK: - Playlist Grid
 
     private var playlistGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                 count: max(2, min(10, gridColumns))), spacing: 20) {
+        let cols = Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)
+        let gridItems = Array(repeating: GridItem(.flexible(), spacing: 16), count: cols)
+        return LazyVGrid(columns: gridItems, spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)

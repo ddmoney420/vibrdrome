@@ -12,6 +12,7 @@ struct ArtistsView: View {
     @State private var favoritedArtistIds: Set<String> = []
     @AppStorage("artistsViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @SceneStorage("artistsFilter") private var filterRaw: String = ArtistFilter.all.rawValue
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
     private var downloadedSongs: [DownloadedSong]
@@ -263,7 +264,8 @@ struct ArtistsView: View {
                 ForEach(filteredIndexes, id: \.id) { index in
                     Section {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                                 count: max(2, min(10, gridColumns))), spacing: 20) {
+                                                 count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
+                                  spacing: 20) {
                             ForEach(index.artists) { artist in
                                 NavigationLink {
                                     ArtistDetailView(artistId: artist.id)

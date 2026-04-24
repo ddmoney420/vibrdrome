@@ -22,6 +22,7 @@ struct AlbumsView: View {
     @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("albumsViewStyle") private var showAsList = false
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.modelContext) private var modelContext
     @State private var showSaveCollection = false
     @State private var collectionName = ""
@@ -353,7 +354,8 @@ struct AlbumsView: View {
     // MARK: - Grid view
 
     private var gridItems: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 16), count: max(2, min(10, gridColumns)))
+        let cols = Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)
+        return Array(repeating: GridItem(.flexible(), spacing: 16), count: cols)
     }
 
     private var albumGrid: some View {

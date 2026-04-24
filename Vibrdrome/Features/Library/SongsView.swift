@@ -17,6 +17,7 @@ struct SongsView: View {
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
     @AppStorage("songsViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var sortBy: SongSortOption = .title
 
     private let pageSize = 500
@@ -388,7 +389,8 @@ struct SongsView: View {
                 }
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: max(2, min(10, gridColumns))), spacing: 20) {
+                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
+                          spacing: 20) {
                     ForEach(Array(displayedSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
                             .contentShape(Rectangle())
