@@ -9,9 +9,20 @@ extension AudioEngine {
         return Array(queue[(currentIndex + 1)...])
     }
 
-    /// Songs actually played before the current track (most recent first, max 20).
+    /// Songs actually played before the current track (chronological: oldest
+    /// first, newest last so the newest ends up adjacent to Now Playing when
+    /// the list is rendered top-to-bottom). Max 20 items.
     var recentlyPlayed: [Song] {
-        Array(playHistory.reversed().prefix(20))
+        Array(playHistory.suffix(20))
+    }
+
+    /// Upcoming tracks (queue[currentIndex+1...]) with absolute queue indices
+    /// so callers can pass them back to skipToIndex / removeFromQueue.
+    var upNextEntries: [(index: Int, song: Song)] {
+        guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
+        return (currentIndex + 1 ..< queue.count).map { idx in
+            (index: idx, song: queue[idx])
+        }
     }
 
     /// All queue tracks except the currently playing one, with absolute queue indices.
@@ -51,6 +62,25 @@ extension AudioEngine {
         guard index >= 0, index < queue.count, index != currentIndex else { return }
         queue.remove(at: index)
         if index < currentIndex { currentIndex -= 1 }
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
+    /// Reorder tracks within the Up Next section only.
+    /// Source/destination are offsets into `upNextEntries`; they get shifted
+    /// by currentIndex+1 to land in the real queue array. Tracks before the
+    /// current track are untouched.
+    func moveInUpNext(from source: IndexSet, to destination: Int) {
+        let startIndex = currentIndex + 1
+        guard startIndex < queue.count else { return }
+        let upNextCount = queue.count - startIndex
+        guard destination >= 0, destination <= upNextCount else { return }
+        let absoluteSource = IndexSet(source.compactMap { offset in
+            let abs = startIndex + offset
+            return abs < queue.count ? abs : nil
+        })
+        guard !absoluteSource.isEmpty else { return }
+        let absoluteDestination = startIndex + destination
+        queue.move(fromOffsets: absoluteSource, toOffset: absoluteDestination)
         if activeMode == .gapless { prepareLookahead() }
     }
 
