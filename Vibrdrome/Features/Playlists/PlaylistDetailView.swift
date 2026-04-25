@@ -328,15 +328,19 @@ struct PlaylistDetailView: View {
         descriptor.fetchLimit = 1
         guard let cached = try? modelContext.fetch(descriptor).first else { return nil }
 
-        // Resolve entries to songs via CachedSong
+        // Resolve entries to songs in a single fetch + dictionary lookup.
+        // Previously this did one modelContext.fetch per entry — a 1000-song playlist
+        // issued 1000 queries on the main thread.
         let sortedEntries = cached.entries.sorted { $0.order < $1.order }
+        let entrySongIds = sortedEntries.map(\.songId)
+        let idSet = Set(entrySongIds)
+        let songsDesc = FetchDescriptor<CachedSong>(
+            predicate: #Predicate<CachedSong> { idSet.contains($0.id) }
+        )
+        let cachedSongs = (try? modelContext.fetch(songsDesc)) ?? []
+        let songMap = Dictionary(uniqueKeysWithValues: cachedSongs.map { ($0.id, $0) })
         let songs: [Song] = sortedEntries.compactMap { entry in
-            let sid = entry.songId
-            var songDesc = FetchDescriptor<CachedSong>(
-                predicate: #Predicate { $0.id == sid }
-            )
-            songDesc.fetchLimit = 1
-            return try? modelContext.fetch(songDesc).first?.toSong()
+            songMap[entry.songId]?.toSong()
         }
 
         return Playlist(

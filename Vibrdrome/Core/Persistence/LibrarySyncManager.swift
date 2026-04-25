@@ -42,8 +42,10 @@ final class LibrarySyncManager {
 
     // Page sizes for paginated API calls. 500 is a safe default for most Subsonic servers;
     // could be made configurable per-server if needed for very large or constrained instances.
-    private let albumPageSize = 500
-    private let songPageSize = 500
+    // `nonisolated` so the `nonisolated static` sync helpers running off the main actor can
+    // read them without hopping back to MainActor just to read a constant.
+    nonisolated static let albumPageSize = 500
+    nonisolated static let songPageSize = 500
 
     /// Stale threshold for auto-sync (24 hours).
     private let staleInterval: TimeInterval = 86400
@@ -164,31 +166,64 @@ final class LibrarySyncManager {
             syncProgress = nil
         }
 
+        // Progress callback — hops to MainActor to update @Observable state.
+        // Marked @Sendable so it's safe to pass into nonisolated static helpers.
+        @Sendable func updateProgress(_ message: String) {
+            Task { @MainActor in
+                self.syncProgress = message
+            }
+        }
+        @Sendable func publishPartialStats(_ partial: SyncStats) {
+            Task { @MainActor in
+                self.lastSyncStats = partial
+            }
+        }
+
         do {
-            let context = ModelContext(container)
-            context.autosaveEnabled = false
+            // All heavy lifting (SwiftData fetch/insert/save + per-row diff loops) happens on a
+            // detached task using a background ModelContext. This keeps the main actor free so
+            // the polling task (which fires every 15+ min) doesn't stutter UI on large libraries.
+            // Background mode is incremental-only: BGAppRefreshTask gets ~30s of CPU, a full sync
+            // on a large library would hit the expirationHandler and be killed.
+            let incremental = (mode == .incremental || mode == .background)
 
-            switch mode {
-            case .full, .background:
-                try await syncAlbums(client: client, context: context, stats: &stats, incremental: false)
-                try await syncArtists(client: client, context: context, stats: &stats, incremental: false)
-                try await syncSongs(client: client, context: context, stats: &stats, incremental: false)
-                try await syncPlaylists(client: client, context: context, stats: &stats)
+            stats = try await Task.detached(priority: .utility) { () -> SyncStats in
+                var working = SyncStats()
+
+                try await Self.syncAlbumsOffMain(
+                    client: client, container: container,
+                    stats: &working, incremental: incremental,
+                    progress: updateProgress, publishStats: publishPartialStats
+                )
+                try await Self.syncArtistsOffMain(
+                    client: client, container: container,
+                    stats: &working, incremental: incremental,
+                    progress: updateProgress, publishStats: publishPartialStats
+                )
+                try await Self.syncSongsOffMain(
+                    client: client, container: container,
+                    stats: &working, incremental: incremental,
+                    progress: updateProgress, publishStats: publishPartialStats
+                )
+                try await Self.syncPlaylistsOffMain(
+                    client: client, container: container,
+                    stats: &working,
+                    progress: updateProgress, publishStats: publishPartialStats
+                )
+                return working
+            }.value
+
+            if mode == .full {
                 UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastFullSyncDate)
-
-            case .incremental:
-                try await syncAlbums(client: client, context: context, stats: &stats, incremental: true)
-                try await syncArtists(client: client, context: context, stats: &stats, incremental: true)
-                try await syncSongs(client: client, context: context, stats: &stats, incremental: true)
-                try await syncPlaylists(client: client, context: context, stats: &stats)
             }
 
-            try context.save()
             lastSyncDate = Date()
             lastSyncStats = stats
 
-            // Save sync history
-            saveSyncHistory(stats: stats, mode: mode, context: context)
+            // Save sync history on a fresh context (the work context above is already gone).
+            let historyContext = ModelContext(container)
+            historyContext.autosaveEnabled = false
+            saveSyncHistory(stats: stats, mode: mode, context: historyContext)
 
             syncLog.info("""
                 Library sync (\(mode.rawValue)) completed in \
@@ -199,9 +234,14 @@ final class LibrarySyncManager {
                 -\(stats.albumsRemoved + stats.artistsRemoved + stats.songsRemoved))
                 """)
 
-            // Prefetch cover art in background after metadata sync
-            if stats.albumsAdded > 0 || stats.artistsAdded > 0 {
-                await prefetchCoverArt(client: client, context: context)
+            // Prefetch cover art in background after metadata sync. Also fires when existing
+            // albums/artists gain a new coverArtId (e.g. server-side art-scan completes after
+            // the metadata was already cached), not just when new rows are inserted.
+            let artChanged = stats.albumsAdded > 0 || stats.artistsAdded > 0 ||
+                stats.albumsUpdated > 0 || stats.artistsUpdated > 0
+            if artChanged {
+                let prefetchContext = ModelContext(container)
+                await prefetchCoverArt(client: client, context: prefetchContext)
             }
         } catch {
             syncError = "Sync failed: \(error.localizedDescription)"
@@ -232,23 +272,22 @@ final class LibrarySyncManager {
         }
     }
 
-    /// Update the stored server lastModified timestamp.
-    private func updateServerModifiedTimestamp(client: SubsonicClient) async {
-        do {
-            let indexes = try await client.getIndexes()
-            if let lastModified = indexes.lastModified {
-                UserDefaults.standard.set(lastModified, forKey: UserDefaultsKeys.lastServerModified)
-            }
-        } catch {
-            syncLog.warning("Failed to fetch server modified timestamp: \(error.localizedDescription)")
-        }
-    }
-
     // MARK: - Albums
 
-    private func syncAlbums(client: SubsonicClient, context: ModelContext,
-                            stats: inout SyncStats, incremental: Bool) async throws {
-        syncProgress = "Syncing albums…"
+    /// Nonisolated so the fetch / insert / diff loops run off MainActor. On 10k+ libraries
+    /// these previously stuttered the UI every polling interval.
+    nonisolated static func syncAlbumsOffMain(
+        client: SubsonicClient,
+        container: ModelContainer,
+        stats: inout SyncStats,
+        incremental: Bool,
+        progress: @Sendable (String) -> Void,
+        publishStats: @Sendable (SyncStats) -> Void
+    ) async throws {
+        progress("Syncing albums…")
+
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
 
         // Build lookup dictionary of existing albums for O(1) access
         let allLocal = try context.fetch(FetchDescriptor<CachedAlbum>())
@@ -300,7 +339,7 @@ final class LibrarySyncManager {
                 }
 
                 totalFetched += page.count
-                syncProgress = "Syncing albums… \(totalFetched)"
+                progress("Syncing albums… \(totalFetched)")
                 offset += page.count
 
                 if page.count < albumPageSize { break }
@@ -314,14 +353,14 @@ final class LibrarySyncManager {
         }
 
         try context.save()
-        lastSyncStats = stats
+        publishStats(stats)
         let added = stats.albumsAdded
         let updated = stats.albumsUpdated
         let removed = stats.albumsRemoved
         syncLog.info("Synced \(totalFetched) albums (+\(added) ~\(updated) -\(removed))")
     }
 
-    private func hasAlbumChanged(_ cached: CachedAlbum, _ server: Album) -> Bool {
+    nonisolated static func hasAlbumChanged(_ cached: CachedAlbum, _ server: Album) -> Bool {
         cached.name != server.name ||
         cached.artistName != server.artist ||
         cached.artistId != server.artistId ||
@@ -338,11 +377,20 @@ final class LibrarySyncManager {
 
     // MARK: - Artists
 
-    private func syncArtists(client: SubsonicClient, context: ModelContext,
-                             stats: inout SyncStats, incremental: Bool) async throws {
-        syncProgress = "Syncing artists…"
+    nonisolated static func syncArtistsOffMain(
+        client: SubsonicClient,
+        container: ModelContainer,
+        stats: inout SyncStats,
+        incremental: Bool,
+        progress: @Sendable (String) -> Void,
+        publishStats: @Sendable (SyncStats) -> Void
+    ) async throws {
+        progress("Syncing artists…")
         let indexes = try await client.getArtists()
         var serverArtistIds = Set<String>()
+
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
 
         // Build lookup dictionary
         let allLocal = try context.fetch(FetchDescriptor<CachedArtist>())
@@ -376,14 +424,14 @@ final class LibrarySyncManager {
         }
 
         try context.save()
-        lastSyncStats = stats
+        publishStats(stats)
         let artAdded = stats.artistsAdded
         let artUpdated = stats.artistsUpdated
         let artRemoved = stats.artistsRemoved
         syncLog.info("Synced \(serverArtistIds.count) artists (+\(artAdded) ~\(artUpdated) -\(artRemoved))")
     }
 
-    private func hasArtistChanged(_ cached: CachedArtist, _ server: Artist) -> Bool {
+    nonisolated static func hasArtistChanged(_ cached: CachedArtist, _ server: Artist) -> Bool {
         cached.name != server.name ||
         cached.coverArtId != server.coverArt ||
         cached.albumCount != server.albumCount ||
@@ -392,9 +440,18 @@ final class LibrarySyncManager {
 
     // MARK: - Songs
 
-    private func syncSongs(client: SubsonicClient, context: ModelContext,
-                           stats: inout SyncStats, incremental: Bool) async throws {
-        syncProgress = "Syncing songs…"
+    nonisolated static func syncSongsOffMain(
+        client: SubsonicClient,
+        container: ModelContainer,
+        stats: inout SyncStats,
+        incremental: Bool,
+        progress: @Sendable (String) -> Void,
+        publishStats: @Sendable (SyncStats) -> Void
+    ) async throws {
+        progress("Syncing songs…")
+
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
 
         // Build lookup dictionary for O(1) access
         let allLocal = try context.fetch(FetchDescriptor<CachedSong>())
@@ -435,12 +492,12 @@ final class LibrarySyncManager {
             }
 
             totalFetched += songs.count
-            syncProgress = "Syncing songs… \(totalFetched)"
+            progress("Syncing songs… \(totalFetched)")
             offset += songs.count
 
             if totalFetched % 2000 == 0 {
                 try context.save()
-                lastSyncStats = stats
+                publishStats(stats)
             }
 
             if songs.count < songPageSize { break }
@@ -455,7 +512,7 @@ final class LibrarySyncManager {
         }
 
         try context.save()
-        lastSyncStats = stats
+        publishStats(stats)
         await updateServerModifiedTimestamp(client: client)
         let songAdded = stats.songsAdded
         let songUpdated = stats.songsUpdated
@@ -463,7 +520,19 @@ final class LibrarySyncManager {
         syncLog.info("Synced \(totalFetched) songs (+\(songAdded) ~\(songUpdated) -\(songRemoved))")
     }
 
-    private func hasSongChanged(_ cached: CachedSong, _ server: Song) -> Bool {
+    /// Nonisolated so songs sync (off MainActor) can call it directly.
+    nonisolated static func updateServerModifiedTimestamp(client: SubsonicClient) async {
+        do {
+            let indexes = try await client.getIndexes()
+            if let lastModified = indexes.lastModified {
+                UserDefaults.standard.set(lastModified, forKey: UserDefaultsKeys.lastServerModified)
+            }
+        } catch {
+            syncLog.warning("Failed to fetch server modified timestamp: \(error.localizedDescription)")
+        }
+    }
+
+    nonisolated static func hasSongChanged(_ cached: CachedSong, _ server: Song) -> Bool {
         cached.title != server.title ||
         cached.artist != server.artist ||
         cached.albumName != server.album ||
@@ -476,7 +545,7 @@ final class LibrarySyncManager {
         cached.bitRate != server.bitRate
     }
 
-    private func updateSongFields(_ cached: CachedSong, from song: Song) {
+    nonisolated static func updateSongFields(_ cached: CachedSong, from song: Song) {
         cached.title = song.title
         cached.artist = song.artist
         cached.albumArtist = song.albumArtist
@@ -500,11 +569,24 @@ final class LibrarySyncManager {
 
     // MARK: - Playlists
 
-    private func syncPlaylists(client: SubsonicClient, context: ModelContext,
-                               stats: inout SyncStats) async throws {
-        syncProgress = "Syncing playlists…"
+    nonisolated static func syncPlaylistsOffMain(
+        client: SubsonicClient,
+        container: ModelContainer,
+        stats: inout SyncStats,
+        progress: @Sendable (String) -> Void,
+        publishStats: @Sendable (SyncStats) -> Void
+    ) async throws {
+        progress("Syncing playlists…")
+
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+
         let playlists = try await client.getPlaylists()
-        var serverPlaylistIds = Set<String>()
+
+        // Source of truth for "what exists on the server" is the getPlaylists() list — NOT the
+        // set of playlists whose details we managed to fetch below. A transient failure on a
+        // single getPlaylist(id:) call must not cause its cached row to be deleted locally.
+        let serverPlaylistIds = Set(playlists.map { $0.id })
 
         let allLocal = try context.fetch(FetchDescriptor<CachedPlaylist>())
         let localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
@@ -538,22 +620,23 @@ final class LibrarySyncManager {
         }
 
         for detail in details {
-            serverPlaylistIds.insert(detail.id)
             upsertPlaylist(detail, context: context, localMap: localMap)
             stats.playlistsSynced += 1
         }
 
+        // Only delete local playlists that are confirmed missing from the server list.
+        // Playlists whose detail fetch failed will simply retain their existing cached entries.
         for local in allLocal where !serverPlaylistIds.contains(local.id) {
             context.delete(local)
         }
 
         try context.save()
-        lastSyncStats = stats
+        publishStats(stats)
         syncLog.info("Synced \(playlists.count) playlists with entries")
     }
 
-    private func upsertPlaylist(_ playlist: Playlist, context: ModelContext,
-                                localMap: [String: CachedPlaylist]) {
+    nonisolated static func upsertPlaylist(_ playlist: Playlist, context: ModelContext,
+                                           localMap: [String: CachedPlaylist]) {
         let cached: CachedPlaylist
         if let existing = localMap[playlist.id] {
             existing.name = playlist.name

@@ -122,7 +122,10 @@ final class SubsonicClient {
             }
         }
 
-        throw SubsonicError.httpError(500)
+        // Unreachable: the for-loop above always exits via `return` on success or `throw`
+        // on the final attempt. Using fatalError makes that invariant explicit and will
+        // surface immediately if the control-flow assumption is ever broken by a refactor.
+        fatalError("SubsonicClient.request retry loop exited without returning or throwing")
     }
 
     private func performRequest(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {

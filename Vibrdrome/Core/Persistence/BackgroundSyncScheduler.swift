@@ -12,21 +12,33 @@ final class BackgroundSyncScheduler {
     static let shared = BackgroundSyncScheduler()
 
     /// Task identifier for lightweight app refresh (incremental sync).
-    static let refreshTaskId = "com.vibrdrome.app.libraryRefresh"
+    /// `nonisolated` so `registerTasks()` (itself nonisolated, called from App.init())
+    /// can read these without hopping to the main actor.
+    nonisolated static let refreshTaskId = "com.vibrdrome.app.libraryRefresh"
     /// Task identifier for longer processing task (full sync).
-    static let processingTaskId = "com.vibrdrome.app.librarySync"
+    nonisolated static let processingTaskId = "com.vibrdrome.app.librarySync"
 
     private init() {}
 
-    /// Register background task handlers. Call once at app launch.
-    func registerTasks() {
+    /// Register background task handlers. MUST be called synchronously from `App.init()`
+    /// before the app finishes launching. If iOS launches the app specifically to handle
+    /// a background task, registration must already be in place or the handler is missing
+    /// and the task fails silently.
+    ///
+    /// `nonisolated` so it can run on whatever thread initializes the SwiftUI `App` struct
+    /// without an `await` hop; `BGTaskScheduler.register` is thread-safe.
+    nonisolated func registerTasks() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.refreshTaskId,
             using: nil
         ) { task in
             guard let refreshTask = task as? BGAppRefreshTask else { return }
+            // BGTask subclasses are not Sendable; transferring them into a MainActor Task
+            // is safe here because the system invokes the handler exactly once and we do
+            // not touch the task from any other isolation domain.
+            nonisolated(unsafe) let unsafeTask = refreshTask
             Task { @MainActor in
-                await self.handleRefreshTask(refreshTask)
+                await self.handleRefreshTask(unsafeTask)
             }
         }
 
@@ -35,8 +47,9 @@ final class BackgroundSyncScheduler {
             using: nil
         ) { task in
             guard let processingTask = task as? BGProcessingTask else { return }
+            nonisolated(unsafe) let unsafeTask = processingTask
             Task { @MainActor in
-                await self.handleProcessingTask(processingTask)
+                await self.handleProcessingTask(unsafeTask)
             }
         }
 

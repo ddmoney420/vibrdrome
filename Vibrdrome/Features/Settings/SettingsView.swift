@@ -437,7 +437,15 @@ struct SettingsView: View {
                     let val = UserDefaults.standard.integer(forKey: UserDefaultsKeys.syncPollingInterval)
                     return [5, 15, 30, 60].contains(val) ? val : 15
                 },
-                set: { UserDefaults.standard.set($0, forKey: UserDefaultsKeys.syncPollingInterval) }
+                set: { newValue in
+                    UserDefaults.standard.set(newValue, forKey: UserDefaultsKeys.syncPollingInterval)
+                    // Restart the running polling task so the change takes effect immediately
+                    // rather than waiting until the next launch.
+                    appState.librarySyncManager.startPolling(
+                        client: appState.subsonicClient,
+                        container: PersistenceController.shared.container
+                    )
+                }
             )) {
                 Text("5 min").tag(5)
                 Text("15 min").tag(15)
