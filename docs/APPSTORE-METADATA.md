@@ -64,15 +64,13 @@ Vibrdrome is free, open source, and contains no ads or tracking.
 
 navidrome,subsonic,music,player,streaming,self-hosted,gapless,offline,equalizer,carplay,watch,lyrics,radio,metadata
 
-## What's New (v1.0.0 Beta Build 50)
+## What's New (v1.0.0 Beta Build 51)
 
-- Get Info window (long-press any song, album, or artist). Overview and Raw Metadata tabs. iOS sheet, macOS window.
-- macOS keyboard shortcuts: Command+K jumps to Search, Command+F focuses the search bar, both in a new Navigate menu.
-- Now Playing toolbar polish: empty pill fix, optional background pill, new Radio Mix button that plays songs similar to the current track.
-- Radio grid: long-press any station card to delete (fixes iPad landscape gap).
-- Add Station form now split into labeled Name / Stream URL / Homepage sections.
-- iPad mini player stays pinned to the bottom even when the floating keyboard is up.
-- Liquid Glass toggle gets a descriptive subtitle so its effect is obvious.
+- Visualizer: Spectrum, Waveform, and Aurora now react to the real frequency content of your audio. Bass shows on the left, treble on the right. Spectrum gains classic peak-hold caps.
+- CarPlay: two-letter drill-down for Artists and Albums so large collections are navigable without endless scrolling.
+- CarPlay Now Playing no longer auto-pushes on track start, so the list you were browsing stays visible.
+- Playback recovery: short call or text interruptions no longer restart the track from 0.
+- Get Info Raw tab now handles SwiftData optional and foreignReference metadata styles (previously dropped those rows).
 
 ## Support URL
 

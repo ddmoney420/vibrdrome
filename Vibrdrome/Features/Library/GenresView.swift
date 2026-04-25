@@ -25,6 +25,7 @@ struct GenresView: View {
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
     @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -170,7 +171,8 @@ struct GenresView: View {
     private var genreGrid: some View {
         ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                     count: max(2, min(10, gridColumns))), spacing: 20) {
+                                     count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
+                      spacing: 20) {
                 ForEach(filteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)

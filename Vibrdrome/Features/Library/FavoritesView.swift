@@ -16,6 +16,7 @@ struct FavoritesView: View {
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "favorites")
     #endif
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     enum FavoriteCategory: String, CaseIterable, Identifiable {
         case songs, albums, artists
@@ -262,7 +263,8 @@ struct FavoritesView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: max(2, min(10, gridColumns))), spacing: 20) {
+                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
+                          spacing: 20) {
                     ForEach(albums) { album in
                         NavigationLink {
                             AlbumDetailView(albumId: album.id)
@@ -314,7 +316,8 @@ struct FavoritesView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: max(2, min(10, gridColumns))), spacing: 20) {
+                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
+                          spacing: 20) {
                     ForEach(artists) { artist in
                         NavigationLink {
                             ArtistDetailView(artistId: artist.id)

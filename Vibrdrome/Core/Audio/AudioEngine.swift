@@ -379,9 +379,19 @@ final class AudioEngine {
         Task {
             do {
                 let tracks = try await item.asset.loadTracks(withMediaType: .audio)
-                guard self.generation == gen, let track = tracks.first else { return }
+                guard self.generation == gen else {
+                    audioLog.info("EQ tap skipped: generation mismatch")
+                    return
+                }
+                guard let track = tracks.first else {
+                    audioLog.warning("EQ tap skipped: no audio tracks in asset")
+                    return
+                }
                 if let mix = EQTapProcessor.createAudioMix(track: track) {
                     item.audioMix = mix
+                    audioLog.info("EQ tap applied to item (tracks=\(tracks.count))")
+                } else {
+                    audioLog.warning("EQ tap skipped: createAudioMix returned nil")
                 }
             } catch {
                 audioLog.error("Failed to apply EQ tap: \(error)")

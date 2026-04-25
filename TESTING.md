@@ -101,6 +101,14 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Lyrics with negative offset don't break sync
 - [ ] Visualizer opens (if not disabled)
 - [ ] Visualizer does not cause audio stutter on open
+- [ ] Spectrum preset: bass-heavy track spikes the left side of the bar graph (Build 51)
+- [ ] Spectrum preset: cymbal-heavy track spikes the right side (Build 51)
+- [ ] Spectrum preset: each bar has a white peak-hold cap that snaps up on transients and decays slowly (Build 51)
+- [ ] Waveform preset: mirrored ribbon bulges based on real frequency content; silence collapses it to a flat line (Build 51)
+- [ ] Aurora preset: ribbons bend with frequency content (left vs right differ) rather than pure sine sweeps (Build 51)
+- [ ] All 18 presets render and animate (switch via swipe or preset picker) (Build 51)
+- [ ] macOS build: visualizer renders correctly (not black), reacts to audio (Build 51)
+- [ ] Console filtered to subsystem:com.vibrdrome.app shows `Spectrum diag` line once per second during playback (Build 51)
 - [ ] Queue opens
 - [ ] Long-press album art shows save/share options
 - [ ] Drag to dismiss works
@@ -194,7 +202,11 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Now Playing template shows current track with progress
 - [ ] Shuffle and repeat buttons work in Now Playing
 - [ ] Up Next queue shows upcoming tracks
-- [ ] Auto-navigates to Now Playing when a track starts
+- [ ] Track start no longer auto-pushes to Now Playing; browse list stays visible (Build 51)
+- [ ] Artists list shows a first-letter picker; tap any letter and a second-letter picker appears; pick a 2-letter combo to drill into that slice (Build 51)
+- [ ] Albums list: same first-letter then second-letter drill-down (Build 51)
+- [ ] Alphabet index fits the screen without clipping; Albums and Starred show every entry (no hard cap) (Build 51)
+- [ ] Playing music, trigger a short incoming call or text; after the interruption ends, playback resumes from the saved position, not from 0 (Build 51)
 - [ ] State refreshes correctly on CarPlay reconnect
 
 ## Radio

@@ -88,11 +88,11 @@ struct QueueView: View {
                     }
                 }
 
-                // Queue (all tracks except currently playing)
-                let entries = engine.queueEntries
+                // Up Next (tracks after currently playing)
+                let entries = engine.upNextEntries
                 if !entries.isEmpty {
                     let totalSeconds = entries.compactMap(\.song.duration).reduce(0, +)
-                    Section("Queue -- \(entries.count) songs -- \(formatDuration(totalSeconds))") {
+                    Section("Up Next -- \(entries.count) songs -- \(formatDuration(totalSeconds))") {
                         ForEach(Array(entries.enumerated()), id: \.element.song.id) { _, entry in
                             HStack(spacing: 12) {
                                 AlbumArtView(coverArtId: entry.song.coverArt, size: 40)
@@ -119,7 +119,6 @@ struct QueueView: View {
                                         .monospacedDigit()
                                 }
                             }
-                            .opacity(entry.index < engine.currentIndex ? 0.5 : 1.0)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 #if os(iOS)
@@ -140,7 +139,7 @@ struct QueueView: View {
                             }
                         }
                         .onMove { source, destination in
-                            engine.moveInQueue(from: source, to: destination)
+                            engine.moveInUpNext(from: source, to: destination)
                         }
                     }
                 }
