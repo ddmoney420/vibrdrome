@@ -27,34 +27,6 @@ final class NowPlayingManager {
     private let infoCenter = MPNowPlayingInfoCenter.default()
     private var currentInfo = [String: Any]()
 
-    /// Update the stored artwork and flush to `infoCenter`. Used by radio
-    /// artwork loading so the station's cover art isn't overwritten by the
-    /// next elapsed-time tick (which writes `currentInfo` back).
-    func setCurrentArtwork(_ artwork: MPMediaItemArtwork) {
-        currentInfo[MPMediaItemPropertyArtwork] = artwork
-        infoCenter.nowPlayingInfo = currentInfo
-    }
-
-    /// Reset `currentInfo` to station metadata so subsequent `updateElapsedTime`
-    /// / `updatePlaybackState` ticks don't overwrite with stale song info.
-    func update(station: InternetRadioStation, isPlaying: Bool) {
-        currentInfo = [String: Any]()
-        currentInfo[MPMediaItemPropertyTitle] = station.name
-        currentInfo[MPMediaItemPropertyArtist] = "Internet Radio"
-        currentInfo[MPNowPlayingInfoPropertyIsLiveStream] = true
-        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        infoCenter.nowPlayingInfo = currentInfo
-
-        #if os(iOS)
-        WatchSessionManager.shared.sendNowPlayingUpdate(
-            title: station.name,
-            artist: "Internet Radio",
-            album: "",
-            isPlaying: isPlaying
-        )
-        #endif
-    }
-
     func update(song: Song, isPlaying: Bool) {
         currentInfo = [String: Any]()
         currentInfo[MPMediaItemPropertyTitle] = song.title
@@ -104,6 +76,41 @@ final class NowPlayingManager {
         #endif
 
         Task { await loadAndApplyArtwork(for: song) }
+    }
+
+    func update(station: InternetRadioStation, isPlaying: Bool) {
+        currentInfo = [String: Any]()
+        currentInfo[MPMediaItemPropertyTitle] = station.name
+        currentInfo[MPMediaItemPropertyArtist] = "Internet Radio"
+        currentInfo[MPMediaItemPropertyAlbumTitle] = ""
+        currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0.0
+        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        currentInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        currentInfo[MPNowPlayingInfoPropertyIsLiveStream] = true
+        currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+        infoCenter.nowPlayingInfo = currentInfo
+
+        updateWidget(title: station.name, artist: "Internet Radio",
+                     album: "", isPlaying: isPlaying,
+                     coverArtId: station.radioCoverArtId)
+
+        #if os(iOS)
+        WatchSessionManager.shared.sendNowPlayingUpdate(
+            title: station.name,
+            artist: "Internet Radio",
+            album: "",
+            isPlaying: isPlaying
+        )
+        #endif
+    }
+
+    func setCurrentArtwork(_ artwork: MPMediaItemArtwork?) {
+        if let artwork {
+            currentInfo[MPMediaItemPropertyArtwork] = artwork
+        } else {
+            currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+        }
+        infoCenter.nowPlayingInfo = currentInfo
     }
 
     private func loadAndApplyArtwork(for song: Song) async {

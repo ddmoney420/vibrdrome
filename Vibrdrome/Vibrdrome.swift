@@ -76,6 +76,15 @@ struct VibrdromeApp: App {
 
     init() {
         Self.migrateCredentialsToKeychain()
+        // BGTaskScheduler.register() MUST run synchronously during app initialization,
+        // before UIApplication finishes launching. If iOS launches the app specifically to
+        // handle a scheduled background task, registration has to already be in place or
+        // the system drops the task silently. `.onAppear` is too late.
+        // scheduleRefresh() / scheduleFullSync() stay in `.onAppear` below — those require
+        // the app to be configured (credentials loaded) and can be submitted at any time.
+        #if os(iOS)
+        BackgroundSyncScheduler.shared.registerTasks()
+        #endif
     }
 
     /// One-time migration: move Last.fm/ListenBrainz credentials from UserDefaults to Keychain.
@@ -136,6 +145,22 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
@@ -152,6 +177,26 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    // registerTasks() already ran synchronously in App.init(); here we just
+                    // submit the scheduled requests once credentials are confirmed loaded.
+                    BackgroundSyncScheduler.shared.scheduleRefresh()
+                    BackgroundSyncScheduler.shared.scheduleFullSync()
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
