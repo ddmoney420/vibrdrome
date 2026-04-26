@@ -1,7 +1,7 @@
 import SwiftUI
 import os.log
 
-struct TrackContextMenuModifier: ViewModifier {
+struct TrackContextMenuModifier: ViewModifier, Equatable {
     let song: Song
     var queue: [Song]?
     var index: Int?
@@ -12,19 +12,25 @@ struct TrackContextMenuModifier: ViewModifier {
     @State private var showAddToPlaylist = false
     @State private var showGetInfo = false
 
+    nonisolated static func == (lhs: TrackContextMenuModifier, rhs: TrackContextMenuModifier) -> Bool {
+        lhs.song == rhs.song && lhs.index == rhs.index
+    }
+
     func body(content: Content) -> some View {
         content
-            // Opaque backer so the system's context-menu preview snapshot has
-            // a solid background. Without it, when iOS has to reposition the
-            // preview to fit the menu on screen the lifted row is transparent
-            // and adjacent rows' text bleeds through (reported Apr 16).
             #if os(iOS)
             .background(Color(.systemBackground))
             #endif
-            .contextMenu { contextMenuItems }
+            .contextMenu {
+                TrackContextMenuContent(
+                    song: song, queue: queue, index: index,
+                    onRemove: onRemove,
+                    showAddToPlaylist: $showAddToPlaylist,
+                    showGetInfo: $showGetInfo
+                )
+            }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistView(songIds: [song.id])
-                    .environment(appState)
             }
             #if os(iOS)
             .sheet(isPresented: $showGetInfo) {
@@ -40,9 +46,21 @@ struct TrackContextMenuModifier: ViewModifier {
             }
             #endif
     }
+}
 
-    @ViewBuilder
-    private var contextMenuItems: some View {
+/// Lazy inner view — `@Environment(AppState.self)` is only resolved when the context menu opens.
+private struct TrackContextMenuContent: View {
+    let song: Song
+    var queue: [Song]?
+    var index: Int?
+    var onRemove: (() -> Void)?
+    @Binding var showAddToPlaylist: Bool
+    @Binding var showGetInfo: Bool
+
+    @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
         playbackActions
         Divider()
         libraryActions

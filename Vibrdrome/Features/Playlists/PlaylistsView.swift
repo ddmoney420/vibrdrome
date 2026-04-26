@@ -9,8 +9,6 @@ struct PlaylistsView: View {
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var searchText = ""
     @State private var searchIsActive = false
     @State private var sortBy: PlaylistSortOption = .name
@@ -256,9 +254,9 @@ struct PlaylistsView: View {
     // MARK: - Playlist Grid
 
     private var playlistGrid: some View {
-        let cols = Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)
-        let gridItems = Array(repeating: GridItem(.flexible(), spacing: 16), count: cols)
-        return LazyVGrid(columns: gridItems, spacing: 20) {
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
+        ], spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)
@@ -323,8 +321,6 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // GeometryReader + aspectRatio so the mosaic scales with grid
-            // column count instead of being stuck at the 2-column cell size.
             GeometryReader { geo in
                 PlaylistMosaicView(playlist: playlist, size: geo.size.width, cornerRadius: 12)
             }

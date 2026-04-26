@@ -4,6 +4,7 @@ import NukeUI
 
 struct LibraryView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Binding var navPath: NavigationPath
     @State private var recentAlbums: [Album] = []
     @State private var frequentAlbums: [Album] = []
@@ -641,18 +642,22 @@ struct LibraryView: View {
     private func fetchSections(client: SubsonicClient, skipCache: Bool = false) async {
         let folder = folderId
 
-        // Show cached data instantly (only for unfiltered/default)
+        // Show local cache data instantly (Recently Added + Starred from SwiftData)
         if folder == nil, !skipCache {
-            if let cached = await client.cachedResponse(
-                for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
-                recentAlbums = cached.albumList2?.album ?? []
+            if recentAlbums.isEmpty {
+                var desc = FetchDescriptor<CachedAlbum>(sortBy: [SortDescriptor(\CachedAlbum.created, order: .reverse)])
+                desc.fetchLimit = 10
+                if let cached = try? modelContext.fetch(desc), !cached.isEmpty {
+                    recentAlbums = cached.map { $0.toAlbum() }
+                }
             }
-            if let cached = await client.cachedResponse(
-                for: .getAlbumList2(type: .frequent, size: 10, offset: 0), ttl: 900) {
-                frequentAlbums = cached.albumList2?.album ?? []
-            }
-            if let cached = await client.cachedResponse(for: .getStarred2(), ttl: 300) {
-                if var songs = cached.starred2?.song, !songs.isEmpty {
+            if starredSongs.isEmpty {
+                let starredDesc = FetchDescriptor<CachedSong>(
+                    predicate: #Predicate<CachedSong> { $0.isStarred },
+                    sortBy: [SortDescriptor(\CachedSong.title)]
+                )
+                if let fetched = try? modelContext.fetch(starredDesc), !fetched.isEmpty {
+                    var songs = fetched.map { $0.toSong() }
                     songs.shuffle()
                     starredSongs = Array(songs.prefix(15))
                 }
