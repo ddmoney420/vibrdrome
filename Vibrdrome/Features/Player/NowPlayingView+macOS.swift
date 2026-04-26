@@ -28,10 +28,7 @@ extension NowPlayingView {
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
                     .foregroundColor(
-                        engine.eqEnabled
-                            ? .white
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.5)
+                        engine.eqEnabled ? .accentColor : .white.opacity(0.5)
                     )
             }
             .accessibilityLabel("Equalizer")
