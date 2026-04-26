@@ -310,7 +310,18 @@ struct MacMiniPlayerView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    if let album = engine.currentSong?.album {
+                    if let album = engine.currentSong?.album,
+                       let albumId = engine.currentSong?.albumId {
+                        Button {
+                            appState.pendingNavigation = .album(id: albumId)
+                        } label: {
+                            Text(album)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                    } else if let album = engine.currentSong?.album {
                         Text(album)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
