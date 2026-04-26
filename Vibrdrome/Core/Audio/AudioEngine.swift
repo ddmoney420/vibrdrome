@@ -348,6 +348,27 @@ final class AudioEngine {
         return max(0.0, min(1.5, linear))
     }
 
+    // MARK: - Queue Metadata
+
+    func updateQueueSongStarred(id: String, starred: Bool) {
+        let starredValue: String? = starred ? "true" : nil
+        for index in queue.indices where queue[index].id == id {
+            queue[index] = queue[index].withStarred(starredValue)
+        }
+        if currentSong?.id == id {
+            currentSong = currentSong?.withStarred(starredValue)
+        }
+    }
+
+    func updateQueueSongRating(id: String, rating: Int?) {
+        for index in queue.indices where queue[index].id == id {
+            queue[index] = queue[index].withUserRating(rating)
+        }
+        if currentSong?.id == id {
+            currentSong = currentSong?.withUserRating(rating)
+        }
+    }
+
     // MARK: - Shuffle / Repeat
 
     func toggleShuffle() {

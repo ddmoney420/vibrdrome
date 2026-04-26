@@ -336,6 +336,7 @@ struct MacMiniPlayerView: View {
                                     let songId = song.id
                                     let wasStarred = isStarred
                                     isStarred = !wasStarred
+                                    engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
                                     NotificationCenter.default.post(
                                         name: .songStarredChanged,
                                         object: nil,
@@ -351,6 +352,7 @@ struct MacMiniPlayerView: View {
                                         } catch {
                                             if engine.currentSong?.id == songId {
                                                 isStarred = wasStarred
+                                                engine.updateQueueSongStarred(id: songId, starred: wasStarred)
                                                 NotificationCenter.default.post(
                                                     name: .songStarredChanged,
                                                     object: nil,
@@ -378,6 +380,7 @@ struct MacMiniPlayerView: View {
                                                 let newRating = star == currentRating ? 0 : star
                                                 currentRating = newRating
                                                 guard let songId = engine.currentSong?.id else { return }
+                                                engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
                                                 Task {
                                                     try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
                                                 }
