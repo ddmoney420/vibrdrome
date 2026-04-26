@@ -17,6 +17,7 @@ struct PlaylistDetailView: View {
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
+    @State private var showRemoveOfflineConfirmation = false
     @Query private var downloadedSongs: [DownloadedSong]
 
     private var filteredSongs: [Song] {
@@ -240,8 +241,18 @@ struct PlaylistDetailView: View {
                         if let playlist, let songs = playlist.entry, !songs.isEmpty {
                             let isFullyDownloaded = DownloadManager.shared.isPlaylistDownloaded(playlistId: playlistId)
                             if isFullyDownloaded {
+                                Button {
+                                    isDownloading = true
+                                    DownloadManager.shared.refreshOfflinePlaylist(
+                                        playlist: playlist,
+                                        songs: songs,
+                                        client: appState.subsonicClient
+                                    )
+                                } label: {
+                                    Label("Refresh Download", systemImage: "arrow.triangle.2.circlepath")
+                                }
                                 Button(role: .destructive) {
-                                    DownloadManager.shared.removeOfflinePlaylist(playlistId: playlistId)
+                                    showRemoveOfflineConfirmation = true
                                 } label: {
                                     Label("Remove Offline", systemImage: "icloud.slash")
                                 }
@@ -267,6 +278,14 @@ struct PlaylistDetailView: View {
         .sheet(isPresented: $showBatchAddToPlaylist) {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
+        }
+        .alert("Remove Offline Playlist?", isPresented: $showRemoveOfflineConfirmation) {
+            Button("Remove", role: .destructive) {
+                DownloadManager.shared.removeOfflinePlaylist(playlistId: playlistId)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Songs from this download will be deleted unless they're also part of another offline playlist.")
         }
         .sheet(isPresented: $showEditSheet) {
             if let playlist {

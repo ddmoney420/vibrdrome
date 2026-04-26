@@ -232,7 +232,33 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         return true
     }
 
-    /// Remove offline playlist metadata (does not delete song files — they may be in other playlists)
+    /// Pure function: given the songs in the playlist being removed and a list of all
+    /// other OfflinePlaylists' song lists, return the songIds safe to delete from disk
+    /// (i.e., those not referenced by any other downloaded playlist).
+    static func orphanedSongIds(
+        forRemovedPlaylistSongs removedSongs: [String],
+        otherPlaylistSongLists: [[String]]
+    ) -> [String] {
+        let stillReferenced = Set(otherPlaylistSongLists.flatMap { $0 })
+        return removedSongs.filter { !stillReferenced.contains($0) }
+    }
+
+    /// Pure function: given the previous snapshot, the new content, and the other
+    /// downloaded playlists, return the songIds that became orphaned by the refresh.
+    static func orphanedSongIds(
+        forRefreshOldSongs oldSongs: [String],
+        newSongs: [String],
+        otherPlaylistSongLists: [[String]]
+    ) -> [String] {
+        let newSet = Set(newSongs)
+        let stillReferenced = Set(otherPlaylistSongLists.flatMap { $0 })
+        return oldSongs.filter { !newSet.contains($0) && !stillReferenced.contains($0) }
+    }
+
+    /// Remove offline playlist metadata. Songs from the stored snapshot are deleted
+    /// from disk unless they're referenced by another OfflinePlaylist (shared songs
+    /// are preserved). Bug #5: smart playlists rotate, so we have to delete by the
+    /// stored songIds at download time, not by the playlist's current content.
     @MainActor
     func removeOfflinePlaylist(playlistId: String) {
         guard let serverId = AppState.shared.activeServerId else { return }
@@ -241,9 +267,51 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         let descriptor = FetchDescriptor<OfflinePlaylist>(
             predicate: #Predicate { $0.compositeKey == key }
         )
-        if let offline = try? modelContext.fetch(descriptor).first {
-            modelContext.delete(offline)
-            try? modelContext.save()
+        guard let offline = try? modelContext.fetch(descriptor).first else { return }
+
+        let removedSongs = offline.songIds
+        modelContext.delete(offline)
+        try? modelContext.save()
+
+        let remainingPlaylists = (try? modelContext.fetch(FetchDescriptor<OfflinePlaylist>())) ?? []
+        let orphaned = Self.orphanedSongIds(
+            forRemovedPlaylistSongs: removedSongs,
+            otherPlaylistSongLists: remainingPlaylists.map(\.songIds)
+        )
+        for songId in orphaned {
+            deleteDownload(songId: songId)
+        }
+    }
+
+    /// Re-download a playlist after its content has rotated. Deletes songs from the
+    /// previous snapshot that aren't in the new content (and aren't referenced by
+    /// other OfflinePlaylists), updates the OfflinePlaylist record, and downloads
+    /// any new songs not already on disk.
+    @MainActor
+    func refreshOfflinePlaylist(playlist: Playlist, songs: [Song], client: SubsonicClient) {
+        guard let serverId = AppState.shared.activeServerId else { return }
+        let modelContext = PersistenceController.shared.container.mainContext
+        let key = "\(serverId)_\(playlist.id)"
+        let descriptor = FetchDescriptor<OfflinePlaylist>(
+            predicate: #Predicate { $0.compositeKey == key }
+        )
+        let oldSongIds = (try? modelContext.fetch(descriptor).first?.songIds) ?? []
+
+        // downloadPlaylist upserts the OfflinePlaylist with the new songIds and
+        // dedupes per-song downloads, so reuse it.
+        downloadPlaylist(playlist: playlist, songs: songs, client: client)
+
+        // Compute orphans from the OTHER playlists (excluding the one we just refreshed,
+        // since its songIds were just overwritten with the new content).
+        let allPlaylists = (try? modelContext.fetch(FetchDescriptor<OfflinePlaylist>())) ?? []
+        let otherPlaylists = allPlaylists.filter { $0.compositeKey != key }
+        let orphaned = Self.orphanedSongIds(
+            forRefreshOldSongs: oldSongIds,
+            newSongs: songs.map(\.id),
+            otherPlaylistSongLists: otherPlaylists.map(\.songIds)
+        )
+        for songId in orphaned {
+            deleteDownload(songId: songId)
         }
     }
 
