@@ -231,6 +231,36 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         self.starred = starred; self.userRating = userRating
         self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
     }
+
+    func withStarred(_ starred: String?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate, path: path,
+            discNumber: discNumber, created: created,
+            starred: starred, userRating: userRating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
+
+    func withUserRating(_ rating: Int?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate, path: path,
+            discNumber: discNumber, created: created,
+            starred: starred, userRating: rating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
 }
 
 struct ReplayGain: Decodable, Sendable, Equatable {

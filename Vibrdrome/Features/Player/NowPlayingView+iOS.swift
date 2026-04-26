@@ -103,6 +103,12 @@ extension NowPlayingView {
                     let songId = song.id
                     let wasStarred = isStarred
                     isStarred = !wasStarred
+                    engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
+                    NotificationCenter.default.post(
+                        name: .songStarredChanged,
+                        object: nil,
+                        userInfo: ["id": songId, "starred": !wasStarred]
+                    )
                     Task {
                         do {
                             if wasStarred {
@@ -117,6 +123,12 @@ extension NowPlayingView {
                         } catch {
                             if engine.currentSong?.id == songId {
                                 isStarred = wasStarred
+                                engine.updateQueueSongStarred(id: songId, starred: wasStarred)
+                                NotificationCenter.default.post(
+                                    name: .songStarredChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "starred": wasStarred]
+                                )
                             }
                         }
                     }
@@ -146,6 +158,7 @@ extension NowPlayingView {
                                 let newRating = star == currentRating ? 0 : star
                                 currentRating = newRating
                                 guard let songId = engine.currentSong?.id else { return }
+                                engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
                                 Task {
                                     try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
                                 }
@@ -360,12 +373,7 @@ extension NowPlayingView {
         case .eq:
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.eqEnabled
-                            ? .accentColor
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .accentColor : nil
-                    )
+                    .foregroundColor(engine.eqEnabled ? .accentColor : nil)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Equalizer")
