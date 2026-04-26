@@ -11,6 +11,7 @@ struct AlbumsView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.modelContext) private var modelContext
     @State private var albums: [Album] = []
     @State private var localFilteredAlbums: [Album]?
     @State private var filterTask: Task<Void, Never>?
@@ -133,13 +134,11 @@ struct AlbumsView: View {
     }
 
     var body: some View {
-        Group {
-            if showAsList {
-                albumList
-            } else {
-                albumGrid
-            }
-        }
+        configuredView
+    }
+
+    private var configuredView: some View {
+        baseView
         #if os(iOS)
         .contentMargins(.bottom, 80)
         #endif
@@ -305,6 +304,16 @@ struct AlbumsView: View {
                 }
             }
         }
+    }
+
+    private var baseView: some View {
+        Group {
+            if showAsList {
+                albumList
+            } else {
+                albumGrid
+            }
+        }
         .alert("Save Collection", isPresented: $showSaveCollection) {
             TextField("Name", text: $collectionName)
             Button("Save") {
@@ -377,6 +386,7 @@ struct AlbumsView: View {
            let albums = starred.album {
             favoritedAlbumIds = Set(albums.map(\.id))
         }
+    }
 
     // MARK: - List view
 

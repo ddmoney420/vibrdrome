@@ -14,29 +14,9 @@ struct FavoritesView: View {
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
-    @State private var selectedCategory: FavoriteCategory = .songs
     @State private var cachedFilteredArtists: [Artist] = []
     @State private var cachedFilteredAlbums: [Album] = []
     @State private var cachedFilteredSongs: [Song] = []
-
-    enum FavoriteCategory: String, CaseIterable, Identifiable {
-        case songs, albums, artists
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .songs: "Songs"
-            case .albums: "Albums"
-            case .artists: "Artists"
-            }
-        }
-        var icon: String {
-            switch self {
-            case .songs: "music.note"
-            case .albums: "square.stack"
-            case .artists: "music.mic"
-            }
-        }
-    }
 
     private func computeFilteredArtists() -> [Artist] {
         let artists = starredArtists.map { $0.toArtist() }

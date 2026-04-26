@@ -599,8 +599,7 @@ final class LibrarySyncManager {
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
-                    // swiftlint:disable:next redundant_nil_coalescing
-                    if let detail = await group.next() ?? nil {
+                    if let detail = await group.next() {
                         results.append(detail)
                     }
                     inflight -= 1
@@ -686,28 +685,26 @@ final class LibrarySyncManager {
         await prefetchCoverArt(client: client, context: context)
     }
 
-    private func prefetchCoverArt(client: SubsonicClient, context: ModelContext) async {
-        syncProgress = "Prefetching cover art…"
-
-        // Collect cover art IDs from albums and artists without loading full objects
-        var coverArtIds = Set<String>()
-
+    private func collectCoverArtIds(context: ModelContext) -> Set<String> {
+        var ids = Set<String>()
         let albumDescriptor = FetchDescriptor<CachedAlbum>(
             predicate: #Predicate<CachedAlbum> { $0.coverArtId != nil }
         )
-        let albums = (try? context.fetch(albumDescriptor)) ?? []
-        for album in albums {
-            if let id = album.coverArtId { coverArtIds.insert(id) }
+        for album in (try? context.fetch(albumDescriptor)) ?? [] {
+            if let id = album.coverArtId { ids.insert(id) }
         }
-
         let artistDescriptor = FetchDescriptor<CachedArtist>(
             predicate: #Predicate<CachedArtist> { $0.coverArtId != nil }
         )
-        let artists = (try? context.fetch(artistDescriptor)) ?? []
-        for artist in artists {
-            if let id = artist.coverArtId { coverArtIds.insert(id) }
+        for artist in (try? context.fetch(artistDescriptor)) ?? [] {
+            if let id = artist.coverArtId { ids.insert(id) }
         }
+        return ids
+    }
 
+    private func prefetchCoverArt(client: SubsonicClient, context: ModelContext) async {
+        syncProgress = "Prefetching cover art…"
+        let coverArtIds = collectCoverArtIds(context: context)
         let total = coverArtIds.count
         guard total > 0 else {
             didPrefetchThisSession = true

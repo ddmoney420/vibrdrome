@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import SwiftData
 import os.log
 
 struct ArtistsView: View {
@@ -16,8 +15,6 @@ struct ArtistsView: View {
     @State private var sortReversed = false
     @State private var favoritedArtistIds: Set<String> = []
     @AppStorage("artistsViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @SceneStorage("artistsFilter") private var filterRaw: String = ArtistFilter.all.rawValue
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
     private var downloadedSongs: [DownloadedSong]
@@ -60,8 +57,15 @@ struct ArtistsView: View {
         }
     }
 
+    private func artistPassesFilter(_ artist: Artist, downloaded: Set<String>, favorited: Set<String>) -> Bool {
+        switch activeFilter {
+        case .all: return true
+        case .favorites: return favorited.contains(artist.id)
+        case .downloaded: return downloaded.contains(artist.name.lowercased())
+        }
+    }
+
     private func computeFilteredIndexes() -> [(id: String, name: String, artists: [Artist])] {
-        // When local filters are active, use flat filtered list (no index grouping)
         if let filtered = localFilteredArtists {
             let source: [Artist]
             if searchText.isEmpty {
@@ -77,23 +81,16 @@ struct ArtistsView: View {
         var raw: [(id: String, name: String, artists: [Artist])]
         let downloaded = downloadedArtistNames
         let favorited = favoritedArtistIds
-        func passesFilter(_ artist: Artist) -> Bool {
-            switch activeFilter {
-            case .all: return true
-            case .favorites: return favorited.contains(artist.id)
-            case .downloaded: return downloaded.contains(artist.name.lowercased())
-            }
-        }
         if searchText.isEmpty {
             raw = indexes.compactMap { index in
-                let artists = (index.artist ?? []).filter(passesFilter)
+                let artists = (index.artist ?? []).filter { artistPassesFilter($0, downloaded: downloaded, favorited: favorited) }
                 guard !artists.isEmpty else { return nil }
                 return (id: index.id, name: index.name, artists: artists)
             }
         } else {
             raw = indexes.compactMap { index in
                 let filtered = (index.artist ?? []).filter {
-                    $0.name.localizedCaseInsensitiveContains(searchText) && passesFilter($0)
+                    $0.name.localizedCaseInsensitiveContains(searchText) && artistPassesFilter($0, downloaded: downloaded, favorited: favorited)
                 }
                 guard !filtered.isEmpty else { return nil }
                 return (id: index.id, name: index.name, artists: filtered)

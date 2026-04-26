@@ -88,7 +88,7 @@ struct SongsView: View {
         }
     }
 
-    var body: some View {
+    private var contentView: some View {
         Group {
             if showAsList {
                 songList
@@ -96,6 +96,42 @@ struct SongsView: View {
                 songGrid
             }
         }
+    }
+
+    var body: some View {
+        decoratedView
+    }
+
+    private var decoratedView: some View {
+        toolbarView
+        .task {
+            await loadSongs()
+            await loadGenres()
+            refreshTitleSongCount()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+            recomputeDisplayedSongs()
+        }
+        .onChange(of: sortBy) { recomputeDisplayedSongs() }
+        .onChange(of: filterYear) { recomputeDisplayedSongs() }
+        .onChange(of: filterGenre) { recomputeDisplayedSongs() }
+        .onChange(of: filterArtist) { recomputeDisplayedSongs() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            refreshTitleSongCount()
+        }
+        #if os(macOS)
+        .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        #endif
+    }
+
+    private var toolbarView: some View {
+        contentView
         .navigationTitle(titleSongCount.map { "Songs (\($0))" } ?? "Songs")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
@@ -251,30 +287,6 @@ struct SongsView: View {
                 }
             }
         }
-        .task {
-            await loadSongs()
-            await loadGenres()
-            refreshTitleSongCount()
-            #if os(macOS)
-            applyLocalFilters()
-            #endif
-            recomputeDisplayedSongs()
-        }
-        .onChange(of: sortBy) { recomputeDisplayedSongs() }
-        .onChange(of: filterYear) { recomputeDisplayedSongs() }
-        .onChange(of: filterGenre) { recomputeDisplayedSongs() }
-        .onChange(of: filterArtist) { recomputeDisplayedSongs() }
-        .onChange(of: appState.libraryCache.generation) { _, _ in
-            refreshTitleSongCount()
-        }
-        #if os(macOS)
-        .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
-        #endif
     }
 
     // MARK: - Active Filter Chips

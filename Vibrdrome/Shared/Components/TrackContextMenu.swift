@@ -56,6 +56,7 @@ private struct TrackContextMenuContent: View {
     @Binding var showAddToPlaylist: Bool
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         playbackActions
