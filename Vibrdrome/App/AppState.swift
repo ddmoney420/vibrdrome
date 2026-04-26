@@ -232,6 +232,10 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
+        albumFilter = LibraryFilter()
+        artistFilter = LibraryFilter()
+        songFilter = LibraryFilter()
+        albumsViewSnapshots = [:]
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(
             baseURL: URL(string: "https://localhost")!,

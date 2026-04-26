@@ -1,6 +1,7 @@
 import Testing
 @testable import Vibrdrome
 
+@MainActor
 struct LibraryFilterTests {
 
     // MARK: - TriState

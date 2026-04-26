@@ -120,6 +120,14 @@ struct AlbumsView: View {
     private func computeFilteredAlbums() -> [Album] {
         let source = localFilteredAlbums ?? albums
         var result = source
+        switch activeFilter {
+        case .all:
+            break
+        case .favorites:
+            result = result.filter { favoritedAlbumIds.contains($0.id) }
+        case .downloaded:
+            result = result.filter { downloadedAlbumNames.contains($0.name.lowercased()) }
+        }
         if !searchText.isEmpty {
             result = result.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText) ||
@@ -340,6 +348,7 @@ struct AlbumsView: View {
             recomputeFilteredAlbums()
         }
         .onChange(of: searchText) { recomputeFilteredAlbums() }
+        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
         .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
         .onDisappear { saveSnapshot() }
         .refreshable {
