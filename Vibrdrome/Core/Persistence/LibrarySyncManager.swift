@@ -154,6 +154,7 @@ final class LibrarySyncManager {
 
     // MARK: - Core Sync Engine
 
+    // swiftlint:disable:next function_body_length
     private func performSync(mode: SyncMode, client: SubsonicClient, container: ModelContainer) async {
         guard !isSyncing else { return }
         isSyncing = true
@@ -274,8 +275,7 @@ final class LibrarySyncManager {
 
     // MARK: - Albums
 
-    /// Nonisolated so the fetch / insert / diff loops run off MainActor. On 10k+ libraries
-    /// these previously stuttered the UI every polling interval.
+    // swiftlint:disable:next function_body_length function_parameter_count
     nonisolated static func syncAlbumsOffMain(
         client: SubsonicClient,
         container: ModelContainer,
@@ -377,6 +377,7 @@ final class LibrarySyncManager {
 
     // MARK: - Artists
 
+    // swiftlint:disable:next function_parameter_count
     nonisolated static func syncArtistsOffMain(
         client: SubsonicClient,
         container: ModelContainer,
@@ -440,6 +441,7 @@ final class LibrarySyncManager {
 
     // MARK: - Songs
 
+    // swiftlint:disable:next function_parameter_count
     nonisolated static func syncSongsOffMain(
         client: SubsonicClient,
         container: ModelContainer,
@@ -599,8 +601,8 @@ final class LibrarySyncManager {
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
-                    if let detail = await group.next() {
-                        results.append(detail)
+                    if let detail = await group.next(), let playlist = detail {
+                        results.append(playlist)
                     }
                     inflight -= 1
                 }

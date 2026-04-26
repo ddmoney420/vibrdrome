@@ -25,7 +25,8 @@ struct TrackContextMenuModifier: ViewModifier, Equatable {
                 TrackContextMenuContent(
                     song: song, queue: queue, index: index,
                     onRemove: onRemove,
-                    showAddToPlaylist: $showAddToPlaylist
+                    showAddToPlaylist: $showAddToPlaylist,
+                    showGetInfo: $showGetInfo
                 )
             }
             .sheet(isPresented: $showAddToPlaylist) {
@@ -54,6 +55,7 @@ private struct TrackContextMenuContent: View {
     var index: Int?
     var onRemove: (() -> Void)?
     @Binding var showAddToPlaylist: Bool
+    @Binding var showGetInfo: Bool
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
