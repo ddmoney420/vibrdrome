@@ -63,11 +63,11 @@ struct ArtistsView: View {
     private func computeFilteredIndexes() -> [(id: String, name: String, artists: [Artist])] {
         // When local filters are active, use flat filtered list (no index grouping)
         if let filtered = localFilteredArtists {
-            let source: [Artist]
-            if searchText.isEmpty {
-                source = filtered
-            } else {
-                source = filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            let downloaded = downloadedArtistNames
+            let favorited = favoritedArtistIds
+            var source = filtered.filter { artistPassesFilter($0, downloaded: downloaded, favorited: favorited) }
+            if !searchText.isEmpty {
+                source = source.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
             }
             let sorted = sortReversed ? source.reversed() : Array(source)
             guard !sorted.isEmpty else { return [] }
@@ -192,12 +192,14 @@ struct ArtistsView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    #if os(iOS)
                     Picker("Filter", selection: $filterRaw) {
                         ForEach(ArtistFilter.allCases) { option in
                             Label(option.label, systemImage: option.icon).tag(option.rawValue)
                         }
                     }
                     Divider()
+                    #endif
                     Button {
                         sortReversed = false
                     } label: {

@@ -287,12 +287,14 @@ struct AlbumsView: View {
                         Label(effectiveGenre?.cleanedGenreDisplay ?? "Genre", systemImage: "guitars")
                     }
                     Divider()
+                    #if os(iOS)
                     Picker("Filter", selection: $filterRaw) {
                         ForEach(AlbumFilter.allCases) { option in
                             Label(option.label, systemImage: option.icon).tag(option.rawValue)
                         }
                     }
                     Divider()
+                    #endif
                     Button {
                         albums = []
                         hasMore = true
@@ -655,6 +657,13 @@ struct AlbumsView: View {
         appState.albumsViewSnapshots[cacheKey] = AppState.AlbumsViewSnapshot(
             albums: albums, hasMore: hasMore, scrollIndex: visibleIndices.min()
         )
+        let limit = 10
+        if appState.albumsViewSnapshots.count > limit {
+            let excess = appState.albumsViewSnapshots.count - limit
+            appState.albumsViewSnapshots.keys.prefix(excess).forEach {
+                appState.albumsViewSnapshots.removeValue(forKey: $0)
+            }
+        }
     }
 
     private func restoreScroll(proxy: ScrollViewProxy) {
