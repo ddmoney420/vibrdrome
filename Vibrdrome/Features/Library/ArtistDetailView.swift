@@ -12,12 +12,20 @@ struct ArtistDetailView: View {
     @State private var error: String?
     @State private var showFullBio = false
     @State private var isStarred = false
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "artist")
+    #endif
 
     var body: some View {
         List {
             // Top Songs section
             if !topSongs.isEmpty {
                 Section {
+                    #if os(macOS)
+                    MacTrackTableView(songs: topSongs, settings: columnSettings)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                    #else
                     ForEach(Array(topSongs.enumerated()), id: \.element.id) { index, song in
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
@@ -26,6 +34,7 @@ struct ArtistDetailView: View {
                             }
                             .trackContextMenu(song: song, queue: topSongs, index: index)
                     }
+                    #endif
                 } header: {
                     Text("Top Tracks")
                 }
