@@ -87,6 +87,9 @@ final class TrackTableColumnSettings {
 
     func setWidth(_ width: CGFloat, for column: TrackTableColumn) {
         columnWidths[column.rawValue] = max(column.minWidth, width)
+    }
+
+    func persistWidths() {
         saveWidths()
     }
 

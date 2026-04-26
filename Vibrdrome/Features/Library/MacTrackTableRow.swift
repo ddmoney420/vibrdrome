@@ -1,6 +1,5 @@
 #if os(macOS)
 import SwiftUI
-import SwiftData
 import NukeUI
 
 // MARK: - Single track row for the custom macOS table
@@ -10,15 +9,17 @@ struct MacTrackTableRow: View {
     let settings: TrackTableColumnSettings
     let queue: [Song]
     let index: Int
+    /// Reactive set of downloaded song IDs, maintained by parent via @Query.
+    let downloadedSongIds: Set<String>
     /// Binding to the parent-managed selected song id for single-click selection.
     @Binding var selectedSongId: String?
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArt: Bool = true
     @State private var isStarred = false
-    @State private var isDownloaded = false
     @State private var isHovered = false
+
+    private var isDownloaded: Bool { downloadedSongIds.contains(song.id) }
 
     private var isCurrentlyPlaying: Bool {
         AudioEngine.shared.currentSong?.id == song.id
@@ -61,11 +62,9 @@ struct MacTrackTableRow: View {
         .accessibilityHint("Double-tap to play")
         .onAppear {
             isStarred = song.starred != nil
-            let songId = song.id
-            let descriptor = FetchDescriptor<DownloadedSong>(
-                predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-            )
-            isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+        }
+        .onChange(of: song.starred) { _, newValue in
+            isStarred = newValue != nil
         }
     }
 
@@ -253,7 +252,6 @@ struct MacTrackTableRow: View {
                     DownloadManager.shared.download(
                         song: song, client: AppState.shared.subsonicClient
                     )
-                    isDownloaded = true
                 } label: {
                     Image(systemName: "arrow.down.circle")
                         .font(.callout)

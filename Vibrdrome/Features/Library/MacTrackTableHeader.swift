@@ -99,6 +99,7 @@ struct MacTrackTableHeader: View {
                                 settings.setWidth(newWidth, for: col)
                             }
                             .onEnded { _ in
+                                settings.persistWidths()
                                 dragBox.column = nil
                                 dragBox.startWidth = 0
                             }

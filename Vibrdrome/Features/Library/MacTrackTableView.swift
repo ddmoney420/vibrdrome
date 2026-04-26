@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import SwiftData
 
 // MARK: - Unified macOS track table (header + LazyVStack rows)
 
@@ -15,6 +16,13 @@ struct MacTrackTableView: View {
     @State private var sortAscending: Bool = true
     @State private var showCustomizer: Bool = false
     @State private var selectedSongId: String?
+
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var completedDownloads: [DownloadedSong]
+
+    private var downloadedSongIds: Set<String> {
+        Set(completedDownloads.map(\.songId))
+    }
 
     // MARK: - Computed sort
 
@@ -98,6 +106,7 @@ struct MacTrackTableView: View {
                                 settings: settings,
                                 queue: ordered,
                                 index: index,
+                                downloadedSongIds: downloadedSongIds,
                                 selectedSongId: $selectedSongId
                             )
                             .accessibilityIdentifier("macTrackRow_\(song.id)")
