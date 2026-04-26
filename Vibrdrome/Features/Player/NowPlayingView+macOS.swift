@@ -186,6 +186,7 @@ extension NowPlayingView {
             let songId = song.id
             let wasStarred = isStarred
             isStarred = !wasStarred
+            engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
             NotificationCenter.default.post(
                 name: .songStarredChanged,
                 object: nil,
@@ -205,6 +206,7 @@ extension NowPlayingView {
                 } catch {
                     if engine.currentSong?.id == songId {
                         isStarred = wasStarred
+                        engine.updateQueueSongStarred(id: songId, starred: wasStarred)
                         NotificationCenter.default.post(
                             name: .songStarredChanged,
                             object: nil,

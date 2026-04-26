@@ -801,6 +801,7 @@ struct NowPlayingView: View {
                         let newRating = star == currentRating ? 0 : star
                         currentRating = newRating
                         guard let songId = engine.currentSong?.id else { return }
+                        engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
                         Task {
                             try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
                         }

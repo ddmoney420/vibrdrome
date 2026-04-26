@@ -61,6 +61,7 @@ struct TrackRow: View {
             Button {
                 let wasStarred = isStarred
                 isStarred = !wasStarred
+                AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: !wasStarred)
                 NotificationCenter.default.post(
                     name: .songStarredChanged,
                     object: nil,
@@ -81,6 +82,7 @@ struct TrackRow: View {
                         }
                     } catch {
                         isStarred = wasStarred
+                        AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: wasStarred)
                         NotificationCenter.default.post(
                             name: .songStarredChanged,
                             object: nil,
