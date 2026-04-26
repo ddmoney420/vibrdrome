@@ -1,3 +1,4 @@
+import Nuke
 import SwiftData
 import SwiftUI
 import os.log
@@ -40,6 +41,7 @@ struct AlbumsView: View {
     @State private var visibleIndices: Set<Int> = []
     @State private var restoredScrollIndex: Int?
     private let pageSize = 40
+    private let imagePrefetcher = ImagePrefetcher()
 
     enum AlbumFilter: String, CaseIterable, Identifiable {
         case all, favorites, downloaded
@@ -344,7 +346,7 @@ struct AlbumsView: View {
             }
             await loadFavoritedAlbumIds()
             #if os(macOS)
-            applyLocalFilters()
+            await applyLocalFilters()
             #endif
             recomputeFilteredAlbums()
         }
@@ -445,6 +447,7 @@ struct AlbumsView: View {
                         .onAppear {
                             visibleIndices.insert(index)
                             triggerLoadIfNeeded(at: index)
+                            prefetchImages(around: index)
                         }
                         .onDisappear { visibleIndices.remove(index) }
                     }
@@ -590,6 +593,19 @@ struct AlbumsView: View {
         }
     }
 
+    private func prefetchImages(around index: Int) {
+        let lookahead = 20
+        let start = min(index + 1, cachedFilteredAlbums.count)
+        let end = min(index + lookahead, cachedFilteredAlbums.count)
+        guard start < end else { return }
+        let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
+            guard let artId = album.coverArt else { return nil }
+            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
+        }
+        guard !urls.isEmpty else { return }
+        imagePrefetcher.startPrefetching(with: urls)
+    }
+
     private func loadAlbums() async {
         scrollLoadTask?.cancel()
         pendingPageTarget = 0
@@ -671,11 +687,11 @@ struct AlbumsView: View {
         filterTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            applyLocalFilters()
+            await applyLocalFilters()
         }
     }
 
-    private func applyLocalFilters() {
+    private func applyLocalFilters() async {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
@@ -683,32 +699,41 @@ struct AlbumsView: View {
             return
         }
 
-        do {
-            let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
-            let selectedArtistNames = selectedArtistNames(for: filter)
-            let allAlbums: [Album]
-            if let cachedAlbums = appState.libraryCache.albums {
-                allAlbums = cachedAlbums
-            } else {
+        // Snapshot all MainActor state into Sendable value types before leaving the main thread.
+        let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
+        let selectedArtistNames = selectedArtistNames(for: filter)
+        let snapshot = FilterSnapshot(filter: filter)
+        let allAlbums: [Album]
+        if let cachedAlbums = appState.libraryCache.albums {
+            allAlbums = cachedAlbums
+        } else {
+            do {
                 var descriptor = FetchDescriptor<CachedAlbum>()
                 descriptor.sortBy = [SortDescriptor(\.name)]
                 allAlbums = try modelContext.fetch(descriptor).map { $0.toAlbum() }
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                    .error("Failed to fetch albums for filter: \(error)")
+                localFilteredAlbums = nil
+                return
             }
+        }
 
-            localFilteredAlbums = allAlbums.filter {
-                albumMatchesFilter(
+        // Heavy array filtering runs off the MainActor.
+        let filtered = await Task.detached(priority: .userInitiated) {
+            allAlbums.filter {
+                AlbumsView.albumMatchesFilter(
                     $0,
-                    filter: filter,
+                    snapshot: snapshot,
                     recentIds: recentlyPlayedAlbumIds,
                     selectedArtistNames: selectedArtistNames
                 )
             }
-            recomputeFilteredAlbums()
-        } catch {
-            Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                .error("Failed to apply local filters: \(error)")
-            localFilteredAlbums = nil
-        }
+        }.value
+
+        guard !Task.isCancelled else { return }
+        localFilteredAlbums = filtered
+        recomputeFilteredAlbums()
     }
 
     private func selectedArtistNames(for filter: LibraryFilter) -> Set<String> {
@@ -730,33 +755,52 @@ struct AlbumsView: View {
         return Set(recentSongs.compactMap(\.albumId))
     }
 
-    private func albumMatchesFilter(
+    struct FilterSnapshot: Sendable {
+        let isFavorited: TriState
+        let isRated: TriState
+        let selectedArtistIds: Set<String>
+        let selectedGenres: Set<String>
+        let selectedLabels: Set<String>
+        let year: Int?
+
+        @MainActor
+        init(filter: LibraryFilter) {
+            isFavorited = filter.isFavorited
+            isRated = filter.isRated
+            selectedArtistIds = filter.selectedArtistIds
+            selectedGenres = filter.selectedGenres
+            selectedLabels = filter.selectedLabels
+            year = filter.year
+        }
+    }
+
+    nonisolated static func albumMatchesFilter(
         _ album: Album,
-        filter: LibraryFilter,
+        snapshot: FilterSnapshot,
         recentIds: Set<String>?,
         selectedArtistNames: Set<String>
     ) -> Bool {
-        guard filter.isFavorited.matches(album.starred != nil) else { return false }
-        guard filter.isRated.matches((album.userRating ?? 0) != 0) else { return false }
+        guard snapshot.isFavorited.matches(album.starred != nil) else { return false }
+        guard snapshot.isRated.matches((album.userRating ?? 0) != 0) else { return false }
         if let recentIds, !recentIds.contains(album.id) { return false }
-        if !filter.selectedArtistIds.isEmpty {
-            let matchesById = album.artistId.map { filter.selectedArtistIds.contains($0) } ?? false
+        if !snapshot.selectedArtistIds.isEmpty {
+            let matchesById = album.artistId.map { snapshot.selectedArtistIds.contains($0) } ?? false
             let matchesByName = album.artist.map { selectedArtistNames.contains($0) } ?? false
             guard matchesById || matchesByName else {
                 return false
             }
         }
-        if !filter.selectedGenres.isEmpty {
-            guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
+        if !snapshot.selectedGenres.isEmpty {
+            guard let genre = album.genre, snapshot.selectedGenres.contains(genre) else {
                 return false
             }
         }
-        if !filter.selectedLabels.isEmpty {
-            guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
+        if !snapshot.selectedLabels.isEmpty {
+            guard let albumLabel = album.label, snapshot.selectedLabels.contains(albumLabel) else {
                 return false
             }
         }
-        if let yearFilter = filter.year {
+        if let yearFilter = snapshot.year {
             guard album.year == yearFilter else { return false }
         }
         return true

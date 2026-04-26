@@ -240,6 +240,7 @@ final class SubsonicClient {
     func coverArtURL(id: String, size: Int? = nil) -> URL {
         var extra = [URLQueryItem(name: "id", value: id)]
         if let size { extra.append(URLQueryItem(name: "size", value: "\(size)")) }
+        extra.append(URLQueryItem(name: "format", value: "webp"))
         return buildURL(path: "/rest/getCoverArt", extra: extra)
     }
 
