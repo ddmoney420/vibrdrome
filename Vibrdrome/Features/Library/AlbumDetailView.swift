@@ -15,6 +15,9 @@ struct AlbumDetailView: View {
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
     @State private var isStarred = false
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "album")
+    #endif
 
     var body: some View {
         ScrollView {
@@ -31,6 +34,13 @@ struct AlbumDetailView: View {
                     let discs = Set(songs.compactMap(\.discNumber)).sorted()
                     let hasMultipleDiscs = discs.count > 1
 
+                    #if os(macOS)
+                    MacTrackTableView(
+                        songs: songs,
+                        settings: columnSettings,
+                        showDiscSeparators: hasMultipleDiscs
+                    )
+                    #else
                     LazyVStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             // Disc separator
@@ -56,6 +66,7 @@ struct AlbumDetailView: View {
                                 .padding(.leading, isSelecting ? 72 : 56)
                         }
                     }
+                    #endif
 
                     // Batch action bar
                     if isSelecting && !selectedSongs.isEmpty {
