@@ -336,6 +336,11 @@ struct MacMiniPlayerView: View {
                                     let songId = song.id
                                     let wasStarred = isStarred
                                     isStarred = !wasStarred
+                                    NotificationCenter.default.post(
+                                        name: .songStarredChanged,
+                                        object: nil,
+                                        userInfo: ["id": songId, "starred": !wasStarred]
+                                    )
                                     Task {
                                         do {
                                             if wasStarred {
@@ -344,7 +349,14 @@ struct MacMiniPlayerView: View {
                                                 try await OfflineActionQueue.shared.star(id: songId)
                                             }
                                         } catch {
-                                            if engine.currentSong?.id == songId { isStarred = wasStarred }
+                                            if engine.currentSong?.id == songId {
+                                                isStarred = wasStarred
+                                                NotificationCenter.default.post(
+                                                    name: .songStarredChanged,
+                                                    object: nil,
+                                                    userInfo: ["id": songId, "starred": wasStarred]
+                                                )
+                                            }
                                         }
                                     }
                                 } label: {
