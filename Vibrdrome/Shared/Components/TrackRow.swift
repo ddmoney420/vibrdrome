@@ -61,6 +61,11 @@ struct TrackRow: View {
             Button {
                 let wasStarred = isStarred
                 isStarred = !wasStarred
+                NotificationCenter.default.post(
+                    name: .songStarredChanged,
+                    object: nil,
+                    userInfo: ["id": song.id, "starred": !wasStarred]
+                )
                 #if os(iOS)
                 Haptics.light()
                 #endif
@@ -76,6 +81,11 @@ struct TrackRow: View {
                         }
                     } catch {
                         isStarred = wasStarred
+                        NotificationCenter.default.post(
+                            name: .songStarredChanged,
+                            object: nil,
+                            userInfo: ["id": song.id, "starred": wasStarred]
+                        )
                     }
                 }
             } label: {
@@ -168,6 +178,11 @@ struct TrackRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
+        .onReceive(NotificationCenter.default.publisher(for: .songStarredChanged)) { note in
+            guard let id = note.userInfo?["id"] as? String, id == song.id,
+                  let starred = note.userInfo?["starred"] as? Bool else { return }
+            isStarred = starred
+        }
         .onAppear {
             isStarred = song.starred != nil
             let songId = song.id

@@ -7,6 +7,8 @@ extension Notification.Name {
     static let navigateToSearch = Notification.Name("com.vibrdrome.navigateToSearch")
     /// Posted to focus the search bar in the currently visible view.
     static let focusSearchBar = Notification.Name("com.vibrdrome.focusSearchBar")
+    /// Posted when a song's starred state changes. userInfo: ["id": String, "starred": Bool]
+    static let songStarredChanged = Notification.Name("com.vibrdrome.songStarredChanged")
 }
 
 /// Centralized UserDefaults key constants.

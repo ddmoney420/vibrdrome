@@ -186,6 +186,11 @@ extension NowPlayingView {
             let songId = song.id
             let wasStarred = isStarred
             isStarred = !wasStarred
+            NotificationCenter.default.post(
+                name: .songStarredChanged,
+                object: nil,
+                userInfo: ["id": songId, "starred": !wasStarred]
+            )
             Task {
                 do {
                     if wasStarred {
@@ -200,6 +205,11 @@ extension NowPlayingView {
                 } catch {
                     if engine.currentSong?.id == songId {
                         isStarred = wasStarred
+                        NotificationCenter.default.post(
+                            name: .songStarredChanged,
+                            object: nil,
+                            userInfo: ["id": songId, "starred": wasStarred]
+                        )
                     }
                 }
             }
