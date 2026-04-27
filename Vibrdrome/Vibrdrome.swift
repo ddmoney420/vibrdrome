@@ -255,6 +255,17 @@ struct VibrdromeApp: App {
         }
         .defaultSize(width: 560, height: 700)
 
+        WindowGroup("Filters", id: "library-filter", for: FilterContext.self) { _ in
+            if let context = appState.activeFilterWindowContext {
+                LibraryFilterSidebarView(context: context, isWindow: true)
+                    .environment(appState)
+                    .modelContainer(persistenceController.container)
+                    .preferredColorScheme(colorScheme)
+                    .tint(accentColor)
+            }
+        }
+        .defaultSize(width: 280, height: 600)
+
         Window("Mini Player", id: "mini-player") {
             PopOutPlayerView()
                 .environment(appState)

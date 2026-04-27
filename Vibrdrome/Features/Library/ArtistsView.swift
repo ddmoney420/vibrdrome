@@ -1,9 +1,13 @@
 import SwiftData
 import SwiftUI
+import os.log
 
 struct ArtistsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var indexes: [ArtistIndex] = []
+    @State private var localFilteredArtists: [Artist]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var error: String?
     @State private var searchText = ""
@@ -16,6 +20,7 @@ struct ArtistsView: View {
     @SceneStorage("artistsFilter") private var filterRaw: String = ArtistFilter.all.rawValue
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
     private var downloadedSongs: [DownloadedSong]
+    @State private var cachedFilteredIndexes: [(id: String, name: String, artists: [Artist])] = []
 
     enum ArtistFilter: String, CaseIterable, Identifiable {
         case all, favorites, downloaded
@@ -54,7 +59,18 @@ struct ArtistsView: View {
         }
     }
 
-    private var filteredIndexes: [(id: String, name: String, artists: [Artist])] {
+    private func computeFilteredIndexes() -> [(id: String, name: String, artists: [Artist])] {
+        // When local filters are active, use flat filtered list (no index grouping)
+        if let filtered = localFilteredArtists {
+            var source = filtered
+            if !searchText.isEmpty {
+                source = source.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            }
+            let sorted = sortReversed ? source.reversed() : Array(source)
+            guard !sorted.isEmpty else { return [] }
+            return [("filtered", "Results", sorted)]
+        }
+
         var raw: [(id: String, name: String, artists: [Artist])]
         let downloaded = downloadedArtistNames
         let favorited = favoritedArtistIds
@@ -143,6 +159,23 @@ struct ArtistsView: View {
             }
         }
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .artistFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .artistFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.artistFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Artist Filters")
+                .accessibilityIdentifier("artistFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -156,12 +189,14 @@ struct ArtistsView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    #if os(iOS)
                     Picker("Filter", selection: $filterRaw) {
                         ForEach(ArtistFilter.allCases) { option in
                             Label(option.label, systemImage: option.icon).tag(option.rawValue)
                         }
                     }
                     Divider()
+                    #endif
                     Button {
                         sortReversed = false
                     } label: {
@@ -193,9 +228,29 @@ struct ArtistsView: View {
                 }
             }
         }
-        .task { await loadArtists() }
-        .task { await loadFavorites() }
+        .task {
+            #if os(macOS)
+            filterRaw = ArtistFilter.all.rawValue
+            #endif
+            await loadArtists()
+            await loadFavorites()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+            recomputeFilteredIndexes()
+        }
+        .onChange(of: searchText) { recomputeFilteredIndexes() }
+        .onChange(of: sortReversed) { recomputeFilteredIndexes() }
         .refreshable { await loadArtists() }
+        #if os(macOS)
+        .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.artistFilter.isActive { debouncedApplyLocalFilters() }
+        }
+        .onAppear { appState.activeFilterWindowContext = .artist }
+        #endif
     }
 
     private func loadFavorites() async {
@@ -211,7 +266,7 @@ struct ArtistsView: View {
     private var artistList: some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(filteredIndexes, id: \.id) { index in
+                ForEach(cachedFilteredIndexes, id: \.id) { index in
                     Section(header: Text(index.name).id(index.name)) {
                         ForEach(index.artists) { artist in
                             NavigationLink {
@@ -235,7 +290,7 @@ struct ArtistsView: View {
 
     private func sectionIndex(proxy: ScrollViewProxy) -> some View {
         VStack(spacing: 1) {
-            ForEach(filteredIndexes, id: \.id) { index in
+            ForEach(cachedFilteredIndexes, id: \.id) { index in
                 let label = sectionIndexLabel(index.name)
                 Text(label)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -261,11 +316,11 @@ struct ArtistsView: View {
     private var artistGrid: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24, pinnedViews: [.sectionHeaders]) {
-                ForEach(filteredIndexes, id: \.id) { index in
+                ForEach(cachedFilteredIndexes, id: \.id) { index in
                     Section {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                                 count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                                  spacing: 20) {
+                        LazyVGrid(columns: [
+                            GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 16)
+                        ], spacing: 20) {
                             ForEach(index.artists) { artist in
                                 NavigationLink {
                                     ArtistDetailView(artistId: artist.id)
@@ -334,10 +389,95 @@ struct ArtistsView: View {
         defer { isLoading = false }
         do {
             indexes = try await client.getArtists()
+            recomputeFilteredIndexes()
         } catch {
             if indexes.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
         }
     }
+
+    private func recomputeFilteredIndexes() {
+        cachedFilteredIndexes = computeFilteredIndexes()
+    }
+
+    #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
+    private func applyLocalFilters() {
+        let filter = appState.artistFilter
+        guard filter.isActive else {
+            localFilteredArtists = nil
+            appState.artistFilter.matchCount = nil
+            recomputeFilteredIndexes()
+            return
+        }
+
+        do {
+            let allArtists: [Artist]
+            if let cachedArtists = appState.libraryCache.artists {
+                allArtists = cachedArtists
+            } else {
+                var descriptor = FetchDescriptor<CachedArtist>()
+                descriptor.sortBy = [SortDescriptor(\.name)]
+                allArtists = try modelContext.fetch(descriptor).map { $0.toArtist() }
+            }
+
+            // Pre-compute artist IDs that have albums matching selected genres
+            var artistIdsWithMatchingGenres: Set<String>?
+            if !filter.selectedGenres.isEmpty {
+                let allAlbums: [Album]
+                if let cachedAlbums = appState.libraryCache.albums {
+                    allAlbums = cachedAlbums
+                } else {
+                    let albumDescriptor = FetchDescriptor<CachedAlbum>()
+                    allAlbums = try modelContext.fetch(albumDescriptor).map { $0.toAlbum() }
+                }
+                var ids = Set<String>()
+                for album in allAlbums {
+                    if let genre = album.genre, filter.selectedGenres.contains(genre),
+                       let artistId = album.artistId {
+                        ids.insert(artistId)
+                    }
+                }
+                artistIdsWithMatchingGenres = ids
+            }
+
+            let filtered = allArtists.filter {
+                artistMatchesFilter($0, filter: filter, genreIds: artistIdsWithMatchingGenres)
+            }
+
+            localFilteredArtists = filtered
+            appState.artistFilter.matchCount = filtered.count
+            recomputeFilteredIndexes()
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Artists")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredArtists = nil
+        }
+    }
+
+    private func artistMatchesFilter(
+        _ artist: Artist, filter: LibraryFilter, genreIds: Set<String>?
+    ) -> Bool {
+        switch filter.isFavorited {
+        case .yes: if artist.starred == nil { return false }
+        case .no: if artist.starred != nil { return false }
+        case .none: break
+        }
+        if let matchIds = genreIds, !matchIds.contains(artist.id) { return false }
+        if !filter.ruleSet.isEmpty {
+            let meta = FilterRuleSet.ArtistMeta(name: artist.name, genre: nil, isFavorited: artist.starred != nil)
+            if !filter.ruleSet.matches(artist: meta) { return false }
+        }
+        return true
+    }
+    #endif
 }

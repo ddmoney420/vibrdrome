@@ -11,7 +11,10 @@ struct AlbumsView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.modelContext) private var modelContext
     @State private var albums: [Album] = []
+    @State private var localFilteredAlbums: [Album]?
+    @State private var filterTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var error: String?
     @State private var hasMore = true
@@ -21,9 +24,6 @@ struct AlbumsView: View {
     @State private var clientSideSort: AlbumSortOption?
     @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("albumsViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.modelContext) private var modelContext
     @State private var showSaveCollection = false
     @State private var collectionName = ""
     @State private var availableGenres: [String] = []
@@ -34,6 +34,11 @@ struct AlbumsView: View {
     @SceneStorage("albumsFilter") private var filterRaw: String = AlbumFilter.all.rawValue
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
     private var downloadedSongs: [DownloadedSong]
+    @State private var cachedFilteredAlbums: [Album] = []
+    @State private var scrollLoadTask: Task<Void, Never>?
+    @State private var pendingPageTarget: Int = 0
+    @State private var visibleIndices: Set<Int> = []
+    @State private var restoredScrollIndex: Int?
     private let pageSize = 40
 
     enum AlbumFilter: String, CaseIterable, Identifiable {
@@ -92,23 +97,43 @@ struct AlbumsView: View {
         activeGenre ?? genre
     }
 
-    private var filteredAlbums: [Album] {
-        // When searching, use server results (search3 searches the entire library,
-        // not just the paginated pages already loaded client-side).
-        var result = searchText.isEmpty ? albums : searchResults
-        if !searchText.isEmpty, let activeGenre = effectiveGenre {
-            result = result.filter {
-                $0.genre?.caseInsensitiveCompare(activeGenre) == .orderedSame
-            }
+    private var cacheKey: String {
+        "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+    }
+
+    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) {
+        self.listType = listType
+        self.title = title
+        self.genre = genre
+        self.fromYear = fromYear
+        self.toYear = toYear
+
+        let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
+        if let snapshot = AppState.shared.albumsViewSnapshots[key] {
+            _albums = State(initialValue: snapshot.albums)
+            _hasMore = State(initialValue: snapshot.hasMore)
+            _isLoading = State(initialValue: false)
+            _cachedFilteredAlbums = State(initialValue: snapshot.albums)
+            _restoredScrollIndex = State(initialValue: snapshot.scrollIndex)
         }
+    }
+
+    private func computeFilteredAlbums() -> [Album] {
+        let source = localFilteredAlbums ?? albums
+        var result = source
         switch activeFilter {
         case .all:
             break
         case .favorites:
             result = result.filter { favoritedAlbumIds.contains($0.id) }
         case .downloaded:
-            let downloaded = downloadedAlbumNames
-            result = result.filter { downloaded.contains($0.name.lowercased()) }
+            result = result.filter { downloadedAlbumNames.contains($0.name.lowercased()) }
+        }
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText) ||
+                ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+            }
         }
         if clientSideSort == .year {
             result.sort { ($0.year ?? 0) > ($1.year ?? 0) }
@@ -117,23 +142,8 @@ struct AlbumsView: View {
     }
 
     var body: some View {
-        Group {
-            if showAsList {
-                albumList
-            } else {
-                albumGrid
-            }
-        }
-        #if os(iOS)
-        .contentMargins(.bottom, 80)
-        #endif
-        .navigationTitle(title)
-        #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
-        .navigationBarTitleDisplayMode(.large)
-        #else
-        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search in Albums")
-        #endif
+        contentView
+        .overlay { albumsOverlay }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
@@ -154,27 +164,44 @@ struct AlbumsView: View {
             searchIsActive = false
             DispatchQueue.main.async { searchIsActive = true }
         }
-        .overlay {
-            if isLoading && albums.isEmpty {
-                ProgressView("Loading albums...")
-            } else if let error, albums.isEmpty {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("Retry") { Task { await loadAlbums() } }
-                        .buttonStyle(.bordered)
-                }
-            } else if !isLoading && albums.isEmpty {
-                ContentUnavailableView {
-                    Label("No Albums", systemImage: "square.stack")
-                } description: {
-                    Text("No albums found")
-                }
+    }
+
+    private var contentView: some View {
+        Group {
+            if showAsList {
+                albumList
+            } else {
+                albumGrid
             }
         }
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
+        .navigationTitle(title)
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
+        .navigationBarTitleDisplayMode(.large)
+        #else
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search in Albums")
+        #endif
         .toolbar {
+            #if os(macOS)
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if appState.activeSidePanel == .albumFilters {
+                            appState.activeSidePanel = nil
+                        } else {
+                            appState.activeSidePanel = .albumFilters
+                        }
+                    }
+                } label: {
+                    Image(systemName: appState.albumFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Album Filters")
+                .accessibilityIdentifier("albumFilterToggle")
+            }
+            #endif
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -246,12 +273,14 @@ struct AlbumsView: View {
                         Label(effectiveGenre?.cleanedGenreDisplay ?? "Genre", systemImage: "guitars")
                     }
                     Divider()
+                    #if os(iOS)
                     Picker("Filter", selection: $filterRaw) {
                         ForEach(AlbumFilter.allCases) { option in
                             Label(option.label, systemImage: option.icon).tag(option.rawValue)
                         }
                     }
                     Divider()
+                    #endif
                     Button {
                         albums = []
                         hasMore = true
@@ -274,29 +303,33 @@ struct AlbumsView: View {
         }
         .alert("Save Collection", isPresented: $showSaveCollection) {
             TextField("Name", text: $collectionName)
-            Button("Save") {
-                let count = (try? modelContext.fetchCount(FetchDescriptor<AlbumCollection>())) ?? 0
-                let collection = AlbumCollection(
-                    name: collectionName,
-                    listType: effectiveListType,
-                    genre: effectiveGenre,
-                    fromYear: fromYear,
-                    toYear: toYear,
-                    order: count
-                )
-                modelContext.insert(collection)
-                try? modelContext.save()
-            }
+            Button("Save") { saveCollection() }
             Button("Cancel", role: .cancel) { }
         }
+        .navigationDestination(for: AlbumNavItem.self) { item in
+            AlbumDetailView(albumId: item.id)
+        }
         .task {
-            await loadAlbums()
+            #if os(macOS)
+            filterRaw = AlbumFilter.all.rawValue
+            #endif
+            if albums.isEmpty {
+                await loadAlbums()
+            }
             if availableGenres.isEmpty {
                 availableGenres = (try? await appState.subsonicClient.getGenres()
                     .map(\.value).sorted()) ?? []
             }
             await loadFavoritedAlbumIds()
+            #if os(macOS)
+            applyLocalFilters()
+            #endif
+            recomputeFilteredAlbums()
         }
+        .onChange(of: searchText) { recomputeFilteredAlbums() }
+        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
+        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
+        .onDisappear { saveSnapshot() }
         .refreshable {
             albums = []
             hasMore = true
@@ -315,6 +348,20 @@ struct AlbumsView: View {
             .environment(appState)
         }
         #endif
+        #if os(macOS)
+        .onChange(of: appState.albumFilter.isFavorited) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRated) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.albumFilter.isActive { debouncedApplyLocalFilters() }
+        }
+        .onAppear { appState.activeFilterWindowContext = .album }
+        #endif
     }
 
     private func loadFavoritedAlbumIds() async {
@@ -325,60 +372,92 @@ struct AlbumsView: View {
         }
     }
 
+    @ViewBuilder
+    private var albumsOverlay: some View {
+        if isLoading && albums.isEmpty {
+            ProgressView("Loading albums...")
+        } else if let error, albums.isEmpty {
+            ContentUnavailableView {
+                Label("Error", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await loadAlbums() } }
+                    .buttonStyle(.bordered)
+            }
+        } else if !isLoading && albums.isEmpty {
+            ContentUnavailableView {
+                Label("No Albums", systemImage: "square.stack")
+            } description: {
+                Text("No albums found")
+            }
+        }
+    }
+
     // MARK: - List view
 
     private var albumList: some View {
-        List {
-            ForEach(filteredAlbums) { album in
-                NavigationLink {
-                    AlbumDetailView(albumId: album.id)
-                } label: {
-                    AlbumCard(album: album)
+        ScrollViewReader { proxy in
+            List {
+                ForEach(0..<totalItemCount, id: \.self) { index in
+                    Group {
+                        if index < cachedFilteredAlbums.count {
+                            let album = cachedFilteredAlbums[index]
+                            NavigationLink(value: AlbumNavItem(id: album.id)) {
+                                AlbumCard(album: album)
+                            }
+                            .accessibilityIdentifier("albumRow_\(album.id)")
+                            .contextMenu { rowContextMenu(for: album) }
+                        } else {
+                            albumListPlaceholder
+                        }
+                    }
+                    .id(index)
+                    .onAppear {
+                        visibleIndices.insert(index)
+                        triggerLoadIfNeeded(at: index)
+                    }
+                    .onDisappear { visibleIndices.remove(index) }
                 }
-                .accessibilityIdentifier("albumRow_\(album.id)")
-                .contextMenu { rowContextMenu(for: album) }
-                .onAppear { paginateIfNeeded(album) }
             }
-
-            if isLoading && !albums.isEmpty {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-            }
+            .listStyle(.plain)
+            .onAppear { restoreScroll(proxy: proxy) }
         }
-        .listStyle(.plain)
     }
 
     // MARK: - Grid view
 
-    private var gridItems: [GridItem] {
-        let cols = Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)
-        return Array(repeating: GridItem(.flexible(), spacing: 16), count: cols)
-    }
-
     private var albumGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: gridItems, spacing: 20) {
-                ForEach(filteredAlbums) { album in
-                    NavigationLink {
-                        AlbumDetailView(albumId: album.id)
-                    } label: {
-                        albumGridCard(album)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
+                ], spacing: 20) {
+                    ForEach(0..<totalItemCount, id: \.self) { index in
+                        Group {
+                            if index < cachedFilteredAlbums.count {
+                                let album = cachedFilteredAlbums[index]
+                                NavigationLink(value: AlbumNavItem(id: album.id)) {
+                                    albumGridCard(album)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("albumCard_\(album.id)")
+                                .contextMenu { rowContextMenu(for: album) }
+                            } else {
+                                albumGridPlaceholder
+                            }
+                        }
+                        .id(index)
+                        .onAppear {
+                            visibleIndices.insert(index)
+                            triggerLoadIfNeeded(at: index)
+                        }
+                        .onDisappear { visibleIndices.remove(index) }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("albumCard_\(album.id)")
-                    .contextMenu { rowContextMenu(for: album) }
-                    .onAppear { paginateIfNeeded(album) }
                 }
+                .padding(16)
             }
-            .padding(16)
-
-            if isLoading && !albums.isEmpty {
-                ProgressView()
-                    .padding()
-            }
+            .onAppear { restoreScroll(proxy: proxy) }
         }
     }
 
@@ -459,13 +538,81 @@ struct AlbumsView: View {
         }
     }
 
-    private func paginateIfNeeded(_ album: Album) {
-        if album.id == albums.last?.id && hasMore {
-            Task { await loadMore() }
+    private var albumListPlaceholder: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.quaternary)
+                .frame(width: 56, height: 56)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 120, height: 14)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .frame(width: 80, height: 12)
+            }
+            Spacer()
         }
     }
 
+    private var albumGridPlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.quaternary)
+                .aspectRatio(1, contentMode: .fit)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(height: 14)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(.quaternary)
+                .frame(width: 80, height: 12)
+        }
+    }
+
+    private var totalItemCount: Int {
+        guard localFilteredAlbums == nil, searchText.isEmpty else { return cachedFilteredAlbums.count }
+        guard hasMore, let totalCount = appState.libraryCache.albums?.count else { return cachedFilteredAlbums.count }
+        return max(cachedFilteredAlbums.count, totalCount)
+    }
+
+    private func triggerLoadIfNeeded(at index: Int) {
+        guard localFilteredAlbums == nil, hasMore else { return }
+        if index >= cachedFilteredAlbums.count {
+            // Scrolled into placeholder territory — always update target, debounce the load
+            pendingPageTarget = max(pendingPageTarget, albums.count + (index - cachedFilteredAlbums.count) + pageSize)
+            scrollLoadTask?.cancel()
+            scrollLoadTask = Task {
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                await loadPages()
+            }
+        } else if !isLoading {
+            // Near end of loaded items — prefetch immediately
+            let prefetchThreshold = max(cachedFilteredAlbums.count - 30, 0)
+            if index >= prefetchThreshold {
+                pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
+                Task { await loadPages() }
+            }
+        }
+    }
+
+    private func saveCollection() {
+        let count = (try? modelContext.fetchCount(FetchDescriptor<AlbumCollection>())) ?? 0
+        let collection = AlbumCollection(
+            name: collectionName,
+            listType: effectiveListType,
+            genre: effectiveGenre,
+            fromYear: fromYear,
+            toYear: toYear,
+            order: count
+        )
+        modelContext.insert(collection)
+        try? modelContext.save()
+    }
+
     private func loadAlbums() async {
+        scrollLoadTask?.cancel()
+        pendingPageTarget = 0
         let client = appState.subsonicClient
         let sortType = effectiveListType
         let endpoint = SubsonicEndpoint.getAlbumList2(
@@ -485,6 +632,8 @@ struct AlbumsView: View {
                 fromYear: fromYear, toYear: toYear)
             albums = result
             hasMore = result.count >= pageSize
+            recomputeFilteredAlbums()
+            saveSnapshot()
         } catch {
             if albums.isEmpty {
                 self.error = ErrorPresenter.userMessage(for: error)
@@ -492,18 +641,167 @@ struct AlbumsView: View {
         }
     }
 
-    private func loadMore() async {
-        guard !isLoading else { return }
+    private func loadPages() async {
+        guard !isLoading, hasMore else { return }
         isLoading = true
-        defer { isLoading = false }
-        do {
-            let result = try await appState.subsonicClient.getAlbumList(
-                type: effectiveListType, size: pageSize, offset: albums.count, genre: effectiveGenre,
-                fromYear: fromYear, toYear: toYear)
-            albums.append(contentsOf: result)
-            hasMore = result.count >= pageSize
-        } catch {
-            hasMore = false
+        defer {
+            isLoading = false
+            // If target moved while loading, schedule another batch
+            if albums.count < pendingPageTarget, hasMore {
+                scrollLoadTask?.cancel()
+                scrollLoadTask = Task { await loadPages() }
+            }
+        }
+        while albums.count < pendingPageTarget, hasMore, !Task.isCancelled {
+            do {
+                let result = try await appState.subsonicClient.getAlbumList(
+                    type: effectiveListType, size: pageSize, offset: albums.count, genre: effectiveGenre,
+                    fromYear: fromYear, toYear: toYear)
+                albums.append(contentsOf: result)
+                hasMore = result.count >= pageSize
+            } catch {
+                hasMore = false
+                break
+            }
+        }
+        recomputeFilteredAlbums()
+        saveSnapshot()
+    }
+
+    private func recomputeFilteredAlbums() {
+        cachedFilteredAlbums = computeFilteredAlbums()
+    }
+
+    private func saveSnapshot() {
+        appState.albumsViewSnapshots[cacheKey] = AppState.AlbumsViewSnapshot(
+            albums: albums, hasMore: hasMore, scrollIndex: visibleIndices.min()
+        )
+        let limit = 10
+        if appState.albumsViewSnapshots.count > limit {
+            let excess = appState.albumsViewSnapshots.count - limit
+            appState.albumsViewSnapshots.keys.prefix(excess).forEach {
+                appState.albumsViewSnapshots.removeValue(forKey: $0)
+            }
         }
     }
+
+    private func restoreScroll(proxy: ScrollViewProxy) {
+        if let target = restoredScrollIndex, target > 0, target < cachedFilteredAlbums.count {
+            proxy.scrollTo(target, anchor: .top)
+            restoredScrollIndex = nil
+        }
+    }
+
+    #if os(macOS)
+    private func debouncedApplyLocalFilters() {
+        filterTask?.cancel()
+        filterTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            applyLocalFilters()
+        }
+    }
+
+    private func applyLocalFilters() {
+        let filter = appState.albumFilter
+        guard filter.isActive else {
+            localFilteredAlbums = nil
+            appState.albumFilter.matchCount = nil
+            recomputeFilteredAlbums()
+            return
+        }
+
+        do {
+            let recentlyPlayedAlbumIds = recentlyPlayedIds(for: filter)
+            let selectedArtistNames = selectedArtistNames(for: filter)
+            let allAlbums: [Album]
+            if let cachedAlbums = appState.libraryCache.albums {
+                allAlbums = cachedAlbums
+            } else {
+                var descriptor = FetchDescriptor<CachedAlbum>()
+                descriptor.sortBy = [SortDescriptor(\.name)]
+                allAlbums = try modelContext.fetch(descriptor).map { $0.toAlbum() }
+            }
+
+            localFilteredAlbums = allAlbums.filter {
+                albumMatchesFilter(
+                    $0,
+                    filter: filter,
+                    recentIds: recentlyPlayedAlbumIds,
+                    selectedArtistNames: selectedArtistNames
+                )
+            }
+            appState.albumFilter.matchCount = localFilteredAlbums?.count
+            recomputeFilteredAlbums()
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                .error("Failed to apply local filters: \(error)")
+            localFilteredAlbums = nil
+        }
+    }
+
+    private func selectedArtistNames(for filter: LibraryFilter) -> Set<String> {
+        guard !filter.selectedArtistIds.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<CachedArtist>()
+        let cachedArtists = (try? modelContext.fetch(descriptor)) ?? []
+        return Set(cachedArtists.compactMap { artist in
+            filter.selectedArtistIds.contains(artist.id) ? artist.name : nil
+        })
+    }
+
+    private func recentlyPlayedIds(for filter: LibraryFilter) -> Set<String>? {
+        guard filter.isRecentlyPlayed else { return nil }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let songDescriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
+        )
+        let recentSongs = (try? modelContext.fetch(songDescriptor)) ?? []
+        return Set(recentSongs.compactMap(\.albumId))
+    }
+
+    private func albumMatchesFilter(
+        _ album: Album,
+        filter: LibraryFilter,
+        recentIds: Set<String>?,
+        selectedArtistNames: Set<String>
+    ) -> Bool {
+        guard filter.isFavorited.matches(album.starred != nil) else { return false }
+        guard filter.isRated.matches((album.userRating ?? 0) != 0) else { return false }
+        if let recentIds, !recentIds.contains(album.id) { return false }
+        if !filter.selectedArtistIds.isEmpty {
+            let matchesById = album.artistId.map { filter.selectedArtistIds.contains($0) } ?? false
+            let matchesByName = album.artist.map { selectedArtistNames.contains($0) } ?? false
+            guard matchesById || matchesByName else {
+                return false
+            }
+        }
+        if !filter.selectedGenres.isEmpty {
+            guard let genre = album.genre, filter.selectedGenres.contains(genre) else {
+                return false
+            }
+        }
+        if !filter.selectedLabels.isEmpty {
+            guard let albumLabel = album.label, filter.selectedLabels.contains(albumLabel) else {
+                return false
+            }
+        }
+        if let yearFilter = filter.year {
+            guard album.year == yearFilter else { return false }
+        }
+        if !filter.ruleSet.isEmpty {
+            let meta = FilterRuleSet.AlbumMeta(
+                title: album.name,
+                artist: album.artist,
+                genre: album.genre,
+                label: album.label,
+                year: album.year,
+                duration: album.duration,
+                rating: album.userRating ?? 0,
+                isFavorited: album.starred != nil
+            )
+            guard filter.ruleSet.matches(album: meta) else { return false }
+        }
+        return true
+    }
+    #endif
 }
