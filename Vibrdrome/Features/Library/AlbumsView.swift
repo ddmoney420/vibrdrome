@@ -9,6 +9,7 @@ struct AlbumsView: View {
     var genre: String?
     var fromYear: Int?
     var toYear: Int?
+    var initialSearch: String?
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
@@ -314,6 +315,7 @@ struct AlbumsView: View {
             AlbumDetailView(albumId: item.id)
         }
         .task {
+            if let initialSearch { searchText = initialSearch }
             #if os(macOS)
             filterRaw = AlbumFilter.all.rawValue
             #endif

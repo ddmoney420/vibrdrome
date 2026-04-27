@@ -71,7 +71,8 @@ final class CachedAlbum {
             song: nil,
             replayGain: nil,
             musicBrainzId: nil,
-            recordLabels: label.map { [RecordLabel(name: $0)] }
+            recordLabels: label.map { [RecordLabel(name: $0)] },
+            genres: nil
         )
     }
 }
