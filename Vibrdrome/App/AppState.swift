@@ -40,6 +40,7 @@ final class AppState {
         case album(id: String)
         case song(id: String)
         case genre(name: String)
+        case label(name: String)
         case playlist(id: String)
     }
     var pendingNavigation: PendingNavigation?
