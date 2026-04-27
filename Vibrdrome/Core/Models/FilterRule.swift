@@ -235,11 +235,37 @@ struct FilterRule: Identifiable, Codable, Sendable, Equatable {
         case .endsWith:
             return haystack.lowercased().hasSuffix(pattern.lowercased())
         case .matchesRegex:
-            return (try? NSRegularExpression(pattern: pattern, options: .caseInsensitive))
+            let (rawPattern, options) = Self.parseRegexLiteral(pattern)
+            return (try? NSRegularExpression(pattern: rawPattern, options: options))
                 .map { $0.firstMatch(in: haystack, range: NSRange(haystack.startIndex..., in: haystack)) != nil } ?? false
         default:
             return true
         }
+    }
+
+    /// Parses an optional `/pattern/flags` regex literal, returning the raw pattern and options.
+    /// If the input doesn't start with `/`, it is returned as-is with no options (plain pattern).
+    /// Supported flags: i (caseInsensitive), s (dotMatchesLineSeparators), m (anchorsMatchLines).
+    static func parseRegexLiteral(_ input: String) -> (pattern: String, options: NSRegularExpression.Options) {
+        guard input.hasPrefix("/") else { return (input, []) }
+        // Find the closing slash — search from the second character onwards
+        let afterOpen = input.index(after: input.startIndex)
+        guard let closingSlash = input[afterOpen...].lastIndex(of: "/"), closingSlash != input.startIndex else {
+            // Malformed (no closing slash) — treat the whole string as a plain pattern
+            return (input, [])
+        }
+        let rawPattern = String(input[afterOpen..<closingSlash])
+        let flagString = String(input[input.index(after: closingSlash)...])
+        var options: NSRegularExpression.Options = []
+        for flag in flagString {
+            switch flag {
+            case "i": options.insert(.caseInsensitive)
+            case "s": options.insert(.dotMatchesLineSeparators)
+            case "m": options.insert(.anchorsMatchLines)
+            default: break
+            }
+        }
+        return (rawPattern, options)
     }
 
     private func matchNumeric(actual: Int?) -> Bool {

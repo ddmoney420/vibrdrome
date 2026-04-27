@@ -235,7 +235,7 @@ private struct RuleRowView: View {
     @ViewBuilder
     private var textValueInput: some View {
         HStack(spacing: 4) {
-            TextField(rule.operator == .matchesRegex ? "regex pattern…" : "value…", text: $draftText)
+            TextField(rule.operator == .matchesRegex ? "/pattern/flags or pattern…" : "value…", text: $draftText)
                 .textFieldStyle(.roundedBorder)
                 .font(.caption)
                 .onChange(of: draftText) { _, newText in scheduleCommit { .text(newText) }
@@ -319,8 +319,9 @@ private struct RuleRowView: View {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             rule.value = .text(pattern)
+            let (rawPattern, options) = FilterRule.parseRegexLiteral(pattern)
             do {
-                _ = try NSRegularExpression(pattern: pattern)
+                _ = try NSRegularExpression(pattern: rawPattern, options: options)
                 regexError = nil
             } catch {
                 regexError = "⚠ \(error.localizedDescription)"
