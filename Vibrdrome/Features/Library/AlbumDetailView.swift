@@ -179,8 +179,10 @@ struct AlbumDetailView: View {
                         }
                     }
 
-                    albumMetadataRow(album)
+                    albumMetadataRow(album, showGenre: false)
                         .foregroundStyle(.white.opacity(0.7))
+
+                    macOSExtendedMetadata(album)
 
                     Spacer(minLength: 12)
 
@@ -190,6 +192,102 @@ struct AlbumDetailView: View {
                 .padding(.vertical, 4)
             }
             .padding(28)
+        }
+    }
+
+    @ViewBuilder
+    private func macOSExtendedMetadata(_ album: Album) -> some View {
+        let allGenres = albumAllGenres(album)
+        let hasLabels = album.recordLabels?.isEmpty == false
+        let hasGrid = hasLabels || album.created != nil
+            || album.replayGain?.albumGain != nil || album.musicBrainzId != nil
+
+        if !allGenres.isEmpty || hasGrid {
+            VStack(alignment: .leading, spacing: 10) {
+                if !allGenres.isEmpty {
+                    macOSGenrePills(allGenres)
+                }
+
+                if hasGrid {
+                    HStack(spacing: 20) {
+                        if let labels = album.recordLabels, !labels.isEmpty {
+                            macOSLabelPills(labels)
+                        }
+                        if let created = album.created {
+                            macOSHeaderMetaCell("Added", value: formatAddedDate(created))
+                        }
+                        if let gain = album.replayGain?.albumGain {
+                            macOSHeaderMetaCell("Album Gain",
+                                                value: String(format: "%.2f dB", gain))
+                        }
+                        if let mbid = album.musicBrainzId {
+                            macOSHeaderMetaCell("MusicBrainz ID", value: mbid)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderPill(text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.18), in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSGenrePills(_ genres: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(genres, id: \.self) { genre in
+                    macOSHeaderPill(text: genre.cleanedGenreDisplay) {
+                        appState.pendingNavigation = .genre(name: genre)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSLabelPills(_ labels: [RecordLabel]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Label")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            HStack(spacing: 6) {
+                ForEach(labels, id: \.name) { recordLabel in
+                    macOSHeaderPill(text: recordLabel.name) {
+                        appState.pendingNavigation = .label(name: recordLabel.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderMetaCell(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .textSelection(.enabled)
         }
     }
 
@@ -238,6 +336,37 @@ struct AlbumDetailView: View {
                     .foregroundStyle(.white)
             }
         }
+    }
+
+    private func albumAllGenres(_ album: Album) -> [String] {
+        // Prefer the OpenSubsonic genres array (complete list) when available
+        if let genres = album.genres, !genres.isEmpty {
+            return genres.map(\.name)
+        }
+        // Fall back to deduplicating genres from individual songs
+        var seen = Set<String>()
+        var result: [String] = []
+        let sources = (album.song ?? []).compactMap(\.genre) + [album.genre].compactMap { $0 }
+        for raw in sources {
+            let parts = raw.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+            for part in parts where !part.isEmpty && !seen.contains(part) {
+                seen.insert(part)
+                result.append(part)
+            }
+        }
+        return result
+    }
+
+    private func formatAddedDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
+            let display = DateFormatter()
+            display.dateStyle = .medium
+            display.timeStyle = .none
+            return display.string(from: date)
+        }
+        return iso
     }
 
     @ViewBuilder
@@ -327,12 +456,12 @@ struct AlbumDetailView: View {
     #endif
 
     @ViewBuilder
-    private func albumMetadataRow(_ album: Album) -> some View {
+    private func albumMetadataRow(_ album: Album, showGenre: Bool = true) -> some View {
         HStack(spacing: 8) {
             if let year = album.year {
                 Text(verbatim: "\(year)")
             }
-            if let genre = album.genre {
+            if showGenre, let genre = album.genre {
                 Text("·")
                 Text(genre.cleanedGenreDisplay)
             }

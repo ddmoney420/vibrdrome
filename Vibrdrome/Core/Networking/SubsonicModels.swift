@@ -141,6 +141,10 @@ struct RecordLabel: Decodable, Sendable {
     let name: String
 }
 
+struct AlbumGenre: Decodable, Sendable {
+    let name: String
+}
+
 struct Album: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -158,6 +162,7 @@ struct Album: Decodable, Identifiable, Sendable {
     let replayGain: ReplayGain?
     let musicBrainzId: String?
     let recordLabels: [RecordLabel]?
+    let genres: [AlbumGenre]?
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }

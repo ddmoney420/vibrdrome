@@ -8,6 +8,7 @@ struct AlbumsView: View {
     var genre: String?
     var fromYear: Int?
     var toYear: Int?
+    var initialSearch: String?
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
@@ -290,6 +291,7 @@ struct AlbumsView: View {
             Button("Cancel", role: .cancel) { }
         }
         .task {
+            if let initialSearch { searchText = initialSearch }
             await loadAlbums()
             if availableGenres.isEmpty {
                 availableGenres = (try? await appState.subsonicClient.getGenres()
