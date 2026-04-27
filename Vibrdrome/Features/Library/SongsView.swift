@@ -106,6 +106,9 @@ struct SongsView: View {
             refreshTitleSongCount()
         }
         #if os(macOS)
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.songFilter.isActive { debouncedApplyLocalFilters() }
+        }
         .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }

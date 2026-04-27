@@ -246,6 +246,9 @@ struct ArtistsView: View {
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.artistFilter.isActive { debouncedApplyLocalFilters() }
+        }
         #endif
     }
 

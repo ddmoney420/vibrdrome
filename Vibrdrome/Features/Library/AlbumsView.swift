@@ -357,6 +357,9 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.albumFilter.isActive { debouncedApplyLocalFilters() }
+        }
         #endif
     }
 
