@@ -112,6 +112,7 @@ struct SongsView: View {
         .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.ruleSet) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -688,6 +689,7 @@ struct SongsView: View {
         let filter = appState.songFilter
         guard filter.isActive else {
             localFilteredSongs = nil
+            appState.songFilter.matchCount = nil
             recomputeDisplayedSongs()
             return
         }
@@ -704,6 +706,7 @@ struct SongsView: View {
 
             let recentSongIds = recentlyPlayedSongIds(for: filter)
             localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
+            appState.songFilter.matchCount = localFilteredSongs?.count
             recomputeDisplayedSongs()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
@@ -740,6 +743,26 @@ struct SongsView: View {
         }
         if let yearFilter = filter.year {
             guard song.year == yearFilter else { return false }
+        }
+        if !filter.ruleSet.isEmpty {
+            let meta = FilterRuleSet.SongMeta(
+                title: song.title,
+                artist: song.artist,
+                albumTitle: song.album,
+                genre: song.genre,
+                suffix: song.suffix,
+                contentType: song.contentType,
+                year: song.year,
+                duration: song.duration,
+                bitRate: song.bitRate,
+                playCount: 0,
+                rating: song.userRating ?? 0,
+                trackNumber: song.track,
+                discNumber: song.discNumber,
+                isFavorited: song.starred != nil,
+                isDownloaded: false
+            )
+            guard filter.ruleSet.matches(song: meta) else { return false }
         }
         return true
     }

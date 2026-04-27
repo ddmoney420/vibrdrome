@@ -245,6 +245,7 @@ struct ArtistsView: View {
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.ruleSet) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -410,6 +411,7 @@ struct ArtistsView: View {
         let filter = appState.artistFilter
         guard filter.isActive else {
             localFilteredArtists = nil
+            appState.artistFilter.matchCount = nil
             recomputeFilteredIndexes()
             return
         }
@@ -444,29 +446,34 @@ struct ArtistsView: View {
                 artistIdsWithMatchingGenres = ids
             }
 
-            let filtered = allArtists.filter { artist in
-                // Favorited filter
-                switch filter.isFavorited {
-                case .yes: if artist.starred == nil { return false }
-                case .no: if artist.starred != nil { return false }
-                case .none: break
-                }
-
-                // Genre filter (via album lookup)
-                if let matchIds = artistIdsWithMatchingGenres {
-                    if !matchIds.contains(artist.id) { return false }
-                }
-
-                return true
+            let filtered = allArtists.filter {
+                artistMatchesFilter($0, filter: filter, genreIds: artistIdsWithMatchingGenres)
             }
 
             localFilteredArtists = filtered
+            appState.artistFilter.matchCount = filtered.count
             recomputeFilteredIndexes()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Artists")
                 .error("Failed to apply local filters: \(error)")
             localFilteredArtists = nil
         }
+    }
+
+    private func artistMatchesFilter(
+        _ artist: Artist, filter: LibraryFilter, genreIds: Set<String>?
+    ) -> Bool {
+        switch filter.isFavorited {
+        case .yes: if artist.starred == nil { return false }
+        case .no: if artist.starred != nil { return false }
+        case .none: break
+        }
+        if let matchIds = genreIds, !matchIds.contains(artist.id) { return false }
+        if !filter.ruleSet.isEmpty {
+            let meta = FilterRuleSet.ArtistMeta(name: artist.name, genre: nil, isFavorited: artist.starred != nil)
+            if !filter.ruleSet.matches(artist: meta) { return false }
+        }
+        return true
     }
     #endif
 }

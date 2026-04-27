@@ -356,6 +356,7 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.ruleSet) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -701,6 +702,7 @@ struct AlbumsView: View {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
+            appState.albumFilter.matchCount = nil
             recomputeFilteredAlbums()
             return
         }
@@ -725,6 +727,7 @@ struct AlbumsView: View {
                     selectedArtistNames: selectedArtistNames
                 )
             }
+            appState.albumFilter.matchCount = localFilteredAlbums?.count
             recomputeFilteredAlbums()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Albums")
@@ -780,6 +783,19 @@ struct AlbumsView: View {
         }
         if let yearFilter = filter.year {
             guard album.year == yearFilter else { return false }
+        }
+        if !filter.ruleSet.isEmpty {
+            let meta = FilterRuleSet.AlbumMeta(
+                title: album.name,
+                artist: album.artist,
+                genre: album.genre,
+                label: album.label,
+                year: album.year,
+                duration: album.duration,
+                rating: album.userRating ?? 0,
+                isFavorited: album.starred != nil
+            )
+            guard filter.ruleSet.matches(album: meta) else { return false }
         }
         return true
     }

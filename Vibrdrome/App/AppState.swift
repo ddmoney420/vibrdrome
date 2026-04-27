@@ -64,6 +64,12 @@ final class AppState {
     var artistFilter = LibraryFilter()
     var songFilter = LibraryFilter()
 
+    private func configureFilterPersistence() {
+        albumFilter.loadRuleSet(from: UserDefaultsKeys.albumFilterRuleSet)
+        artistFilter.loadRuleSet(from: UserDefaultsKeys.artistFilterRuleSet)
+        songFilter.loadRuleSet(from: UserDefaultsKeys.songFilterRuleSet)
+    }
+
     /// Cached albums state for back-navigation, keyed by view configuration.
     struct AlbumsViewSnapshot {
         var albums: [Album]
@@ -105,6 +111,7 @@ final class AppState {
         )
         loadServers()
         loadSavedCredentials()
+        configureFilterPersistence()
 
         // UI testing: auto-login with credentials from environment variables
         // so XCUITest doesn't have to type them (avoids idle-wait SIGKILL).
@@ -228,6 +235,7 @@ final class AppState {
         albumFilter = LibraryFilter()
         artistFilter = LibraryFilter()
         songFilter = LibraryFilter()
+        configureFilterPersistence()
         albumsViewSnapshots = [:]
     }
 
