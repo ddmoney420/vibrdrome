@@ -58,6 +58,9 @@ private struct TrackContextMenuContent: View {
     @Binding var showGetInfo: Bool
 
     @Environment(AppState.self) private var appState
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
 
     var body: some View {
         playbackActions

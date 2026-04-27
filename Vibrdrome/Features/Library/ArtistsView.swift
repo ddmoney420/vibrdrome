@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import SwiftData
 import os.log
 
 struct ArtistsView: View {
@@ -63,9 +62,7 @@ struct ArtistsView: View {
     private func computeFilteredIndexes() -> [(id: String, name: String, artists: [Artist])] {
         // When local filters are active, use flat filtered list (no index grouping)
         if let filtered = localFilteredArtists {
-            let downloaded = downloadedArtistNames
-            let favorited = favoritedArtistIds
-            var source = filtered.filter { artistPassesFilter($0, downloaded: downloaded, favorited: favorited) }
+            var source = filtered
             if !searchText.isEmpty {
                 source = source.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
             }
@@ -232,6 +229,9 @@ struct ArtistsView: View {
             }
         }
         .task {
+            #if os(macOS)
+            filterRaw = ArtistFilter.all.rawValue
+            #endif
             await loadArtists()
             await loadFavorites()
             #if os(macOS)

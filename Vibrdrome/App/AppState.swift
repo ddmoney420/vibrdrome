@@ -224,6 +224,13 @@ final class AppState {
         requiresReAuth = false
     }
 
+    func resetLibraryFilterState() {
+        albumFilter = LibraryFilter()
+        artistFilter = LibraryFilter()
+        songFilter = LibraryFilter()
+        albumsViewSnapshots = [:]
+    }
+
     func clearCredentials() {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.serverURL)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.username)
@@ -232,10 +239,7 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
-        albumFilter = LibraryFilter()
-        artistFilter = LibraryFilter()
-        songFilter = LibraryFilter()
-        albumsViewSnapshots = [:]
+        resetLibraryFilterState()
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(
             baseURL: URL(string: "https://localhost")!,
@@ -260,6 +264,7 @@ final class AppState {
               let password = keychain["server_\(id)"] else { return }
         activeServerId = id
         UserDefaults.standard.set(id, forKey: Self.activeServerKey)
+        resetLibraryFilterState()
         configure(url: server.url, username: server.username, password: password)
 
         // Update legacy keys

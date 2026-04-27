@@ -11,6 +11,7 @@ struct AlbumsView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.modelContext) private var modelContext
     @State private var albums: [Album] = []
     @State private var localFilteredAlbums: [Album]?
     @State private var filterTask: Task<Void, Never>?
@@ -141,23 +142,8 @@ struct AlbumsView: View {
     }
 
     var body: some View {
-        Group {
-            if showAsList {
-                albumList
-            } else {
-                albumGrid
-            }
-        }
-        #if os(iOS)
-        .contentMargins(.bottom, 80)
-        #endif
-        .navigationTitle(title)
-        #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
-        .navigationBarTitleDisplayMode(.large)
-        #else
-        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search in Albums")
-        #endif
+        contentView
+        .overlay { albumsOverlay }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
@@ -178,26 +164,26 @@ struct AlbumsView: View {
             searchIsActive = false
             DispatchQueue.main.async { searchIsActive = true }
         }
-        .overlay {
-            if isLoading && albums.isEmpty {
-                ProgressView("Loading albums...")
-            } else if let error, albums.isEmpty {
-                ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("Retry") { Task { await loadAlbums() } }
-                        .buttonStyle(.bordered)
-                }
-            } else if !isLoading && albums.isEmpty {
-                ContentUnavailableView {
-                    Label("No Albums", systemImage: "square.stack")
-                } description: {
-                    Text("No albums found")
-                }
+    }
+
+    private var contentView: some View {
+        Group {
+            if showAsList {
+                albumList
+            } else {
+                albumGrid
             }
         }
+        #if os(iOS)
+        .contentMargins(.bottom, 80)
+        #endif
+        .navigationTitle(title)
+        #if os(iOS)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search in Albums")
+        .navigationBarTitleDisplayMode(.large)
+        #else
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search in Albums")
+        #endif
         .toolbar {
             #if os(macOS)
             ToolbarItem(placement: .automatic) {
@@ -317,25 +303,16 @@ struct AlbumsView: View {
         }
         .alert("Save Collection", isPresented: $showSaveCollection) {
             TextField("Name", text: $collectionName)
-            Button("Save") {
-                let count = (try? modelContext.fetchCount(FetchDescriptor<AlbumCollection>())) ?? 0
-                let collection = AlbumCollection(
-                    name: collectionName,
-                    listType: effectiveListType,
-                    genre: effectiveGenre,
-                    fromYear: fromYear,
-                    toYear: toYear,
-                    order: count
-                )
-                modelContext.insert(collection)
-                try? modelContext.save()
-            }
+            Button("Save") { saveCollection() }
             Button("Cancel", role: .cancel) { }
         }
         .navigationDestination(for: AlbumNavItem.self) { item in
             AlbumDetailView(albumId: item.id)
         }
         .task {
+            #if os(macOS)
+            filterRaw = AlbumFilter.all.rawValue
+            #endif
             if albums.isEmpty {
                 await loadAlbums()
             }
@@ -388,6 +365,29 @@ struct AlbumsView: View {
            let albums = starred.album {
             favoritedAlbumIds = Set(albums.map(\.id))
         }
+    }
+
+    @ViewBuilder
+    private var albumsOverlay: some View {
+        if isLoading && albums.isEmpty {
+            ProgressView("Loading albums...")
+        } else if let error, albums.isEmpty {
+            ContentUnavailableView {
+                Label("Error", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await loadAlbums() } }
+                    .buttonStyle(.bordered)
+            }
+        } else if !isLoading && albums.isEmpty {
+            ContentUnavailableView {
+                Label("No Albums", systemImage: "square.stack")
+            } description: {
+                Text("No albums found")
+            }
+        }
+    }
 
     // MARK: - List view
 
@@ -589,6 +589,20 @@ struct AlbumsView: View {
                 Task { await loadPages() }
             }
         }
+    }
+
+    private func saveCollection() {
+        let count = (try? modelContext.fetchCount(FetchDescriptor<AlbumCollection>())) ?? 0
+        let collection = AlbumCollection(
+            name: collectionName,
+            listType: effectiveListType,
+            genre: effectiveGenre,
+            fromYear: fromYear,
+            toYear: toYear,
+            order: count
+        )
+        modelContext.insert(collection)
+        try? modelContext.save()
     }
 
     private func loadAlbums() async {
