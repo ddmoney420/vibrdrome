@@ -116,6 +116,7 @@ struct SongsView: View {
         .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onAppear { appState.activeFilterWindowContext = .song }
         #endif
     }
 

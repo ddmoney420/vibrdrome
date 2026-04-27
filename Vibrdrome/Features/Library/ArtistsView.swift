@@ -249,6 +249,7 @@ struct ArtistsView: View {
         .onChange(of: appState.libraryCache.generation) { _, _ in
             if appState.artistFilter.isActive { debouncedApplyLocalFilters() }
         }
+        .onAppear { appState.activeFilterWindowContext = .artist }
         #endif
     }
 

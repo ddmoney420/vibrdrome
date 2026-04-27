@@ -59,6 +59,10 @@ final class AppState {
     }
     var activeSidePanel: SidePanel?
 
+    /// Context currently shown in the popped-out filter window. Stays up-to-date
+    /// as the user navigates between Albums / Songs / Artists in the main window.
+    var activeFilterWindowContext: FilterContext?
+
     /// Filter state for the macOS filter sidebars.
     var albumFilter = LibraryFilter()
     var artistFilter = LibraryFilter()

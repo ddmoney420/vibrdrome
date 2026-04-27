@@ -255,8 +255,8 @@ struct VibrdromeApp: App {
         }
         .defaultSize(width: 560, height: 700)
 
-        WindowGroup("Filters", id: "library-filter", for: FilterContext.self) { $context in
-            if let context {
+        WindowGroup("Filters", id: "library-filter", for: FilterContext.self) { _ in
+            if let context = appState.activeFilterWindowContext {
                 LibraryFilterSidebarView(context: context, isWindow: true)
                     .environment(appState)
                     .modelContainer(persistenceController.container)

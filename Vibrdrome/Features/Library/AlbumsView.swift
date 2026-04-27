@@ -360,6 +360,7 @@ struct AlbumsView: View {
         .onChange(of: appState.libraryCache.generation) { _, _ in
             if appState.albumFilter.isActive { debouncedApplyLocalFilters() }
         }
+        .onAppear { appState.activeFilterWindowContext = .album }
         #endif
     }
 

@@ -38,6 +38,7 @@ struct LibraryFilterSidebarView: View {
                 title: context.windowTitle,
                 onClose: { appState.activeSidePanel = nil },
                 onPopOut: {
+                    appState.activeFilterWindowContext = context
                     openWindow(id: "library-filter", value: context)
                     appState.activeSidePanel = nil
                 }
