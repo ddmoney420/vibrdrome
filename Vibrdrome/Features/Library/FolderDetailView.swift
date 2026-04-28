@@ -40,10 +40,6 @@ struct FolderDetailView: View {
                 contentList
             }
         }
-        .navigationDestination(for: String.self) { childId in
-            FolderDetailView(directoryId: childId)
-                .environment(appState)
-        }
         .navigationTitle(directory?.name ?? "Folder")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -65,7 +61,10 @@ struct FolderDetailView: View {
             if !subfolders.isEmpty {
                 Section("Folders") {
                     ForEach(subfolders) { child in
-                        NavigationLink(value: child.id) {
+                        NavigationLink {
+                            FolderDetailView(directoryId: child.id)
+                                .environment(appState)
+                        } label: {
                             Label(child.title ?? "Unknown", systemImage: "folder.fill")
                         }
                     }
