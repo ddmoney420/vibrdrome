@@ -68,6 +68,28 @@ struct ConditionalGlassModifier: ViewModifier {
 }
 #endif
 
+// MARK: - Grid Density
+
+enum GridDensity: String, CaseIterable {
+    case compact, comfortable, spacious
+
+    var minimumWidth: CGFloat {
+        switch self {
+        case .compact:     return 130
+        case .comfortable: return 170
+        case .spacious:    return 220
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .compact:     return "Compact"
+        case .comfortable: return "Comfortable"
+        case .spacious:    return "Spacious"
+        }
+    }
+}
+
 // MARK: - Theme
 
 enum Theme {
@@ -116,19 +138,5 @@ enum Theme {
         #else
         140
         #endif
-    }
-
-    /// Returns the column count for grid views given the user's base preference
-    /// and the current vertical size class. Doubles the base count when the
-    /// vertical size class is `.compact` (iPhone in landscape) so a portrait-
-    /// tuned value still uses the extra horizontal space after rotation.
-    /// Clamped to the picker's 2-10 range. On iPad and macOS the size class
-    /// is regular in both orientations so the base value is used as-is.
-    static func effectiveGridColumns(
-        base: Int,
-        verticalSizeClass: UserInterfaceSizeClass?
-    ) -> Int {
-        let multiplier = verticalSizeClass == .compact ? 2 : 1
-        return max(2, min(10, base * multiplier))
     }
 }

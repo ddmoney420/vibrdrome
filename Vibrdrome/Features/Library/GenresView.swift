@@ -24,6 +24,8 @@ struct GenresView: View {
     @State private var searchIsActive = false
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     @State private var cachedFilteredGenres: [Genre] = []
 
     enum GenreSortOption: String, CaseIterable {
@@ -172,7 +174,7 @@ struct GenresView: View {
     private var genreGrid: some View {
         ScrollView {
             LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 16)
+                GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
             ], spacing: 20) {
                 ForEach(cachedFilteredGenres) { genre in
                     NavigationLink {

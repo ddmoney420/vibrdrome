@@ -16,11 +16,11 @@ struct FavoritesView: View {
     @State private var showBatchAddToPlaylist = false
     @State private var selectedCategory: FavoriteCategory = .songs
     @AppStorage("favoritesViewAsList") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "favorites")
     #endif
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var cachedFilteredArtists: [Artist] = []
     @State private var cachedFilteredAlbums: [Album] = []
     @State private var cachedFilteredSongs: [Song] = []
@@ -264,9 +264,9 @@ struct FavoritesView: View {
             .listStyle(.plain)
         } else {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                          spacing: 20) {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+                ], spacing: 20) {
                     ForEach(albums) { album in
                         NavigationLink {
                             AlbumDetailView(albumId: album.id)
@@ -317,9 +317,9 @@ struct FavoritesView: View {
             .listStyle(.plain)
         } else {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                          spacing: 20) {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+                ], spacing: 20) {
                     ForEach(artists) { artist in
                         NavigationLink {
                             ArtistDetailView(artistId: artist.id)

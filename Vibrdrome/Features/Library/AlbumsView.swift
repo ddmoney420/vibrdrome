@@ -24,6 +24,8 @@ struct AlbumsView: View {
     @State private var clientSideSort: AlbumSortOption?
     @State private var getInfoTarget: GetInfoTarget?
     @AppStorage("albumsViewStyle") private var showAsList = false
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     @State private var showSaveCollection = false
     @State private var collectionName = ""
     @State private var availableGenres: [String] = []
@@ -426,7 +428,7 @@ struct AlbumsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 170, maximum: 220), spacing: 16)
+                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
                 ], spacing: 20) {
                     ForEach(0..<totalItemCount, id: \.self) { index in
                         Group {

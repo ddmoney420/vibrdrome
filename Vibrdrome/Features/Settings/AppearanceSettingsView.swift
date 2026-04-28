@@ -14,6 +14,7 @@ struct AppearanceSettingsView: View {
 
     // Lists
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
 
     // Mini Player
     @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt: Bool = false
@@ -128,6 +129,16 @@ struct AppearanceSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("albumArtInListsToggle")
+
+            Picker(selection: $gridDensityRaw) {
+                ForEach(GridDensity.allCases, id: \.rawValue) { density in
+                    Text(density.label).tag(density.rawValue)
+                }
+            } label: {
+                Label("Grid Density", systemImage: "square.grid.2x2")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("gridDensityPicker")
         } header: {
             settingSectionHeader("Lists", icon: "list.bullet", color: .green)
         }
