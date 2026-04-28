@@ -46,6 +46,14 @@ final class AudioEngine {
     static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
     static let predownloadedCategory = "pre-downloaded"
     static let predownloadedCacheTimeMins = 30.0
+    
+    /// Cache for smart shuffle next index
+    var cachedSmartShuffleNextIndex: Int?
+    var cachedSmartShuffleSongId: String?
+    
+    /// Cache for next up to 5 smart shuffle songs
+    var cachedSmartShuffleSongs: [Song] = []
+    var cachedSmartShuffleSongsId: String?
 
     // MARK: - Playback Mode
 
@@ -158,6 +166,10 @@ final class AudioEngine {
     var lastScrobbleTime: Date?
     var generation: Int = 0
 
+    // Near-end download check — tracks the song ID for which we've already
+    // inserted a fallback, so we don't insert multiple times per track.
+    var nearEndCheckSongId: String?
+    
     func incrementGeneration() { generation += 1 }
     var generationValue: Int { generation }
     var isScrobbleSubmitted: Bool { scrobbleSubmitted }
@@ -307,7 +319,10 @@ final class AudioEngine {
     func toggleShuffle() {
         shuffleEnabled.toggle()
         shufflePlayCount = 0
+        cachedSmartShuffleSongs.removeAll()   // flush stale cache so next songs reflect new shuffle state
+        cachedSmartShuffleSongId = nil
         if activeMode == .gapless { prepareLookahead() }
+        startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
     }
 
     func cycleRepeatMode() {

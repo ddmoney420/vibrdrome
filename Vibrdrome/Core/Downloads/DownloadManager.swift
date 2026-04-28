@@ -447,10 +447,10 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         let startTime = taskStartTimes[taskId]
         lock.unlock()
 
-        var mbs = 0.0
+        var kbs = 0.0
         guard let start = startTime else {
             Task { @MainActor in
-                DownloadProgress.shared.update(songId: songId, progress: progress, speed: mbs)
+                DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
             }
             return
         }
@@ -458,11 +458,11 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         let elapsed = Date().timeIntervalSince(start)
         if elapsed > 0 && totalBytesWritten > 500000 {
             let bytesPerSecond = Double(totalBytesWritten) / elapsed
-            mbs = bytesPerSecond / (1024 * 1024)
+            kbs = bytesPerSecond / 1024
         }
         
         Task { @MainActor in
-            DownloadProgress.shared.update(songId: songId, progress: progress, speed: mbs)
+            DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
         }
 
     }

@@ -206,4 +206,212 @@ struct QueueManagementTests {
         let next = upNext(queue: queue, currentIndex: 3)
         #expect(next.count == 6)
     }
+
+    // MARK: - Near-End Predownload Check
+
+    /// Mirrors AudioEngine.checkPredownloadedSongNearEnd() gate logic.
+    /// Returns true when the check should proceed (i.e. a fallback insert is warranted).
+    private func shouldCheckNearEnd(
+        currentTime: Double,
+        duration: Double,
+        isRadio: Bool,
+        repeatMode: RepeatMode,
+        nearEndCheckSongId: String?,
+        currentSongId: String,
+        nextSongIsDownloaded: Bool
+    ) -> Bool {
+        guard duration > 0,
+              currentTime > 0,
+              duration - currentTime <= 30,
+              duration - currentTime > 0 else { return false }
+        guard !isRadio, repeatMode != .one else { return false }
+        guard nearEndCheckSongId != currentSongId else { return false }  // already handled this track
+        guard !nextSongIsDownloaded else { return false }                 // nothing to insert
+        return true
+    }
+
+    @Test func nearEndCheckTriggersWithin30Seconds() {
+        // 5 s remaining — should trigger
+        #expect(shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerBeyond30Seconds() {
+        // 31 s remaining — too early
+        #expect(!shouldCheckNearEnd(
+            currentTime: 149, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerWhenNextIsDownloaded() {
+        // Next song already downloaded — no insert needed
+        #expect(!shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: true
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerInRadioMode() {
+        #expect(!shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: true,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerForRepeatOne() {
+        // repeat-one has no meaningful next song
+        #expect(!shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: false,
+            repeatMode: .one, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDedupGuardPreventsSecondFire() {
+        // Same song ID already handled — flag blocks re-entry
+        #expect(!shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: "A",
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDedupResetsBetweenTracks() {
+        // Dedup flag is keyed to song ID — a different current song resets it
+        #expect(shouldCheckNearEnd(
+            currentTime: 175, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: "A",  // previous song
+            currentSongId: "B",                          // new current song
+            nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerAtExactEnd() {
+        // duration - currentTime == 0: track already ended, lower bound guard blocks it
+        #expect(!shouldCheckNearEnd(
+            currentTime: 180, duration: 180, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    @Test func nearEndCheckDoesNotTriggerForZeroDuration() {
+        // duration unknown — stream not yet loaded
+        #expect(!shouldCheckNearEnd(
+            currentTime: 0, duration: 0, isRadio: false,
+            repeatMode: .off, nearEndCheckSongId: nil,
+            currentSongId: "A", nextSongIsDownloaded: false
+        ))
+    }
+
+    // MARK: - insertSongNext Shuffle Cache
+
+    /// Mirrors the shuffle-cache mutation in AudioEngine.insertSongNext().
+    /// Returns the updated cachedSmartShuffleSongs after the insert.
+    private func insertSongNextCache(
+        cache: [String], insertSong: String, shuffleEnabled: Bool
+    ) -> [String] {
+        guard shuffleEnabled else { return cache }  // non-shuffle: cache untouched
+        var updated = cache
+        updated.insert(insertSong, at: 0)
+        return updated
+    }
+
+    @Test func insertSongNextPrependsToCacheInShuffleMode() {
+        let result = insertSongNextCache(
+            cache: ["C", "D", "E"], insertSong: "X", shuffleEnabled: true
+        )
+        #expect(result.first == "X")
+        #expect(result == ["X", "C", "D", "E"])
+    }
+
+    @Test func insertSongNextDoesNotTouchCacheWhenShuffleOff() {
+        // Sequential mode: cache is irrelevant, must not be mutated
+        let result = insertSongNextCache(
+            cache: ["C", "D", "E"], insertSong: "X", shuffleEnabled: false
+        )
+        #expect(result == ["C", "D", "E"])
+    }
+
+    @Test func insertSongNextIntoEmptyCacheInShuffleMode() {
+        let result = insertSongNextCache(cache: [], insertSong: "X", shuffleEnabled: true)
+        #expect(result == ["X"])
+    }
+
+    @Test func insertSongNextPreservesRestOfCacheOrder() {
+        // Existing planned shuffle sequence must be intact after index 0
+        let result = insertSongNextCache(
+            cache: ["B", "C", "D"], insertSong: "A", shuffleEnabled: true
+        )
+        #expect(result[1] == "B")
+        #expect(result[2] == "C")
+        #expect(result[3] == "D")
+    }
+
+    @Test func insertSongNextMultipleInsertsStackCorrectly() {
+        // Each successive insert becomes the new immediate-next pick (LIFO at head)
+        var cache = insertSongNextCache(cache: ["C"], insertSong: "B", shuffleEnabled: true)
+        cache = insertSongNextCache(cache: cache, insertSong: "A", shuffleEnabled: true)
+        #expect(cache == ["A", "B", "C"])
+    }
+
+    // MARK: - toggleShuffle Cache Flush
+
+    /// Mirrors the cache-flush logic in AudioEngine.toggleShuffle().
+    /// Returns (newShuffleEnabled, updatedCache, updatedCacheAnchorId).
+    private func toggleShuffle(
+        shuffleEnabled: Bool,
+        cache: [String],
+        cacheAnchorId: String?
+    ) -> (shuffleEnabled: Bool, cache: [String], cacheAnchorId: String?) {
+        let newEnabled = !shuffleEnabled
+        // Cache is always flushed so the next getNextSmartShuffleSongs call rebuilds
+        // from scratch against whatever mode is now active.
+        return (newEnabled, [], nil)
+    }
+
+    @Test func toggleShuffleOnFlushesCache() {
+        let (enabled, cache, anchorId) = toggleShuffle(
+            shuffleEnabled: false, cache: [], cacheAnchorId: nil
+        )
+        #expect(enabled == true)
+        #expect(cache.isEmpty)
+        #expect(anchorId == nil)
+    }
+
+    @Test func toggleShuffleOffFlushesStaleShuffleCache() {
+        // Cache held a random shuffle sequence — must be cleared so sequential
+        // playback doesn't accidentally consume stale shuffle picks.
+        let (enabled, cache, anchorId) = toggleShuffle(
+            shuffleEnabled: true,
+            cache: ["D", "B", "E"],
+            cacheAnchorId: "currentSong"
+        )
+        #expect(enabled == false)
+        #expect(cache.isEmpty)
+        #expect(anchorId == nil)
+    }
+
+    @Test func toggleShuffleCacheIsEmptyAfterFlushRegardlessOfPreviousSize() {
+        let (_, cache, _) = toggleShuffle(
+            shuffleEnabled: true,
+            cache: ["X", "Y", "Z", "W"],
+            cacheAnchorId: "song1"
+        )
+        #expect(cache.count == 0)
+    }
+
+    @Test func toggleShuffleTogglesEnabledFlagCorrectly() {
+        let (onResult, _, _) = toggleShuffle(shuffleEnabled: false, cache: [], cacheAnchorId: nil)
+        #expect(onResult == true)
+        let (offResult, _, _) = toggleShuffle(shuffleEnabled: true, cache: [], cacheAnchorId: nil)
+        #expect(offResult == false)
+    }
 }

@@ -29,6 +29,7 @@ extension AudioEngine {
                 self.currentTime = time.seconds
                 NowPlayingManager.shared.updateElapsedTime(time.seconds)
                 self.autoScrobbleIfNeeded()
+                self.checkPredownloadedSongNearEnd()
             }
         }
         setTimeObserver(observer: observer)

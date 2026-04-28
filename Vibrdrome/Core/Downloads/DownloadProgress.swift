@@ -10,7 +10,7 @@ final class DownloadProgress {
     static let shared = DownloadProgress()
 
     var progressBySongId: [String: Double] = [:]
-    var speedBySongId: [String: Double] = [:]
+    var speedBySongId: [String: Double] = [:]  // kBs
 
     func update(songId: String, progress: Double) {
         progressBySongId[songId] = progress
@@ -36,6 +36,7 @@ final class DownloadProgress {
         progressBySongId[songId] ?? 0
     }
 
+    /// kBs
     func speed(for songId: String) -> Double {
         speedBySongId[songId] ?? 0
     }

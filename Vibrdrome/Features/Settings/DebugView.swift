@@ -59,7 +59,14 @@ struct DebugView: View {
             row("Shuffle", value: engine.shuffleEnabled ? "On" : "Off")
             row("Repeat", value: repeatLabel(engine.repeatMode))
             row("Pre-download Status", value: predownloadStatusLabel(engine.predownloadStatus))
-            row("Pre-download Speed", value: String(format: "%.1f Mbs", engine.predownloadSpeed))
+            if (engine.predownloadSpeed < 0.0001) {
+                row("Pre-download Speed", value: "-")
+            } else if (engine.predownloadSpeed < 1024.0) {
+                row("Pre-download Speed", value: String(format: "%.1f KBs", engine.predownloadSpeed))
+            } else {
+                row("Pre-download Speed", value: String(format: "%.1f Mbs", engine.predownloadSpeed/1024))
+            }
+            
             row("Pre-download Pending", value: "\(engine.predownloadsPending)")
             row("Duration", value: formatDuration(engine.duration))
             row("Position", value: formatDuration(engine.currentTime))

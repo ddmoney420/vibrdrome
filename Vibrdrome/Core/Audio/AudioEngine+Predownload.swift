@@ -186,7 +186,7 @@ actor PredownloadManager {
         // Monitor progress until completion
         await monitorDownloadProgress(songId: song.id)
         
-        predownloadLog.debug("Completed download for \(song.title)")
+        predownloadLog.debug("Completed download for song: \(song.title)")
         
         // Add recently downloaded song to AudioEngine's tracking to avoid immediate re-selection
         Task { @MainActor in
@@ -391,6 +391,55 @@ extension AudioEngine {
         return nil
     }
     
+    /// This method will monitor the currentTime and also check if the songe is 30 seconds from the end
+    /// If it is it will validate that the next song is downloaded
+    /// If not insert a downloaded song
+    @MainActor
+    func checkPredownloadedSongNearEnd() {
+        // Only act when there is a real, finite duration and we're close to the end
+        guard duration > 0,
+              currentTime > 0,
+              duration - currentTime <= 30,
+              duration - currentTime > 25 else { return }  // 25 due to cross fade
+
+        // Skip in contexts where there is no meaningful "next song"
+        guard currentRadioStation == nil,
+              repeatMode != .one else { return }
+
+        let preloadCount = UserDefaults.standard.integer(forKey: UserDefaultsKeys.preloadSongs)
+        guard preloadCount > 0 else {
+            return
+        }
+        
+        // Guard against running more than once per track
+        guard nearEndCheckSongId != currentSong?.id else { return }
+
+        // Find out what the next song will be
+        guard let nextIdx = nextSongIndex(), nextIdx < queue.count else { return }
+        let nextSong = queue[nextIdx]
+
+        // Nothing to do if the next song is already downloaded
+        guard !AudioEngine.isSongDownloaded(nextSong) else { return }
+
+        // Mark as handled before the async work so we don't re-enter
+        nearEndCheckSongId = currentSong?.id
+
+        // Insert a random downloaded song right after the current track
+        guard let fallback = getRandomDownloadedSong() else {
+            predownloadLog.info("checkPredownloadedSongNearEnd: no downloaded songs available to insert")
+            return
+        }
+
+        let insertAt = currentIndex + 1
+        insertSongNext(for: fallback, at: insertAt)
+        predownloadLog.info("checkPredownloadedSongNearEnd: inserted \"\(fallback.title)\" before \"\(nextSong.title)\" (next song not downloaded)")
+
+        // Rebuild the lookahead so gapless mode picks up the newly inserted item
+        if activeMode == .gapless {
+            prepareLookahead()
+        }
+    }
+    
     /// Start predownload for current song if needed
     /// - Parameters: startIndex - index of first song to play, queue - current song queue
     @MainActor
@@ -400,46 +449,40 @@ extension AudioEngine {
             return
         }
 
-        let startSong = queue[startIndex]
-        var nextSong = startSong
-        let nextIndex = startIndex + 1
-        if (nextIndex < queue.count) {
-            nextSong = queue[nextIndex]
-        } else {
-            predownloadLog.debug("startPredownloadIfNeeded: Last Song no predownloading \(startSong.title)")
+        guard let nextIndex = nextSongIndex() else {
+            predownloadLog.debug("startPredownloadIfNeeded: No next song to predownload")
             return
         }
+        let nextSong = queue[nextIndex]
         
         // Get downloaded random song
         if (predownloadStatus == .stalled) {
-            DownloadManager.shared.resumeIncompleteDownloads() //Kick downloads on song changes
             if (!AudioEngine.isSongDownloaded(nextSong)) {
                 if let randomSong = getRandomDownloadedSong() {
                     insertSongNext(for: randomSong, at: nextIndex)
+                    predownloadLog.info("Inserted random song: \(randomSong.title)")
                     prepareLookahead()
                 }
             } else {
                 predownloadLog.info("Download stalled but \(nextSong.title) is already downloaded")
             }
         } else {
-            performPredownload(song: nextSong, nextIndex: nextIndex, queue: queue, needsPrepareLookahead: true)
+            performPredownload(song: nextSong, queue: queue, needsPrepareLookahead: true)
         }
     }
        
-    /// Perform actual predownload of songs starting from specified index
-    /// - Parameters: song - starting song to predownload, nextIndex - index of song in queue, queue - current song queue, needsPrepareLookahead - whether prepareLookahead should be called
+    /// Perform actual predownload of songs using smart shuffle
+    /// - Parameters: song - starting song to predownload, queue - current song queue, needsPrepareLookahead - whether prepareLookahead should be called
     @MainActor
-    private func performPredownload(song: Song, nextIndex: Int, queue: [Song], needsPrepareLookahead: Bool) {
+    private func performPredownload(song: Song, queue: [Song], needsPrepareLookahead: Bool) {
         // Get number of songs to preload from settings
         let preloadCount = UserDefaults.standard.integer(forKey: UserDefaultsKeys.preloadSongs)
         guard preloadCount > 0 else {
-            predownloadLog.debug("performPredownload: Preload songs is set to 0, exiting")
             return
         }
         
-        // Calculate songs to download (from nextIndex up to preloadCount)
-        let endIndex = min(nextIndex + preloadCount, queue.count)
-        let songsToDownload = Array(queue[nextIndex..<endIndex])
+        // Get next songs to predownload
+        let songsToDownload = nextSongs(count: preloadCount)
         
         guard !songsToDownload.isEmpty else {
             predownloadLog.debug("performPredownload: No songs to download")

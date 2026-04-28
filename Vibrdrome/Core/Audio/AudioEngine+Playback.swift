@@ -136,6 +136,15 @@ extension AudioEngine {
         // Insert song at specified index
         queue.insert(song, at: atSong)
         
+        // If shuffle is active, prepend to the smart shuffle cache so this song
+        // is returned first by getNextSmartShuffleSongs / smartShuffleNextIndex.
+        // The cache is an ordered upcoming sequence; inserting at position 0 makes
+        // the fallback the immediate next pick without disturbing the rest of the
+        // planned shuffle order.
+        if shuffleEnabled {
+            cachedSmartShuffleSongs.insert(song, at: 0)
+            playbackLog.debug("Inserted \(song.title) to next song in smart shuffle song")
+        }
     }
 
     func playRadio(station: InternetRadioStation) {
