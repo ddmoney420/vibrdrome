@@ -1,10 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct FavoritesView: View {
     @Environment(AppState.self) private var appState
-    @State private var starred: Starred2?
-    @State private var isLoading = true
-    @State private var error: String?
+    @Query(filter: #Predicate<CachedArtist> { $0.isStarred }, sort: \CachedArtist.name)
+    private var starredArtists: [CachedArtist]
+    @Query(filter: #Predicate<CachedAlbum> { $0.isStarred }, sort: \CachedAlbum.name)
+    private var starredAlbums: [CachedAlbum]
+    @Query(filter: #Predicate<CachedSong> { $0.isStarred }, sort: \CachedSong.title)
+    private var starredSongs: [CachedSong]
     @State private var searchText = ""
     @State private var searchIsActive = false
     @State private var selectedSongs = Set<String>()
@@ -12,11 +16,14 @@ struct FavoritesView: View {
     @State private var showBatchAddToPlaylist = false
     @State private var selectedCategory: FavoriteCategory = .songs
     @AppStorage("favoritesViewAsList") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "favorites")
     #endif
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var cachedFilteredArtists: [Artist] = []
+    @State private var cachedFilteredAlbums: [Album] = []
+    @State private var cachedFilteredSongs: [Song] = []
 
     enum FavoriteCategory: String, CaseIterable, Identifiable {
         case songs, albums, artists
@@ -37,20 +44,20 @@ struct FavoritesView: View {
         }
     }
 
-    private var filteredArtists: [Artist] {
-        guard let artists = starred?.artist else { return [] }
+    private func computeFilteredArtists() -> [Artist] {
+        let artists = starredArtists.map { $0.toArtist() }
         if searchText.isEmpty { return artists }
         return artists.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var filteredAlbums: [Album] {
-        guard let albums = starred?.album else { return [] }
+    private func computeFilteredAlbums() -> [Album] {
+        let albums = starredAlbums.map { $0.toAlbum() }
         if searchText.isEmpty { return albums }
         return albums.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var filteredSongs: [Song] {
-        guard let songs = starred?.song else { return [] }
+    private func computeFilteredSongs() -> [Song] {
+        let songs = starredSongs.map { $0.toSong() }
         if searchText.isEmpty { return songs }
         return songs.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
@@ -85,18 +92,13 @@ struct FavoritesView: View {
             DispatchQueue.main.async { searchIsActive = true }
         }
         .overlay {
-            if isLoading && starred == nil {
-                ProgressView("Loading favorites...")
-            } else if let error, starred == nil {
+            if appState.librarySyncManager.lastSyncDate == nil && isEmpty {
                 ContentUnavailableView {
-                    Label("Error", systemImage: "exclamationmark.triangle")
+                    Label("Loading Favorites", systemImage: "heart")
                 } description: {
-                    Text(error)
-                } actions: {
-                    Button("Retry") { Task { await loadStarred() } }
-                        .buttonStyle(.bordered)
+                    Text("Syncing your library...")
                 }
-            } else if !isLoading && isEmpty {
+            } else if isEmpty {
                 ContentUnavailableView {
                     Label("No Favorites", systemImage: "heart")
                 } description: {
@@ -131,7 +133,7 @@ struct FavoritesView: View {
             }
             #if os(macOS)
             ToolbarItem {
-                Button { Task { await loadStarred() } } label: {
+                Button { Task { await LibrarySyncManager.shared.syncIfStale() } } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
@@ -141,8 +143,12 @@ struct FavoritesView: View {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
         }
-        .task { await loadStarred() }
-        .refreshable { await loadStarred() }
+        .refreshable { await LibrarySyncManager.shared.syncIfStale() }
+        .onChange(of: searchText) { recomputeFilteredLists() }
+        .onChange(of: starredArtists) { recomputeFilteredLists() }
+        .onChange(of: starredAlbums) { recomputeFilteredLists() }
+        .onChange(of: starredSongs) { recomputeFilteredLists() }
+        .onAppear { recomputeFilteredLists() }
     }
 
     // MARK: - Category picker
@@ -163,7 +169,7 @@ struct FavoritesView: View {
 
     @ViewBuilder
     private var songsContent: some View {
-        let songs = filteredSongs
+        let songs = cachedFilteredSongs
         if songs.isEmpty {
             emptyCategory("No Favorited Songs")
         } else {
@@ -229,12 +235,8 @@ struct FavoritesView: View {
                 }
 
                 if isSelecting && !selectedSongs.isEmpty {
-                    BatchActionBar(
-                        selectedSongIds: selectedSongs,
-                        songs: songs,
-                        onAddToPlaylist: { showBatchAddToPlaylist = true }
-                    )
-                    .listRowSeparator(.hidden)
+                    favoritesBatchActionBar(songs: songs)
+                        .listRowSeparator(.hidden)
                 }
             }
             .listStyle(.plain)
@@ -246,7 +248,7 @@ struct FavoritesView: View {
 
     @ViewBuilder
     private var albumsContent: some View {
-        let albums = filteredAlbums
+        let albums = cachedFilteredAlbums
         if albums.isEmpty {
             emptyCategory("No Favorited Albums")
         } else if showAsList {
@@ -262,9 +264,9 @@ struct FavoritesView: View {
             .listStyle(.plain)
         } else {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                          spacing: 20) {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+                ], spacing: 20) {
                     ForEach(albums) { album in
                         NavigationLink {
                             AlbumDetailView(albumId: album.id)
@@ -299,7 +301,7 @@ struct FavoritesView: View {
 
     @ViewBuilder
     private var artistsContent: some View {
-        let artists = filteredArtists
+        let artists = cachedFilteredArtists
         if artists.isEmpty {
             emptyCategory("No Favorited Artists")
         } else if showAsList {
@@ -315,9 +317,9 @@ struct FavoritesView: View {
             .listStyle(.plain)
         } else {
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                         count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                          spacing: 20) {
+                LazyVGrid(columns: [
+                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+                ], spacing: 20) {
                     ForEach(artists) { artist in
                         NavigationLink {
                             ArtistDetailView(artistId: artist.id)
@@ -351,6 +353,20 @@ struct FavoritesView: View {
         }
     }
 
+    private func recomputeFilteredLists() {
+        cachedFilteredArtists = computeFilteredArtists()
+        cachedFilteredAlbums = computeFilteredAlbums()
+        cachedFilteredSongs = computeFilteredSongs()
+    }
+
+    private func favoritesBatchActionBar(songs: [Song]) -> some View {
+        BatchActionBar(
+            selectedSongIds: selectedSongs,
+            songs: songs,
+            onAddToPlaylist: { showBatchAddToPlaylist = true }
+        )
+    }
+
     private func toggleSelection(_ songId: String) {
         if selectedSongs.contains(songId) {
             selectedSongs.remove(songId)
@@ -360,20 +376,6 @@ struct FavoritesView: View {
     }
 
     private var isEmpty: Bool {
-        guard let starred else { return true }
-        return (starred.artist?.isEmpty ?? true) &&
-               (starred.album?.isEmpty ?? true) &&
-               (starred.song?.isEmpty ?? true)
-    }
-
-    private func loadStarred() async {
-        isLoading = true
-        error = nil
-        defer { isLoading = false }
-        do {
-            starred = try await appState.subsonicClient.getStarred()
-        } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
-        }
+        starredArtists.isEmpty && starredAlbums.isEmpty && starredSongs.isEmpty
     }
 }

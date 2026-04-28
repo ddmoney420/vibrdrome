@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 // MARK: - Filter UI & Logic
@@ -185,6 +186,15 @@ extension SearchView {
     }
 
     func loadGenres() async {
+        // Try local SwiftData first — fetch album genres (much smaller than all songs)
+        let albums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        let localGenres = Set(albums.compactMap(\.genre).filter { !$0.isEmpty })
+        if !localGenres.isEmpty {
+            availableGenres = localGenres.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            return
+        }
+
+        // Fall back to API
         do {
             let genres = try await appState.subsonicClient.getGenres()
             availableGenres = genres
