@@ -44,7 +44,7 @@ struct QueueView: View {
                 let history = engine.recentlyPlayed
                 if !history.isEmpty {
                     Section("Recently Played") {
-                        ForEach(Array(history.enumerated()), id: \.element.id) { _, song in
+                        ForEach(Array(history.enumerated()), id: \.offset) { _, song in
                             HStack(spacing: 12) {
                                 AlbumArtView(coverArtId: song.coverArt, size: 36)
 
@@ -84,71 +84,25 @@ struct QueueView: View {
                 }
 
                 // Up next
-                let upNext = engine.upNext
+                let upNext = engine.shuffleEnabled ? engine.nextSongs(count: 5) : engine.upNext
+                let allUpNext = engine.upNext
                 if !upNext.isEmpty {
-                    let totalSeconds = upNext.compactMap(\.duration).reduce(0, +)
-                    Section("Up Next — \(upNext.count) songs · \(formatDuration(totalSeconds))") {
-                        ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
-                            HStack(spacing: 12) {
-                                AlbumArtView(coverArtId: song.coverArt, size: 40)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.title)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                    Text(song.artist ?? "")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-
-                                Spacer()
-
-                                if let duration = song.duration {
-                                    Text(formatDuration(duration))
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                        .monospacedDigit()
-                                }
+                    let totalSeconds = allUpNext.compactMap(\.duration).reduce(0, +)
+                    let header = engine.shuffleEnabled
+                    ? "Up Next — \(upNext.count)/\(allUpNext.count) songs · \(formatDuration(totalSeconds))"
+                        : "Up Next — \(upNext.count) songs · \(formatDuration(totalSeconds))"
+                    Section(header) {
+                        if engine.shuffleEnabled {
+                            ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
+                                upNextRow(song: song, index: index)
                             }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                #if os(iOS)
-                                Haptics.light()
-                                #endif
-                                let absoluteIndex = engine.currentIndex + 1 + index
-                                engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                        } else {
+                            ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
+                                upNextRow(song: song, index: index)
                             }
-                            .contextMenu {
-                                Button {
-                                    let absoluteIndex = engine.currentIndex + 1 + index
-                                    engine.play(song: song, from: engine.queue, at: absoluteIndex)
-                                } label: {
-                                    Label("Play Now", systemImage: "play.fill")
-                                }
-                                Button {
-                                    engine.addToQueueNext(song)
-                                } label: {
-                                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                                }
-                                Divider()
-                                Button(role: .destructive) {
-                                    engine.removeFromQueue(at: index)
-                                } label: {
-                                    Label("Remove from Queue", systemImage: "minus.circle")
-                                }
+                            .onMove { source, destination in
+                                engine.moveInQueue(from: source, to: destination)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    engine.removeFromQueue(at: index)
-                                } label: {
-                                    Label("Remove", systemImage: "trash")
-                                }
-                                .tint(.red)
-                            }
-                        }
-                        .onMove { source, destination in
-                            engine.moveInQueue(from: source, to: destination)
                         }
                     }
                 }
@@ -208,6 +162,83 @@ struct QueueView: View {
             }
             .alert(saveMessage, isPresented: $showingSaveAlert) {
                 Button("OK") { }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func upNextRow(song: Song, index: Int) -> some View {
+        HStack(spacing: 12) {
+            AlbumArtView(coverArtId: song.coverArt, size: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title)
+                    .font(.body)
+                    .lineLimit(1)
+                Text(song.artist ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let duration = song.duration {
+                Text(formatDuration(duration))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            #if os(iOS)
+            Haptics.light()
+            #endif
+            if engine.shuffleEnabled {
+                if let absoluteIndex = engine.queue.firstIndex(where: { $0.id == song.id }) {
+                    engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                }
+            } else {
+                let absoluteIndex = engine.currentIndex + 1 + index
+                engine.play(song: song, from: engine.queue, at: absoluteIndex)
+            }
+        }
+        .contextMenu {
+            Button {
+                if engine.shuffleEnabled {
+                    if let absoluteIndex = engine.queue.firstIndex(where: { $0.id == song.id }) {
+                        engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                    }
+                } else {
+                    let absoluteIndex = engine.currentIndex + 1 + index
+                    engine.play(song: song, from: engine.queue, at: absoluteIndex)
+                }
+            } label: {
+                Label("Play Now", systemImage: "play.fill")
+            }
+            Button {
+                engine.addToQueueNext(song)
+            } label: {
+                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            if !engine.shuffleEnabled {
+                Divider()
+                Button(role: .destructive) {
+                    engine.removeFromQueue(at: index)
+                } label: {
+                    Label("Remove from Queue", systemImage: "minus.circle")
+                }
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if !engine.shuffleEnabled {
+                Button(role: .destructive) {
+                    engine.removeFromQueue(at: index)
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+                .tint(.red)
             }
         }
     }

@@ -50,6 +50,12 @@ extension AudioEngine {
         updateQueue(for: song, newQueue: newQueue, index: index)
 
         let isNewTrack = currentSong?.id != song.id
+        if shuffleEnabled, let outgoing = currentSong, isNewTrack {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
         currentSong = song
         currentRadioStation = nil
         // Only clear playingFromContext when a NEW queue is loaded,
@@ -117,6 +123,7 @@ extension AudioEngine {
             queue = newQueue
             currentIndex = newQueue.isEmpty ? 0 : min(index, newQueue.count - 1)
             shufflePlayCount = 0
+            shufflePlayHistory.removeAll()
         } else if queue.isEmpty {
             queue = [song]
             currentIndex = 0
@@ -520,6 +527,12 @@ extension AudioEngine {
 
         currentIndex = nextIndex
         let nextSong = queue[currentIndex]
+        if shuffleEnabled, let outgoing = currentSong {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
         currentSong = nextSong
         scrobbleSubmitted = false
         trackStartTime = Date()

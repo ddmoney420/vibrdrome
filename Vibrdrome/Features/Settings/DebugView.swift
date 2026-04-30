@@ -58,6 +58,7 @@ struct DebugView: View {
             row("Queue Index", value: "\(engine.currentIndex)")
             row("Shuffle", value: engine.shuffleEnabled ? "On" : "Off")
             row("Repeat", value: repeatLabel(engine.repeatMode))
+            row("Recently Played Count", value: "\(engine.recentlyPlayed.count)")
             row("Pre-download Status", value: predownloadStatusLabel(engine.predownloadStatus))
             if (engine.predownloadSpeed < 0.0001) {
                 row("Pre-download Speed", value: "-")

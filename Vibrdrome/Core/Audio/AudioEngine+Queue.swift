@@ -12,11 +12,15 @@ extension AudioEngine {
         return Array(queue[(currentIndex + 1)...])
     }
 
-    /// Songs played before the current track (most recent first, max 20)
+    /// Songs played before the current track (most recent first, max 20).
+    /// When shuffle is enabled, returns from the actual shuffle playback
+    /// history rather than linear queue position, which would be meaningless.
     var recentlyPlayed: [Song] {
+        if shuffleEnabled {
+            return Array(shufflePlayHistory.reversed().prefix(20))
+        }
         guard currentIndex > 0 else { return [] }
-        let history = Array(queue[0..<currentIndex].reversed().prefix(20))
-        return history
+        return Array(queue[0..<currentIndex].reversed().prefix(20))
     }
 
     func addToQueue(_ song: Song) {
@@ -118,11 +122,24 @@ extension AudioEngine {
         if cachedSmartShuffleSongs.count < count {
             let needed = count - cachedSmartShuffleSongs.count
 
-            // Build the exclusion set: current song + everything already queued.
+            // Build the exclusion set: current song + already-cached upcoming songs
+            // + recently played songs (up to 20 tracks behind current index).
             var excludedIds = Set(cachedSmartShuffleSongs.map(\.id))
             excludedIds.insert(queue[currentIndex].id)
+            let recentlyPlayedIds = Set(recentlyPlayed.map(\.id))
+            excludedIds.formUnion(recentlyPlayedIds)
 
-            let available = queue.indices.filter { !excludedIds.contains(queue[$0].id) }
+            var available = queue.indices.filter { !excludedIds.contains(queue[$0].id) }
+
+            // If excluding recently played leaves nothing to pick from, fall back to
+            // only excluding the current song and already-queued upcoming tracks so
+            // playback is never stuck (e.g. small queues).
+            if available.isEmpty {
+                let minExcludedIds = Set(cachedSmartShuffleSongs.map(\.id))
+                    .union([queue[currentIndex].id])
+                available = queue.indices.filter { !minExcludedIds.contains(queue[$0].id) }
+            }
+
             guard !available.isEmpty else {
                 // Queue is too small to fill — return whatever we have.
                 return Array(cachedSmartShuffleSongs.prefix(count))

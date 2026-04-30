@@ -84,6 +84,12 @@ extension AudioEngine {
         // predownload window, the shuffle cache, and radio refill all see the
         // incoming track for the full duration of the fade — not just after it
         // completes.
+        if shuffleEnabled, let outgoing = currentSong {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
         currentIndex = nextIdx
         currentSong = nextSong
         setReplayGainFactor(nextRGFactor)

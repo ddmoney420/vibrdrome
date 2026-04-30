@@ -335,6 +335,7 @@ extension AudioEngine {
     }
     
     /// Get a random downloaded song, avoiding duplicates from last maxRandomSongsPlayed returned songs
+    /// and from songs recently played in the current queue session.
     @MainActor
     func getRandomDownloadedSong() -> Song? {
         let modelContext = PersistenceController.shared.container.mainContext
@@ -345,6 +346,20 @@ extension AudioEngine {
         guard let songs = try? modelContext.fetch(descriptor), !songs.isEmpty else {
             predownloadLog.info("No downloaded songs available")
             return nil
+        }
+        
+        // Merge the in-memory dedup list with songs actually played in this session
+        // (recentlyPlayed returns up to 20 most-recent tracks from the queue history).
+        // This prevents repeats even after an app restart when randomSongsPlayedIds is empty.
+        let recentlyPlayedIds = Set(recentlyPlayed.map(\.id))
+        if !recentlyPlayedIds.isEmpty {
+            for id in recentlyPlayedIds where !randomSongsPlayedIds.contains(id) {
+                addRandomSongPlayed(songId: id)
+            }
+        }
+        // Also exclude the currently playing song
+        if let currentId = currentSong?.id, !randomSongsPlayedIds.contains(currentId) {
+            addRandomSongPlayed(songId: currentId)
         }
         
         let ids = songs.map { $0.songId }
@@ -359,7 +374,7 @@ extension AudioEngine {
             return nil
         }
         
-        // Filter out songs from last maxRandomSongsPlayed returned
+        // Filter out recently played and previously returned songs
         let availableSongIds = ids.filter { songId in
             !randomSongsPlayedIds.contains(songId)
         }

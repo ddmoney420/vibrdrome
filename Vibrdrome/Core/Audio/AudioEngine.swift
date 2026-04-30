@@ -55,6 +55,12 @@ final class AudioEngine {
     var cachedSmartShuffleSongs: [Song] = []
     var cachedSmartShuffleSongsId: String?
 
+    /// Actual playback order under shuffle — most recent last, capped at 50.
+    /// Used by recentlyPlayed when shuffle is enabled so history reflects
+    /// what was genuinely heard rather than linear queue position.
+    var shufflePlayHistory: [Song] = []
+    static let maxShufflePlayHistory = 50
+
     // MARK: - Playback Mode
 
     /// The currently active playback topology
