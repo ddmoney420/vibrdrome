@@ -31,7 +31,7 @@ extension AudioEngine {
         }
         return hasher.finalize()
     }
-    
+
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
@@ -93,8 +93,8 @@ extension AudioEngine {
         isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
-        
-        if (newQueue == nil) {
+
+        if newQueue == nil {
             startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
         } else {
             startPredownloadIfNeeded(startIndex: index, queue: newQueue!)
@@ -134,15 +134,15 @@ extension AudioEngine {
             currentIndex = 0
         }
     }
-    
+
     func insertSongNext(for song: Song, at atSong: Int) {
         guard atSong >= 0 && atSong <= queue.count else {
             return
         }
-        
+
         // Insert song at specified index
         queue.insert(song, at: atSong)
-        
+
         // If shuffle is active, prepend to the smart shuffle cache so this song
         // is returned first by getNextSmartShuffleSongs / smartShuffleNextIndex.
         // The cache is an ordered upcoming sequence; inserting at position 0 makes

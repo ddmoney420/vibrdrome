@@ -77,21 +77,22 @@ final class CacheManager {
         }
 
         var evictedCount = 0
-        
-        //First Evict Pre-Downloaded
+
+        // First Evict Pre-Downloaded
         for download in candidates {
             guard !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) else { break }
 
             // Skip pinned songs
             if pinned.contains(download.songId) { continue }
 
-            if (download.category == AudioEngine.predownloadedCategory) {
+            if download.category == AudioEngine.predownloadedCategory {
                 // Delete the file if X minutes * 60 seconds old
-                if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
+                if download.lastAccessedAt != nil &&
+                    download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
                     let fileURL = DownloadManager.absoluteURL(for: download.localFilePath)
                     try? FileManager.default.removeItem(at: fileURL)
                     cacheLog.debug("Evicted \(download.songTitle) as it is old pre-downloaded")
-                    
+
                     total -= download.fileSize
                     context.delete(download)
                     evictedCount += 1

@@ -54,7 +54,7 @@ final class DownloadedSong {
             category: category
         )
     }
-    
+
     func toSong() -> Song {
         Song(
             id: songId, parent: nil, title: songTitle,

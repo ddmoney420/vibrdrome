@@ -166,7 +166,7 @@ extension AudioEngine {
 
         return Array(cachedSmartShuffleSongs.prefix(count))
     }
-    
+
     /// Get next songs up to 5, similar using nextSongIndices
     func nextSongs(count: Int = 5) -> [Song] {
         let songs = nextSongIndices(count: count).map { queue[$0] }
@@ -174,15 +174,15 @@ extension AudioEngine {
         queueLog.debug("nextSongs: \(titles)")
         return songs
     }
-    
+
     /// Get next song indexes up to 5, similar to nextSongIndex but returning multiple indexes
     /// Uses getNextSmartShuffleSongs when shuffle is enabled, sequential indices otherwise
     func nextSongIndices(count: Int = 5) -> [Int] {
         guard !queue.isEmpty else { return [] }
         guard count > 0 else { return [] }
-        
+
         let actualCount = min(count, 5) // Limit to 5 as requested
-        
+
         if repeatMode == .all {
             // Gapless loop - return current index repeated
             return Array(repeating: currentIndex, count: actualCount)
@@ -193,7 +193,7 @@ extension AudioEngine {
         if currentRadioStation != nil {
             return []
         }
-        
+
         if shuffleEnabled {
             // Use smart shuffle to get songs, then convert to indexes
             let nextSongs = getNextSmartShuffleSongs(count: actualCount)
@@ -204,7 +204,7 @@ extension AudioEngine {
             // Sequential indices
             var indexes: [Int] = []
             var nextIndex = currentIndex + 1
-            
+
             for _ in 0..<actualCount {
                 if nextIndex < queue.count {
                     indexes.append(nextIndex)
@@ -222,7 +222,7 @@ extension AudioEngine {
                     break
                 }
             }
-            
+
             queueLog.debug("nextSongIndices: \(indexes)")
             return indexes
         }

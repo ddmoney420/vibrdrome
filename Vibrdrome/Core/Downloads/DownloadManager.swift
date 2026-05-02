@@ -401,7 +401,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
                 at: destURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            
+
             // Remove existing file if re-downloading
             try? FileManager.default.removeItem(at: destURL)
 
@@ -419,7 +419,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
             }
 
             try? modelContext.save()
-            Task {@MainActor in await DownloadProgress.shared.removeAsync(songId: songId)}
+            Task { @MainActor in await DownloadProgress.shared.removeAsync(songId: songId) }
 
             // Evict old cache if over limit
             CacheManager.shared.evictIfNeeded()
@@ -436,9 +436,9 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription,
               totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-               
+
         let taskId = downloadTask.taskIdentifier
-        
+
         lock.lock()
         // If this is the first chunk of data, record the start time
         if taskStartTimes[taskId] == nil {
@@ -454,13 +454,13 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
             }
             return
         }
-        
+
         let elapsed = Date().timeIntervalSince(start)
         if elapsed > 0 && totalBytesWritten > 500000 {
             let bytesPerSecond = Double(totalBytesWritten) / elapsed
             kbs = bytesPerSecond / 1024
         }
-        
+
         Task { @MainActor in
             DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
         }
@@ -483,7 +483,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if !isCancelled {
             print("Download failed for songId: \(songId)")
         }
-        
+
         // Clean up incomplete SwiftData record for failed (non-cancelled) downloads
         // Cancelled downloads are cleaned up in cancelDownload()
         if !isCancelled {
@@ -502,7 +502,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        
+
         let handler = self.completionHandler
         self.completionHandler = nil
         DispatchQueue.main.async {

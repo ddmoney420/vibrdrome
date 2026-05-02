@@ -289,7 +289,7 @@ struct ServerEditView: View {
         }
     }
 
-    private func testConnection() {
+    func testConnection() {
         isTesting = true
         testResult = nil
         Task {

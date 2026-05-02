@@ -188,7 +188,7 @@ struct MiniPlayerView: View {
             guard let index = engine.nextSongIndex() else {return song.artist ?? ""}
             return "Next: \(engine.queue[index].title)"
         }
-        
+
         if engine.currentRadioStation != nil {
             return "Internet Radio"
         }

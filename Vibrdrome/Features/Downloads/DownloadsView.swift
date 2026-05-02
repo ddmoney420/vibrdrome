@@ -155,15 +155,17 @@ private struct DownloadedSongRow: View {
 
             Spacer()
 
-            if (download.category == AudioEngine.predownloadedCategory && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback)) {
+            if download.category == AudioEngine.predownloadedCategory &&
+                !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) {
                 // Delete the file if X minutes * 60 seconds old
-                if download.lastAccessedAt != nil && download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
+                if download.lastAccessedAt != nil &&
+                    download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
                     VStack(alignment: .trailing, spacing: 2) {
                         Image(systemName: "arrow.down.app.dashed.trianglebadge.exclamationmark")
                             .symbolRenderingMode(.multicolor)
                             .font(.caption)
                             .foregroundStyle(.red)
-                        
+
                         Text(formatBytes(download.fileSize))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -174,7 +176,7 @@ private struct DownloadedSongRow: View {
                             .symbolRenderingMode(.multicolor)
                             .font(.caption)
                             .foregroundStyle(.green)
-                        
+
                         Text(formatBytes(download.fileSize))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -187,7 +189,7 @@ private struct DownloadedSongRow: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.caption)
-                    
+
                     Text(formatBytes(download.fileSize))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

@@ -35,7 +35,7 @@ final class AudioEngine {
     var duration: TimeInterval = 0
     var isBuffering = false
     var isSeeking = false
-    
+
     /// Current predownload status from PredownloadManager
     var predownloadStatus: PredownloadStatus = .idle
     var predownloadSpeed: Double = 0.0
@@ -46,11 +46,11 @@ final class AudioEngine {
     static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
     static let predownloadedCategory = "pre-downloaded"
     static let predownloadedCacheTimeMins = 30.0
-    
+
     /// Cache for smart shuffle next index
     var cachedSmartShuffleNextIndex: Int?
     var cachedSmartShuffleSongId: String?
-    
+
     /// Cache for next up to 5 smart shuffle songs
     var cachedSmartShuffleSongs: [Song] = []
     var cachedSmartShuffleSongsId: String?
@@ -175,7 +175,7 @@ final class AudioEngine {
     // Near-end download check — tracks the song ID for which we've already
     // inserted a fallback, so we don't insert multiple times per track.
     var nearEndCheckSongId: String?
-    
+
     func incrementGeneration() { generation += 1 }
     var generationValue: Int { generation }
     var isScrobbleSubmitted: Bool { scrobbleSubmitted }
@@ -428,9 +428,9 @@ final class AudioEngine {
         let url = resolveURL(for: nextSong)
 
         // Check if this URL is already in use by current player items
-        if (lookaheadItem != nil) {
+        if lookaheadItem != nil {
            let oldLookaheadAsset = lookaheadItem!.asset as? AVURLAsset
-            if (oldLookaheadAsset?.url == url) {
+            if oldLookaheadAsset?.url == url {
                 audioLog.debug("prepareLookahead - SAME look ahead item url")
                 return
             } else {

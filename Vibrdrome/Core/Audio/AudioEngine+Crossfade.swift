@@ -64,13 +64,13 @@ extension AudioEngine {
               crossfadeDuration > 0,
               duration > 0,
               currentRadioStation == nil else { return }
-        
+
         let fadeDur = min(Double(crossfadeDuration), duration * 0.5)
         let fadeStart = duration - fadeDur
         guard fadeStart > 0, fadeDur > 0, currentTime >= fadeStart else { return }
-        
+
         guard repeatMode == .off else { return }
-        
+
         guard let nextIdx = nextSongIndex(), nextIdx < queue.count else { return }
         let nextSong = queue[nextIdx]
         let nextURL = resolveURL(for: nextSong)
