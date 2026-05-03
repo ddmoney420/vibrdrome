@@ -166,11 +166,11 @@ struct SidebarContentView: View {
                             case .song(let id):
                                 SongDetailView(songId: id)
                             case .genre(let name):
-                                AlbumsView(listType: .byGenre,
-                                           title: name.cleanedGenreDisplay, genre: name)
+                                AlbumsView(listType: .alphabeticalByName,
+                                           title: name.cleanedGenreDisplay, initialGenreFilter: name)
                             case .label(let name):
                                 AlbumsView(listType: .alphabeticalByName,
-                                           title: name, initialSearch: name)
+                                           title: name, initialLabelFilter: name)
                             }
                         }
                 }
@@ -201,7 +201,7 @@ struct SidebarContentView: View {
                                        title: name.cleanedGenreDisplay, genre: name)
                         case .label(let name):
                             AlbumsView(listType: .alphabeticalByName,
-                                       title: name, initialSearch: name)
+                                       title: name, initialLabelFilter: name)
                         }
                     }
             }

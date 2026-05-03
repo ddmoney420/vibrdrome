@@ -9,7 +9,8 @@ struct AlbumsView: View {
     var genre: String?
     var fromYear: Int?
     var toYear: Int?
-    var initialSearch: String?
+    var initialLabelFilter: String?
+    var initialGenreFilter: String?
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
@@ -45,6 +46,9 @@ struct AlbumsView: View {
     @State private var restoredScrollIndex: Int?
     private let pageSize = 40
     private let imagePrefetcher = ImagePrefetcher()
+    #if os(macOS)
+    @State private var showFilterPanel = false
+    #endif
 
     enum AlbumFilter: String, CaseIterable, Identifiable {
         case all, favorites, downloaded
@@ -106,12 +110,16 @@ struct AlbumsView: View {
         "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
     }
 
-    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) {
+    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil,
+         fromYear: Int? = nil, toYear: Int? = nil,
+         initialLabelFilter: String? = nil, initialGenreFilter: String? = nil) {
         self.listType = listType
         self.title = title
         self.genre = genre
         self.fromYear = fromYear
         self.toYear = toYear
+        self.initialLabelFilter = initialLabelFilter
+        self.initialGenreFilter = initialGenreFilter
 
         let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
         if let snapshot = AppState.shared.albumsViewSnapshots[key] {
@@ -149,6 +157,13 @@ struct AlbumsView: View {
     var body: some View {
         contentView
         .overlay { albumsOverlay }
+        #if os(macOS)
+        .inspector(isPresented: $showFilterPanel) {
+            LibraryFilterSidebarView(context: .album)
+                .environment(appState)
+        }
+        .inspectorColumnWidth(min: 280, ideal: 300, max: 500)
+        #endif
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
@@ -169,6 +184,32 @@ struct AlbumsView: View {
             searchIsActive = false
             DispatchQueue.main.async { searchIsActive = true }
         }
+        .task { await onAppearTask() }
+        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
+        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
+        .onDisappear {
+            saveSnapshot()
+            #if os(macOS)
+            if initialLabelFilter != nil || initialGenreFilter != nil {
+                appState.albumFilter.reset()
+            }
+            #endif
+        }
+        .refreshable {
+            albums = []
+            hasMore = true
+            await loadAlbums()
+        }
+        #if os(macOS)
+        .onChange(of: appState.activeSidePanel) { _, newValue in
+            showFilterPanel = newValue == .albumFilters
+        }
+        .onChange(of: showFilterPanel) { _, show in
+            if !show && appState.activeSidePanel == .albumFilters {
+                appState.activeSidePanel = nil
+            }
+        }
+        #endif
     }
 
     private var contentView: some View {
@@ -194,11 +235,7 @@ struct AlbumsView: View {
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if appState.activeSidePanel == .albumFilters {
-                            appState.activeSidePanel = nil
-                        } else {
-                            appState.activeSidePanel = .albumFilters
-                        }
+                        showFilterPanel.toggle()
                     }
                 } label: {
                     Image(systemName: appState.albumFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -314,33 +351,6 @@ struct AlbumsView: View {
         .navigationDestination(for: AlbumNavItem.self) { item in
             AlbumDetailView(albumId: item.id)
         }
-        .task {
-            if let initialSearch { searchText = initialSearch }
-            #if os(macOS)
-            filterRaw = AlbumFilter.all.rawValue
-            #endif
-            if albums.isEmpty {
-                await loadAlbums()
-            }
-            if availableGenres.isEmpty {
-                availableGenres = (try? await appState.subsonicClient.getGenres()
-                    .map(\.value).sorted()) ?? []
-            }
-            await loadFavoritedAlbumIds()
-            #if os(macOS)
-            await applyLocalFilters()
-            #endif
-            recomputeFilteredAlbums()
-        }
-        .onChange(of: searchText) { recomputeFilteredAlbums() }
-        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
-        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
-        .onDisappear { saveSnapshot() }
-        .refreshable {
-            albums = []
-            hasMore = true
-            await loadAlbums()
-        }
         #if os(iOS)
         .sheet(item: $getInfoTarget) { target in
             NavigationStack {
@@ -362,6 +372,37 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
+        #endif
+    }
+
+    private func onAppearTask() async {
+        #if os(macOS)
+        let hasInitialFilter = initialLabelFilter != nil || initialGenreFilter != nil
+        appState.albumFilter.reset()
+        if let initialLabelFilter {
+            appState.albumFilter.selectedLabels = [initialLabelFilter]
+            showFilterPanel = true
+        } else if let initialGenreFilter {
+            appState.albumFilter.selectedGenres = [initialGenreFilter]
+            showFilterPanel = true
+        }
+        filterRaw = AlbumFilter.all.rawValue
+        if !hasInitialFilter && albums.isEmpty { await loadAlbums() }
+        if availableGenres.isEmpty {
+            availableGenres = (try? await appState.subsonicClient.getGenres()
+                .map(\.value).sorted()) ?? []
+        }
+        await loadFavoritedAlbumIds()
+        applyLocalFilters()
+        recomputeFilteredAlbums()
+        #else
+        if albums.isEmpty { await loadAlbums() }
+        if availableGenres.isEmpty {
+            availableGenres = (try? await appState.subsonicClient.getGenres()
+                .map(\.value).sorted()) ?? []
+        }
+        await loadFavoritedAlbumIds()
+        recomputeFilteredAlbums()
         #endif
     }
 
