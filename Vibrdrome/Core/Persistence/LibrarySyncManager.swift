@@ -601,9 +601,8 @@ final class LibrarySyncManager {
 
             for playlist in playlists {
                 if inflight >= maxConcurrency {
-                    // swiftlint:disable:next redundant_nil_coalescing
-                    if let detail = await group.next() ?? nil {
-                        results.append(detail)
+                    if let detail = await group.next(), let playlist = detail {
+                        results.append(playlist)
                     }
                     inflight -= 1
                 }

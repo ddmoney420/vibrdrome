@@ -1,10 +1,12 @@
 import SwiftUI
+import SwiftData
 import NukeUI
 
 struct AlbumDetailView: View {
     let albumId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var album: Album?
     @State private var albumNotes: String?
     @State private var showFullNotes = false
@@ -615,7 +617,33 @@ struct AlbumDetailView: View {
     }
 
     private func loadAlbum() async {
-        isLoading = true
+        // Show cached album header instantly if available
+        if album == nil {
+            let aid = albumId
+            let descriptor = FetchDescriptor<CachedAlbum>(
+                predicate: #Predicate { $0.id == aid }
+            )
+            if let cached = try? modelContext.fetch(descriptor).first {
+                var preview = cached.toAlbum()
+                // Attach cached songs if available
+                let songs = cached.songs
+                    .sorted { ($0.discNumber ?? 0, $0.track ?? 0) < ($1.discNumber ?? 0, $1.track ?? 0) }
+                    .map { $0.toSong() }
+                if !songs.isEmpty {
+                    preview = Album(
+                        id: preview.id, name: preview.name, artist: preview.artist,
+                        artistId: preview.artistId, coverArt: preview.coverArt,
+                        songCount: preview.songCount, duration: preview.duration,
+                        year: preview.year, genre: preview.genre, starred: preview.starred,
+                        created: preview.created, userRating: preview.userRating,
+                        song: songs, replayGain: nil, musicBrainzId: nil,
+                        recordLabels: nil
+                    )
+                }
+                album = preview
+            }
+        }
+        isLoading = album == nil
         error = nil
         defer { isLoading = false }
         do {

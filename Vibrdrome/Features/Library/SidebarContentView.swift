@@ -152,7 +152,7 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            HStack(spacing: 0) {
+            GeometryReader { geometry in
                 NavigationStack(path: $detailPath) {
                     detailView
                         .navigationDestination(for: SidebarNavRoute.self) { route in
@@ -166,15 +166,17 @@ struct SidebarContentView: View {
                             }
                         }
                 }
-
+                .environment(\.contentWidth, geometry.size.width)
+            }
+            .inspector(isPresented: Binding(
+                get: { appState.activeSidePanel != nil },
+                set: { if !$0 { appState.activeSidePanel = nil } }
+            )) {
                 if let panel = appState.activeSidePanel {
-                    Divider()
                     sidePanelView(for: panel)
-                        .frame(width: sidePanelWidth)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: appState.activeSidePanel)
+            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
             #else
             NavigationStack(path: $detailPath) {
                 detailView
@@ -195,6 +197,22 @@ struct SidebarContentView: View {
             if !detailPath.isEmpty {
                 detailPath = NavigationPath()
             }
+            #if os(macOS)
+            // Auto-switch filter panel when a filter panel is already open
+            if let panel = appState.activeSidePanel,
+               panel == .albumFilters || panel == .artistFilters || panel == .songFilters {
+                switch SidebarItem(rawValue: selectionRaw) {
+                case .albums, .recentlyAdded, .mostPlayed, .recentlyPlayed:
+                    appState.activeSidePanel = .albumFilters
+                case .artists:
+                    appState.activeSidePanel = .artistFilters
+                case .songs:
+                    appState.activeSidePanel = .songFilters
+                default:
+                    appState.activeSidePanel = nil
+                }
+            }
+            #endif
         }
         .onChange(of: appState.pendingNavigation) { _, newValue in
             guard let nav = newValue else { return }
@@ -312,6 +330,12 @@ struct SidebarContentView: View {
             LyricsPanelView()
         case .artistInfo:
             ArtistInfoPanelView()
+        case .albumFilters:
+            LibraryFilterSidebarView(context: .album)
+        case .artistFilters:
+            LibraryFilterSidebarView(context: .artist)
+        case .songFilters:
+            LibraryFilterSidebarView(context: .song)
         }
     }
     #endif
