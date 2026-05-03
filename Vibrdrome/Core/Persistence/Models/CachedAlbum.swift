@@ -16,6 +16,7 @@ final class CachedAlbum {
     var created: String?
     var userRating: Int = 0
     var label: String?
+    var genreNames: [String]?
     var cachedAt: Date = Date()
 
     var songs: [CachedSong] = []
@@ -34,6 +35,7 @@ final class CachedAlbum {
         self.created = album.created
         self.userRating = album.userRating ?? 0
         self.label = album.label
+        self.genreNames = album.genres.map { $0.map(\.name) }
     }
 
     /// Update existing record with fresh server data.
@@ -50,12 +52,14 @@ final class CachedAlbum {
         created = album.created
         userRating = album.userRating ?? 0
         label = album.label
+        genreNames = album.genres.map { $0.map(\.name) }
         cachedAt = Date()
     }
 
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
-        Album(
+        let cachedGenres = genreNames.map { $0.map { AlbumGenre(name: $0) } }
+        return Album(
             id: id,
             name: name,
             artist: artistName,
@@ -72,7 +76,7 @@ final class CachedAlbum {
             replayGain: nil,
             musicBrainzId: nil,
             recordLabels: label.map { [RecordLabel(name: $0)] },
-            genres: nil
+            genres: cachedGenres
         )
     }
 }
