@@ -166,6 +166,25 @@ struct Album: Decodable, Identifiable, Sendable {
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
+
+    /// All genre names, deduplicated. Prefers the OpenSubsonic `genres` array when present,
+    /// then falls back to `genre` / per-song genres (semicolon-split).
+    var allGenres: [String] {
+        if let genres, !genres.isEmpty {
+            return genres.map(\.name)
+        }
+        var seen = Set<String>()
+        var result: [String] = []
+        let sources = (song ?? []).compactMap(\.genre) + [genre].compactMap { $0 }
+        for raw in sources {
+            for part in raw.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) })
+            where !part.isEmpty && !seen.contains(part) {
+                seen.insert(part)
+                result.append(part)
+            }
+        }
+        return result
+    }
 }
 
 struct AlbumList2Response: Decodable, Sendable {

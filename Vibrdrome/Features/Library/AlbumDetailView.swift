@@ -199,7 +199,7 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func macOSExtendedMetadata(_ album: Album) -> some View {
-        let allGenres = albumAllGenres(album)
+        let allGenres = album.allGenres
         let hasLabels = album.recordLabels?.isEmpty == false
         let hasGrid = hasLabels || album.created != nil
             || album.replayGain?.albumGain != nil || album.musicBrainzId != nil
@@ -340,35 +340,23 @@ struct AlbumDetailView: View {
         }
     }
 
-    private func albumAllGenres(_ album: Album) -> [String] {
-        // Prefer the OpenSubsonic genres array (complete list) when available
-        if let genres = album.genres, !genres.isEmpty {
-            return genres.map(\.name)
-        }
-        // Fall back to deduplicating genres from individual songs
-        var seen = Set<String>()
-        var result: [String] = []
-        let sources = (album.song ?? []).compactMap(\.genre) + [album.genre].compactMap { $0 }
-        for raw in sources {
-            let parts = raw.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
-            for part in parts where !part.isEmpty && !seen.contains(part) {
-                seen.insert(part)
-                result.append(part)
-            }
-        }
-        return result
-    }
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let dateDisplayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
 
     private func formatAddedDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let display = DateFormatter()
-            display.dateStyle = .medium
-            display.timeStyle = .none
-            return display.string(from: date)
-        }
-        return iso
+        let date = Self.isoFormatterFractional.date(from: iso)
+            ?? Self.isoFormatterBasic.date(from: iso)
+        return date.map { Self.dateDisplayFormatter.string(from: $0) } ?? iso
     }
 
     @ViewBuilder
