@@ -156,11 +156,12 @@ struct LibraryView: View {
                 SongDetailView(songId: item.id)
             }
             .navigationDestination(for: GenreNavItem.self) { item in
-                AlbumsView(listType: .byGenre, title: item.name.cleanedGenreDisplay, genre: item.name)
+                AlbumsView(listType: .alphabeticalByName, title: item.name.cleanedGenreDisplay,
+                           initialGenreFilter: item.name)
             }
             .navigationDestination(for: LabelNavItem.self) { item in
                 AlbumsView(listType: .alphabeticalByName, title: item.name,
-                           initialSearch: item.name)
+                           initialLabelFilter: item.name)
             }
             .navigationDestination(for: PlaylistNavItem.self) { item in
                 PlaylistDetailView(playlistId: item.id)

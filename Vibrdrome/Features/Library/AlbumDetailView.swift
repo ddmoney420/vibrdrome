@@ -754,7 +754,7 @@ struct AlbumDetailView: View {
                         year: preview.year, genre: preview.genre, starred: preview.starred,
                         created: preview.created, userRating: preview.userRating,
                         song: songs, replayGain: nil, musicBrainzId: nil,
-                        recordLabels: nil
+                        recordLabels: nil, genres: nil
                     )
                 }
                 album = preview
