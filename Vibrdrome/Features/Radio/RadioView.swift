@@ -11,8 +11,8 @@ struct RadioView: View {
     @State private var showAddSheet = false
     @State private var showSearchSheet = false
     @AppStorage("radioViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
 
     private var engine: AudioEngine { AudioEngine.shared }
 
@@ -256,9 +256,9 @@ struct RadioView: View {
     }
 
     private var stationGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                 count: Theme.effectiveGridColumns(base: gridColumns, verticalSizeClass: verticalSizeClass)),
-                  spacing: 16) {
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+        ], spacing: 16) {
             ForEach(Array(filteredStations.enumerated()), id: \.element.id) { index, station in
                 stationCardView(station, colorIndex: index)
             }

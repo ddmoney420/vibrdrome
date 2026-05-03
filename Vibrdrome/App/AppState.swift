@@ -52,12 +52,25 @@ final class AppState {
     }
     var pendingNowPlayingAction: NowPlayingAction?
 
-    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info).
+    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info / Album Filters).
     /// Mutually exclusive: setting one closes the others.
     enum SidePanel: String, Equatable {
-        case queue, lyrics, artistInfo
+        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters
     }
     var activeSidePanel: SidePanel?
+
+    /// Filter state for the macOS filter sidebars.
+    var albumFilter = LibraryFilter()
+    var artistFilter = LibraryFilter()
+    var songFilter = LibraryFilter()
+
+    /// Cached albums state for back-navigation, keyed by view configuration.
+    struct AlbumsViewSnapshot {
+        var albums: [Album]
+        var hasMore: Bool
+        var scrollIndex: Int?
+    }
+    var albumsViewSnapshots: [String: AlbumsViewSnapshot] = [:]
 
     /// Library sync manager.
     let librarySyncManager = LibrarySyncManager.shared
@@ -211,6 +224,13 @@ final class AppState {
         requiresReAuth = false
     }
 
+    func resetLibraryFilterState() {
+        albumFilter = LibraryFilter()
+        artistFilter = LibraryFilter()
+        songFilter = LibraryFilter()
+        albumsViewSnapshots = [:]
+    }
+
     func clearCredentials() {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.serverURL)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.username)
@@ -219,6 +239,7 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
+        resetLibraryFilterState()
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(
             baseURL: URL(string: "https://localhost")!,
@@ -243,6 +264,7 @@ final class AppState {
               let password = keychain["server_\(id)"] else { return }
         activeServerId = id
         UserDefaults.standard.set(id, forKey: Self.activeServerKey)
+        resetLibraryFilterState()
         configure(url: server.url, username: server.username, password: password)
 
         // Update legacy keys

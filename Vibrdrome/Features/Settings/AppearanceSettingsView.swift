@@ -14,6 +14,7 @@ struct AppearanceSettingsView: View {
 
     // Lists
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
 
     // Mini Player
     @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt: Bool = false
@@ -121,8 +122,6 @@ struct AppearanceSettingsView: View {
 
     // MARK: - Lists Section
 
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
-
     private var listsSection: some View {
         Section {
             Toggle(isOn: $showAlbumArtInLists) {
@@ -131,21 +130,15 @@ struct AppearanceSettingsView: View {
             }
             .accessibilityIdentifier("albumArtInListsToggle")
 
-            Picker(selection: $gridColumns) {
-                Text("2").tag(2)
-                Text("3").tag(3)
-                Text("4").tag(4)
-                Text("5").tag(5)
-                Text("6").tag(6)
-                #if os(macOS)
-                Text("8").tag(8)
-                Text("10").tag(10)
-                #endif
+            Picker(selection: $gridDensityRaw) {
+                ForEach(GridDensity.allCases, id: \.rawValue) { density in
+                    Text(density.label).tag(density.rawValue)
+                }
             } label: {
-                Label("Grid Columns", systemImage: "square.grid.2x2")
+                Label("Grid Density", systemImage: "square.grid.2x2")
                     .foregroundColor(.primary)
             }
-            .accessibilityIdentifier("gridColumnsPicker")
+            .accessibilityIdentifier("gridDensityPicker")
         } header: {
             settingSectionHeader("Lists", icon: "list.bullet", color: .green)
         }
