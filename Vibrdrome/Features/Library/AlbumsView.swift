@@ -360,6 +360,7 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -815,9 +816,8 @@ struct AlbumsView: View {
             }
         }
         if !snapshot.selectedGenres.isEmpty {
-            guard let genre = album.genre, snapshot.selectedGenres.contains(genre) else {
-                return false
-            }
+            let albumGenres = Set(album.allGenres)
+            guard !albumGenres.isDisjoint(with: snapshot.selectedGenres) else { return false }
         }
         if !snapshot.selectedLabels.isEmpty {
             guard let albumLabel = album.label, snapshot.selectedLabels.contains(albumLabel) else {

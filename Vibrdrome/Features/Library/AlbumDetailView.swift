@@ -634,10 +634,10 @@ struct AlbumDetailView: View {
                         id: preview.id, name: preview.name, artist: preview.artist,
                         artistId: preview.artistId, coverArt: preview.coverArt,
                         songCount: preview.songCount, duration: preview.duration,
-                        year: preview.year, genre: preview.genre, starred: preview.starred,
-                        created: preview.created, userRating: preview.userRating,
-                        song: songs, replayGain: nil, musicBrainzId: nil,
-                        recordLabels: nil
+                        year: preview.year, genre: preview.genre, genres: preview.genres,
+                        starred: preview.starred, created: preview.created,
+                        userRating: preview.userRating, song: songs,
+                        replayGain: nil, musicBrainzId: nil, recordLabels: nil
                     )
                 }
                 album = preview

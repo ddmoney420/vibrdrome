@@ -9,7 +9,7 @@ final class CachedAlbum {
     var artistId: String?
     var coverArtId: String?
     var year: Int?
-    var genre: String?
+    var genres: [String] = []
     var songCount: Int?
     var duration: Int?
     var isStarred: Bool = false
@@ -27,7 +27,7 @@ final class CachedAlbum {
         self.artistId = album.artistId
         self.coverArtId = album.coverArt
         self.year = album.year
-        self.genre = album.genre
+        self.genres = album.allGenres
         self.songCount = album.songCount
         self.duration = album.duration
         self.isStarred = album.starred != nil
@@ -43,7 +43,7 @@ final class CachedAlbum {
         artistId = album.artistId
         coverArtId = album.coverArt
         year = album.year
-        genre = album.genre
+        genres = album.allGenres
         songCount = album.songCount
         duration = album.duration
         isStarred = album.starred != nil
@@ -64,7 +64,8 @@ final class CachedAlbum {
             songCount: songCount,
             duration: duration,
             year: year,
-            genre: genre,
+            genre: genres.first,
+            genres: genres.map { ItemGenre(name: $0) },
             starred: isStarred ? "true" : nil,
             created: created,
             userRating: userRating > 0 ? userRating : nil,

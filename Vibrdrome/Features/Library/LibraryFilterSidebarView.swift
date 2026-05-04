@@ -330,12 +330,20 @@ struct LibraryFilterSidebarView: View {
         } else {
             let descriptor = FetchDescriptor<CachedAlbum>()
             let albums = (try? modelContext.fetch(descriptor)) ?? []
-            genreSet = Set(albums.compactMap(\.genre)).subtracting([""])
+            // Collect all genres from the multi-genre array on each album
+            var mutableGenreSet = Set(albums.flatMap(\.genres)).subtracting([""])
 
             if context == .album {
+                // Union in song genres so albums not yet backfilled still appear in the list
+                let songDescriptor = FetchDescriptor<CachedSong>()
+                let songs = (try? modelContext.fetch(songDescriptor)) ?? []
+                mutableGenreSet.formUnion(Set(songs.compactMap(\.genre)).subtracting([""]))
+
                 let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
                 labels = labelSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             }
+
+            genreSet = mutableGenreSet
         }
         genres = genreSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
