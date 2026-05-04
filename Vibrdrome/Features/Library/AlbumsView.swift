@@ -653,19 +653,6 @@ struct AlbumsView: View {
         try? modelContext.save()
     }
 
-    private func prefetchImages(around index: Int) {
-        let lookahead = 20
-        let start = min(index + 1, cachedFilteredAlbums.count)
-        let end = min(index + lookahead, cachedFilteredAlbums.count)
-        guard start < end else { return }
-        let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
-            guard let artId = album.coverArt else { return nil }
-            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
-        }
-        guard !urls.isEmpty else { return }
-        imagePrefetcher.startPrefetching(with: urls)
-    }
-
     private func loadAlbums() async {
         scrollLoadTask?.cancel()
         pendingPageTarget = 0
@@ -873,4 +860,19 @@ struct AlbumsView: View {
         return true
     }
     #endif
+}
+
+private extension AlbumsView {
+    func prefetchImages(around index: Int) {
+        let lookahead = 20
+        let start = min(index + 1, cachedFilteredAlbums.count)
+        let end = min(index + lookahead, cachedFilteredAlbums.count)
+        guard start < end else { return }
+        let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
+            guard let artId = album.coverArt else { return nil }
+            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
+        }
+        guard !urls.isEmpty else { return }
+        imagePrefetcher.startPrefetching(with: urls)
+    }
 }
