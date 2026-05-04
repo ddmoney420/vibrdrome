@@ -20,6 +20,17 @@ final class SubsonicClient {
     }
 
     var isConnected: Bool = false
+    /// Navidrome serverVersion string from the last successful ping (e.g. "0.52.5").
+    private(set) var serverVersion: String?
+
+    /// WebP cover art requires Navidrome ≥ 0.49.0. Older servers and non-Navidrome
+    /// Subsonic implementations don't support the `format` parameter on getCoverArt.
+    var supportsWebP: Bool {
+        guard let v = serverVersion else { return false }
+        let parts = v.split(separator: ".").compactMap { Int($0) }
+        guard parts.count >= 2 else { return false }
+        return (parts[0], parts[1]) >= (0, 49)
+    }
 
     init(baseURL: URL, username: String, password: String) {
         self.baseURL = baseURL
@@ -240,6 +251,7 @@ final class SubsonicClient {
     func coverArtURL(id: String, size: Int? = nil) -> URL {
         var extra = [URLQueryItem(name: "id", value: id)]
         if let size { extra.append(URLQueryItem(name: "size", value: "\(size)")) }
+        if supportsWebP { extra.append(URLQueryItem(name: "format", value: "webp")) }
         return buildURL(path: "/rest/getCoverArt", extra: extra)
     }
 
@@ -337,6 +349,7 @@ final class SubsonicClient {
         do {
             let body = try await request(.ping)
             isConnected = body.status == "ok"
+            if let sv = body.serverVersion { serverVersion = sv }
             return isConnected
         } catch {
             isConnected = false
@@ -600,6 +613,13 @@ final class SubsonicClient {
         self.baseURL = baseURL
         self.auth = SubsonicAuth(username: username, password: password)
         self.isConnected = false
+        self.serverVersion = nil
         Task { await clearCache() }
     }
+
+    #if DEBUG
+    func setServerVersionForTesting(_ version: String) {
+        serverVersion = version
+    }
+    #endif
 }
