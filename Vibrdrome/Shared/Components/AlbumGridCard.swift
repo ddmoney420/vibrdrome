@@ -92,7 +92,8 @@ struct AlbumGridCard: View {
             Image(systemName: isStarred ? "heart.fill" : "heart")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(isStarred ? .pink : .white)
-                .shadow(color: .black.opacity(0.4), radius: 2)
+                .shadow(color: .black.opacity(0.9), radius: 6, y: 2)
+                .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
@@ -115,7 +116,8 @@ struct AlbumGridCard: View {
                     Image(systemName: star <= currentRating ? "star.fill" : "star")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(star <= currentRating ? .yellow : .white)
-                        .shadow(color: .black.opacity(0.4), radius: 2)
+                        .shadow(color: .black.opacity(0.9), radius: 6, y: 2)
+                        .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
