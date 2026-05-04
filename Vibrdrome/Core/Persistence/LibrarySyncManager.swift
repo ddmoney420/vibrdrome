@@ -584,19 +584,16 @@ final class LibrarySyncManager {
         let context = ModelContext(container)
         context.autosaveEnabled = false
 
-        // Target albums where getAlbumList returned no genres
-        let emptyGenresDescriptor = FetchDescriptor<CachedAlbum>(
-            predicate: #Predicate<CachedAlbum> { $0.genres.isEmpty }
-        )
-        let albumsNeedingGenres = try context.fetch(emptyGenresDescriptor)
+        // SwiftData can't translate [String].isEmpty or optional != nil into SQL,
+        // so fetch all albums/songs and filter in memory.
+        let albumsNeedingGenres = try context.fetch(FetchDescriptor<CachedAlbum>())
+            .filter { $0.genres.isEmpty }
         guard !albumsNeedingGenres.isEmpty else { return }
 
         progress("Backfilling album genres…")
 
-        let songsDescriptor = FetchDescriptor<CachedSong>(
-            predicate: #Predicate<CachedSong> { $0.genre != nil && $0.albumId != nil }
-        )
-        let songsWithGenre = try context.fetch(songsDescriptor)
+        let songsWithGenre = try context.fetch(FetchDescriptor<CachedSong>())
+            .filter { $0.genre != nil && $0.albumId != nil }
 
         // Build albumId → Set<genre> from songs belonging to empty-genre albums
         let albumIds = Set(albumsNeedingGenres.map { $0.id })
