@@ -108,12 +108,17 @@ struct SongsView: View {
             refreshTitleSongCount()
         }
         #if os(macOS)
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.songFilter.isActive { debouncedApplyLocalFilters() }
+        }
         .onChange(of: appState.songFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.isRated) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.isRecentlyPlayed) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onAppear { appState.activeFilterWindowContext = .song }
         #endif
     }
 
@@ -535,7 +540,7 @@ struct SongsView: View {
         await loadGenres()
         refreshTitleSongCount()
         #if os(macOS)
-        applyLocalFilters()
+        await applyLocalFilters()
         #endif
         recomputeDisplayedSongs()
     }
@@ -682,36 +687,66 @@ struct SongsView: View {
         filterTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            applyLocalFilters()
+            await applyLocalFilters()
         }
     }
 
-    private func applyLocalFilters() {
+    private func applyLocalFilters() async {
         let filter = appState.songFilter
         guard filter.isActive else {
             localFilteredSongs = nil
+            appState.songFilter.matchCount = nil
             recomputeDisplayedSongs()
             return
         }
 
+        // Snapshot MainActor state before leaving the main thread.
+        let snapshot = SongFilterSnapshot(filter: filter)
+        let allSongs: [Song]
+        let cachedExtras: [String: CachedSongExtras]
+        let recentSongIds: Set<String>?
         do {
-            let allSongs: [Song]
-            if let cachedSongs = appState.libraryCache.songs {
-                allSongs = cachedSongs
+            if let cached = appState.libraryCache.songs {
+                allSongs = cached
             } else {
                 var descriptor = FetchDescriptor<CachedSong>()
                 descriptor.sortBy = [SortDescriptor(\.title)]
                 allSongs = try modelContext.fetch(descriptor).map { $0.toSong() }
             }
-
-            let recentSongIds = recentlyPlayedSongIds(for: filter)
-            localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
-            recomputeDisplayedSongs()
+            // Build extras lookup only when rule-set fields require SwiftData fields
+            // (playCount, albumRating, albumFavorited, dateAdded, isDownloaded).
+            if filter.ruleSet.needsCachedSong {
+                let all = try modelContext.fetch(FetchDescriptor<CachedSong>())
+                cachedExtras = Dictionary(uniqueKeysWithValues: all.map {
+                    ($0.id, CachedSongExtras(
+                        playCount: $0.playCount,
+                        albumRating: $0.album?.userRating ?? 0,
+                        albumFavorited: $0.album?.isStarred ?? false,
+                        isDownloaded: $0.download != nil,
+                        dateAdded: $0.dateAdded
+                    ))
+                })
+            } else {
+                cachedExtras = [:]
+            }
+            recentSongIds = recentlyPlayedSongIds(for: filter)
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
-                .error("Failed to apply local filters: \(error)")
+                .error("Failed to fetch songs for filter: \(error)")
             localFilteredSongs = nil
+            return
         }
+
+        let filtered = await Task.detached(priority: .userInitiated) {
+            allSongs.filter {
+                SongsView.songMatchesFilter($0, snapshot: snapshot, recentIds: recentSongIds, extras: cachedExtras)
+            }
+        }.value
+
+        guard !Task.isCancelled else { return }
+        localFilteredSongs = filtered
+        appState.songFilter.matchCount = filtered.count
+        recomputeDisplayedSongs()
     }
 
     private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {
@@ -720,28 +755,87 @@ struct SongsView: View {
         let descriptor = FetchDescriptor<CachedSong>(
             predicate: #Predicate { $0.lastPlayed != nil && $0.lastPlayed! > cutoff }
         )
-        let recentSongs = (try? modelContext.fetch(descriptor)) ?? []
-        return Set(recentSongs.map(\.id))
+        return Set((try? modelContext.fetch(descriptor))?.map(\.id) ?? [])
     }
 
-    private func songMatchesFilter(
-        _ song: Song, filter: LibraryFilter, recentIds: Set<String>?
+    struct CachedSongExtras: Sendable {
+        let playCount: Int
+        let albumRating: Int
+        let albumFavorited: Bool
+        let isDownloaded: Bool
+        let dateAdded: Date?
+    }
+
+    struct SongFilterSnapshot: Sendable {
+        let isFavorited: TriState
+        let isRated: TriState
+        let isRecentlyPlayed: Bool
+        let selectedArtistIds: Set<String>
+        let selectedGenres: Set<String>
+        let year: Int?
+        let ruleSet: FilterRuleSet
+
+        @MainActor
+        init(filter: LibraryFilter) {
+            isFavorited = filter.isFavorited
+            isRated = filter.isRated
+            isRecentlyPlayed = filter.isRecentlyPlayed
+            selectedArtistIds = filter.selectedArtistIds
+            selectedGenres = filter.selectedGenres
+            year = filter.year
+            ruleSet = filter.ruleSet
+        }
+    }
+
+    nonisolated static func songMatchesFilter(
+        _ song: Song, snapshot: SongFilterSnapshot,
+        recentIds: Set<String>?, extras: [String: CachedSongExtras]
     ) -> Bool {
-        guard filter.isFavorited.matches(song.starred != nil) else { return false }
-        guard filter.isRated.matches((song.userRating ?? 0) != 0) else { return false }
+        guard snapshot.isFavorited.matches(song.starred != nil) else { return false }
+        guard snapshot.isRated.matches((song.userRating ?? 0) != 0) else { return false }
         if let recentIds, !recentIds.contains(song.id) { return false }
-        if !filter.selectedArtistIds.isEmpty {
-            guard let artistId = song.artistId, filter.selectedArtistIds.contains(artistId) else {
-                return false
-            }
+        if !snapshot.selectedArtistIds.isEmpty {
+            guard let artistId = song.artistId, snapshot.selectedArtistIds.contains(artistId) else { return false }
         }
-        if !filter.selectedGenres.isEmpty {
-            guard let genre = song.genre, filter.selectedGenres.contains(genre) else {
-                return false
-            }
+        if !snapshot.selectedGenres.isEmpty {
+            guard let genre = song.genre, snapshot.selectedGenres.contains(genre) else { return false }
         }
-        if let yearFilter = filter.year {
+        if let yearFilter = snapshot.year {
             guard song.year == yearFilter else { return false }
+        }
+        if !snapshot.ruleSet.isEmpty {
+            let extra = extras[song.id]
+            let meta = FilterRuleSet.SongMeta(
+                title: song.title,
+                artist: song.artist,
+                albumTitle: song.album,
+                genre: song.genre,
+                label: nil,
+                suffix: song.suffix,
+                contentType: song.contentType,
+                comment: song.comment,
+                year: song.year,
+                duration: song.duration,
+                bitRate: song.bitRate,
+                bitDepth: song.bitDepth,
+                samplingRate: song.samplingRate,
+                bpm: song.bpm,
+                playCount: extra?.playCount ?? 0,
+                rating: song.userRating ?? 0,
+                albumRating: extra?.albumRating ?? 0,
+                trackNumber: song.track,
+                discNumber: song.discNumber,
+                isFavorited: song.starred != nil,
+                albumFavorited: extra?.albumFavorited ?? false,
+                isDownloaded: extra?.isDownloaded ?? false,
+                hasCoverArt: song.coverArt != nil,
+                isCompilation: false,
+                size: song.size,
+                channels: nil,
+                mbzRecordingId: song.musicBrainzId,
+                dateAdded: extra?.dateAdded
+            )
+            guard snapshot.ruleSet.matches(song: meta) else { return false }
         }
         return true
     }

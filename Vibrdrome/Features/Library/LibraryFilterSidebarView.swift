@@ -2,18 +2,16 @@
 import SwiftUI
 import SwiftData
 
-/// Which entity type the filter sidebar is controlling.
-enum FilterContext {
-    case album, artist, song
-}
-
-/// Feishin-style filter sidebar shown as a macOS side panel.
+/// Feishin-style filter sidebar shown as a macOS side panel or a standalone window.
 /// Adapts its controls based on the entity type being filtered.
 struct LibraryFilterSidebarView: View {
     let context: FilterContext
+    /// True when rendered in a standalone window; hides the SidePanelContainer chrome.
+    var isWindow: Bool = false
 
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \CachedArtist.name) private var artists: [CachedArtist]
     @State private var genres: [String] = []
     @State private var labels: [String] = []
@@ -26,32 +24,52 @@ struct LibraryFilterSidebarView: View {
         }
     }
 
-    private var panelTitle: String {
-        switch context {
-        case .album: "Album Filters"
-        case .artist: "Artist Filters"
-        case .song: "Song Filters"
+    var body: some View {
+        if isWindow {
+            VStack(spacing: 0) {
+                stickyHeader
+                Divider()
+                scrollableContent
+            }
+            .navigationTitle(context.windowTitle)
+            .task { loadCachedMetadata() }
+        } else {
+            SidePanelContainer(
+                title: context.windowTitle,
+                onClose: { appState.activeSidePanel = nil },
+                onPopOut: {
+                    appState.activeFilterWindowContext = context
+                    openWindow(id: "library-filter", value: context)
+                    appState.activeSidePanel = nil
+                }
+            ) {
+                VStack(spacing: 0) {
+                    stickyHeader
+                    Divider()
+                    scrollableContent
+                }
+            }
+            .task { loadCachedMetadata() }
         }
     }
 
-    var body: some View {
-        SidePanelContainer(title: panelTitle, onClose: {
-            appState.activeSidePanel = nil
-        }) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    headerButtons
+    private var stickyHeader: some View {
+        headerButtons
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+    }
 
-                    if appState.librarySyncManager.lastSyncDate == nil {
-                        syncRequiredView
-                    } else {
-                        filterControls
-                    }
+    private var scrollableContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if appState.librarySyncManager.lastSyncDate == nil {
+                    syncRequiredView
+                } else {
+                    filterControls
                 }
-                .padding(14)
             }
+            .padding(14)
         }
-        .task { loadCachedMetadata() }
     }
 
     // MARK: - Header
@@ -60,9 +78,17 @@ struct LibraryFilterSidebarView: View {
     private var headerButtons: some View {
         HStack {
             if filter.isActive {
-                Text("\(filter.activeFilterCount) active")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let count = filter.matchCount {
+                    Text("\(count) result\(count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.2), value: count)
+                } else {
+                    Text("\(filter.activeFilterCount) filter\(filter.activeFilterCount == 1 ? "" : "s") active")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Button("Reset") {
@@ -94,6 +120,7 @@ struct LibraryFilterSidebarView: View {
                 Task {
                     await appState.librarySyncManager.sync(
                         client: appState.subsonicClient,
+                        ndClient: appState.navidromeClient,
                         container: PersistenceController.shared.container
                     )
                     loadCachedMetadata()
@@ -156,6 +183,36 @@ struct LibraryFilterSidebarView: View {
         if context == .album || context == .song {
             Divider()
             yearFilter
+        }
+
+        Divider()
+        advancedFilterSection
+    }
+
+    // MARK: - Advanced Filter Builder
+
+    @ViewBuilder
+    private var advancedFilterSection: some View {
+        @Bindable var state = appState
+        switch context {
+        case .album:
+            FilterRuleBuilderView(
+                ruleSet: $state.albumFilter.ruleSet,
+                allowedFields: FilterField.albumFields,
+                expandedKey: UserDefaultsKeys.albumFilterRuleBuilderExpanded
+            )
+        case .song:
+            FilterRuleBuilderView(
+                ruleSet: $state.songFilter.ruleSet,
+                allowedFields: FilterField.songFields,
+                expandedKey: UserDefaultsKeys.songFilterRuleBuilderExpanded
+            )
+        case .artist:
+            FilterRuleBuilderView(
+                ruleSet: $state.artistFilter.ruleSet,
+                allowedFields: FilterField.artistFields,
+                expandedKey: UserDefaultsKeys.artistFilterRuleBuilderExpanded
+            )
         }
     }
 

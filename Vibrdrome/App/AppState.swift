@@ -25,6 +25,8 @@ final class AppState {
     static let shared = AppState()
 
     var subsonicClient: SubsonicClient
+    /// Non-nil when the active server is Navidrome and native API auth succeeded.
+    var navidromeClient: NavidromeNativeClient?
     var isConfigured: Bool = false
     var requiresReAuth: Bool = false
 
@@ -59,10 +61,20 @@ final class AppState {
     }
     var activeSidePanel: SidePanel?
 
+    /// Context currently shown in the popped-out filter window. Stays up-to-date
+    /// as the user navigates between Albums / Songs / Artists in the main window.
+    var activeFilterWindowContext: FilterContext?
+
     /// Filter state for the macOS filter sidebars.
     var albumFilter = LibraryFilter()
     var artistFilter = LibraryFilter()
     var songFilter = LibraryFilter()
+
+    private func configureFilterPersistence() {
+        albumFilter.loadRuleSet(from: UserDefaultsKeys.albumFilterRuleSet)
+        artistFilter.loadRuleSet(from: UserDefaultsKeys.artistFilterRuleSet)
+        songFilter.loadRuleSet(from: UserDefaultsKeys.songFilterRuleSet)
+    }
 
     /// Cached albums state for back-navigation, keyed by view configuration.
     struct AlbumsViewSnapshot {
@@ -105,6 +117,7 @@ final class AppState {
         )
         loadServers()
         loadSavedCredentials()
+        configureFilterPersistence()
 
         // UI testing: auto-login with credentials from environment variables
         // so XCUITest doesn't have to type them (avoids idle-wait SIGKILL).
@@ -136,6 +149,11 @@ final class AppState {
         #endif
         LibrarySyncManager.shared.client = subsonicClient
         LibrarySyncManager.shared.container = PersistenceController.shared.container
+
+        // Probe Navidrome native API in the background — sets navidromeClient if available.
+        let ndClient = NavidromeNativeClient(baseURL: serverURL, username: username, password: password)
+        navidromeClient = ndClient
+        Task { await ndClient.probe() }
     }
 
     func loadSavedCredentials() {
@@ -228,6 +246,7 @@ final class AppState {
         albumFilter = LibraryFilter()
         artistFilter = LibraryFilter()
         songFilter = LibraryFilter()
+        configureFilterPersistence()
         albumsViewSnapshots = [:]
     }
 
@@ -239,6 +258,7 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
+        navidromeClient = nil
         resetLibraryFilterState()
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(

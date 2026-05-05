@@ -121,6 +121,7 @@ final class BackgroundSyncScheduler {
         let syncTask = Task {
             await appState.librarySyncManager.incrementalSync(
                 client: appState.subsonicClient,
+                ndClient: appState.navidromeClient,
                 container: PersistenceController.shared.container
             )
         }
@@ -150,6 +151,7 @@ final class BackgroundSyncScheduler {
         let syncTask = Task {
             await appState.librarySyncManager.sync(
                 client: appState.subsonicClient,
+                ndClient: appState.navidromeClient,
                 container: PersistenceController.shared.container
             )
         }

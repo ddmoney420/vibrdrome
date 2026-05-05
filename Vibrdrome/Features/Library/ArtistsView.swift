@@ -235,7 +235,7 @@ struct ArtistsView: View {
             await loadArtists()
             await loadFavorites()
             #if os(macOS)
-            applyLocalFilters()
+            await applyLocalFilters()
             #endif
             recomputeFilteredIndexes()
         }
@@ -245,6 +245,11 @@ struct ArtistsView: View {
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.artistFilter.isActive { debouncedApplyLocalFilters() }
+        }
+        .onAppear { appState.activeFilterWindowContext = .artist }
         #endif
     }
 
@@ -402,71 +407,94 @@ struct ArtistsView: View {
         filterTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
-            applyLocalFilters()
+            await applyLocalFilters()
         }
     }
 
-    private func applyLocalFilters() {
+    private func applyLocalFilters() async {
         let filter = appState.artistFilter
         guard filter.isActive else {
             localFilteredArtists = nil
+            appState.artistFilter.matchCount = nil
             recomputeFilteredIndexes()
             return
         }
 
+        // Snapshot MainActor state before leaving the main thread.
+        let snapshot = ArtistFilterSnapshot(filter: filter)
+        let allArtists: [Artist]
+        let artistIdsWithMatchingGenres: Set<String>?
         do {
-            let allArtists: [Artist]
-            if let cachedArtists = appState.libraryCache.artists {
-                allArtists = cachedArtists
+            if let cached = appState.libraryCache.artists {
+                allArtists = cached
             } else {
                 var descriptor = FetchDescriptor<CachedArtist>()
                 descriptor.sortBy = [SortDescriptor(\.name)]
                 allArtists = try modelContext.fetch(descriptor).map { $0.toArtist() }
             }
-
-            // Pre-compute artist IDs that have albums matching selected genres
-            var artistIdsWithMatchingGenres: Set<String>?
+            // Pre-compute artist IDs that have albums matching selected genres.
             if !filter.selectedGenres.isEmpty {
                 let allAlbums: [Album]
-                if let cachedAlbums = appState.libraryCache.albums {
-                    allAlbums = cachedAlbums
+                if let cached = appState.libraryCache.albums {
+                    allAlbums = cached
                 } else {
-                    let albumDescriptor = FetchDescriptor<CachedAlbum>()
-                    allAlbums = try modelContext.fetch(albumDescriptor).map { $0.toAlbum() }
+                    allAlbums = try modelContext.fetch(FetchDescriptor<CachedAlbum>()).map { $0.toAlbum() }
                 }
                 var ids = Set<String>()
                 for album in allAlbums {
                     if let genre = album.genre, filter.selectedGenres.contains(genre),
-                       let artistId = album.artistId {
-                        ids.insert(artistId)
-                    }
+                       let artistId = album.artistId { ids.insert(artistId) }
                 }
                 artistIdsWithMatchingGenres = ids
+            } else {
+                artistIdsWithMatchingGenres = nil
             }
-
-            let filtered = allArtists.filter { artist in
-                // Favorited filter
-                switch filter.isFavorited {
-                case .yes: if artist.starred == nil { return false }
-                case .no: if artist.starred != nil { return false }
-                case .none: break
-                }
-
-                // Genre filter (via album lookup)
-                if let matchIds = artistIdsWithMatchingGenres {
-                    if !matchIds.contains(artist.id) { return false }
-                }
-
-                return true
-            }
-
-            localFilteredArtists = filtered
-            recomputeFilteredIndexes()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Artists")
-                .error("Failed to apply local filters: \(error)")
+                .error("Failed to fetch artists for filter: \(error)")
             localFilteredArtists = nil
+            return
         }
+
+        let filtered = await Task.detached(priority: .userInitiated) {
+            allArtists.filter {
+                ArtistsView.artistMatchesFilter($0, snapshot: snapshot, genreIds: artistIdsWithMatchingGenres)
+            }
+        }.value
+
+        guard !Task.isCancelled else { return }
+        localFilteredArtists = filtered
+        appState.artistFilter.matchCount = filtered.count
+        recomputeFilteredIndexes()
+    }
+
+    struct ArtistFilterSnapshot: Sendable {
+        let isFavorited: TriState
+        let selectedGenres: Set<String>
+        let ruleSet: FilterRuleSet
+
+        @MainActor
+        init(filter: LibraryFilter) {
+            isFavorited = filter.isFavorited
+            selectedGenres = filter.selectedGenres
+            ruleSet = filter.ruleSet
+        }
+    }
+
+    nonisolated static func artistMatchesFilter(
+        _ artist: Artist, snapshot: ArtistFilterSnapshot, genreIds: Set<String>?
+    ) -> Bool {
+        switch snapshot.isFavorited {
+        case .yes: if artist.starred == nil { return false }
+        case .no: if artist.starred != nil { return false }
+        case .none: break
+        }
+        if let matchIds = genreIds, !matchIds.contains(artist.id) { return false }
+        if !snapshot.ruleSet.isEmpty {
+            let meta = FilterRuleSet.ArtistMeta(name: artist.name, genre: nil, isFavorited: artist.starred != nil)
+            if !snapshot.ruleSet.matches(artist: meta) { return false }
+        }
+        return true
     }
     #endif
 }

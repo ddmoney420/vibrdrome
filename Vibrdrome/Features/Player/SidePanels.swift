@@ -8,6 +8,7 @@ import os.log
 struct SidePanelContainer<Content: View>: View {
     let title: String
     let onClose: () -> Void
+    var onPopOut: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -16,6 +17,15 @@ struct SidePanelContainer<Content: View>: View {
                 Text(title)
                     .font(.headline)
                 Spacer()
+                if let onPopOut {
+                    Button(action: onPopOut) {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Pop out \(title)")
+                }
                 Button {
                     onClose()
                 } label: {

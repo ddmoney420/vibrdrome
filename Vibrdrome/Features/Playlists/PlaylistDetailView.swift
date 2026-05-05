@@ -11,6 +11,10 @@ struct PlaylistDetailView: View {
     @State private var error: String?
     @State private var showEditSheet = false
     @State private var isDownloading = false
+    @State private var smartPlaylistRules: NSPCriteria?
+    @State private var isSmartPlaylist = false
+    @State private var isLoadingSmartRules = false
+    @State private var didDetectSmartPlaylist = false
     @State private var searchText = ""
     @State private var m3uFileURL: URL?
     @State private var showShareSheet = false
@@ -18,10 +22,17 @@ struct PlaylistDetailView: View {
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
     @State private var showRemoveOfflineConfirmation = false
+    /// Active view mode for smart playlists: songs list or album grid.
+    @State private var smartViewMode: SmartPlaylistViewMode = .songs
     @Query private var downloadedSongs: [DownloadedSong]
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "playlist")
     #endif
+
+    enum SmartPlaylistViewMode: String, CaseIterable {
+        case songs = "Songs"
+        case albums = "Albums"
+    }
 
     private var filteredSongs: [Song] {
         guard let songs = playlist?.entry else { return [] }
@@ -30,6 +41,22 @@ struct PlaylistDetailView: View {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
             ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
         }
+    }
+
+    /// Songs grouped by album for the Albums view. Preserves playlist order within each album.
+    private var songsByAlbum: [(albumName: String, albumId: String?, songs: [Song])] {
+        var seen: [String: Int] = [:]
+        var groups: [(albumName: String, albumId: String?, songs: [Song])] = []
+        for song in filteredSongs {
+            let key = song.album ?? "Unknown Album"
+            if let idx = seen[key] {
+                groups[idx].songs.append(song)
+            } else {
+                seen[key] = groups.count
+                groups.append((albumName: key, albumId: song.albumId, songs: [song]))
+            }
+        }
+        return groups
     }
 
     var body: some View {
@@ -46,6 +73,14 @@ struct PlaylistDetailView: View {
                             .bold()
 
                         HStack(spacing: 8) {
+                            if isSmartPlaylist {
+                                Label("Smart Playlist", systemImage: "sparkles")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text("·")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             Text(verbatim: "\(playlist.songCount ?? 0) songs")
                             if let duration = playlist.duration {
                                 Text("·")
@@ -54,6 +89,16 @@ struct PlaylistDetailView: View {
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                        if isSmartPlaylist {
+                            Picker("View", selection: $smartViewMode) {
+                                ForEach(SmartPlaylistViewMode.allCases, id: \.self) {
+                                    Text($0.rawValue).tag($0)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 200)
+                        }
 
                         // Action buttons
                         HStack(spacing: 16) {
@@ -111,55 +156,56 @@ struct PlaylistDetailView: View {
                     .padding(.vertical, 12)
                 }
 
-                // Songs
-                Section {
-                    #if os(macOS)
-                    MacTrackTableView(songs: filteredSongs, settings: columnSettings)
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                    #else
-                    ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
-                        HStack(spacing: 0) {
-                            if isSelecting {
-                                Button {
-                                    toggleSelection(song.id)
-                                } label: {
-                                    Image(systemName: selectedSongs.contains(song.id)
-                                          ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(selectedSongs.contains(song.id)
-                                                         ? Color.accentColor : .secondary)
-                                        .font(.title3)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 8)
-                            }
-
-                            TrackRow(song: song, showTrackNumber: false)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if isSelecting {
+                // Songs or Albums view
+                if isSmartPlaylist && smartViewMode == .albums {
+                    smartAlbumsSection
+                } else {
+                    Section {
+                        #if os(macOS)
+                        MacTrackTableView(songs: filteredSongs, settings: columnSettings)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                        #else
+                        ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
+                            HStack(spacing: 0) {
+                                if isSelecting {
+                                    Button {
                                         toggleSelection(song.id)
-                                    } else {
-                                        playFromPlaylist(song: song, songs: filteredSongs, index: index)
+                                    } label: {
+                                        Image(systemName: selectedSongs.contains(song.id)
+                                              ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selectedSongs.contains(song.id)
+                                                             ? Color.accentColor : .secondary)
+                                            .font(.title3)
                                     }
+                                    .buttonStyle(.plain)
+                                    .padding(.trailing, 8)
                                 }
-                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
+
+                                TrackRow(song: song, showTrackNumber: false)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if isSelecting {
+                                            toggleSelection(song.id)
+                                        } else {
+                                            playFromPlaylist(song: song, songs: filteredSongs, index: index)
+                                        }
+                                    }
+                                    .trackContextMenu(song: song, queue: filteredSongs, index: index)
+                            }
                         }
+                        .onDelete(perform: isSmartPlaylist ? nil : { offsets in
+                            let allSongs = playlist.entry ?? []
+                            let filtered = filteredSongs
+                            let originalIndices = offsets.compactMap { offset -> Int? in
+                                guard offset < filtered.count else { return nil }
+                                let songId = filtered[offset].id
+                                return allSongs.firstIndex(where: { $0.id == songId })
+                            }
+                            removeFromPlaylist(at: IndexSet(originalIndices), songs: allSongs)
+                        })
+                        #endif
                     }
-                    .onDelete { offsets in
-                        // Map filtered indices to original playlist indices
-                        let allSongs = playlist.entry ?? []
-                        let filtered = filteredSongs
-                        let originalIndices = offsets.compactMap { offset -> Int? in
-                            guard offset < filtered.count else { return nil }
-                            let songId = filtered[offset].id
-                            return allSongs.firstIndex(where: { $0.id == songId })
-                        }
-                        removeFromPlaylist(
-                            at: IndexSet(originalIndices), songs: allSongs
-                        )
-                    }
-                    #endif
                 }
 
                 // Batch action bar
@@ -196,10 +242,16 @@ struct PlaylistDetailView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
-                            showEditSheet = true
+                            openEditSheet()
                         } label: {
-                            Label("Edit Playlist", systemImage: "pencil")
+                            if isLoadingSmartRules {
+                                Label("Loading…", systemImage: "arrow.clockwise")
+                            } else {
+                                Label(isSmartPlaylist ? "Edit Smart Playlist" : "Edit Playlist",
+                                      systemImage: isSmartPlaylist ? "sparkles" : "pencil")
+                            }
                         }
+                        .disabled(isLoadingSmartRules)
 
                         Button {
                             if let songs = playlist?.entry, !songs.isEmpty {
@@ -299,7 +351,11 @@ struct PlaylistDetailView: View {
         .sheet(isPresented: $showEditSheet) {
             if let playlist {
                 PlaylistEditorView(
-                    mode: .edit(playlistId: playlist.id, currentName: playlist.name)
+                    mode: isSmartPlaylist
+                        ? .smartPlaylist(playlistId: playlist.id,
+                                         currentName: playlist.name,
+                                         existingRules: smartPlaylistRules)
+                        : .edit(playlistId: playlist.id, currentName: playlist.name)
                 ) {
                     await loadPlaylist()
                 }
@@ -331,6 +387,68 @@ struct PlaylistDetailView: View {
         .refreshable { await loadPlaylist() }
     }
 
+    @ViewBuilder
+    private var smartAlbumsSection: some View {
+        ForEach(songsByAlbum, id: \.albumName) { group in
+            Section {
+                ForEach(Array(group.songs.enumerated()), id: \.element.id) { index, song in
+                    TrackRow(song: song, showTrackNumber: true)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            playFromPlaylist(song: song, songs: group.songs, index: index)
+                        }
+                        .trackContextMenu(song: song, queue: group.songs, index: index)
+                }
+            } header: {
+                HStack(spacing: 10) {
+                    AlbumArtView(coverArtId: group.songs.first?.coverArt, size: 40, cornerRadius: 4)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.albumName)
+                            .font(.subheadline)
+                            .bold()
+                        if let artist = group.songs.first?.albumArtist ?? group.songs.first?.artist {
+                            Text(artist)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Text("\(group.songs.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func openEditSheet() {
+        if isLoadingSmartRules {
+            // Detection still in flight — wait for it
+            return
+        }
+        showEditSheet = true
+    }
+
+    /// Detect smart playlist status eagerly when the playlist loads. Runs once per view lifetime.
+    private func detectSmartPlaylist() async {
+        guard let ndClient = appState.navidromeClient, ndClient.isAvailable else {
+            didDetectSmartPlaylist = true
+            return
+        }
+        isLoadingSmartRules = true
+        defer { isLoadingSmartRules = false; didDetectSmartPlaylist = true }
+        do {
+            let playlists = try await ndClient.getPlaylists()
+            if let match = playlists.first(where: { $0.id == playlistId }) {
+                isSmartPlaylist = match.rules != nil
+                smartPlaylistRules = match.rules
+            }
+        } catch {
+            // Detection failed — treat as regular playlist
+        }
+    }
+
     private func loadPlaylist() async {
         // Show cached playlist data instantly while fetching fresh
         if playlist == nil {
@@ -345,6 +463,10 @@ struct PlaylistDetailView: View {
             if playlist == nil {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
+        }
+        // Run smart playlist detection once (not on every refresh)
+        if playlist != nil && !didDetectSmartPlaylist {
+            await detectSmartPlaylist()
         }
     }
 

@@ -28,6 +28,17 @@ final class LibraryFilter {
     var selectedLabels: Set<String> = []
     var year: Int?
 
+    /// Advanced rule-set filter (regex / operator-based, persisted separately).
+    var ruleSet: FilterRuleSet = .init() {
+        didSet { persistRuleSet() }
+    }
+
+    /// Live result count written back by the library view after each filter pass. Nil when filter is inactive.
+    var matchCount: Int?
+
+    /// UserDefaults key used to persist this filter's rule set. Set once after init.
+    var ruleSetPersistenceKey: String?
+
     var isActive: Bool {
         isFavorited != .none ||
         isRated != .none ||
@@ -35,7 +46,8 @@ final class LibraryFilter {
         !selectedArtistIds.isEmpty ||
         !selectedGenres.isEmpty ||
         !selectedLabels.isEmpty ||
-        year != nil
+        year != nil ||
+        !ruleSet.isEmpty
     }
 
     var activeFilterCount: Int {
@@ -47,6 +59,7 @@ final class LibraryFilter {
         if !selectedGenres.isEmpty { count += 1 }
         if !selectedLabels.isEmpty { count += 1 }
         if year != nil { count += 1 }
+        if !ruleSet.isEmpty { count += 1 }
         return count
     }
 
@@ -58,5 +71,22 @@ final class LibraryFilter {
         selectedGenres = []
         selectedLabels = []
         year = nil
+        ruleSet = .init()
+        matchCount = nil
+    }
+
+    // MARK: Persistence
+
+    func loadRuleSet(from key: String) {
+        ruleSetPersistenceKey = key
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode(FilterRuleSet.self, from: data) else { return }
+        ruleSet = decoded
+    }
+
+    private func persistRuleSet() {
+        guard let key = ruleSetPersistenceKey,
+              let data = try? JSONEncoder().encode(ruleSet) else { return }
+        UserDefaults.standard.set(data, forKey: key)
     }
 }
