@@ -445,7 +445,7 @@ struct MacMiniPlayerView: View {
                 }
 
                 // Seek bar with timestamps
-                let duration = engine.duration > 0 ? engine.duration : Double(engine.currentSong?.duration ?? 1)
+                let duration = max(engine.duration, Double(engine.currentSong?.duration ?? 1))
                 HStack(spacing: 6) {
                     Text(formatDuration(sliderValue))
                         .font(.caption2)
@@ -464,6 +464,9 @@ struct MacMiniPlayerView: View {
                     .accessibilityLabel("Track Progress")
                     .onChange(of: engine.currentTime) { _, newTime in
                         if !isDragging { sliderValue = newTime }
+                    }
+                    .onChange(of: duration) { _, newDuration in
+                        if sliderValue > newDuration { sliderValue = newDuration }
                     }
 
                     Text("-\(formatDuration(max(0, duration - sliderValue)))")
