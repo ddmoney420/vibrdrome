@@ -16,6 +16,11 @@ final class CachedAlbum {
     var created: String?
     var userRating: Int = 0
     var label: String?
+    var mbzAlbumId: String?
+    var mbzAlbumArtistId: String?
+    var mbzReleaseGroupId: String?
+    var playCount: Int = 0
+    var isCompilation: Bool = false
     var cachedAt: Date = Date()
 
     var songs: [CachedSong] = []
@@ -34,6 +39,43 @@ final class CachedAlbum {
         self.created = album.created
         self.userRating = album.userRating ?? 0
         self.label = album.label
+        self.mbzAlbumId = album.musicBrainzId
+    }
+
+    init(from ndAlbum: NDAlbum) {
+        self.id = ndAlbum.id
+        self.name = ndAlbum.name
+        self.artistName = ndAlbum.artist
+        self.artistId = ndAlbum.artistId
+        self.coverArtId = ndAlbum.id        // ND albums use the album id as coverArt id
+        self.year = ndAlbum.year
+        self.genre = ndAlbum.genre
+        self.songCount = ndAlbum.songCount
+        self.duration = ndAlbum.duration.map { Int($0) }
+        self.isStarred = ndAlbum.starred ?? false
+        self.userRating = ndAlbum.rating ?? 0
+        self.mbzAlbumId = ndAlbum.mbzAlbumId
+        self.mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
+        self.mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        self.playCount = ndAlbum.playCount ?? 0
+        self.isCompilation = ndAlbum.compilation ?? false
+    }
+
+    func update(from ndAlbum: NDAlbum) {
+        name = ndAlbum.name
+        artistId = ndAlbum.artistId
+        year = ndAlbum.year
+        genre = ndAlbum.genre
+        songCount = ndAlbum.songCount
+        duration = ndAlbum.duration.map { Int($0) }
+        isStarred = ndAlbum.starred ?? false
+        userRating = ndAlbum.rating ?? 0
+        mbzAlbumId = ndAlbum.mbzAlbumId
+        mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
+        mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        playCount = ndAlbum.playCount ?? 0
+        isCompilation = ndAlbum.compilation ?? false
+        cachedAt = Date()
     }
 
     /// Update existing record with fresh server data.
@@ -50,6 +92,7 @@ final class CachedAlbum {
         created = album.created
         userRating = album.userRating ?? 0
         label = album.label
+        mbzAlbumId = album.musicBrainzId
         cachedAt = Date()
     }
 
@@ -70,7 +113,7 @@ final class CachedAlbum {
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
             replayGain: nil,
-            musicBrainzId: nil,
+            musicBrainzId: mbzAlbumId,
             recordLabels: label.map { [RecordLabel(name: $0)] }
         )
     }

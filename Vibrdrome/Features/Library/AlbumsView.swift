@@ -360,6 +360,11 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.albumFilter.ruleSet) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.libraryCache.generation) { _, _ in
+            if appState.albumFilter.isActive { debouncedApplyLocalFilters() }
+        }
+        .onAppear { appState.activeFilterWindowContext = .album }
         #endif
     }
 
@@ -696,6 +701,7 @@ struct AlbumsView: View {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
+            appState.albumFilter.matchCount = nil
             recomputeFilteredAlbums()
             return
         }
@@ -705,19 +711,19 @@ struct AlbumsView: View {
         let selectedArtistNames = selectedArtistNames(for: filter)
         let snapshot = FilterSnapshot(filter: filter)
         let allAlbums: [Album]
-        if let cachedAlbums = appState.libraryCache.albums {
-            allAlbums = cachedAlbums
-        } else {
-            do {
+        do {
+            if let cachedAlbums = appState.libraryCache.albums {
+                allAlbums = cachedAlbums
+            } else {
                 var descriptor = FetchDescriptor<CachedAlbum>()
                 descriptor.sortBy = [SortDescriptor(\.name)]
                 allAlbums = try modelContext.fetch(descriptor).map { $0.toAlbum() }
-            } catch {
-                Logger(subsystem: "com.vibrdrome.app", category: "Albums")
-                    .error("Failed to fetch albums for filter: \(error)")
-                localFilteredAlbums = nil
-                return
             }
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "Albums")
+                .error("Failed to fetch albums for filter: \(error)")
+            localFilteredAlbums = nil
+            return
         }
 
         // Heavy array filtering runs off the MainActor.
@@ -734,6 +740,7 @@ struct AlbumsView: View {
 
         guard !Task.isCancelled else { return }
         localFilteredAlbums = filtered
+        appState.albumFilter.matchCount = filtered.count
         recomputeFilteredAlbums()
     }
 
@@ -759,19 +766,23 @@ struct AlbumsView: View {
     struct FilterSnapshot: Sendable {
         let isFavorited: TriState
         let isRated: TriState
+        let isRecentlyPlayed: Bool
         let selectedArtistIds: Set<String>
         let selectedGenres: Set<String>
         let selectedLabels: Set<String>
         let year: Int?
+        let ruleSet: FilterRuleSet
 
         @MainActor
         init(filter: LibraryFilter) {
             isFavorited = filter.isFavorited
             isRated = filter.isRated
+            isRecentlyPlayed = filter.isRecentlyPlayed
             selectedArtistIds = filter.selectedArtistIds
             selectedGenres = filter.selectedGenres
             selectedLabels = filter.selectedLabels
             year = filter.year
+            ruleSet = filter.ruleSet
         }
     }
 
@@ -787,22 +798,29 @@ struct AlbumsView: View {
         if !snapshot.selectedArtistIds.isEmpty {
             let matchesById = album.artistId.map { snapshot.selectedArtistIds.contains($0) } ?? false
             let matchesByName = album.artist.map { selectedArtistNames.contains($0) } ?? false
-            guard matchesById || matchesByName else {
-                return false
-            }
+            guard matchesById || matchesByName else { return false }
         }
         if !snapshot.selectedGenres.isEmpty {
-            guard let genre = album.genre, snapshot.selectedGenres.contains(genre) else {
-                return false
-            }
+            guard let genre = album.genre, snapshot.selectedGenres.contains(genre) else { return false }
         }
         if !snapshot.selectedLabels.isEmpty {
-            guard let albumLabel = album.label, snapshot.selectedLabels.contains(albumLabel) else {
-                return false
-            }
+            guard let albumLabel = album.label, snapshot.selectedLabels.contains(albumLabel) else { return false }
         }
         if let yearFilter = snapshot.year {
             guard album.year == yearFilter else { return false }
+        }
+        if !snapshot.ruleSet.isEmpty {
+            let meta = FilterRuleSet.AlbumMeta(
+                title: album.name,
+                artist: album.artist,
+                genre: album.genre,
+                label: album.label,
+                year: album.year,
+                duration: album.duration,
+                rating: album.userRating ?? 0,
+                isFavorited: album.starred != nil
+            )
+            guard snapshot.ruleSet.matches(album: meta) else { return false }
         }
         return true
     }

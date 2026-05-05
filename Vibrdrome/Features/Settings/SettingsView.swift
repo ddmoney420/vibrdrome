@@ -380,6 +380,7 @@ struct SettingsView: View {
                     Task {
                         await appState.librarySyncManager.sync(
                             client: appState.subsonicClient,
+                            ndClient: appState.navidromeClient,
                             container: PersistenceController.shared.container
                         )
                     }
@@ -398,6 +399,7 @@ struct SettingsView: View {
                     Task {
                         await appState.librarySyncManager.incrementalSync(
                             client: appState.subsonicClient,
+                            ndClient: appState.navidromeClient,
                             container: PersistenceController.shared.container
                         )
                     }
@@ -443,6 +445,7 @@ struct SettingsView: View {
                     // rather than waiting until the next launch.
                     appState.librarySyncManager.startPolling(
                         client: appState.subsonicClient,
+                        ndClient: appState.navidromeClient,
                         container: PersistenceController.shared.container
                     )
                 }

@@ -199,6 +199,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
     let suffix: String?
     let duration: Int?
     let bitRate: Int?
+    let bitDepth: Int?
+    let samplingRate: Int?
+    let comment: String?
     let path: String?
     let discNumber: Int?
     let created: String?
@@ -215,8 +218,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         track: Int? = nil, year: Int? = nil, genre: String? = nil,
         coverArt: String? = nil, size: Int? = nil,
         contentType: String? = nil, suffix: String? = nil,
-        duration: Int? = nil, bitRate: Int? = nil, path: String? = nil,
-        discNumber: Int? = nil, created: String? = nil,
+        duration: Int? = nil, bitRate: Int? = nil,
+        bitDepth: Int? = nil, samplingRate: Int? = nil, comment: String? = nil,
+        path: String? = nil, discNumber: Int? = nil, created: String? = nil,
         starred: String? = nil, userRating: Int? = nil,
         bpm: Int? = nil, replayGain: ReplayGain? = nil, musicBrainzId: String? = nil
     ) {
@@ -226,8 +230,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         self.track = track; self.year = year; self.genre = genre
         self.coverArt = coverArt; self.size = size
         self.contentType = contentType; self.suffix = suffix
-        self.duration = duration; self.bitRate = bitRate; self.path = path
-        self.discNumber = discNumber; self.created = created
+        self.duration = duration; self.bitRate = bitRate
+        self.bitDepth = bitDepth; self.samplingRate = samplingRate; self.comment = comment
+        self.path = path; self.discNumber = discNumber; self.created = created
         self.starred = starred; self.userRating = userRating
         self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
     }

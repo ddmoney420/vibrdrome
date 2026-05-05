@@ -155,6 +155,15 @@ enum UserDefaultsKeys {
     static let macSidePanelWidth = "macSidePanelWidth"
     static let macMiniPlayerPanelTrigger = "macMiniPlayerPanelTrigger"
 
+    // MARK: - Advanced Filter Rule Sets
+
+    static let albumFilterRuleSet = "albumFilterRuleSet"
+    static let songFilterRuleSet = "songFilterRuleSet"
+    static let artistFilterRuleSet = "artistFilterRuleSet"
+    static let albumFilterRuleBuilderExpanded = "albumFilterRuleBuilderExpanded"
+    static let songFilterRuleBuilderExpanded = "songFilterRuleBuilderExpanded"
+    static let artistFilterRuleBuilderExpanded = "artistFilterRuleBuilderExpanded"
+
     // MARK: - Library Sync
 
     static let lastLibrarySyncDate = "lastLibrarySyncDate"
