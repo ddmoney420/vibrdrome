@@ -437,7 +437,7 @@ struct AlbumsView: View {
                             if index < cachedFilteredAlbums.count {
                                 let album = cachedFilteredAlbums[index]
                                 NavigationLink(value: AlbumNavItem(id: album.id)) {
-                                    albumGridCard(album)
+                                    AlbumGridCard(album: album)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("albumCard_\(album.id)")
@@ -458,29 +458,6 @@ struct AlbumsView: View {
                 .padding(16)
             }
             .onAppear { restoreScroll(proxy: proxy) }
-        }
-    }
-
-    private func albumGridCard(_ album: Album) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            GeometryReader { geo in
-                AlbumArtView(coverArtId: album.coverArt, size: geo.size.width, cornerRadius: 10)
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-
-            Text(album.name)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.primary)
-                .lineLimit(1)
-
-            if let artist = album.artist {
-                Text(artist)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
         }
     }
 

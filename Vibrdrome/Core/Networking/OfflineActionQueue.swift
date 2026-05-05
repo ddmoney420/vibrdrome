@@ -86,6 +86,31 @@ final class OfflineActionQueue {
         enqueue(actionType: "scrobble", targetId: id, submission: submission)
     }
 
+    /// Set rating on a song or album — queues offline if no network
+    func setRating(id: String, rating: Int) async throws {
+        let client = AppState.shared.subsonicClient
+        if isConnected {
+            do {
+                try await client.setRating(id: id, rating: rating)
+                return
+            } catch {
+                offlineLog.info("setRating failed, queuing for offline sync")
+            }
+        }
+        let serverId = AppState.shared.activeServerId ?? ""
+        let action = PendingAction(serverId: serverId, actionType: "setRating", targetId: id)
+        action.ratingValue = rating
+        let context = PersistenceController.shared.container.mainContext
+        context.insert(action)
+        do {
+            try context.save()
+            refreshCounts()
+            offlineLog.info("Queued setRating(\(rating)) for \(id)")
+        } catch {
+            offlineLog.error("Failed to save pending setRating: \(error)")
+        }
+    }
+
     /// Queue a ListenBrainz scrobble — submits immediately if online, queues if offline
     func listenBrainzScrobble(song: Song) async {
         if isConnected {
@@ -261,6 +286,8 @@ final class OfflineActionQueue {
             try await client.star(artistId: action.targetId)
         case "unstarArtist":
             try await client.unstar(artistId: action.targetId)
+        case "setRating":
+            try await client.setRating(id: action.targetId, rating: action.ratingValue)
         case "scrobble":
             try await client.scrobble(id: action.targetId, submission: action.submission)
         case "listenBrainzScrobble":
