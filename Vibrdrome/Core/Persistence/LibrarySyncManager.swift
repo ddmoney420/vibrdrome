@@ -241,8 +241,7 @@ final class LibrarySyncManager {
             let artChanged = stats.albumsAdded > 0 || stats.artistsAdded > 0 ||
                 stats.albumsUpdated > 0 || stats.artistsUpdated > 0
             if artChanged {
-                let prefetchContext = ModelContext(container)
-                await prefetchCoverArt(client: client, context: prefetchContext)
+                await warmImageCache(client: client, container: container)
             }
         } catch {
             syncError = "Sync failed: \(error.localizedDescription)"
