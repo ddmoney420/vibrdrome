@@ -568,6 +568,15 @@ extension AudioEngine {
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
         let song = queue[index]
+        
+        let isNewTrack = currentSong?.id != song.id
+        if shuffleEnabled, let outgoing = currentSong, isNewTrack {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
+
         currentIndex = index
         currentSong = song
         currentRadioStation = nil

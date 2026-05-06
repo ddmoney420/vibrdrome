@@ -252,10 +252,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func cancelDownload(songId: String) {
-        lock.withLock {
-            activeDownloads[songId]?.cancel()
-            activeDownloads.removeValue(forKey: songId)
-        }
+        cleanupTaskInfo(songId)
         Task { @MainActor in
             DownloadProgress.shared.remove(songId: songId)
             // Clean up the incomplete SwiftData record
@@ -364,14 +361,12 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription else { return }
 
         Task { @MainActor in
-            DownloadProgress.shared.update(songId: songId, progress: 100.0)
+            DownloadProgress.shared.update(songId: songId, progress: 1.0)
         }
 
         // D3: Always clean up activeDownloads, even on failure
         defer {
-            lock.lock()
-            activeDownloads.removeValue(forKey: songId)
-            lock.unlock()
+            cleanupTaskInfo(songId)
         }
 
         // CRITICAL: Move file synchronously before delegate returns,
@@ -467,6 +462,16 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
     }
 
+    fileprivate func cleanupTaskInfo(_ songId: String) {
+        lock.lock()
+        let downloadTask = activeDownloads[songId]
+        let taskId = downloadTask?.taskIdentifier
+        downloadTask?.cancel()
+        activeDownloads.removeValue(forKey: songId)
+        if taskId != nil { taskStartTimes.removeValue(forKey: taskId!) }
+        lock.unlock()
+    }
+    
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -475,9 +480,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let error else { return }
         guard let songId = task.taskDescription else { return }
 
-        lock.lock()
-        activeDownloads.removeValue(forKey: songId)
-        lock.unlock()
+        cleanupTaskInfo(songId)
 
         let isCancelled = (error as NSError).code == NSURLErrorCancelled
         if !isCancelled {
