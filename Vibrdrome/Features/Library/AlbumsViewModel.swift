@@ -56,6 +56,7 @@ final class AlbumsViewModel {
     var albums: [Album] = []
     var indexedAlbums: [(offset: Int, element: Album)] = []
     var prefetchRequests: [ImageRequest?] = []
+    var blurRequests: [ImageRequest?] = []
     var isLoading = true
     var error: String?
     var hasMore = true
@@ -70,6 +71,7 @@ final class AlbumsViewModel {
     private(set) var cachedFilteredAlbums: [Album] = []
     var gridColumns: [GridItem] = []
     var gridCellWidth: CGFloat = 170
+    private(set) var gridColumnCount: Int = 2
 
     // MARK: Configuration (set once at init)
 
@@ -88,10 +90,17 @@ final class AlbumsViewModel {
     private var searchTask: Task<Void, Never>?
     private var isLoadingPages = false
 
-    /// Scroll-ahead prefetcher: decoded bitmaps into memory so nearby cells appear instantly.
-    private let imagePrefetcher: ImagePrefetcher = {
+    /// Near-window prefetcher: decodes bitmaps for cells just off-screen at high priority.
+    private let nearPrefetcher: ImagePrefetcher = {
         let p = ImagePrefetcher(destination: .memoryCache)
-        p.priority = .low
+        p.priority = .high
+        return p
+    }()
+
+    /// Far-window prefetcher: decodes bitmaps for the wider scroll-ahead window at normal priority.
+    private let farPrefetcher: ImagePrefetcher = {
+        let p = ImagePrefetcher(destination: .memoryCache)
+        p.priority = .normal
         return p
     }()
 
@@ -99,6 +108,13 @@ final class AlbumsViewModel {
     private let bulkPrefetcher: ImagePrefetcher = {
         let p = ImagePrefetcher(destination: .diskCache)
         p.priority = .veryLow
+        return p
+    }()
+
+    /// Thumbnail prefetcher: persists 32px blur placeholders using the isolated blur pipeline.
+    private let thumbPrefetcher: ImagePrefetcher = {
+        let p = ImagePrefetcher(pipeline: VibrdromeApp.blurPipeline, destination: .diskCache)
+        p.priority = .normal
         return p
     }()
 
@@ -193,6 +209,7 @@ final class AlbumsViewModel {
         let cellWidth = (available - spacing * (columnCount - 1)) / columnCount
         guard abs(cellWidth - gridCellWidth) > 1 else { return }
         gridCellWidth = cellWidth
+        gridColumnCount = Int(columnCount)
         gridColumns = [GridItem(.adaptive(minimum: minCellWidth), spacing: spacing)]
         // Rebuild with correct pixel size now that actual cell width is known.
         rebuildPrefetchRequests(client: AppState.shared.subsonicClient)
@@ -214,14 +231,34 @@ final class AlbumsViewModel {
     }
 
     func prefetchImages(around index: Int) {
-        guard index >= lastPrefetchIndex + 5 || index < lastPrefetchIndex else { return }
+        guard index >= lastPrefetchIndex + 1 || index < lastPrefetchIndex else { return }
         lastPrefetchIndex = index
-        let start = min(index + 1, prefetchRequests.count)
-        let end = min(index + 120, prefetchRequests.count)
-        guard start < end else { return }
-        let requests = prefetchRequests[start..<end].compactMap { $0 }
-        guard !requests.isEmpty else { return }
-        imagePrefetcher.startPrefetching(with: requests)
+
+        // Near window: high-priority decoded bitmaps — must be ready before cells appear.
+        let nearStart = max(0, index - 5)
+        let nearEnd = min(index + 60, prefetchRequests.count)
+        if nearStart < nearEnd {
+            nearPrefetcher.startPrefetching(with: prefetchRequests[nearStart..<nearEnd].compactMap { $0 })
+        }
+
+        // Far window: normal-priority lookahead so fast-scrollers don't see grey.
+        let farEnd = min(index + 150, prefetchRequests.count)
+        if nearEnd < farEnd {
+            farPrefetcher.startPrefetching(with: prefetchRequests[nearEnd..<farEnd].compactMap { $0 })
+        }
+    }
+
+    /// Called from onScrollGeometryChange — computes which album index sits at the leading
+    /// edge of the prefetch window (1.5 viewport-heights ahead of the bottom of the visible area).
+    func prefetchImagesForScrollOffset(_ offsetY: CGFloat, viewportHeight: CGFloat) {
+        guard gridColumnCount > 0, gridCellWidth > 0 else { return }
+        // Row height: cell width (square art) + 20pt grid row spacing + 44pt for two label lines.
+        let rowHeight = gridCellWidth + 20 + 44
+        // Aim 1.5 screen-heights ahead of what's currently visible so images are decoded before arrival.
+        let lookAheadY = offsetY + viewportHeight + viewportHeight * 1.5
+        let leadingRow = Int(lookAheadY / rowHeight)
+        let leadingIndex = leadingRow * gridColumnCount
+        prefetchImages(around: min(leadingIndex, max(0, prefetchRequests.count - 1)))
     }
 
     // MARK: Sort / filter triggers
@@ -399,15 +436,17 @@ final class AlbumsViewModel {
         }
         guard !lookup.isEmpty else { return }
 
+        let totalKnown = lookup.count
+
         // For alphabetical sort orders, derive ordering locally without a persisted list.
         if effectiveListType == .alphabeticalByName && genre == nil && fromYear == nil && toYear == nil {
             let seeded = lookup.values.sorted { $0.name < $1.name }
-            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
             return
         }
         if effectiveListType == .alphabeticalByArtist && genre == nil && fromYear == nil && toYear == nil {
             let seeded = lookup.values.sorted { ($0.artist ?? "") < ($1.artist ?? "") }
-            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
             return
         }
 
@@ -415,12 +454,16 @@ final class AlbumsViewModel {
         guard let ids = loadPersistedOrder() else { return }
         let seeded = ids.compactMap { lookup[$0] }
         guard !seeded.isEmpty else { return }
-        applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+        // If the persisted ID list covers the full library, the scroll bar can reflect everything.
+        applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
     }
 
-    private func applySeeded(_ seeded: [Album], filterRaw: String, client: SubsonicClient) {
+    private func applySeeded(_ seeded: [Album], filterRaw: String, client: SubsonicClient, fullLibraryCount: Int? = nil) {
         albums = seeded
-        hasMore = true
+        // If we seeded the entire known library, mark hasMore = false so the scroll bar
+        // reflects the full length immediately. loadAlbums will correct this if the server
+        // returns a full page (meaning there may be more).
+        hasMore = fullLibraryCount.map { seeded.count < $0 } ?? true
         isLoading = false
         recomputeFilteredAlbums(filterRaw: filterRaw)
         rebuildPrefetchRequests(client: client)
@@ -538,14 +581,27 @@ final class AlbumsViewModel {
 
     func rebuildPrefetchRequests(client: SubsonicClient) {
         prefetchRequests = cachedFilteredAlbums.map { album in
-            album.coverArt.map { makeGridImageRequest(url: client.coverArtURL(id: $0, size: CoverArtSize.gridThumb)) }
+            album.coverArt.map {
+                makeGridImageRequest(
+                    url: client.coverArtURL(id: $0, size: CoverArtSize.gridThumb),
+                    cacheKey: client.coverArtCacheKey(id: $0, size: CoverArtSize.gridThumb)
+                )
+            }
         }
-        // Warm the full library into disk cache with matching requests so every cell
-        // gets a cache hit on first appearance instead of showing a grey box.
+        blurRequests = cachedFilteredAlbums.map { album in
+            album.coverArt.map {
+                var req = ImageRequest(url: client.coverArtURL(id: $0, size: CoverArtSize.blur))
+                req.userInfo[.imageIdKey] = client.coverArtCacheKey(id: $0, size: CoverArtSize.blur)
+                return req
+            }
+        }
+        // Warm full-res into disk cache so cells get a fast hit on first appearance.
         bulkPrefetcher.startPrefetching(with: prefetchRequests.compactMap { $0 })
+        // Warm blur thumbnails into memory — they're ~1 KB each so the whole library fits easily.
+        thumbPrefetcher.startPrefetching(with: blurRequests.compactMap { $0 })
     }
 
-    private func makeGridImageRequest(url: URL) -> ImageRequest {
+    private func makeGridImageRequest(url: URL, cacheKey: String? = nil) -> ImageRequest {
         #if os(macOS)
         let scale = NSScreen.main?.backingScaleFactor ?? 2
         #else
@@ -553,10 +609,12 @@ final class AlbumsViewModel {
         #endif
         let side = gridCellWidth * scale
         let pixelSize = CGSize(width: side, height: side)
-        return ImageRequest(
+        var request = ImageRequest(
             url: url,
             processors: [ImageProcessors.Resize(size: pixelSize, contentMode: .aspectFill, crop: true)]
         )
+        if let cacheKey { request.userInfo[.imageIdKey] = cacheKey }
+        return request
     }
 
     private func saveSnapshot(appState: AppState) {

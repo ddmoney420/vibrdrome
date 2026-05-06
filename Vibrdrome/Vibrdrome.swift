@@ -61,6 +61,8 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct VibrdromeApp: App {
+    static let blurPipeline: ImagePipeline = makeBlurPipeline()
+
     #if os(iOS)
     @UIApplicationDelegateAdaptor(VibrdromeAppDelegate.self) var appDelegate
     #elseif os(macOS)
@@ -338,10 +340,21 @@ struct VibrdromeApp: App {
 
     private static func makeImagePipeline() -> ImagePipeline {
         var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images")
-        // Memory cache: 500 images / 150 MB — prevents re-decompression during fast scroll in large libraries.
-        config.imageCache = ImageCache(costLimit: 150 * 1024 * 1024, countLimit: 500)
+        config.imageCache = ImageCache(costLimit: 300 * 1024 * 1024, countLimit: 2000)
         if let dataCache = config.dataCache as? DataCache {
-            dataCache.sizeLimit = 500 * 1024 * 1024
+            dataCache.sizeLimit = 1024 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
+    }
+
+    /// Separate pipeline for 32px blur placeholders — isolated disk cache so blur thumbnails
+    /// are never evicted by full-res images. 20 MB covers ~10 000 albums at ~2 KB each.
+    static func makeBlurPipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images.blur")
+        config.imageCache = ImageCache(costLimit: 10 * 1024 * 1024, countLimit: 5000)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 20 * 1024 * 1024
         }
         config.isDecompressionEnabled = true
         return ImagePipeline(configuration: config)

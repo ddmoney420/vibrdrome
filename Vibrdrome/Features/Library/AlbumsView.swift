@@ -301,7 +301,6 @@ struct AlbumsView: View {
                         }
                         .onAppear {
                             model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw)
-                            model.prefetchImages(around: index)
                         }
                     }
                 }
@@ -316,6 +315,11 @@ struct AlbumsView: View {
                     gridLoadMoreFooter
                 }
             }
+            .onScrollGeometryChange(for: CGSize.self,
+                                    of: { CGSize(width: $0.contentOffset.y, height: $0.containerSize.height) },
+                                    action: { _, new in
+                                        model.prefetchImagesForScrollOffset(new.width, viewportHeight: new.height)
+                                    })
             #if os(iOS)
             .scrollDismissesKeyboard(.immediately)
             .scrollBounceBehavior(.basedOnSize)

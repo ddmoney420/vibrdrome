@@ -255,6 +255,14 @@ final class SubsonicClient {
         return buildURL(path: "/rest/getCoverArt", extra: extra)
     }
 
+    /// Stable cache key for a cover art image — excludes the random auth salt so
+    /// Nuke can find the same image across app launches regardless of token rotation.
+    func coverArtCacheKey(id: String, size: Int? = nil) -> String {
+        var key = "\(baseURL)/getCoverArt/\(id)"
+        if let size { key += "@\(size)" }
+        return key
+    }
+
     // MARK: - Raw JSON Metadata
 
     /// Returns the raw decoded JSON object under `subsonic-response` for an endpoint.
