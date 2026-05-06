@@ -338,9 +338,10 @@ struct VibrdromeApp: App {
 
     private static func makeImagePipeline() -> ImagePipeline {
         var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images")
-        config.imageCache = ImageCache(costLimit: 50 * 1024 * 1024, countLimit: 150)
+        // Memory cache: 500 images / 150 MB — prevents re-decompression during fast scroll in large libraries.
+        config.imageCache = ImageCache(costLimit: 150 * 1024 * 1024, countLimit: 500)
         if let dataCache = config.dataCache as? DataCache {
-            dataCache.sizeLimit = 200 * 1024 * 1024
+            dataCache.sizeLimit = 500 * 1024 * 1024
         }
         config.isDecompressionEnabled = true
         return ImagePipeline(configuration: config)

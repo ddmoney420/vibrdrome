@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlbumGridCard: View {
     let album: Album
+    let cellWidth: CGFloat
 
     @State private var isStarred: Bool
     @State private var currentRating: Int
@@ -9,8 +10,9 @@ struct AlbumGridCard: View {
     @State private var isHovered = false
     #endif
 
-    init(album: Album) {
+    init(album: Album, cellWidth: CGFloat) {
         self.album = album
+        self.cellWidth = cellWidth
         self._isStarred = State(initialValue: album.starred != nil)
         self._currentRating = State(initialValue: album.userRating ?? 0)
     }
@@ -30,8 +32,6 @@ struct AlbumGridCard: View {
                     .lineLimit(1)
             }
         }
-        .onChange(of: album.starred) { old, new in if old != new { isStarred = new != nil } }
-        .onChange(of: album.userRating) { old, new in if old != new { currentRating = new ?? 0 } }
     }
 
     private var artworkWithOverlay: some View {
@@ -41,7 +41,7 @@ struct AlbumGridCard: View {
                 ZStack(alignment: .bottom) {
                     AlbumArtView(
                         coverArtId: album.coverArt,
-                        size: nil,
+                        size: cellWidth,
                         cornerRadius: 10,
                         requestSize: CoverArtSize.gridThumb
                     )

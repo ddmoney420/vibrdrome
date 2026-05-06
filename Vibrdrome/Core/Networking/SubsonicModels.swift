@@ -137,16 +137,16 @@ struct AlbumInfo2: Decodable, Sendable {
 
 // MARK: - Album Models
 
-struct RecordLabel: Decodable, Sendable {
+struct RecordLabel: Decodable, Sendable, Equatable {
     let name: String
 }
 
 /// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
-struct ItemGenre: Decodable, Sendable {
+struct ItemGenre: Decodable, Sendable, Equatable {
     let name: String
 }
 
-struct Album: Decodable, Identifiable, Sendable {
+struct Album: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let name: String
     let artist: String?

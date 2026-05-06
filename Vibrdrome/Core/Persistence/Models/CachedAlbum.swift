@@ -57,7 +57,7 @@ final class CachedAlbum {
 
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
-        var album = Album(
+        let album = Album(
             id: id,
             name: name,
             artist: artistName,
