@@ -330,7 +330,7 @@ struct LibraryFilterSidebarView: View {
         } else {
             let descriptor = FetchDescriptor<CachedAlbum>()
             let albums = (try? modelContext.fetch(descriptor)) ?? []
-            genreSet = Set(albums.compactMap(\.genre)).subtracting([""])
+            genreSet = Set(albums.flatMap(\.genres)).subtracting([""])
 
             if context == .album {
                 let labelSet = Set(albums.compactMap(\.label)).subtracting([""])

@@ -365,7 +365,7 @@ final class LibrarySyncManager {
         cached.artistName != server.artist ||
         cached.artistId != server.artistId ||
         cached.year != server.year ||
-        cached.genre != server.genre ||
+        Set(cached.genres) != Set(server.allGenres) ||
         cached.songCount != server.songCount ||
         cached.duration != server.duration ||
         cached.isStarred != (server.starred != nil) ||

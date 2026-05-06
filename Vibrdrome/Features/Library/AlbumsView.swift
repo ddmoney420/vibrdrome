@@ -393,7 +393,7 @@ struct AlbumsView: View {
                 .map(\.value).sorted()) ?? []
         }
         await loadFavoritedAlbumIds()
-        applyLocalFilters()
+        await applyLocalFilters()
         recomputeFilteredAlbums()
         #else
         if albums.isEmpty { await loadAlbums() }

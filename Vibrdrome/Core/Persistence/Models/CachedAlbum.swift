@@ -9,14 +9,13 @@ final class CachedAlbum {
     var artistId: String?
     var coverArtId: String?
     var year: Int?
-    var genre: String?
+    var genres: [String] = []
     var songCount: Int?
     var duration: Int?
     var isStarred: Bool = false
     var created: String?
     var userRating: Int = 0
     var label: String?
-    var genreNames: [String]?
     var cachedAt: Date = Date()
 
     var songs: [CachedSong] = []
@@ -28,14 +27,13 @@ final class CachedAlbum {
         self.artistId = album.artistId
         self.coverArtId = album.coverArt
         self.year = album.year
-        self.genre = album.genre
+        self.genres = album.allGenres
         self.songCount = album.songCount
         self.duration = album.duration
         self.isStarred = album.starred != nil
         self.created = album.created
         self.userRating = album.userRating ?? 0
         self.label = album.label
-        self.genreNames = album.genres.map { $0.map(\.name) }
     }
 
     /// Update existing record with fresh server data.
@@ -45,20 +43,19 @@ final class CachedAlbum {
         artistId = album.artistId
         coverArtId = album.coverArt
         year = album.year
-        genre = album.genre
+        genres = album.allGenres
         songCount = album.songCount
         duration = album.duration
         isStarred = album.starred != nil
         created = album.created
         userRating = album.userRating ?? 0
         label = album.label
-        genreNames = album.genres.map { $0.map(\.name) }
         cachedAt = Date()
     }
 
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
-        let cachedGenres = genreNames.map { $0.map { AlbumGenre(name: $0) } }
+        let albumGenres = genres.isEmpty ? nil : genres.map { AlbumGenre(name: $0) }
         return Album(
             id: id,
             name: name,
@@ -68,7 +65,7 @@ final class CachedAlbum {
             songCount: songCount,
             duration: duration,
             year: year,
-            genre: genre,
+            genre: genres.first,
             starred: isStarred ? "true" : nil,
             created: created,
             userRating: userRating > 0 ? userRating : nil,
@@ -76,7 +73,7 @@ final class CachedAlbum {
             replayGain: nil,
             musicBrainzId: nil,
             recordLabels: label.map { [RecordLabel(name: $0)] },
-            genres: cachedGenres
+            genres: albumGenres
         )
     }
 }

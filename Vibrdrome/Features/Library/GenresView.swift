@@ -258,9 +258,10 @@ struct GenresView: View {
         var genreSongCount: [String: Int] = [:]
 
         for album in allAlbums {
-            guard let genre = album.genre, !genre.isEmpty else { continue }
-            genreAlbumCount[genre, default: 0] += 1
-            genreSongCount[genre, default: 0] += album.songCount ?? 0
+            for genre in album.genres where !genre.isEmpty {
+                genreAlbumCount[genre, default: 0] += 1
+                genreSongCount[genre, default: 0] += album.songCount ?? 0
+            }
         }
 
         return genreAlbumCount.map { key, albumCount in

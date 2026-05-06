@@ -76,7 +76,7 @@ struct LibrarySyncTests {
         let album = makeAlbum(genre: "Alternative Rock")
         let cached = CachedAlbum(from: album)
         let restored = cached.toAlbum()
-        #expect(restored.genre == "Alternative Rock")
+        #expect(restored.allGenres == ["Alternative Rock"])
     }
 
     @Test func cachedAlbumStarredConversion() {
@@ -122,7 +122,7 @@ struct LibrarySyncTests {
 
         #expect(cached.name == "New Name")
         #expect(cached.year == 2024)
-        #expect(cached.genre == "Electronic")
+        #expect(cached.genres == ["Electronic"])
     }
 
     @Test func cachedAlbumUpdatePreservesIdOnMismatch() {
