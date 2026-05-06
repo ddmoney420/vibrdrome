@@ -1,13 +1,21 @@
 {
-  "images": [
+  "images" : [
     {
-      "filename": "Abstract_Hip_Hop.jpg",
-      "idiom": "universal",
-      "scale": "1x"
+      "filename" : "Abstract_Hip_Hop.jpg",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
-  "info": {
-    "version": 1,
-    "author": "xcode"
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
   }
 }

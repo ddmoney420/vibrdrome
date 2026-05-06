@@ -30,26 +30,32 @@ struct AlbumGridCard: View {
                     .lineLimit(1)
             }
         }
-        .onChange(of: album.starred) { isStarred = album.starred != nil }
-        .onChange(of: album.userRating) { currentRating = album.userRating ?? 0 }
+        .onChange(of: album.starred) { old, new in if old != new { isStarred = new != nil } }
+        .onChange(of: album.userRating) { old, new in if old != new { currentRating = new ?? 0 } }
     }
 
     private var artworkWithOverlay: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                AlbumArtView(coverArtId: album.coverArt, size: geo.size.width, cornerRadius: 10)
-                #if os(macOS)
-                if isHovered {
-                    hoverOverlay
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    AlbumArtView(
+                        coverArtId: album.coverArt,
+                        size: nil,
+                        cornerRadius: 10,
+                        requestSize: CoverArtSize.gridThumb
+                    )
+                    #if os(macOS)
+                    if isHovered {
+                        hoverOverlay
+                    }
+                    #endif
                 }
-                #endif
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-        #if os(macOS)
-        .onHover { isHovered = $0 }
-        #endif
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            #if os(macOS)
+            .onHover { isHovered = $0 }
+            #endif
     }
 
     #if os(macOS)

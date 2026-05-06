@@ -142,11 +142,18 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     appState.librarySyncManager.onSyncCompleted = {
                         appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                        }
                     }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
@@ -177,7 +184,7 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     // registerTasks() already ran synchronously in App.init(); here we just
@@ -186,6 +193,13 @@ struct VibrdromeApp: App {
                     BackgroundSyncScheduler.shared.scheduleFullSync()
                     appState.librarySyncManager.onSyncCompleted = {
                         appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                        }
                     }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
@@ -320,6 +334,16 @@ struct VibrdromeApp: App {
         default:
             logger.warning("Unknown deep link host: \(host)")
         }
+    }
+
+    private static func makeImagePipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images")
+        config.imageCache = ImageCache(costLimit: 50 * 1024 * 1024, countLimit: 150)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 200 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
     }
 }
 

@@ -70,6 +70,12 @@ struct ConditionalGlassModifier: ViewModifier {
 
 // MARK: - Grid Density
 
+enum CoverArtSize {
+    static let gridThumb = 400          // 200pt @2x — matches grid card display size
+    static let listThumb = 112          // 56pt @2x — matches list row display size
+    static let detail: Int? = nil       // omit size param — serve original resolution
+}
+
 enum GridDensity: String, CaseIterable {
     case compact, comfortable, spacious
 

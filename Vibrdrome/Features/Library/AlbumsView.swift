@@ -37,13 +37,18 @@ struct AlbumsView: View {
     @SceneStorage("albumsFilter") private var filterRaw: String = AlbumFilter.all.rawValue
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
     private var downloadedSongs: [DownloadedSong]
+    @State private var downloadedAlbumNamesCache: Set<String> = []
     @State private var cachedFilteredAlbums: [Album] = []
     @State private var scrollLoadTask: Task<Void, Never>?
     @State private var pendingPageTarget: Int = 0
-    @State private var visibleIndices: Set<Int> = []
     @State private var restoredScrollIndex: Int?
+    @State private var lastPrefetchIndex: Int = -20
     private let pageSize = 40
-    private let imagePrefetcher = ImagePrefetcher()
+    private let imagePrefetcher: ImagePrefetcher = {
+        let p = ImagePrefetcher(destination: .diskCache)
+        p.priority = .low
+        return p
+    }()
 
     enum AlbumFilter: String, CaseIterable, Identifiable {
         case all, favorites, downloaded
@@ -68,9 +73,7 @@ struct AlbumsView: View {
         AlbumFilter(rawValue: filterRaw) ?? .all
     }
 
-    private var downloadedAlbumNames: Set<String> {
-        Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
-    }
+    private var downloadedAlbumNames: Set<String> { downloadedAlbumNamesCache }
 
     enum AlbumSortOption: String, CaseIterable {
         case name, artist, year, recentlyAdded
@@ -317,6 +320,7 @@ struct AlbumsView: View {
             #if os(macOS)
             filterRaw = AlbumFilter.all.rawValue
             #endif
+            downloadedAlbumNamesCache = Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
             if albums.isEmpty {
                 await loadAlbums()
             }
@@ -333,6 +337,10 @@ struct AlbumsView: View {
         .onChange(of: searchText) { recomputeFilteredAlbums() }
         .onChange(of: filterRaw) { recomputeFilteredAlbums() }
         .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
+        .onChange(of: downloadedSongs) {
+            downloadedAlbumNamesCache = Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
+            if activeFilter == .downloaded { recomputeFilteredAlbums() }
+        }
         .onDisappear { saveSnapshot() }
         .refreshable {
             albums = []
@@ -413,11 +421,7 @@ struct AlbumsView: View {
                         }
                     }
                     .id(index)
-                    .onAppear {
-                        visibleIndices.insert(index)
-                        triggerLoadIfNeeded(at: index)
-                    }
-                    .onDisappear { visibleIndices.remove(index) }
+                    .onAppear { triggerLoadIfNeeded(at: index) }
                 }
             }
             .listStyle(.plain)
@@ -449,11 +453,9 @@ struct AlbumsView: View {
                         }
                         .id(index)
                         .onAppear {
-                            visibleIndices.insert(index)
                             triggerLoadIfNeeded(at: index)
                             prefetchImages(around: index)
                         }
-                        .onDisappear { visibleIndices.remove(index) }
                     }
                 }
                 .padding(16)
@@ -589,13 +591,14 @@ struct AlbumsView: View {
     }
 
     private func prefetchImages(around index: Int) {
-        let lookahead = 20
+        guard index >= lastPrefetchIndex + 5 || index < lastPrefetchIndex else { return }
+        lastPrefetchIndex = index
         let start = min(index + 1, cachedFilteredAlbums.count)
-        let end = min(index + lookahead, cachedFilteredAlbums.count)
+        let end = min(index + 40, cachedFilteredAlbums.count)
         guard start < end else { return }
         let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
             guard let artId = album.coverArt else { return nil }
-            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
+            return appState.subsonicClient.coverArtURL(id: artId, size: CoverArtSize.gridThumb)
         }
         guard !urls.isEmpty else { return }
         imagePrefetcher.startPrefetching(with: urls)
@@ -660,12 +663,18 @@ struct AlbumsView: View {
     }
 
     private func recomputeFilteredAlbums() {
+        let source = localFilteredAlbums ?? albums
+        // Fast path: no filter, no search, no sort override — skip the copy entirely.
+        guard activeFilter != .all || !searchText.isEmpty || clientSideSort == .year else {
+            cachedFilteredAlbums = source
+            return
+        }
         cachedFilteredAlbums = computeFilteredAlbums()
     }
 
     private func saveSnapshot() {
         appState.albumsViewSnapshots[cacheKey] = AppState.AlbumsViewSnapshot(
-            albums: albums, hasMore: hasMore, scrollIndex: visibleIndices.min()
+            albums: albums, hasMore: hasMore, scrollIndex: nil
         )
         let limit = 10
         if appState.albumsViewSnapshots.count > limit {
@@ -740,6 +749,11 @@ struct AlbumsView: View {
 
     private func selectedArtistNames(for filter: LibraryFilter) -> Set<String> {
         guard !filter.selectedArtistIds.isEmpty else { return [] }
+        if let cached = appState.libraryCache.artists {
+            return Set(cached.compactMap { artist in
+                filter.selectedArtistIds.contains(artist.id) ? artist.name : nil
+            })
+        }
         let descriptor = FetchDescriptor<CachedArtist>()
         let cachedArtists = (try? modelContext.fetch(descriptor)) ?? []
         return Set(cachedArtists.compactMap { artist in

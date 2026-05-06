@@ -717,19 +717,13 @@ final class LibrarySyncManager {
     // MARK: - Cover Art Prefetch
 
     /// Whether a prefetch pass already ran this session (avoids duplicate work).
-    private var didPrefetchThisSession = false
+    var didPrefetchThisSession = false
 
     /// Warm the in-memory image cache on startup by loading all known cover art.
     /// Images already in memory are skipped; images in disk cache load instantly.
     /// Skipped if a prefetch already ran during sync this session.
     func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
         guard !didPrefetchThisSession else { return }
-        // Skip if a full prefetch completed recently (within 24 hours)
-        if let lastPrefetch = UserDefaults.standard.object(forKey: UserDefaultsKeys.lastCoverArtPrefetchDate) as? Date,
-           Date().timeIntervalSince(lastPrefetch) < 86_400 {
-            didPrefetchThisSession = true
-            return
-        }
         let context = ModelContext(container)
         await prefetchCoverArt(client: client, context: context)
     }
@@ -768,7 +762,7 @@ final class LibrarySyncManager {
         // Filter out images already in memory or disk cache so we only fetch what's missing
         let dataCache = pipeline.configuration.dataCache as? DataCache
         let uncachedUrls: [(String, URL)] = coverArtIds.compactMap { id in
-            let url = client.coverArtURL(id: id, size: 600)
+            let url = client.coverArtURL(id: id, size: CoverArtSize.gridThumb)
             let request = ImageRequest(url: url)
             if pipeline.cache.containsCachedImage(for: request) { return nil }
             let key = pipeline.cache.makeDataCacheKey(for: request)
