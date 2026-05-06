@@ -263,9 +263,15 @@ struct MacMiniPlayerView: View {
     @Environment(\.openWindow) private var openWindow
     @SceneStorage("sidebarSelection") private var sidebarSelectionRaw: String = "artists"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
-    @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt = false
     @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
+    @AppStorage(UserDefaultsKeys.showHeartInPlayer) private var showHeartInPlayer = true
+    @AppStorage(UserDefaultsKeys.showRatingInPlayer) private var showRatingInPlayer = true
     @State private var dominantColor: Color?
+    @State private var sliderValue: Double = 0
+    @State private var isDragging = false
+    @State private var isStarred = false
+    @State private var currentRating: Int = 0
+    @State private var showEQ = false
 
     private func navigateToNowPlaying() {
         sidebarSelectionRaw = "nowPlaying"
@@ -273,79 +279,140 @@ struct MacMiniPlayerView: View {
 
     private var engine: AudioEngine { AudioEngine.shared }
 
-    private var shouldSpin: Bool {
-        engine.isPlaying && !disableSpinningArt && !reduceMotion
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            // Thin progress bar across full width
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(.quaternary)
+        HStack(spacing: 0) {
+            // LEFT: album art + track info + heart/rating
+            HStack(spacing: 10) {
+                AlbumArtView(
+                    coverArtId: engine.currentSong?.coverArt
+                        ?? engine.currentRadioStation?.radioCoverArtId,
+                    size: 52,
+                    cornerRadius: 4
+                )
+                .onTapGesture { navigateToNowPlaying() }
 
-                    Rectangle()
-                        .fill(.tint)
-                        .frame(width: engine.duration > 0
-                               ? geo.size.width * (engine.currentTime / engine.duration)
-                               : 0)
-                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
-                }
-            }
-            .frame(height: 3)
-
-            HStack(spacing: 16) {
-                // Spinning album art with circular progress ring
-                ZStack {
-                    Circle()
-                        .stroke(.white.opacity(0.1), lineWidth: 2.5)
-                        .frame(width: 56, height: 56)
-
-                    Circle()
-                        .trim(from: 0, to: engine.duration > 0
-                              ? engine.currentTime / engine.duration : 0)
-                        .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .frame(width: 56, height: 56)
-                        .rotationEffect(.degrees(-90))
-                        .animation(reduceMotion ? nil : .linear(duration: 0.5), value: engine.currentTime)
-
-                    SpinningAlbumArt(
-                        coverArtId: engine.currentSong?.coverArt
-                            ?? engine.currentRadioStation?.radioCoverArtId,
-                        shouldSpin: shouldSpin,
-                        disableSpinningArt: disableSpinningArt,
-                        reduceMotion: reduceMotion,
-                        size: 48
-                    )
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    navigateToNowPlaying()
-                }
-
-                // Song info
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(displayTitle)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(engine.currentSong?.title
+                         ?? engine.currentRadioStation?.name
+                         ?? "Not Playing")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)
 
-                    Text(displaySubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if let artist = engine.currentSong?.artist {
+                        Text(artist)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else if engine.currentRadioStation != nil {
+                        Text("Internet Radio")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let album = engine.currentSong?.album,
+                       let albumId = engine.currentSong?.albumId {
+                        Button {
+                            appState.pendingNavigation = .album(id: albumId)
+                        } label: {
+                            Text(album)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                    } else if let album = engine.currentSong?.album {
+                        Text(album)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+
+                    if showHeartInPlayer || showRatingInPlayer {
+                        HStack(spacing: 6) {
+                            if showHeartInPlayer {
+                                Button {
+                                    guard let song = engine.currentSong else { return }
+                                    let songId = song.id
+                                    let wasStarred = isStarred
+                                    isStarred = !wasStarred
+                                    engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
+                                    NotificationCenter.default.post(
+                                        name: .songStarredChanged,
+                                        object: nil,
+                                        userInfo: ["id": songId, "starred": !wasStarred]
+                                    )
+                                    Task {
+                                        do {
+                                            if wasStarred {
+                                                try await OfflineActionQueue.shared.unstar(id: songId)
+                                            } else {
+                                                try await OfflineActionQueue.shared.star(id: songId)
+                                            }
+                                        } catch {
+                                            if engine.currentSong?.id == songId {
+                                                isStarred = wasStarred
+                                                engine.updateQueueSongStarred(id: songId, starred: wasStarred)
+                                                NotificationCenter.default.post(
+                                                    name: .songStarredChanged,
+                                                    object: nil,
+                                                    userInfo: ["id": songId, "starred": wasStarred]
+                                                )
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(isStarred ? .pink : .secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
+                            }
+
+                            if showRatingInPlayer {
+                                HStack(spacing: 3) {
+                                    ForEach(1...5, id: \.self) { star in
+                                        Image(systemName: star <= currentRating ? "star.fill" : "star")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(star <= currentRating ? .yellow : .secondary)
+                                            .onTapGesture {
+                                                let newRating = star == currentRating ? 0 : star
+                                                currentRating = newRating
+                                                guard let songId = engine.currentSong?.id else { return }
+                                                engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
+                                                NotificationCenter.default.post(
+                                                    name: .songRatingChanged,
+                                                    object: nil,
+                                                    userInfo: ["id": songId, "rating": newRating]
+                                                )
+                                                Task {
+                                                    try? await OfflineActionQueue.shared.setRating(id: songId, rating: newRating)
+                                                }
+                                            }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                .frame(minWidth: 120, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    navigateToNowPlaying()
-                }
+                .onTapGesture { navigateToNowPlaying() }
+            }
+            .padding(.leading, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
+            // CENTER: transport + seek bar
+            VStack(spacing: 4) {
+                HStack(spacing: 20) {
+                    Button { engine.toggleShuffle() } label: {
+                        Image(systemName: "shuffle")
+                            .font(.caption)
+                            .foregroundStyle(engine.shuffleEnabled ? .primary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Shuffle")
 
-                // Transport controls — centered
-                HStack(spacing: 16) {
                     Button { engine.previous() } label: {
                         Image(systemName: "backward.fill")
                             .font(.body)
@@ -353,12 +420,17 @@ struct MacMiniPlayerView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Previous Track")
 
-                    Button { engine.togglePlayPause() } label: {
-                        Image(systemName: engine.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3)
+                    if engine.isBuffering {
+                        ProgressView()
+                            .frame(width: 32, height: 32)
+                    } else {
+                        Button { engine.togglePlayPause() } label: {
+                            Image(systemName: engine.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                .font(.system(size: 32))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(engine.isPlaying ? "Pause" : "Play")
 
                     Button { engine.next() } label: {
                         Image(systemName: "forward.fill")
@@ -367,31 +439,89 @@ struct MacMiniPlayerView: View {
                     .buttonStyle(.plain)
                     .disabled(engine.queue.isEmpty)
                     .accessibilityLabel("Next Track")
+
+                    Button { engine.cycleRepeatMode() } label: {
+                        Image(systemName: engine.repeatMode == .one ? "repeat.1" : "repeat")
+                            .font(.caption)
+                            .foregroundStyle(engine.repeatMode != .off ? .primary : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Repeat")
                 }
 
-                Spacer()
-
-                // Volume slider
+                // Seek bar with timestamps
+                let duration = max(engine.duration, Double(engine.currentSong?.duration ?? 1))
                 HStack(spacing: 6) {
-                    Image(systemName: "speaker.fill")
-                        .font(.caption)
+                    Text(formatDuration(sliderValue))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                        .monospacedDigit()
+                        .frame(width: 36, alignment: .trailing)
 
-                    Slider(value: Binding(
-                        get: { engine.volume },
-                        set: { engine.volume = $0 }
-                    ).animation(nil), in: 0...1)
-                    .frame(width: 100)
-                    .accessibilityLabel("Volume")
+                    Slider(
+                        value: $sliderValue,
+                        in: 0...max(duration, 1)
+                    ) { editing in
+                        isDragging = editing
+                        if !editing { engine.seek(to: sliderValue) }
+                    }
+                    .tint(.primary)
+                    .accessibilityLabel("Track Progress")
+                    .onChange(of: engine.currentTime) { _, newTime in
+                        if !isDragging { sliderValue = newTime }
+                    }
+                    .onChange(of: duration) { _, newDuration in
+                        if sliderValue > newDuration { sliderValue = newDuration }
+                    }
 
-                    Image(systemName: "speaker.wave.3.fill")
-                        .font(.caption)
+                    Text("-\(formatDuration(max(0, duration - sliderValue)))")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                        .monospacedDigit()
+                        .frame(width: 36, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: 480)
+
+            // RIGHT: secondary actions + volume
+            HStack(spacing: 14) {
+                Button {
+                    appState.activeSidePanel = (appState.activeSidePanel == .queue) ? nil : .queue
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.caption)
+                        .foregroundStyle(appState.activeSidePanel == .queue ? .primary : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Queue")
+                .accessibilityLabel("Show Queue")
+
+                Button {
+                    appState.activeSidePanel = (appState.activeSidePanel == .lyrics) ? nil : .lyrics
+                } label: {
+                    Image(systemName: "quote.bubble")
+                        .font(.caption)
+                        .foregroundStyle(appState.activeSidePanel == .lyrics ? .primary : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Lyrics")
+                .accessibilityLabel("Show Lyrics")
+
+                Button {
+                    showEQ = true
+                } label: {
+                    Image(systemName: "slider.vertical.3")
+                        .font(.caption)
+                        .foregroundStyle(engine.eqEnabled ? .primary : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Equalizer")
+                .accessibilityLabel("Equalizer")
+                .sheet(isPresented: $showEQ) {
+                    EQView()
+                        .frame(minWidth: 480, idealWidth: 540, minHeight: 480, idealHeight: 560)
                 }
 
-                // Visualizer
                 Button {
                     openWindow(id: "visualizer")
                 } label: {
@@ -400,24 +530,32 @@ struct MacMiniPlayerView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Open Visualizer")
+                .help("Visualizer")
                 .accessibilityLabel("Open Visualizer")
 
-                // Pop-out mini player
-                Button {
-                    openWindow(id: "mini-player")
-                } label: {
-                    Image(systemName: "pip.enter")
-                        .font(.caption)
+                HStack(spacing: 5) {
+                    Image(systemName: "speaker.fill")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+
+                    Slider(value: Binding(
+                        get: { Double(engine.userVolume) },
+                        set: { engine.userVolume = Float($0) }
+                    ).animation(nil), in: 0...1)
+                    .frame(width: 80)
+                    .accessibilityLabel("Volume")
+
+                    Image(systemName: "speaker.wave.3.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                .help("Pop out mini player")
-                .accessibilityLabel("Pop Out Mini Player")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.trailing, 12)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .padding(.vertical, 8)
         .background {
             ZStack {
                 Rectangle().fill(.bar)
@@ -455,33 +593,36 @@ struct MacMiniPlayerView: View {
                 }
             }
         }
+        .onAppear {
+            isStarred = engine.currentSong?.starred != nil
+            currentRating = engine.currentSong?.userRating ?? 0
+        }
+        .onChange(of: engine.currentSong?.id) {
+            isStarred = engine.currentSong?.starred != nil
+            currentRating = engine.currentSong?.userRating ?? 0
+            isDragging = false
+            sliderValue = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .songStarredChanged)) { note in
+            guard let id = note.userInfo?["id"] as? String, id == engine.currentSong?.id,
+                  let starred = note.userInfo?["starred"] as? Bool else { return }
+            isStarred = starred
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .songRatingChanged)) { note in
+            guard let id = note.userInfo?["id"] as? String, id == engine.currentSong?.id,
+                  let rating = note.userInfo?["rating"] as? Int else { return }
+            currentRating = rating
+        }
         .task(id: engine.currentSong?.coverArt ?? engine.currentRadioStation?.id) {
             await loadDominantColor()
         }
     }
 
-    private var displayTitle: String {
-        if let song = engine.currentSong {
-            return song.title
-        }
-        if let station = engine.currentRadioStation {
-            return station.name
-        }
-        return "Not Playing"
-    }
-
-    private var displaySubtitle: String {
-        if let song = engine.currentSong {
-            let nextIndex = engine.currentIndex + 1
-            if engine.queue.indices.contains(nextIndex) {
-                return "Next: \(engine.queue[nextIndex].title)"
-            }
-            return song.artist ?? ""
-        }
-        if engine.currentRadioStation != nil {
-            return "Internet Radio"
-        }
-        return ""
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let m = total / 60
+        let s = total % 60
+        return "\(m):\(String(format: "%02d", s))"
     }
 
     private func loadDominantColor() async {
