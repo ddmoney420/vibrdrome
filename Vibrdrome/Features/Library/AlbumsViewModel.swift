@@ -88,6 +88,7 @@ final class AlbumsViewModel {
     private var lastPrefetchIndex = -20
     private var filterTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
+    private var geometryTask: Task<Void, Never>?
     private var isLoadingPages = false
     /// Total count known from disk seed — lets us avoid incorrectly setting hasMore=true
     /// when the server returns a full page that doesn't actually imply there are more pages.
@@ -205,6 +206,15 @@ final class AlbumsViewModel {
 
     func updateGridGeometry(containerWidth: CGFloat, minCellWidth: CGFloat) {
         guard containerWidth > 0 else { return }
+        geometryTask?.cancel()
+        geometryTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled, let self else { return }
+            self.applyGridGeometry(containerWidth: containerWidth, minCellWidth: minCellWidth)
+        }
+    }
+
+    private func applyGridGeometry(containerWidth: CGFloat, minCellWidth: CGFloat) {
         let spacing: CGFloat = 16
         let padding: CGFloat = 32
         let available = containerWidth - padding
@@ -214,7 +224,6 @@ final class AlbumsViewModel {
         gridCellWidth = cellWidth
         gridColumnCount = Int(columnCount)
         gridColumns = [GridItem(.adaptive(minimum: minCellWidth), spacing: spacing)]
-        // Rebuild with correct pixel size now that actual cell width is known.
         rebuildPrefetchRequests(client: AppState.shared.subsonicClient)
     }
 

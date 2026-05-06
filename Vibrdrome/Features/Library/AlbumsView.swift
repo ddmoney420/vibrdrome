@@ -13,6 +13,13 @@ struct AlbumsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
+    #if os(macOS)
+    // Stored references break the @Observable tracking chain: AlbumsView.body reads these
+    // fields once at property-init time, so changes to other AppState properties (e.g.
+    // activeSidePanel) don't invalidate the grid. AlbumFilterWatcher tracks sub-properties.
+    private let albumFilter = AppState.shared.albumFilter
+    private let libraryCache = AppState.shared.libraryCache
+    #endif
     @State private var model: AlbumsViewModel
     @State private var searchText = ""
     @State private var searchIsActive = false
@@ -104,14 +111,11 @@ struct AlbumsView: View {
         }
         #endif
         #if os(macOS)
-        .onChange(of: appState.albumFilter.isFavorited) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.isRated) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.isRecentlyPlayed) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.selectedArtistIds) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.selectedGenres) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.selectedLabels) { debouncedFilter() }
-        .onChange(of: appState.albumFilter.year) { debouncedFilter() }
-        .onChange(of: appState.libraryCache.generation) { _, _ in debouncedFilter() }
+        .modifier(AlbumFilterWatcher(
+            filter: albumFilter,
+            cache: libraryCache,
+            onChange: { debouncedFilter() }
+        ))
         #endif
     }
 
@@ -443,6 +447,30 @@ private struct AlbumContextMenu: View {
     }
 }
 
+// MARK: - AlbumFilterWatcher
+
+/// Watches LibraryFilter and LibraryDataCache directly so AlbumsView.body does not
+/// access AppState properties — preventing activeSidePanel changes from re-rendering the grid.
+#if os(macOS)
+private struct AlbumFilterWatcher: ViewModifier {
+    let filter: LibraryFilter
+    let cache: LibraryDataCache
+    let onChange: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: filter.isFavorited) { onChange() }
+            .onChange(of: filter.isRated) { onChange() }
+            .onChange(of: filter.isRecentlyPlayed) { onChange() }
+            .onChange(of: filter.selectedArtistIds) { onChange() }
+            .onChange(of: filter.selectedGenres) { onChange() }
+            .onChange(of: filter.selectedLabels) { onChange() }
+            .onChange(of: filter.year) { onChange() }
+            .onChange(of: cache.generation) { _, _ in onChange() }
+    }
+}
+#endif
+
 // MARK: - AlbumFilterToggleButton
 
 #if os(macOS)
@@ -451,12 +479,10 @@ private struct AlbumFilterToggleButton: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if appState.activeSidePanel == .albumFilters {
-                    appState.activeSidePanel = nil
-                } else {
-                    appState.activeSidePanel = .albumFilters
-                }
+            if appState.activeSidePanel == .albumFilters {
+                appState.activeSidePanel = nil
+            } else {
+                appState.activeSidePanel = .albumFilters
             }
         } label: {
             Image(systemName: appState.albumFilter.isActive
