@@ -39,7 +39,6 @@ struct AlbumsView: View {
     private var downloadedSongs: [DownloadedSong]
     @State private var downloadedAlbumNamesCache: Set<String> = []
     @State private var cachedFilteredAlbums: [Album] = []
-    @State private var scrollLoadTask: Task<Void, Never>?
     @State private var pendingPageTarget: Int = 0
     @State private var restoredScrollIndex: Int?
     @State private var lastPrefetchIndex: Int = -20
@@ -407,21 +406,21 @@ struct AlbumsView: View {
     private var albumList: some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(0..<totalItemCount, id: \.self) { index in
-                    Group {
-                        if index < cachedFilteredAlbums.count {
-                            let album = cachedFilteredAlbums[index]
-                            NavigationLink(value: AlbumNavItem(id: album.id)) {
-                                AlbumCard(album: album)
-                            }
-                            .accessibilityIdentifier("albumRow_\(album.id)")
-                            .contextMenu { rowContextMenu(for: album) }
-                        } else {
-                            albumListPlaceholder
+                ForEach(cachedFilteredAlbums) { album in
+                    NavigationLink(value: AlbumNavItem(id: album.id)) {
+                        AlbumCard(album: album)
+                    }
+                    .accessibilityIdentifier("albumRow_\(album.id)")
+                    .contextMenu { rowContextMenu(for: album) }
+                    .onAppear {
+                        if let index = cachedFilteredAlbums.firstIndex(where: { $0.id == album.id }) {
+                            triggerLoadIfNeeded(at: index)
                         }
                     }
-                    .id(index)
-                    .onAppear { triggerLoadIfNeeded(at: index) }
+                }
+
+                if hasMore && localFilteredAlbums == nil && searchText.isEmpty {
+                    listLoadMoreFooter
                 }
             }
             .listStyle(.plain)
@@ -429,38 +428,73 @@ struct AlbumsView: View {
         }
     }
 
+    private var listLoadMoreFooter: some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .padding(.vertical, 8)
+                .onAppear {
+                    pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
+                    Task { await loadPages() }
+                }
+            Spacer()
+        }
+        .listRowSeparator(.hidden)
+    }
+
     // MARK: - Grid view
 
     private var albumGrid: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
-                ], spacing: 20) {
-                    ForEach(0..<totalItemCount, id: \.self) { index in
-                        Group {
-                            if index < cachedFilteredAlbums.count {
-                                let album = cachedFilteredAlbums[index]
-                                NavigationLink(value: AlbumNavItem(id: album.id)) {
-                                    AlbumGridCard(album: album)
+            GeometryReader { geo in
+                let columnCount = max(1, Int(geo.size.width / gridDensity.minimumWidth))
+                let spacing: CGFloat = 16
+                let totalPadding: CGFloat = 32
+                let cellWidth = (geo.size.width - totalPadding - spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)
+                let columns = Array(repeating: GridItem(.fixed(cellWidth), spacing: spacing), count: columnCount)
+
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 20) {
+                        ForEach(cachedFilteredAlbums) { album in
+                            NavigationLink(value: AlbumNavItem(id: album.id)) {
+                                AlbumGridCard(album: album)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("albumCard_\(album.id)")
+                            .contextMenu { rowContextMenu(for: album) }
+                            .onAppear {
+                                if let index = cachedFilteredAlbums.firstIndex(where: { $0.id == album.id }) {
+                                    triggerLoadIfNeeded(at: index)
+                                    prefetchImages(around: index)
                                 }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("albumCard_\(album.id)")
-                                .contextMenu { rowContextMenu(for: album) }
-                            } else {
-                                albumGridPlaceholder
                             }
                         }
-                        .id(index)
-                        .onAppear {
-                            triggerLoadIfNeeded(at: index)
-                            prefetchImages(around: index)
-                        }
+                    }
+                    .padding(16)
+
+                    if hasMore && localFilteredAlbums == nil && searchText.isEmpty {
+                        gridLoadMoreFooter
                     }
                 }
-                .padding(16)
+                #if os(iOS)
+                .scrollDismissesKeyboard(.immediately)
+                .scrollBounceBehavior(.basedOnSize)
+                #endif
+                .onAppear { restoreScroll(proxy: proxy) }
             }
-            .onAppear { restoreScroll(proxy: proxy) }
+        }
+    }
+
+    private var gridLoadMoreFooter: some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .padding(.vertical, 24)
+                .onAppear {
+                    pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
+                    Task { await loadPages() }
+                }
+            Spacer()
         }
     }
 
@@ -518,61 +552,12 @@ struct AlbumsView: View {
         }
     }
 
-    private var albumListPlaceholder: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.quaternary)
-                .frame(width: 56, height: 56)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(.quaternary)
-                    .frame(width: 120, height: 14)
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(.quaternary)
-                    .frame(width: 80, height: 12)
-            }
-            Spacer()
-        }
-    }
-
-    private var albumGridPlaceholder: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.quaternary)
-                .aspectRatio(1, contentMode: .fit)
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.quaternary)
-                .frame(height: 14)
-            RoundedRectangle(cornerRadius: 3)
-                .fill(.quaternary)
-                .frame(width: 80, height: 12)
-        }
-    }
-
-    private var totalItemCount: Int {
-        guard localFilteredAlbums == nil, searchText.isEmpty else { return cachedFilteredAlbums.count }
-        guard hasMore, let totalCount = appState.libraryCache.albums?.count else { return cachedFilteredAlbums.count }
-        return max(cachedFilteredAlbums.count, totalCount)
-    }
-
     private func triggerLoadIfNeeded(at index: Int) {
-        guard localFilteredAlbums == nil, hasMore else { return }
-        if index >= cachedFilteredAlbums.count {
-            // Scrolled into placeholder territory — always update target, debounce the load
-            pendingPageTarget = max(pendingPageTarget, albums.count + (index - cachedFilteredAlbums.count) + pageSize)
-            scrollLoadTask?.cancel()
-            scrollLoadTask = Task {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { return }
-                await loadPages()
-            }
-        } else if !isLoading {
-            // Near end of loaded items — prefetch immediately
-            let prefetchThreshold = max(cachedFilteredAlbums.count - 30, 0)
-            if index >= prefetchThreshold {
-                pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
-                Task { await loadPages() }
-            }
+        guard localFilteredAlbums == nil, hasMore, !isLoading else { return }
+        let prefetchThreshold = max(cachedFilteredAlbums.count - 30, 0)
+        if index >= prefetchThreshold {
+            pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
+            Task { await loadPages() }
         }
     }
 
@@ -605,7 +590,6 @@ struct AlbumsView: View {
     }
 
     private func loadAlbums() async {
-        scrollLoadTask?.cancel()
         pendingPageTarget = 0
         let client = appState.subsonicClient
         let sortType = effectiveListType
@@ -640,10 +624,8 @@ struct AlbumsView: View {
         isLoading = true
         defer {
             isLoading = false
-            // If target moved while loading, schedule another batch
             if albums.count < pendingPageTarget, hasMore {
-                scrollLoadTask?.cancel()
-                scrollLoadTask = Task { await loadPages() }
+                Task { await loadPages() }
             }
         }
         while albums.count < pendingPageTarget, hasMore, !Task.isCancelled {
