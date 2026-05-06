@@ -845,7 +845,7 @@ struct AlbumsView: View {
             }
         }
         if !snapshot.selectedGenres.isEmpty {
-            guard let genre = album.genre, snapshot.selectedGenres.contains(genre) else {
+            guard !snapshot.selectedGenres.isDisjoint(with: album.allGenres) else {
                 return false
             }
         }
