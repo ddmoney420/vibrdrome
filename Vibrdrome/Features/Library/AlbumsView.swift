@@ -319,6 +319,7 @@ struct AlbumsView: View {
                                     of: { CGSize(width: $0.contentOffset.y, height: $0.containerSize.height) },
                                     action: { _, new in
                                         model.prefetchImagesForScrollOffset(new.width, viewportHeight: new.height)
+                                        model.triggerLoadIfNeededForScrollOffset(new.width, viewportHeight: new.height, filterRaw: filterRaw)
                                     })
             #if os(iOS)
             .scrollDismissesKeyboard(.immediately)

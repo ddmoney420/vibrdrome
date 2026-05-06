@@ -89,6 +89,9 @@ final class AlbumsViewModel {
     private var filterTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
     private var isLoadingPages = false
+    /// Total count known from disk seed — lets us avoid incorrectly setting hasMore=true
+    /// when the server returns a full page that doesn't actually imply there are more pages.
+    private var seededTotalCount: Int?
 
     /// Near-window prefetcher: decodes bitmaps for cells just off-screen at high priority.
     private let nearPrefetcher: ImagePrefetcher = {
@@ -219,7 +222,7 @@ final class AlbumsViewModel {
 
     func triggerLoadIfNeeded(at index: Int, appState: AppState, filterRaw: String) {
         guard localFilteredAlbums == nil, hasMore, !isLoadingPages else { return }
-        let threshold = max(cachedFilteredAlbums.count - 30, 0)
+        let threshold = max(cachedFilteredAlbums.count - 60, 0)
         guard index >= threshold else { return }
         pendingPageTarget = max(pendingPageTarget, albums.count + pageSize)
         Task { await loadPages(appState: appState, filterRaw: filterRaw) }
@@ -228,6 +231,18 @@ final class AlbumsViewModel {
     /// Closure-friendly overload — uses AppState.shared so ForEach cells don't capture the environment object.
     func triggerLoadIfNeeded(at index: Int, filterRaw: String) {
         triggerLoadIfNeeded(at: index, appState: AppState.shared, filterRaw: filterRaw)
+    }
+
+    /// Called from onScrollGeometryChange — triggers pagination when within 2 viewport-heights
+    /// of the end, well before the user reaches the last rendered cell.
+    func triggerLoadIfNeededForScrollOffset(_ offsetY: CGFloat, viewportHeight: CGFloat, filterRaw: String) {
+        guard gridColumnCount > 0, gridCellWidth > 0 else { return }
+        let rowHeight = gridCellWidth + 20 + 44
+        let totalRows = Int(ceil(Double(cachedFilteredAlbums.count) / Double(gridColumnCount)))
+        let totalContentHeight = CGFloat(totalRows) * rowHeight + 32
+        let distanceFromBottom = totalContentHeight - (offsetY + viewportHeight)
+        guard distanceFromBottom < viewportHeight * 2 else { return }
+        triggerLoadIfNeeded(at: cachedFilteredAlbums.count - 1, filterRaw: filterRaw)
     }
 
     func prefetchImages(around index: Int) {
@@ -460,9 +475,7 @@ final class AlbumsViewModel {
 
     private func applySeeded(_ seeded: [Album], filterRaw: String, client: SubsonicClient, fullLibraryCount: Int? = nil) {
         albums = seeded
-        // If we seeded the entire known library, mark hasMore = false so the scroll bar
-        // reflects the full length immediately. loadAlbums will correct this if the server
-        // returns a full page (meaning there may be more).
+        seededTotalCount = fullLibraryCount
         hasMore = fullLibraryCount.map { seeded.count < $0 } ?? true
         isLoading = false
         recomputeFilteredAlbums(filterRaw: filterRaw)
@@ -507,8 +520,24 @@ final class AlbumsViewModel {
             let result = try await client.getAlbumList(
                 type: sortType, size: pageSize, offset: 0,
                 genre: effectiveGenre, fromYear: fromYear, toYear: toYear)
-            albums = result
-            hasMore = result.count >= pageSize
+            let firstPageMore = result.count >= pageSize
+            // If we already have more items (from seed/snapshot), keep them — don't let a
+            // single page response shrink the visible list. Load more pages to fill the gap.
+            if result.count < albums.count {
+                hasMore = firstPageMore
+                if firstPageMore {
+                    pendingPageTarget = max(pendingPageTarget, albums.count)
+                    Task { await loadPages(appState: appState, filterRaw: filterRaw) }
+                }
+            } else {
+                albums = result
+                if let known = seededTotalCount, result.count <= known {
+                    hasMore = false
+                } else {
+                    hasMore = firstPageMore
+                }
+            }
+            seededTotalCount = nil
             recomputeFilteredAlbums(filterRaw: filterRaw)
             rebuildPrefetchRequests(client: client)
             saveSnapshot(appState: appState)
