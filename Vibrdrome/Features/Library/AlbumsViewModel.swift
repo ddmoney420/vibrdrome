@@ -55,7 +55,7 @@ final class AlbumsViewModel {
 
     var albums: [Album] = []
     var indexedAlbums: [(offset: Int, element: Album)] = []
-    var prefetchURLs: [URL?] = []
+    var prefetchRequests: [ImageRequest?] = []
     var isLoading = true
     var error: String?
     var hasMore = true
@@ -88,9 +88,17 @@ final class AlbumsViewModel {
     private var searchTask: Task<Void, Never>?
     private var isLoadingPages = false
 
+    /// Scroll-ahead prefetcher: decoded bitmaps into memory so nearby cells appear instantly.
     private let imagePrefetcher: ImagePrefetcher = {
-        let p = ImagePrefetcher(destination: .diskCache)
+        let p = ImagePrefetcher(destination: .memoryCache)
         p.priority = .low
+        return p
+    }()
+
+    /// Full-library disk warmup: raw JPEGs into disk cache so memory-miss cells load fast.
+    private let bulkPrefetcher: ImagePrefetcher = {
+        let p = ImagePrefetcher(destination: .diskCache)
+        p.priority = .veryLow
         return p
     }()
 
@@ -125,9 +133,15 @@ final class AlbumsViewModel {
 
     // MARK: Lifecycle
 
-    func onAppear(appState: AppState, downloadedSongs: [DownloadedSong], filterRaw: String) async {
+    func onAppear(
+        appState: AppState,
+        modelContext: ModelContext,
+        downloadedSongs: [DownloadedSong],
+        filterRaw: String
+    ) async {
         downloadedAlbumNames = Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
         if albums.isEmpty {
+            seedFromDisk(appState: appState, modelContext: modelContext, filterRaw: filterRaw)
             await loadAlbums(appState: appState, filterRaw: filterRaw)
         }
         if availableGenres.isEmpty {
@@ -136,7 +150,7 @@ final class AlbumsViewModel {
         }
         await loadFavoritedAlbumIds(appState: appState)
         recomputeFilteredAlbums(filterRaw: filterRaw)
-        rebuildPrefetchURLs(client: appState.subsonicClient)
+        rebuildPrefetchRequests(client: appState.subsonicClient)
     }
 
     func onDisappear(appState: AppState) {
@@ -180,6 +194,8 @@ final class AlbumsViewModel {
         guard abs(cellWidth - gridCellWidth) > 1 else { return }
         gridCellWidth = cellWidth
         gridColumns = [GridItem(.adaptive(minimum: minCellWidth), spacing: spacing)]
+        // Rebuild with correct pixel size now that actual cell width is known.
+        rebuildPrefetchRequests(client: AppState.shared.subsonicClient)
     }
 
     // MARK: Pagination
@@ -200,12 +216,12 @@ final class AlbumsViewModel {
     func prefetchImages(around index: Int) {
         guard index >= lastPrefetchIndex + 5 || index < lastPrefetchIndex else { return }
         lastPrefetchIndex = index
-        let start = min(index + 1, prefetchURLs.count)
-        let end = min(index + 120, prefetchURLs.count)
+        let start = min(index + 1, prefetchRequests.count)
+        let end = min(index + 120, prefetchRequests.count)
         guard start < end else { return }
-        let urls = prefetchURLs[start..<end].compactMap { $0 }
-        guard !urls.isEmpty else { return }
-        imagePrefetcher.startPrefetching(with: urls)
+        let requests = prefetchRequests[start..<end].compactMap { $0 }
+        guard !requests.isEmpty else { return }
+        imagePrefetcher.startPrefetching(with: requests)
     }
 
     // MARK: Sort / filter triggers
@@ -365,6 +381,63 @@ final class AlbumsViewModel {
 
     // MARK: Private helpers
 
+    /// Instantly populate the grid from disk on cold launch so it's never empty while
+    /// waiting for the network. Uses persisted album ID ordering + CachedAlbum rows.
+    /// Skipped for .random (stale random is misleading).
+    private func seedFromDisk(appState: AppState, modelContext: ModelContext, filterRaw: String) {
+        guard effectiveListType != .random else { return }
+
+        // Build an id→Album lookup from CachedAlbum (falls back to libraryCache if ready)
+        let lookup: [String: Album]
+        if let cached = appState.libraryCache.albums, !cached.isEmpty {
+            lookup = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        } else {
+            var descriptor = FetchDescriptor<CachedAlbum>()
+            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId, \.year, \.genres, \.isStarred, \.userRating]
+            guard let rows = try? modelContext.fetch(descriptor), !rows.isEmpty else { return }
+            lookup = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.toAlbum()) })
+        }
+        guard !lookup.isEmpty else { return }
+
+        // For alphabetical sort orders, derive ordering locally without a persisted list.
+        if effectiveListType == .alphabeticalByName && genre == nil && fromYear == nil && toYear == nil {
+            let seeded = lookup.values.sorted { $0.name < $1.name }
+            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+            return
+        }
+        if effectiveListType == .alphabeticalByArtist && genre == nil && fromYear == nil && toYear == nil {
+            let seeded = lookup.values.sorted { ($0.artist ?? "") < ($1.artist ?? "") }
+            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+            return
+        }
+
+        // For server-ordered sorts, reconstruct ordering from persisted ID list.
+        guard let ids = loadPersistedOrder() else { return }
+        let seeded = ids.compactMap { lookup[$0] }
+        guard !seeded.isEmpty else { return }
+        applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient)
+    }
+
+    private func applySeeded(_ seeded: [Album], filterRaw: String, client: SubsonicClient) {
+        albums = seeded
+        hasMore = true
+        isLoading = false
+        recomputeFilteredAlbums(filterRaw: filterRaw)
+        rebuildPrefetchRequests(client: client)
+    }
+
+    private static let orderDefaultsPrefix = "albumOrder_"
+
+    private func persistOrder() {
+        let ids = albums.map(\.id)
+        guard !ids.isEmpty else { return }
+        UserDefaults.standard.set(ids, forKey: Self.orderDefaultsPrefix + cacheKey)
+    }
+
+    private func loadPersistedOrder() -> [String]? {
+        UserDefaults.standard.array(forKey: Self.orderDefaultsPrefix + cacheKey) as? [String]
+    }
+
     private func loadFavoritedAlbumIds(appState: AppState) async {
         guard favoritedAlbumIds.isEmpty else { return }
         if let starred = try? await appState.subsonicClient.getStarred(),
@@ -394,7 +467,7 @@ final class AlbumsViewModel {
             albums = result
             hasMore = result.count >= pageSize
             recomputeFilteredAlbums(filterRaw: filterRaw)
-            rebuildPrefetchURLs(client: client)
+            rebuildPrefetchRequests(client: client)
             saveSnapshot(appState: appState)
         } catch {
             if albums.isEmpty {
@@ -422,7 +495,7 @@ final class AlbumsViewModel {
                 albums.append(contentsOf: result)
                 hasMore = more
                 recomputeFilteredAlbums(filterRaw: filterRaw)
-                rebuildPrefetchURLs(client: client)
+                rebuildPrefetchRequests(client: client)
             } catch {
                 hasMore = false
                 break
@@ -463,10 +536,27 @@ final class AlbumsViewModel {
         return result
     }
 
-    func rebuildPrefetchURLs(client: SubsonicClient) {
-        prefetchURLs = cachedFilteredAlbums.map { album in
-            album.coverArt.map { client.coverArtURL(id: $0, size: CoverArtSize.gridThumb) }
+    func rebuildPrefetchRequests(client: SubsonicClient) {
+        prefetchRequests = cachedFilteredAlbums.map { album in
+            album.coverArt.map { makeGridImageRequest(url: client.coverArtURL(id: $0, size: CoverArtSize.gridThumb)) }
         }
+        // Warm the full library into disk cache with matching requests so every cell
+        // gets a cache hit on first appearance instead of showing a grey box.
+        bulkPrefetcher.startPrefetching(with: prefetchRequests.compactMap { $0 })
+    }
+
+    private func makeGridImageRequest(url: URL) -> ImageRequest {
+        #if os(macOS)
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        #else
+        let scale = UIScreen.main.scale
+        #endif
+        let side = gridCellWidth * scale
+        let pixelSize = CGSize(width: side, height: side)
+        return ImageRequest(
+            url: url,
+            processors: [ImageProcessors.Resize(size: pixelSize, contentMode: .aspectFill, crop: true)]
+        )
     }
 
     private func saveSnapshot(appState: AppState) {
@@ -479,5 +569,6 @@ final class AlbumsViewModel {
                 appState.albumsViewSnapshots.removeValue(forKey: $0)
             }
         }
+        persistOrder()
     }
 }

@@ -81,7 +81,7 @@ struct AlbumsView: View {
             #if os(macOS)
             filterRaw = AlbumFilter.all.rawValue
             #endif
-            await model.onAppear(appState: appState, downloadedSongs: downloadedSongs, filterRaw: filterRaw)
+            await model.onAppear(appState: appState, modelContext: modelContext, downloadedSongs: downloadedSongs, filterRaw: filterRaw)
             #if os(macOS)
             await model.applyLocalFilters(appState: appState, modelContext: modelContext, filterRaw: filterRaw)
             #endif
