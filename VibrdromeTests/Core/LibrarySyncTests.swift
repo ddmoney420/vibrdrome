@@ -122,7 +122,7 @@ struct LibrarySyncTests {
 
         #expect(cached.name == "New Name")
         #expect(cached.year == 2024)
-        #expect(cached.genre == "Electronic")
+        #expect(cached.genres == ["Electronic"])
     }
 
     @Test func cachedAlbumUpdatePreservesIdOnMismatch() {
@@ -217,7 +217,7 @@ struct LibrarySyncTests {
         Album(
             id: id, name: name, artist: artist, artistId: artistId,
             coverArt: nil, songCount: songCount, duration: duration,
-            year: year, genre: genre, starred: starred, created: nil,
+            year: year, genre: genre, genres: nil, starred: starred, created: nil,
             userRating: userRating, song: nil, replayGain: nil,
             musicBrainzId: nil,
             recordLabels: label.map { [RecordLabel(name: $0)] }

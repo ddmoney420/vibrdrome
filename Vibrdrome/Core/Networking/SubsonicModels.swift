@@ -141,6 +141,11 @@ struct RecordLabel: Decodable, Sendable {
     let name: String
 }
 
+/// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
+struct ItemGenre: Decodable, Sendable {
+    let name: String
+}
+
 struct Album: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
@@ -151,6 +156,7 @@ struct Album: Decodable, Identifiable, Sendable {
     let duration: Int?
     let year: Int?
     let genre: String?
+    let genres: [ItemGenre]?
     let starred: String?
     let created: String?
     let userRating: Int?
@@ -161,6 +167,15 @@ struct Album: Decodable, Identifiable, Sendable {
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
+
+    /// All genres for this album. Prefers the OpenSubsonic `genres` array when present;
+    /// falls back to the legacy single `genre` string.
+    var allGenres: [String] {
+        if let items = genres, !items.isEmpty {
+            return items.map(\.name)
+        }
+        return genre.map { [$0] } ?? []
+    }
 }
 
 struct AlbumList2Response: Decodable, Sendable {

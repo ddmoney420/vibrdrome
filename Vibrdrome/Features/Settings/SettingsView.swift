@@ -408,6 +408,15 @@ struct SettingsView: View {
                 .accessibilityIdentifier("incrementalSyncButton")
             }
 
+            Button {
+                appState.libraryCache.invalidate()
+                appState.libraryCache.rebuild(container: PersistenceController.shared.container)
+            } label: {
+                Label("Reset Cache", systemImage: "memorychip")
+            }
+            .disabled(appState.librarySyncManager.isSyncing)
+            .accessibilityIdentifier("resetCacheButton")
+
             NavigationLink {
                 SyncHistoryView()
             } label: {

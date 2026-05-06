@@ -145,6 +145,9 @@ struct VibrdromeApp: App {
                     ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    appState.librarySyncManager.onSyncCompleted = {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                    }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
                         await appState.librarySyncManager.syncIfStale(
@@ -181,6 +184,9 @@ struct VibrdromeApp: App {
                     // submit the scheduled requests once credentials are confirmed loaded.
                     BackgroundSyncScheduler.shared.scheduleRefresh()
                     BackgroundSyncScheduler.shared.scheduleFullSync()
+                    appState.librarySyncManager.onSyncCompleted = {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                    }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
                         await appState.librarySyncManager.syncIfStale(

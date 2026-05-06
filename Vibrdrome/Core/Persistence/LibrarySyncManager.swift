@@ -37,6 +37,10 @@ final class LibrarySyncManager {
     /// Stats from the most recent sync, updated live during sync.
     var lastSyncStats: SyncStats?
 
+    /// Called on MainActor after each successful sync completes. Wire this up in the app startup
+    /// task to trigger a library cache rebuild so filters see fresh data after polling syncs.
+    var onSyncCompleted: (@MainActor () -> Void)?
+
     /// Polling timer for change detection while app is active.
     private var pollingTask: Task<Void, Never>?
 
@@ -206,6 +210,7 @@ final class LibrarySyncManager {
                     stats: &working, incremental: incremental,
                     progress: updateProgress, publishStats: publishPartialStats
                 )
+                try Self.backfillAlbumGenresOffMain(container: container, progress: updateProgress)
                 try await Self.syncPlaylistsOffMain(
                     client: client, container: container,
                     stats: &working,
@@ -220,6 +225,7 @@ final class LibrarySyncManager {
 
             lastSyncDate = Date()
             lastSyncStats = stats
+            onSyncCompleted?()
 
             // Save sync history on a fresh context (the work context above is already gone).
             let historyContext = ModelContext(container)
@@ -364,7 +370,7 @@ final class LibrarySyncManager {
         cached.artistName != server.artist ||
         cached.artistId != server.artistId ||
         cached.year != server.year ||
-        cached.genre != server.genre ||
+        Set(cached.genres) != Set(server.allGenres) ||
         cached.songCount != server.songCount ||
         cached.duration != server.duration ||
         cached.isStarred != (server.starred != nil) ||
@@ -566,6 +572,48 @@ final class LibrarySyncManager {
         cached.isStarred = song.starred != nil
         cached.rating = song.userRating ?? 0
         cached.cachedAt = Date()
+    }
+
+    // MARK: - Genre Backfill
+
+    nonisolated static func backfillAlbumGenresOffMain(
+        container: ModelContainer,
+        progress: @Sendable (String) -> Void
+    ) throws {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+
+        // SwiftData can't translate [String].isEmpty or optional != nil into SQL,
+        // so fetch all albums/songs and filter in memory.
+        let albumsNeedingGenres = try context.fetch(FetchDescriptor<CachedAlbum>())
+            .filter { $0.genres.isEmpty }
+        guard !albumsNeedingGenres.isEmpty else { return }
+
+        progress("Backfilling album genres…")
+
+        let songsWithGenre = try context.fetch(FetchDescriptor<CachedSong>())
+            .filter { $0.genre != nil && $0.albumId != nil }
+
+        // Build albumId → Set<genre> from songs belonging to empty-genre albums
+        let albumIds = Set(albumsNeedingGenres.map { $0.id })
+        var albumGenres: [String: Set<String>] = [:]
+        for song in songsWithGenre {
+            guard let albumId = song.albumId, albumIds.contains(albumId),
+                  let genre = song.genre, !genre.isEmpty else { continue }
+            albumGenres[albumId, default: []].insert(genre)
+        }
+
+        var backfilledCount = 0
+        for album in albumsNeedingGenres {
+            guard let genres = albumGenres[album.id], !genres.isEmpty else { continue }
+            album.genres = genres.sorted()
+            backfilledCount += 1
+        }
+
+        if backfilledCount > 0 {
+            try context.save()
+            syncLog.info("Backfilled genres for \(backfilledCount) albums from song metadata")
+        }
     }
 
     // MARK: - Playlists
