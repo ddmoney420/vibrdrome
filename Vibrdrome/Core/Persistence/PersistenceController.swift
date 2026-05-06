@@ -21,6 +21,7 @@ final class PersistenceController {
         let schema = Schema([
             CachedArtist.self,
             CachedAlbum.self,
+            AlbumGenre.self,
             CachedSong.self,
             CachedPlaylist.self,
             CachedPlaylistEntry.self,

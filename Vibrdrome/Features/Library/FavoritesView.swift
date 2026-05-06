@@ -45,24 +45,27 @@ struct FavoritesView: View {
     }
 
     private func computeFilteredArtists() -> [Artist] {
-        let artists = starredArtists.map { $0.toArtist() }
-        if searchText.isEmpty { return artists }
-        return artists.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        if searchText.isEmpty { return starredArtists.map { $0.toArtist() } }
+        return starredArtists
+            .filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            .map { $0.toArtist() }
     }
 
     private func computeFilteredAlbums() -> [Album] {
-        let albums = starredAlbums.map { $0.toAlbum() }
-        if searchText.isEmpty { return albums }
-        return albums.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        if searchText.isEmpty { return starredAlbums.map { $0.toAlbum() } }
+        return starredAlbums
+            .filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            .map { $0.toAlbum() }
     }
 
     private func computeFilteredSongs() -> [Song] {
-        let songs = starredSongs.map { $0.toSong() }
-        if searchText.isEmpty { return songs }
-        return songs.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
-        }
+        if searchText.isEmpty { return starredSongs.map { $0.toSong() } }
+        return starredSongs
+            .filter {
+                $0.title.localizedCaseInsensitiveContains(searchText) ||
+                ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+            }
+            .map { $0.toSong() }
     }
 
     var body: some View {
