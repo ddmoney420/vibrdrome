@@ -330,7 +330,17 @@ struct LibraryFilterSidebarView: View {
         } else {
             let descriptor = FetchDescriptor<CachedAlbum>()
             let albums = (try? modelContext.fetch(descriptor)) ?? []
-            genreSet = Set(albums.flatMap(\.genres)).subtracting([""])
+            var mutableGenreSet = Set(albums.flatMap(\.genres)).subtracting([""])
+
+            // Fallback: if backfillAlbumGenresOffMain hasn't run yet, album.genres may be
+            // empty. Union in song genres so the sidebar isn't blank during that window.
+            if mutableGenreSet.isEmpty {
+                let songDescriptor = FetchDescriptor<CachedSong>()
+                let songs = (try? modelContext.fetch(songDescriptor)) ?? []
+                mutableGenreSet.formUnion(songs.compactMap(\.genre))
+                mutableGenreSet.subtract([""])
+            }
+            genreSet = mutableGenreSet
 
             if context == .album {
                 let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
