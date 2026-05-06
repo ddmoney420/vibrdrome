@@ -740,11 +740,12 @@ struct AlbumsView: View {
 
     private func selectedArtistNames(for filter: LibraryFilter) -> Set<String> {
         guard !filter.selectedArtistIds.isEmpty else { return [] }
-        let descriptor = FetchDescriptor<CachedArtist>()
+        let ids = filter.selectedArtistIds
+        let descriptor = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate { ids.contains($0.id) }
+        )
         let cachedArtists = (try? modelContext.fetch(descriptor)) ?? []
-        return Set(cachedArtists.compactMap { artist in
-            filter.selectedArtistIds.contains(artist.id) ? artist.name : nil
-        })
+        return Set(cachedArtists.map(\.name))
     }
 
     private func recentlyPlayedIds(for filter: LibraryFilter) -> Set<String>? {

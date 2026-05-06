@@ -45,8 +45,10 @@ struct ArtistsView: View {
         ArtistFilter(rawValue: filterRaw) ?? .all
     }
 
-    private var downloadedArtistNames: Set<String> {
-        Set(downloadedSongs.compactMap { $0.artistName?.lowercased() })
+    @State private var downloadedArtistNames: Set<String> = []
+
+    private func recomputeDownloadedArtistNames() {
+        downloadedArtistNames = Set(downloadedSongs.compactMap { $0.artistName?.lowercased() })
     }
 
     enum ArtistSortOption: String, CaseIterable {
@@ -234,6 +236,7 @@ struct ArtistsView: View {
             #endif
             await loadArtists()
             await loadFavorites()
+            recomputeDownloadedArtistNames()
             #if os(macOS)
             applyLocalFilters()
             #endif
@@ -241,6 +244,7 @@ struct ArtistsView: View {
         }
         .onChange(of: searchText) { recomputeFilteredIndexes() }
         .onChange(of: sortReversed) { recomputeFilteredIndexes() }
+        .onChange(of: downloadedSongs) { recomputeDownloadedArtistNames(); recomputeFilteredIndexes() }
         .refreshable { await loadArtists() }
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
