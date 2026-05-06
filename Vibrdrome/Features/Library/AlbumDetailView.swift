@@ -155,7 +155,7 @@ struct AlbumDetailView: View {
             blurredArt(coverArtId: album.coverArt)
 
             HStack(alignment: .top, spacing: 24) {
-                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14)
+                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14, requestSize: CoverArtSize.detail)
                     .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -275,7 +275,7 @@ struct AlbumDetailView: View {
             let opacity = minY < -100 ? max(0, 1 + (minY + 100) / 150) : 1.0
 
             ZStack {
-                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0)
+                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0, requestSize: CoverArtSize.detail)
                     .frame(width: geo.size.width, height: height)
                     .clipped()
                     .scaleEffect(scale)

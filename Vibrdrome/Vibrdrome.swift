@@ -61,6 +61,8 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct VibrdromeApp: App {
+    static let blurPipeline: ImagePipeline = makeBlurPipeline()
+
     #if os(iOS)
     @UIApplicationDelegateAdaptor(VibrdromeAppDelegate.self) var appDelegate
     #elseif os(macOS)
@@ -142,11 +144,18 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     appState.librarySyncManager.onSyncCompleted = {
                         appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                        }
                     }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
@@ -177,7 +186,7 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
                     // registerTasks() already ran synchronously in App.init(); here we just
@@ -186,6 +195,13 @@ struct VibrdromeApp: App {
                     BackgroundSyncScheduler.shared.scheduleFullSync()
                     appState.librarySyncManager.onSyncCompleted = {
                         appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                        }
                     }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
@@ -320,6 +336,28 @@ struct VibrdromeApp: App {
         default:
             logger.warning("Unknown deep link host: \(host)")
         }
+    }
+
+    private static func makeImagePipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images")
+        config.imageCache = ImageCache(costLimit: 300 * 1024 * 1024, countLimit: 2000)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 1024 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
+    }
+
+    /// Separate pipeline for 32px blur placeholders — isolated disk cache so blur thumbnails
+    /// are never evicted by full-res images. 20 MB covers ~10 000 albums at ~2 KB each.
+    static func makeBlurPipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images.blur")
+        config.imageCache = ImageCache(costLimit: 10 * 1024 * 1024, countLimit: 5000)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 20 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
     }
 }
 
