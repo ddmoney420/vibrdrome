@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class CachedArtist {
+    #Index<CachedArtist>([\.name], [\.isStarred])
+
     @Attribute(.unique) var id: String
     var name: String
     var coverArtId: String?

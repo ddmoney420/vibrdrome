@@ -606,7 +606,7 @@ final class LibrarySyncManager {
         var backfilledCount = 0
         for album in albumsNeedingGenres {
             guard let genres = albumGenres[album.id], !genres.isEmpty else { continue }
-            album.genres = genres.sorted()
+            album.genreLinks = genres.sorted().map { AlbumGenre(name: $0) }
             backfilledCount += 1
         }
 
