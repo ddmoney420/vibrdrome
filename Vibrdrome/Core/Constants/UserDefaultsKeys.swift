@@ -9,6 +9,8 @@ extension Notification.Name {
     static let focusSearchBar = Notification.Name("com.vibrdrome.focusSearchBar")
     /// Posted when a song's starred state changes. userInfo: ["id": String, "starred": Bool]
     static let songStarredChanged = Notification.Name("com.vibrdrome.songStarredChanged")
+    /// Posted when a song's rating changes. userInfo: ["id": String, "rating": Int]
+    static let songRatingChanged = Notification.Name("com.vibrdrome.songRatingChanged")
 }
 
 /// Centralized UserDefaults key constants.

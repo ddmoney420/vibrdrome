@@ -159,8 +159,13 @@ extension NowPlayingView {
                                 currentRating = newRating
                                 guard let songId = engine.currentSong?.id else { return }
                                 engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
+                                NotificationCenter.default.post(
+                                    name: .songRatingChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "rating": newRating]
+                                )
                                 Task {
-                                    try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                                    try? await OfflineActionQueue.shared.setRating(id: songId, rating: newRating)
                                 }
                             }
                     }
