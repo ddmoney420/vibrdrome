@@ -117,7 +117,7 @@ actor PredownloadManager {
             status = .waiting
             if !wasAlreadyDownloaded && firstDownload {
                 predownloadLog.debug("Sleeping 10 seconds before starting download")
-                try? await Task.sleep(nanoseconds: 10_000_000_000) // 20 seconds
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
                 guard !Task.isCancelled else {return}
                 firstDownload = false
             }
@@ -197,56 +197,57 @@ actor PredownloadManager {
     }
 
     /// Monitor download progress and detect stalls
-private func monitorDownloadProgress(songId: String) async {
-    var speed = 0.0
-    var hasStarted = false
-    let startupTimeout: TimeInterval = 20.0
+    private func monitorDownloadProgress(songId: String) async {
+        var speed = 0.0
+        var hasStarted = false
+        let startupTimeout: TimeInterval = 20.0
 
-    while !Task.isCancelled {
-        // 1. Batch fetch state
-        let (progress, currentSpeed, exists) = await MainActor.run {
-            (DownloadProgress.shared.progress(for: songId),
-             DownloadProgress.shared.speed(for: songId),
-             DownloadProgress.shared.progressBySongId[songId] != nil)
-        }
-
-        // 2. State Transition: Wait for start, then wait for completion
-        if !hasStarted {
-            if progress > 0.01 {
-                hasStarted = true
-                lastProgressUpdate = Date()
-                status = .active
-                predownloadLog.debug("Song download started for song: \(songId)")
-            } else if Date().timeIntervalSince(lastProgressUpdate ?? Date()) > startupTimeout {
-                status = .stalled
-                predownloadLog.warning("Startup timeout for song: \(songId)")
+        while !Task.isCancelled {
+            // 1. Batch fetch state
+            let (progress, currentSpeed, exists) = await MainActor.run {
+                (DownloadProgress.shared.progress(for: songId),
+                 DownloadProgress.shared.speed(for: songId),
+                 DownloadProgress.shared.progressBySongId[songId] != nil)
             }
-        } else if !exists || progress >= 1.0 { // Started, now check for completion
-            break
-        }
 
-        // 3. Stall & Speed Logic (only if started)
-        if hasStarted {
-            if progress > 0.5 { speed = currentSpeed }
-            if progress > lastProgressValue {
-                lastProgressUpdate = Date(); lastProgressValue = progress; status = .active
-            } else if Date().timeIntervalSince(lastProgressUpdate ?? Date()) > stallTimeout {
-                status = .stalled
-                predownloadLog.warning("Stalled for song: \(songId)")
+            // 2. State Transition: Wait for start, then wait for completion
+            if !hasStarted {
+                if progress > 0.01 {
+                    hasStarted = true
+                    lastProgressUpdate = Date()
+                    status = .active
+                    predownloadLog.debug("Song download started for song: \(songId)")
+                } else if Date().timeIntervalSince(lastProgressUpdate ?? Date()) > startupTimeout {
+                    status = .stalled
+                    predownloadLog.warning("Startup timeout for song: \(songId)")
+                }
+            } else if !exists || progress >= 1.0 { // Started, now check for completion
+                break
             }
+
+            // 3. Stall & Speed Logic (only if started)
+            if hasStarted {
+                if progress > 0.5 { speed = currentSpeed }
+                if progress > lastProgressValue {
+                    lastProgressUpdate = Date(); lastProgressValue = progress; status = .active
+                } else if Date().timeIntervalSince(lastProgressUpdate ?? Date()) > stallTimeout {
+                    status = .stalled
+                    predownloadLog.warning("Stalled for song: \(songId)")
+                }
+            }
+
+            try? await Task.sleep(for: .milliseconds(hasStarted ? 200 : 20))
         }
 
-        try? await Task.sleep(for: .milliseconds(hasStarted ? 200 : 20))
+        // 4. Finalize Averages
+        if speed > 0 {
+            lastSpeeds = (lastSpeeds + [speed]).suffix(3)
+            avgSpeed = lastSpeeds.reduce(0, +) / Double(lastSpeeds.count)
+            let finalAvg = avgSpeed
+            await MainActor.run { AudioEngine.shared.predownloadSpeed = finalAvg }
+        }
     }
-
-    // 4. Finalize Averages
-    if speed > 0 {
-        lastSpeeds = (lastSpeeds + [speed]).suffix(3)
-        avgSpeed = lastSpeeds.reduce(0, +) / Double(lastSpeeds.count)
-        let finalAvg = avgSpeed
-        await MainActor.run { AudioEngine.shared.predownloadSpeed = finalAvg }
-    }
-}
+    
     /// Check if a song is already downloaded
     private func isSongAlreadyDownloaded(_ song: Song) async -> Bool {
         await MainActor.run {

@@ -32,7 +32,11 @@ struct DownloadsView: View {
                     if !songs.isEmpty {
                         HStack(spacing: 12) {
                             Button {
-                                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                                AudioEngine.shared.play(
+                                    song: songs[0],
+                                    from: songs,
+                                    at: 0
+                                )
                             } label: {
                                 Label("Play All", systemImage: "play.fill")
                                     .font(.subheadline)
@@ -45,7 +49,11 @@ struct DownloadsView: View {
 
                             Button {
                                 let shuffled = songs.shuffled()
-                                AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                                AudioEngine.shared.play(
+                                    song: shuffled[0],
+                                    from: shuffled,
+                                    at: 0
+                                )
                             } label: {
                                 Label("Shuffle", systemImage: "shuffle")
                                     .font(.subheadline)
@@ -63,10 +71,19 @@ struct DownloadsView: View {
                         DownloadedSongRow(download: download)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                let allSongs = completedDownloads.map { $0.toSong() }
+                                let allSongs = completedDownloads.map {
+                                    $0.toSong()
+                                }
                                 let song = download.toSong()
-                                let playIndex = allSongs.firstIndex(where: { $0.id == song.id }) ?? 0
-                                AudioEngine.shared.play(song: song, from: allSongs, at: playIndex)
+                                let playIndex =
+                                    allSongs.firstIndex(where: {
+                                        $0.id == song.id
+                                    }) ?? 0
+                                AudioEngine.shared.play(
+                                    song: song,
+                                    from: allSongs,
+                                    at: playIndex
+                                )
                             }
                     }
                     .onDelete { offsets in
@@ -93,7 +110,7 @@ struct DownloadsView: View {
         }
         .accessibilityIdentifier("downloadsList")
         #if os(iOS)
-        .contentMargins(.bottom, 80)
+            .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Downloads")
         .alert("Delete All Downloads?", isPresented: $showDeleteConfirmation) {
@@ -110,7 +127,10 @@ struct DownloadsView: View {
         completed.reduce(0) { $0 + $1.fileSize }
     }
 
-    private func deleteDownloads(_ completed: [DownloadedSong], at offsets: IndexSet) {
+    private func deleteDownloads(
+        _ completed: [DownloadedSong],
+        at offsets: IndexSet
+    ) {
         for offset in offsets {
             let download = completed[offset]
             DownloadManager.shared.deleteDownload(songId: download.songId)
@@ -124,7 +144,8 @@ private struct DownloadedSongRow: View {
     let download: DownloadedSong
 
     @Environment(AppState.self) private var appState
-    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
+    @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private
+        var showAlbumArtInLists: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -155,16 +176,24 @@ private struct DownloadedSongRow: View {
 
             Spacer()
 
-            if download.category == AudioEngine.predownloadedCategory &&
-                !UserDefaults.standard.bool(forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback) {
+            if download.category == AudioEngine.predownloadedCategory
+                && !UserDefaults.standard.bool(
+                    forKey: UserDefaultsKeys.keepSongsInCacheAfterPlayback
+                )
+            {
                 // Delete the file if X minutes * 60 seconds old
-                if download.lastAccessedAt != nil &&
-                    download.lastAccessedAt!.timeIntervalSinceNow < (-60.0 * AudioEngine.predownloadedCacheTimeMins) {
+                if download.lastAccessedAt != nil
+                    && download.lastAccessedAt!.timeIntervalSinceNow
+                        < (-60.0 * AudioEngine.predownloadedCacheTimeMins)
+                {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Image(systemName: "arrow.down.app.dashed.trianglebadge.exclamationmark")
-                            .symbolRenderingMode(.multicolor)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                        Image(
+                            systemName:
+                                "arrow.down.app.dashed.trianglebadge.exclamationmark"
+                        )
+                        .symbolRenderingMode(.multicolor)
+                        .font(.caption)
+                        .foregroundStyle(.red)
 
                         Text(formatBytes(download.fileSize))
                             .font(.caption2)
@@ -172,10 +201,13 @@ private struct DownloadedSongRow: View {
                     }
                 } else {
                     VStack(alignment: .trailing, spacing: 2) {
-                        Image(systemName: "arrow.down.app.dashed.trianglebadge.exclamationmark")
-                            .symbolRenderingMode(.multicolor)
-                            .font(.caption)
-                            .foregroundStyle(.green)
+                        Image(
+                            systemName:
+                                "arrow.down.app.dashed.trianglebadge.exclamationmark"
+                        )
+                        .symbolRenderingMode(.multicolor)
+                        .font(.caption)
+                        .foregroundStyle(.green)
 
                         Text(formatBytes(download.fileSize))
                             .font(.caption2)
