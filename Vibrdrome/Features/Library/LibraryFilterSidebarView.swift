@@ -321,32 +321,28 @@ struct LibraryFilterSidebarView: View {
     // MARK: - Helpers
 
     private func loadCachedMetadata() {
-        // Genres from albums (artists inherit album genres) or songs
-        let genreSet: Set<String>
-        if context == .song {
-            let songDescriptor = FetchDescriptor<CachedSong>()
+        // Genres: fetch only AlbumGenre name rows (indexed) instead of loading full album/song objects.
+        // For songs, union in CachedSong.genre for tracks not linked to an album.
+        var genreSet: Set<String>
+        let albumGenreDescriptor = FetchDescriptor<AlbumGenre>()
+        let albumGenreNames = (try? modelContext.fetch(albumGenreDescriptor))?.compactMap(\.name) ?? []
+        genreSet = Set(albumGenreNames).subtracting([""])
+
+        if context == .song || context == .album {
+            var songDescriptor = FetchDescriptor<CachedSong>()
+            songDescriptor.propertiesToFetch = [\.genre]
             let songs = (try? modelContext.fetch(songDescriptor)) ?? []
-            genreSet = Set(songs.compactMap(\.genre)).subtracting([""])
-        } else {
-            let descriptor = FetchDescriptor<CachedAlbum>()
-            let albums = (try? modelContext.fetch(descriptor)) ?? []
-            var mutableGenreSet = Set(albums.flatMap(\.genres)).subtracting([""])
-
-            // Fallback: if backfillAlbumGenresOffMain hasn't run yet, album.genres may be
-            // empty. Union in song genres so the sidebar isn't blank during that window.
-            if mutableGenreSet.isEmpty {
-                let songDescriptor = FetchDescriptor<CachedSong>()
-                let songs = (try? modelContext.fetch(songDescriptor)) ?? []
-                mutableGenreSet.formUnion(songs.compactMap(\.genre))
-                mutableGenreSet.subtract([""])
-            }
-            genreSet = mutableGenreSet
-
-            if context == .album {
-                let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
-                labels = labelSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-            }
+            genreSet.formUnion(Set(songs.compactMap(\.genre)).subtracting([""]))
         }
+
+        if context == .album {
+            var albumDescriptor = FetchDescriptor<CachedAlbum>()
+            albumDescriptor.propertiesToFetch = [\.label]
+            let albums = (try? modelContext.fetch(albumDescriptor)) ?? []
+            let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
+            labels = labelSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }
+
         genres = genreSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }
