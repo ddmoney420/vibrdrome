@@ -9,6 +9,8 @@ struct AlbumsView: View {
     var genre: String?
     var fromYear: Int?
     var toYear: Int?
+    var initialLabelFilter: String?
+    var initialGenreFilter: String?
 
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
@@ -44,6 +46,9 @@ struct AlbumsView: View {
     @State private var restoredScrollIndex: Int?
     private let pageSize = 40
     private let imagePrefetcher = ImagePrefetcher()
+    #if os(macOS)
+    @State private var showFilterPanel = false
+    #endif
 
     enum AlbumFilter: String, CaseIterable, Identifiable {
         case all, favorites, downloaded
@@ -105,12 +110,16 @@ struct AlbumsView: View {
         "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
     }
 
-    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil, fromYear: Int? = nil, toYear: Int? = nil) {
+    init(listType: AlbumListType, title: String = "Albums", genre: String? = nil,
+         fromYear: Int? = nil, toYear: Int? = nil,
+         initialLabelFilter: String? = nil, initialGenreFilter: String? = nil) {
         self.listType = listType
         self.title = title
         self.genre = genre
         self.fromYear = fromYear
         self.toYear = toYear
+        self.initialLabelFilter = initialLabelFilter
+        self.initialGenreFilter = initialGenreFilter
 
         let key = "\(listType.rawValue)_\(genre ?? "")_\(fromYear ?? 0)_\(toYear ?? 0)"
         if let snapshot = AppState.shared.albumsViewSnapshots[key] {
@@ -148,6 +157,13 @@ struct AlbumsView: View {
     var body: some View {
         contentView
         .overlay { albumsOverlay }
+        #if os(macOS)
+        .inspector(isPresented: $showFilterPanel) {
+            LibraryFilterSidebarView(context: .album)
+                .environment(appState)
+        }
+        .inspectorColumnWidth(min: 280, ideal: 300, max: 500)
+        #endif
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
@@ -168,6 +184,32 @@ struct AlbumsView: View {
             searchIsActive = false
             DispatchQueue.main.async { searchIsActive = true }
         }
+        .task { await onAppearTask() }
+        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
+        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
+        .onDisappear {
+            saveSnapshot()
+            #if os(macOS)
+            if initialLabelFilter != nil || initialGenreFilter != nil {
+                appState.albumFilter.reset()
+            }
+            #endif
+        }
+        .refreshable {
+            albums = []
+            hasMore = true
+            await loadAlbums()
+        }
+        #if os(macOS)
+        .onChange(of: appState.activeSidePanel) { _, newValue in
+            showFilterPanel = newValue == .albumFilters
+        }
+        .onChange(of: showFilterPanel) { _, show in
+            if !show && appState.activeSidePanel == .albumFilters {
+                appState.activeSidePanel = nil
+            }
+        }
+        #endif
     }
 
     private var contentView: some View {
@@ -193,11 +235,7 @@ struct AlbumsView: View {
             ToolbarItem(placement: .automatic) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        if appState.activeSidePanel == .albumFilters {
-                            appState.activeSidePanel = nil
-                        } else {
-                            appState.activeSidePanel = .albumFilters
-                        }
+                        showFilterPanel.toggle()
                     }
                 } label: {
                     Image(systemName: appState.albumFilter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -313,32 +351,6 @@ struct AlbumsView: View {
         .navigationDestination(for: AlbumNavItem.self) { item in
             AlbumDetailView(albumId: item.id)
         }
-        .task {
-            #if os(macOS)
-            filterRaw = AlbumFilter.all.rawValue
-            #endif
-            if albums.isEmpty {
-                await loadAlbums()
-            }
-            if availableGenres.isEmpty {
-                availableGenres = (try? await appState.subsonicClient.getGenres()
-                    .map(\.value).sorted()) ?? []
-            }
-            await loadFavoritedAlbumIds()
-            #if os(macOS)
-            await applyLocalFilters()
-            #endif
-            recomputeFilteredAlbums()
-        }
-        .onChange(of: searchText) { recomputeFilteredAlbums() }
-        .onChange(of: filterRaw) { recomputeFilteredAlbums() }
-        .onChange(of: clientSideSort) { recomputeFilteredAlbums() }
-        .onDisappear { saveSnapshot() }
-        .refreshable {
-            albums = []
-            hasMore = true
-            await loadAlbums()
-        }
         #if os(iOS)
         .sheet(item: $getInfoTarget) { target in
             NavigationStack {
@@ -360,7 +372,37 @@ struct AlbumsView: View {
         .onChange(of: appState.albumFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.selectedLabels) { debouncedApplyLocalFilters() }
         .onChange(of: appState.albumFilter.year) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.libraryCache.generation) { _, _ in debouncedApplyLocalFilters() }
+        #endif
+    }
+
+    private func onAppearTask() async {
+        #if os(macOS)
+        let hasInitialFilter = initialLabelFilter != nil || initialGenreFilter != nil
+        appState.albumFilter.reset()
+        if let initialLabelFilter {
+            appState.albumFilter.selectedLabels = [initialLabelFilter]
+            showFilterPanel = true
+        } else if let initialGenreFilter {
+            appState.albumFilter.selectedGenres = [initialGenreFilter]
+            showFilterPanel = true
+        }
+        filterRaw = AlbumFilter.all.rawValue
+        if !hasInitialFilter && albums.isEmpty { await loadAlbums() }
+        if availableGenres.isEmpty {
+            availableGenres = (try? await appState.subsonicClient.getGenres()
+                .map(\.value).sorted()) ?? []
+        }
+        await loadFavoritedAlbumIds()
+        await applyLocalFilters()
+        recomputeFilteredAlbums()
+        #else
+        if albums.isEmpty { await loadAlbums() }
+        if availableGenres.isEmpty {
+            availableGenres = (try? await appState.subsonicClient.getGenres()
+                .map(\.value).sorted()) ?? []
+        }
+        await loadFavoritedAlbumIds()
+        recomputeFilteredAlbums()
         #endif
     }
 
@@ -438,7 +480,7 @@ struct AlbumsView: View {
                             if index < cachedFilteredAlbums.count {
                                 let album = cachedFilteredAlbums[index]
                                 NavigationLink(value: AlbumNavItem(id: album.id)) {
-                                    AlbumGridCard(album: album)
+                                    albumGridCard(album)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("albumCard_\(album.id)")
@@ -459,6 +501,29 @@ struct AlbumsView: View {
                 .padding(16)
             }
             .onAppear { restoreScroll(proxy: proxy) }
+        }
+    }
+
+    private func albumGridCard(_ album: Album) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                AlbumArtView(coverArtId: album.coverArt, size: geo.size.width, cornerRadius: 10)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(album.name)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            if let artist = album.artist {
+                Text(artist)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -586,19 +651,6 @@ struct AlbumsView: View {
         )
         modelContext.insert(collection)
         try? modelContext.save()
-    }
-
-    private func prefetchImages(around index: Int) {
-        let lookahead = 20
-        let start = min(index + 1, cachedFilteredAlbums.count)
-        let end = min(index + lookahead, cachedFilteredAlbums.count)
-        guard start < end else { return }
-        let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
-            guard let artId = album.coverArt else { return nil }
-            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
-        }
-        guard !urls.isEmpty else { return }
-        imagePrefetcher.startPrefetching(with: urls)
     }
 
     private func loadAlbums() async {
@@ -793,8 +845,9 @@ struct AlbumsView: View {
             }
         }
         if !snapshot.selectedGenres.isEmpty {
-            let albumGenres = Set(album.allGenres)
-            guard !albumGenres.isDisjoint(with: snapshot.selectedGenres) else { return false }
+            guard !snapshot.selectedGenres.isDisjoint(with: album.allGenres) else {
+                return false
+            }
         }
         if !snapshot.selectedLabels.isEmpty {
             guard let albumLabel = album.label, snapshot.selectedLabels.contains(albumLabel) else {
@@ -807,4 +860,19 @@ struct AlbumsView: View {
         return true
     }
     #endif
+}
+
+private extension AlbumsView {
+    func prefetchImages(around index: Int) {
+        let lookahead = 20
+        let start = min(index + 1, cachedFilteredAlbums.count)
+        let end = min(index + lookahead, cachedFilteredAlbums.count)
+        guard start < end else { return }
+        let urls = cachedFilteredAlbums[start..<end].compactMap { album -> URL? in
+            guard let artId = album.coverArt else { return nil }
+            return appState.subsonicClient.coverArtURL(id: artId, size: 440)
+        }
+        guard !urls.isEmpty else { return }
+        imagePrefetcher.startPrefetching(with: urls)
+    }
 }

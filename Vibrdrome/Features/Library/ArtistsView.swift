@@ -245,7 +245,6 @@ struct ArtistsView: View {
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
-        .onChange(of: appState.libraryCache.generation) { _, _ in debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -437,8 +436,7 @@ struct ArtistsView: View {
                 }
                 var ids = Set<String>()
                 for album in allAlbums {
-                    let albumGenres = Set(album.allGenres)
-                    if !albumGenres.isDisjoint(with: filter.selectedGenres),
+                    if let genre = album.genre, filter.selectedGenres.contains(genre),
                        let artistId = album.artistId {
                         ids.insert(artistId)
                     }

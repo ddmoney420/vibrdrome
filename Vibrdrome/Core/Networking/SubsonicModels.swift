@@ -141,7 +141,6 @@ struct RecordLabel: Decodable, Sendable {
     let name: String
 }
 
-/// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
 struct ItemGenre: Decodable, Sendable {
     let name: String
 }
@@ -156,7 +155,6 @@ struct Album: Decodable, Identifiable, Sendable {
     let duration: Int?
     let year: Int?
     let genre: String?
-    let genres: [ItemGenre]?
     let starred: String?
     let created: String?
     let userRating: Int?
@@ -164,17 +162,28 @@ struct Album: Decodable, Identifiable, Sendable {
     let replayGain: ReplayGain?
     let musicBrainzId: String?
     let recordLabels: [RecordLabel]?
+    let genres: [ItemGenre]?
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
 
-    /// All genres for this album. Prefers the OpenSubsonic `genres` array when present;
-    /// falls back to the legacy single `genre` string.
+    /// All genre names, deduplicated. Prefers the OpenSubsonic `genres` array when present,
+    /// then falls back to `genre` / per-song genres (semicolon-split).
     var allGenres: [String] {
-        if let items = genres, !items.isEmpty {
-            return items.map(\.name)
+        if let genres, !genres.isEmpty {
+            return genres.map(\.name)
         }
-        return genre.map { [$0] } ?? []
+        var seen = Set<String>()
+        var result: [String] = []
+        let sources = (song ?? []).compactMap(\.genre) + [genre].compactMap { $0 }
+        for raw in sources {
+            for part in raw.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) })
+            where !part.isEmpty && !seen.contains(part) {
+                seen.insert(part)
+                result.append(part)
+            }
+        }
+        return result
     }
 }
 
