@@ -879,9 +879,12 @@ final class LibrarySyncManager {
             syncProgress = "Warming image cache… \(warmed)/\(diskOnlyIds.count)"
         }
         syncLog.info("Memory warm complete: \(warmed) images")
+        await warmBlurThumbnailsFromDisk(coverArtIds: coverArtIds, client: client, batchSize: batchSize)
+    }
 
-        // Also warm blur thumbnails into the blur pipeline's memory cache so cells
-        // show the blurred placeholder instantly rather than decoding from disk.
+    private func warmBlurThumbnailsFromDisk(
+        coverArtIds: Set<String>, client: SubsonicClient, batchSize: Int
+    ) async {
         let blurPipeline = VibrdromeApp.blurPipeline
         let blurDataCache = blurPipeline.configuration.dataCache as? DataCache
         let blurDiskOnlyIds: [String] = coverArtIds.compactMap { id in

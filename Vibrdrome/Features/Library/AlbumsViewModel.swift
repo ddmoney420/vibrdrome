@@ -474,8 +474,10 @@ final class AlbumsViewModel {
             let context = ModelContext(container)
             context.autosaveEnabled = false
             var descriptor = FetchDescriptor<CachedAlbum>()
-            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId,
-                                             \.coverArtId, \.year, \.isStarred, \.userRating]
+            descriptor.propertiesToFetch = [
+                \.id, \.name, \.artistName, \.artistId,
+                \.coverArtId, \.year, \.isStarred, \.userRating
+            ]
             descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
             guard let rows = try? context.fetch(descriptor), !rows.isEmpty else {
                 return ([:], nil)

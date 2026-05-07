@@ -77,7 +77,6 @@ enum CoverArtSize {
     static let detail: Int? = nil       // omit size param — serve original resolution
 }
 
-
 enum GridDensity: String, CaseIterable {
     case compact, comfortable, spacious
 
