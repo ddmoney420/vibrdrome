@@ -77,8 +77,10 @@ final class LibraryDataCache {
             convertedArtists = []
         }
 
-        // Albums
-        let albumDescriptor = FetchDescriptor<CachedAlbum>(sortBy: [SortDescriptor<CachedAlbum>(\.name)])
+        // Albums — prefetch genreLinks so toAlbum() doesn't fault each relationship lazily,
+        // which would race if two contexts are running concurrently.
+        var albumDescriptor = FetchDescriptor<CachedAlbum>(sortBy: [SortDescriptor<CachedAlbum>(\.name)])
+        albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
         let convertedAlbums: [Album]
         if let cached = try? context.fetch(albumDescriptor) {
             convertedAlbums = cached.map { $0.toAlbum() }

@@ -456,7 +456,8 @@ final class AlbumsViewModel {
             lookup = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
         } else {
             var descriptor = FetchDescriptor<CachedAlbum>()
-            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId, \.year, \.genres, \.isStarred, \.userRating]
+            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId, \.year, \.isStarred, \.userRating]
+            descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
             guard let rows = try? modelContext.fetch(descriptor), !rows.isEmpty else { return }
             lookup = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.toAlbum()) })
         }
