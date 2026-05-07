@@ -173,15 +173,7 @@ struct SidebarContentView: View {
                         }
                     }
             }
-            .inspector(isPresented: Binding(
-                get: { appState.activeSidePanel != nil },
-                set: { if !$0 { appState.activeSidePanel = nil } }
-            )) {
-                if let panel = appState.activeSidePanel {
-                    sidePanelView(for: panel)
-                }
-            }
-            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
+            .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
             #else
             NavigationStack(path: $detailPath) {
                 detailView
@@ -433,3 +425,26 @@ struct SidebarContentView: View {
         return result
     }
 }
+
+#if os(macOS)
+/// Isolates `.inspector` + side-panel rendering so that `activeSidePanel` changes
+/// only invalidate this modifier, not the entire `SidebarContentView` body.
+private struct SidePanelInspector<Panel: View>: ViewModifier {
+    @Environment(AppState.self) private var appState
+    let sidePanelWidth: CGFloat
+    @ViewBuilder let panelView: (AppState.SidePanel) -> Panel
+
+    func body(content: Content) -> some View {
+        content
+            .inspector(isPresented: Binding(
+                get: { appState.activeSidePanel != nil },
+                set: { if !$0 { appState.activeSidePanel = nil } }
+            )) {
+                if let panel = appState.activeSidePanel {
+                    panelView(panel)
+                }
+            }
+            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
+    }
+}
+#endif
