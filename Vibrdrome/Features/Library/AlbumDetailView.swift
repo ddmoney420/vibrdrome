@@ -734,30 +734,18 @@ struct AlbumDetailView: View {
     }
 
     private func loadAlbum() async {
-        // Show cached album header instantly if available
+        // Seed the header (art, title, artist) instantly from disk without faulting songs.
+        // Song rows arrive from the network fetch below; faulting cached.songs on the main
+        // actor during the navigation transition is what caused the tap-to-navigate lag.
         if album == nil {
             let aid = albumId
-            let descriptor = FetchDescriptor<CachedAlbum>(
-                predicate: #Predicate { $0.id == aid }
-            )
+            var descriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
+            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId,
+                                             \.year, \.isStarred, \.userRating, \.label]
+            descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
             if let cached = try? modelContext.fetch(descriptor).first {
-                var preview = cached.toAlbum()
-                // Attach cached songs if available
-                let songs = cached.songs
-                    .sorted { ($0.discNumber ?? 0, $0.track ?? 0) < ($1.discNumber ?? 0, $1.track ?? 0) }
-                    .map { $0.toSong() }
-                if !songs.isEmpty {
-                    preview = Album(
-                        id: preview.id, name: preview.name, artist: preview.artist,
-                        artistId: preview.artistId, coverArt: preview.coverArt,
-                        songCount: preview.songCount, duration: preview.duration,
-                        year: preview.year, genre: preview.genre, genres: preview.genres,
-                        starred: preview.starred, created: preview.created,
-                        userRating: preview.userRating, song: songs,
-                        replayGain: nil, musicBrainzId: nil, recordLabels: nil
-                    )
-                }
-                album = preview
+                album = cached.toAlbum()
+                isStarred = album?.starred != nil
             }
         }
         isLoading = album == nil
