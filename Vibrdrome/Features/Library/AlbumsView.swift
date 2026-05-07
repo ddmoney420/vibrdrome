@@ -276,7 +276,7 @@ struct AlbumsView: View {
                     }
                     .onAppear { model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw) }
                 }
-                if model.hasMore && model.localFilteredAlbums == nil && searchText.isEmpty {
+                if model.hasMore && !model.albums.isEmpty && model.localFilteredAlbums == nil && searchText.isEmpty {
                     listLoadMoreFooter
                 }
             }
@@ -334,7 +334,7 @@ struct AlbumsView: View {
                     }
                 }
 
-                if model.hasMore && model.localFilteredAlbums == nil && searchText.isEmpty {
+                if model.hasMore && !model.albums.isEmpty && model.localFilteredAlbums == nil && searchText.isEmpty {
                     gridLoadMoreFooter
                 }
             }
