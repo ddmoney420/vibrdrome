@@ -305,6 +305,33 @@ struct ArtistDetailView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isStarred ? "Unfavorite Artist" : "Favorite Artist")
             .accessibilityIdentifier("artistFavoriteButton")
+
+            artistExternalLinks(artist)
+        }
+    }
+
+    @ViewBuilder
+    private func artistExternalLinks(_ artist: Artist) -> some View {
+        let links = ArtistExternalLinksManager.shared.links
+        if !links.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(links) { link in
+                    if let url = link.url(for: artist.name) {
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            ArtistLinkIcon(link: link)
+                        }
+                        .buttonStyle(.plain)
+                        .help(link.label)
+                        .onHover { inside in
+                            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                        }
+                        .accessibilityLabel(link.label)
+                    }
+                }
+            }
+            .padding(.leading, 4)
         }
     }
 
