@@ -741,25 +741,55 @@ struct AlbumDetailView: View {
         .background(.ultraThinMaterial)
     }
 
+    // Runs off the main actor so the SwiftData fetch doesn't block the push/pop animation.
+    // Returns a fully populated Album (header + cached songs) or nil if not on disk yet.
+    private func seedAlbumFromDisk() async -> Album? {
+        let aid = albumId
+        let container = PersistenceController.shared.container
+        return await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+
+            var albumDescriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
+            albumDescriptor.propertiesToFetch = [
+                \.id, \.name, \.artistName, \.artistId, \.coverArtId,
+                \.year, \.isStarred, \.userRating, \.label,
+                \.replayGainAlbumGain, \.replayGainTrackGain, \.replayGainBaseGain,
+                \.musicBrainzId
+            ]
+            albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
+            guard var albumValue = (try? context.fetch(albumDescriptor).first)?.toAlbum() else {
+                return nil
+            }
+
+            var songDescriptor = FetchDescriptor<CachedSong>(
+                predicate: #Predicate { $0.albumId == aid },
+                sortBy: [SortDescriptor(\.discNumber), SortDescriptor(\.track)]
+            )
+            songDescriptor.propertiesToFetch = [
+                \.id, \.title, \.artist, \.albumArtist, \.albumName, \.albumId, \.artistId,
+                \.coverArtId, \.track, \.discNumber, \.year, \.genre, \.duration,
+                \.bitRate, \.suffix, \.contentType, \.size, \.isStarred, \.rating
+            ]
+            let songs = (try? context.fetch(songDescriptor))?.map { $0.toSong() } ?? []
+            return Album(
+                id: albumValue.id, name: albumValue.name,
+                artist: albumValue.artist, artistId: albumValue.artistId,
+                coverArt: albumValue.coverArt, songCount: albumValue.songCount,
+                duration: albumValue.duration, year: albumValue.year,
+                genre: albumValue.genre, genres: albumValue.genres,
+                starred: albumValue.starred, created: albumValue.created,
+                userRating: albumValue.userRating,
+                song: songs.isEmpty ? nil : songs,
+                replayGain: albumValue.replayGain, musicBrainzId: albumValue.musicBrainzId,
+                recordLabels: albumValue.recordLabels
+            )
+        }.value
+    }
+
     private func loadAlbum() async {
-        // Seed the header off the main actor so the SwiftData fetch doesn't block the
-        // push/pop animation. ModelContext is not Sendable — create a fresh one in the
-        // detached task from the shared container.
         if album == nil {
-            let aid = albumId
-            let container = PersistenceController.shared.container
-            let seeded: Album? = await Task.detached(priority: .userInitiated) {
-                let context = ModelContext(container)
-                context.autosaveEnabled = false
-                var descriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
-                descriptor.propertiesToFetch = [
-                    \.id, \.name, \.artistName, \.artistId, \.coverArtId,
-                    \.year, \.isStarred, \.userRating, \.label
-                ]
-                descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
-                return (try? context.fetch(descriptor).first)?.toAlbum()
-            }.value
-            if let seeded {
+            if let seeded = await seedAlbumFromDisk() {
                 album = seeded
                 isStarred = seeded.starred != nil
             }

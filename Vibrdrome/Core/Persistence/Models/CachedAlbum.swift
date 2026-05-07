@@ -19,6 +19,13 @@ final class CachedAlbum {
     var label: String?
     var cachedAt: Date = Date()
 
+    // Extended metadata — stored so AlbumDetailView can seed the full header from disk.
+    // These are optional with no default so SwiftData treats them as lightweight migrations.
+    var replayGainAlbumGain: Double?
+    var replayGainTrackGain: Double?
+    var replayGainBaseGain: Double?
+    var musicBrainzId: String?
+
     var songs: [CachedSong] = []
     @Relationship(deleteRule: .cascade, inverse: \AlbumGenre.album) var genreLinks: [AlbumGenre] = []
 
@@ -39,6 +46,10 @@ final class CachedAlbum {
         self.created = album.created
         self.userRating = album.userRating ?? 0
         self.label = album.label
+        self.replayGainAlbumGain = album.replayGain?.albumGain
+        self.replayGainTrackGain = album.replayGain?.trackGain
+        self.replayGainBaseGain = album.replayGain?.baseGain
+        self.musicBrainzId = album.musicBrainzId
         self.genreLinks = album.allGenres.map { AlbumGenre(name: $0) }
     }
 
@@ -55,6 +66,10 @@ final class CachedAlbum {
         created = album.created
         userRating = album.userRating ?? 0
         label = album.label
+        replayGainAlbumGain = album.replayGain?.albumGain
+        replayGainTrackGain = album.replayGain?.trackGain
+        replayGainBaseGain = album.replayGain?.baseGain
+        musicBrainzId = album.musicBrainzId
         cachedAt = Date()
         let incoming = Set(album.allGenres)
         let existing = Set(genreLinks.map(\.name))
@@ -84,8 +99,11 @@ final class CachedAlbum {
             created: created,
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
-            replayGain: nil,
-            musicBrainzId: nil,
+            replayGain: replayGainAlbumGain.map {
+                ReplayGain(trackGain: replayGainTrackGain, albumGain: $0,
+                           trackPeak: nil, albumPeak: nil, baseGain: replayGainBaseGain)
+            },
+            musicBrainzId: musicBrainzId,
             recordLabels: label.map { [RecordLabel(name: $0)] }
         )
         return album

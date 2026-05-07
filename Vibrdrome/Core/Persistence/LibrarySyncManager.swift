@@ -377,7 +377,11 @@ final class LibrarySyncManager {
         cached.coverArtId != server.coverArt ||
         cached.created != server.created ||
         cached.userRating != (server.userRating ?? 0) ||
-        cached.label != server.label
+        cached.label != server.label ||
+        cached.replayGainAlbumGain != server.replayGain?.albumGain ||
+        cached.replayGainTrackGain != server.replayGain?.trackGain ||
+        cached.replayGainBaseGain != server.replayGain?.baseGain ||
+        cached.musicBrainzId != server.musicBrainzId
     }
 
     // MARK: - Artists
