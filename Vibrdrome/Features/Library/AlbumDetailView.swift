@@ -365,7 +365,15 @@ struct AlbumDetailView: View {
             ZStack {
                 Color.black
                 if let coverArtId {
-                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 600)) { state in
+                    LazyImage(
+                        request: {
+                            var req = ImageRequest(
+                                url: appState.subsonicClient.coverArtURL(id: coverArtId, size: CoverArtSize.gridThumb))
+                            req.userInfo[.imageIdKey] = appState.subsonicClient
+                                .coverArtCacheKey(id: coverArtId, size: CoverArtSize.gridThumb)
+                            return req
+                        }()
+                    ) { state in
                         if let image = state.image {
                             image
                                 .resizable()
@@ -734,18 +742,26 @@ struct AlbumDetailView: View {
     }
 
     private func loadAlbum() async {
-        // Seed the header (art, title, artist) instantly from disk without faulting songs.
-        // Song rows arrive from the network fetch below; faulting cached.songs on the main
-        // actor during the navigation transition is what caused the tap-to-navigate lag.
+        // Seed the header off the main actor so the SwiftData fetch doesn't block the
+        // push/pop animation. ModelContext is not Sendable — create a fresh one in the
+        // detached task from the shared container.
         if album == nil {
             let aid = albumId
-            var descriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
-            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId,
-                                             \.year, \.isStarred, \.userRating, \.label]
-            descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
-            if let cached = try? modelContext.fetch(descriptor).first {
-                album = cached.toAlbum()
-                isStarred = album?.starred != nil
+            let container = PersistenceController.shared.container
+            let seeded: Album? = await Task.detached(priority: .userInitiated) {
+                let context = ModelContext(container)
+                context.autosaveEnabled = false
+                var descriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
+                descriptor.propertiesToFetch = [
+                    \.id, \.name, \.artistName, \.artistId, \.coverArtId,
+                    \.year, \.isStarred, \.userRating, \.label
+                ]
+                descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
+                return (try? context.fetch(descriptor).first)?.toAlbum()
+            }.value
+            if let seeded {
+                album = seeded
+                isStarred = seeded.starred != nil
             }
         }
         isLoading = album == nil
