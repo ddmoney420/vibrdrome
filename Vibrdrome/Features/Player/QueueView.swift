@@ -238,14 +238,14 @@ struct QueueView: View {
 
             if !engine.shuffleEnabled {
                 Divider()
-                Button(role: .destructive) { engine.removeFromQueue(at: index) } label: {
+                Button(role: .destructive) { engine.removeFromQueue(atAbsolute: index) } label: {
                     Label("Remove from Queue", systemImage: "minus.circle")
                 }
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if !engine.shuffleEnabled {
-                Button(role: .destructive) { engine.removeFromQueue(at: index) } label: {
+                Button(role: .destructive) { engine.removeFromQueue(atAbsolute: index) } label: {
                     Label("Remove", systemImage: "trash")
                 }.tint(.red)
             }
