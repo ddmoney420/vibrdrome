@@ -219,12 +219,13 @@ final class AlbumsViewModel {
         let spacing: CGFloat = 16
         let padding: CGFloat = 32
         let available = containerWidth - padding
-        let columnCount = floor(max(1, (available + spacing) / (minCellWidth + spacing)))
-        let cellWidth = (available - spacing * (columnCount - 1)) / columnCount
+        let columnCount = Int(floor(max(1, (available + spacing) / (minCellWidth + spacing))))
+        let cellWidth = (available - spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)
         guard abs(cellWidth - gridCellWidth) > 1 else { return }
         gridCellWidth = cellWidth
-        gridColumnCount = Int(columnCount)
-        gridColumns = [GridItem(.adaptive(minimum: minCellWidth), spacing: spacing)]
+        gridColumnCount = columnCount
+        // Fixed columns so the grid cell width exactly matches gridCellWidth — no stretching.
+        gridColumns = Array(repeating: GridItem(.fixed(cellWidth), spacing: spacing), count: columnCount)
         rebuildPrefetchRequests(client: AppState.shared.subsonicClient)
     }
 
