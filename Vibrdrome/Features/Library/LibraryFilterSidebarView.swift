@@ -328,6 +328,43 @@ struct LibraryFilterSidebarView: View {
     // MARK: - Helpers
 
     private func loadCachedMetadata() async {
+        // Fast path: libraryCache already has genres/artists computed — use them directly
+        // without touching the database. Falls through to the actor only on first launch.
+        let cache = appState.libraryCache
+        switch context {
+        case .album:
+            if let cachedGenres = cache.songFilterGenres, let cachedAlbums = cache.albums {
+                genres = cachedGenres
+                labels = Array(Set(cachedAlbums.compactMap(\.label)).subtracting([""])).sorted {
+                    $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+                }
+                if let cachedArtists = cache.artists {
+                    artists = cachedArtists.map {
+                        FilterArtistItem(id: $0.id, name: $0.name, coverArtId: $0.coverArt,
+                                         albumCount: $0.albumCount)
+                    }
+                }
+                return
+            }
+        case .artist:
+            if let cachedGenres = cache.songFilterGenres {
+                genres = cachedGenres
+                return
+            }
+        case .song:
+            if let cachedGenres = cache.songFilterGenres {
+                genres = cachedGenres
+                if let cachedArtists = cache.artists {
+                    artists = cachedArtists.map {
+                        FilterArtistItem(id: $0.id, name: $0.name, coverArtId: $0.coverArt,
+                                         albumCount: $0.albumCount)
+                    }
+                }
+                return
+            }
+        }
+
+        // Slow path: cache not ready yet — fetch off-main via the actor.
         let actor = FilterMetadataActor(modelContainer: PersistenceController.shared.container)
         switch context {
         case .album:
