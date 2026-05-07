@@ -381,8 +381,10 @@ final class AlbumsViewModel {
         if let cached = appState.libraryCache.artists {
             return Set(cached.compactMap { filter.selectedArtistIds.contains($0.id) ? $0.name : nil })
         }
-        let artists = (try? modelContext.fetch(FetchDescriptor<CachedArtist>())) ?? []
-        return Set(artists.compactMap { filter.selectedArtistIds.contains($0.id) ? $0.name : nil })
+        let ids = filter.selectedArtistIds
+        let descriptor = FetchDescriptor<CachedArtist>(predicate: #Predicate { ids.contains($0.id) })
+        let artists = (try? modelContext.fetch(descriptor)) ?? []
+        return Set(artists.map(\.name))
     }
 
     private func recentlyPlayedIds(for filter: LibraryFilter, modelContext: ModelContext) -> Set<String>? {
