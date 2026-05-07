@@ -17,6 +17,11 @@ struct AlbumDetailView: View {
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
     @State private var isStarred = false
+    // Single query for all completed downloads — passed into track rows to avoid per-row
+    // SwiftData fetchCount calls on the main actor during the push/pop animation.
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var completedDownloads: [DownloadedSong]
+    private var downloadedSongIds: Set<String> { Set(completedDownloads.map(\.songId)) }
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "album")
     #endif
@@ -40,7 +45,8 @@ struct AlbumDetailView: View {
                     MacTrackTableView(
                         songs: songs,
                         settings: columnSettings,
-                        showDiscSeparators: hasMultipleDiscs
+                        showDiscSeparators: hasMultipleDiscs,
+                        downloadedSongIds: downloadedSongIds
                     )
                     #else
                     LazyVStack(spacing: 0) {
@@ -614,7 +620,7 @@ struct AlbumDetailView: View {
                 .padding(.trailing, 4)
             }
 
-            TrackRow(song: song, showTrackNumber: true)
+            TrackRow(song: song, showTrackNumber: true, downloadedSongIds: downloadedSongIds)
                 .padding(.horizontal, isSelecting ? 8 : 16)
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())

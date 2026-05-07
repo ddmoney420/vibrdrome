@@ -6,6 +6,9 @@ struct TrackRow: View {
     var showTrackNumber: Bool = true
     var queue: [Song]?
     var index: Int?
+    /// When non-nil, skips the per-row SwiftData fetchCount in onAppear. Pass from a
+    /// parent @Query so the main-actor fetch doesn't happen mid-navigation-animation.
+    var downloadedSongIds: Set<String>?
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @State private var isDownloaded = false
@@ -187,11 +190,15 @@ struct TrackRow: View {
         }
         .onAppear {
             isStarred = song.starred != nil
-            let songId = song.id
-            let descriptor = FetchDescriptor<DownloadedSong>(
-                predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-            )
-            isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+            if let ids = downloadedSongIds {
+                isDownloaded = ids.contains(song.id)
+            } else {
+                let songId = song.id
+                let descriptor = FetchDescriptor<DownloadedSong>(
+                    predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+                )
+                isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+            }
         }
     }
 
