@@ -875,6 +875,37 @@ final class LibrarySyncManager {
             syncProgress = "Warming image cache… \(warmed)/\(diskOnlyIds.count)"
         }
         syncLog.info("Memory warm complete: \(warmed) images")
+
+        // Also warm blur thumbnails into the blur pipeline's memory cache so cells
+        // show the blurred placeholder instantly rather than decoding from disk.
+        let blurPipeline = VibrdromeApp.blurPipeline
+        let blurDataCache = blurPipeline.configuration.dataCache as? DataCache
+        let blurDiskOnlyIds: [String] = coverArtIds.compactMap { id in
+            var request = ImageRequest(url: client.coverArtURL(id: id, size: CoverArtSize.blur))
+            request.userInfo[.imageIdKey] = client.coverArtCacheKey(id: id, size: CoverArtSize.blur)
+            if blurPipeline.cache.containsCachedImage(for: request) { return nil }
+            let key = blurPipeline.cache.makeDataCacheKey(for: request)
+            return blurDataCache?.containsData(for: key) == true ? id : nil
+        }
+        guard !blurDiskOnlyIds.isEmpty else { return }
+        syncLog.info("Warming \(blurDiskOnlyIds.count) blur thumbnails from disk into memory")
+        let blurPairs: [(URL, String)] = blurDiskOnlyIds.map { id in
+            (client.coverArtURL(id: id, size: CoverArtSize.blur),
+             client.coverArtCacheKey(id: id, size: CoverArtSize.blur))
+        }
+        for batchStart in stride(from: 0, to: blurPairs.count, by: batchSize) {
+            guard !Task.isCancelled else { break }
+            let batch = blurPairs[batchStart..<min(batchStart + batchSize, blurPairs.count)]
+            await withTaskGroup(of: Void.self) { group in
+                for (url, stableKey) in batch {
+                    group.addTask(priority: .background) {
+                        var request = ImageRequest(url: url)
+                        request.userInfo[.imageIdKey] = stableKey
+                        _ = try? await blurPipeline.image(for: request)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Sync History

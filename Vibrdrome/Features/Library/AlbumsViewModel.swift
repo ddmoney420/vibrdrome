@@ -117,7 +117,7 @@ final class AlbumsViewModel {
 
     /// Thumbnail prefetcher: persists 32px blur placeholders using the isolated blur pipeline.
     private let thumbPrefetcher: ImagePrefetcher = {
-        let p = ImagePrefetcher(pipeline: VibrdromeApp.blurPipeline, destination: .diskCache)
+        let p = ImagePrefetcher(pipeline: VibrdromeApp.blurPipeline, destination: .memoryCache)
         p.priority = .normal
         return p
     }()
