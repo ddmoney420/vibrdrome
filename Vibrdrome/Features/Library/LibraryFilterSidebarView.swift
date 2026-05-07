@@ -7,6 +7,13 @@ enum FilterContext {
     case album, artist, song
 }
 
+struct FilterArtistItem: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let coverArtId: String?
+    let albumCount: Int?
+}
+
 /// Feishin-style filter sidebar shown as a macOS side panel.
 /// Adapts its controls based on the entity type being filtered.
 struct LibraryFilterSidebarView: View {
@@ -14,7 +21,7 @@ struct LibraryFilterSidebarView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \CachedArtist.name) private var artists: [CachedArtist]
+    @State private var artists: [FilterArtistItem] = []
     @State private var genres: [String] = []
     @State private var labels: [String] = []
 
@@ -51,7 +58,7 @@ struct LibraryFilterSidebarView: View {
                 .padding(14)
             }
         }
-        .task { loadCachedMetadata() }
+        .task { await loadCachedMetadata() }
     }
 
     // MARK: - Header
@@ -96,7 +103,7 @@ struct LibraryFilterSidebarView: View {
                         client: appState.subsonicClient,
                         container: PersistenceController.shared.container
                     )
-                    loadCachedMetadata()
+                    await loadCachedMetadata()
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -320,30 +327,21 @@ struct LibraryFilterSidebarView: View {
 
     // MARK: - Helpers
 
-    private func loadCachedMetadata() {
-        // Genres: fetch only AlbumGenre name rows (indexed) instead of loading full album/song objects.
-        // For songs, union in CachedSong.genre for tracks not linked to an album.
-        var genreSet: Set<String>
-        let albumGenreDescriptor = FetchDescriptor<AlbumGenre>()
-        let albumGenreNames = (try? modelContext.fetch(albumGenreDescriptor))?.compactMap(\.name) ?? []
-        genreSet = Set(albumGenreNames).subtracting([""])
-
-        if context == .song || context == .album {
-            var songDescriptor = FetchDescriptor<CachedSong>()
-            songDescriptor.propertiesToFetch = [\.genre]
-            let songs = (try? modelContext.fetch(songDescriptor)) ?? []
-            genreSet.formUnion(Set(songs.compactMap(\.genre)).subtracting([""]))
+    private func loadCachedMetadata() async {
+        let actor = FilterMetadataActor(modelContainer: PersistenceController.shared.container)
+        switch context {
+        case .album:
+            let result = await actor.loadAlbumFilterMetadata()
+            genres = result.genres
+            labels = result.labels
+            artists = result.artists
+        case .artist:
+            genres = await actor.loadArtistFilterMetadata()
+        case .song:
+            let result = await actor.loadSongFilterMetadata()
+            genres = result.genres
+            artists = result.artists
         }
-
-        if context == .album {
-            var albumDescriptor = FetchDescriptor<CachedAlbum>()
-            albumDescriptor.propertiesToFetch = [\.label]
-            let albums = (try? modelContext.fetch(albumDescriptor)) ?? []
-            let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
-            labels = labelSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        }
-
-        genres = genreSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }
 

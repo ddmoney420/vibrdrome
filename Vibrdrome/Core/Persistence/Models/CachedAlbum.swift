@@ -69,7 +69,7 @@ final class CachedAlbum {
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
         let g = genres
-        return Album(
+        let album = Album(
             id: id,
             name: name,
             artist: artistName,
@@ -79,14 +79,15 @@ final class CachedAlbum {
             duration: duration,
             year: year,
             genre: g.first,
+            genres: g.map { ItemGenre(name: $0) },
             starred: isStarred ? "true" : nil,
             created: created,
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
             replayGain: nil,
             musicBrainzId: nil,
-            recordLabels: label.map { [RecordLabel(name: $0)] },
-            genres: g.map { ItemGenre(name: $0) }
+            recordLabels: label.map { [RecordLabel(name: $0)] }
         )
+        return album
     }
 }

@@ -717,19 +717,13 @@ final class LibrarySyncManager {
     // MARK: - Cover Art Prefetch
 
     /// Whether a prefetch pass already ran this session (avoids duplicate work).
-    private var didPrefetchThisSession = false
+    var didPrefetchThisSession = false
 
     /// Warm the in-memory image cache on startup by loading all known cover art.
     /// Images already in memory are skipped; images in disk cache load instantly.
     /// Skipped if a prefetch already ran during sync this session.
     func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
         guard !didPrefetchThisSession else { return }
-        // Skip if a full prefetch completed recently (within 24 hours)
-        if let lastPrefetch = UserDefaults.standard.object(forKey: UserDefaultsKeys.lastCoverArtPrefetchDate) as? Date,
-           Date().timeIntervalSince(lastPrefetch) < 86_400 {
-            didPrefetchThisSession = true
-            return
-        }
         let context = ModelContext(container)
         await prefetchCoverArt(client: client, context: context)
     }
@@ -764,37 +758,38 @@ final class LibrarySyncManager {
         syncLog.info("Prefetching \(total) cover art images")
 
         let pipeline = ImagePipeline.shared
-
-        // Filter out images already in memory or disk cache so we only fetch what's missing
         let dataCache = pipeline.configuration.dataCache as? DataCache
+
+        // Filter out images already in disk cache so we only fetch what's missing.
+        // Use stable cache keys (no auth salt) so lookups survive across app launches.
         let uncachedUrls: [(String, URL)] = coverArtIds.compactMap { id in
-            let url = client.coverArtURL(id: id, size: 600)
-            let request = ImageRequest(url: url)
-            if pipeline.cache.containsCachedImage(for: request) { return nil }
+            let url = client.coverArtURL(id: id, size: CoverArtSize.gridThumb)
+            var request = ImageRequest(url: url)
+            request.userInfo[.imageIdKey] = client.coverArtCacheKey(id: id, size: CoverArtSize.gridThumb)
             let key = pipeline.cache.makeDataCacheKey(for: request)
             if dataCache?.containsData(for: key) == true { return nil }
             return (id, url)
         }
 
         let alreadyCached = total - uncachedUrls.count
-        guard !uncachedUrls.isEmpty else {
-            didPrefetchThisSession = true
-            UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
-            syncLog.info("Cover art prefetch skipped — all \(total) images already cached")
-            return
+
+        if !uncachedUrls.isEmpty {
+            syncLog.info("Prefetching \(uncachedUrls.count) cover art images (\(alreadyCached) already cached)")
+            let fetched = await prefetchBatches(uncachedUrls: uncachedUrls, total: total, alreadyCached: alreadyCached, client: client)
+            syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
+        } else {
+            syncLog.info("Cover art prefetch skipped — all \(total) images already on disk")
         }
 
-        syncLog.info("Prefetching \(uncachedUrls.count) cover art images (\(alreadyCached) already cached)")
-
-        let fetched = await prefetchBatches(uncachedUrls: uncachedUrls, total: total, alreadyCached: alreadyCached)
+        // Promote disk-cached images into memory so the grid renders instantly without decompression stalls.
+        await warmMemoryFromDisk(coverArtIds: coverArtIds, client: client)
 
         didPrefetchThisSession = true
         UserDefaults.standard.set(Date(), forKey: UserDefaultsKeys.lastCoverArtPrefetchDate)
-        syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
     }
 
     /// Fetch cover art in batches of 10 with per-image timeouts. Returns total processed count.
-    private func prefetchBatches(uncachedUrls: [(String, URL)], total: Int, alreadyCached: Int) async -> Int {
+    private func prefetchBatches(uncachedUrls: [(String, URL)], total: Int, alreadyCached: Int, client: SubsonicClient) async -> Int {
         let pipeline = ImagePipeline.shared
         var fetched = alreadyCached
         let batchSize = 10
@@ -803,14 +798,19 @@ final class LibrarySyncManager {
         for batchStart in stride(from: 0, to: uncachedUrls.count, by: batchSize) {
             guard !Task.isCancelled else { break }
             let batch = uncachedUrls[batchStart..<min(batchStart + batchSize, uncachedUrls.count)]
+            let batchRequests: [(URL, String)] = batch.map { id, url in
+                (url, client.coverArtCacheKey(id: id, size: CoverArtSize.gridThumb))
+            }
             await withTaskGroup(of: Void.self) { group in
-                for (_, url) in batch {
+                for (url, stableKey) in batchRequests {
+                    var req = ImageRequest(url: url)
+                    req.userInfo[.imageIdKey] = stableKey
+                    let finalRequest = req
                     group.addTask {
-                        let request = ImageRequest(url: url)
                         // Timeout prevents a single stalled request from blocking the entire prefetch
                         await withTaskGroup(of: Void.self) { inner in
                             inner.addTask {
-                                _ = try? await pipeline.image(for: request)
+                                _ = try? await pipeline.image(for: finalRequest)
                             }
                             inner.addTask {
                                 try? await Task.sleep(nanoseconds: perImageTimeout)
@@ -826,6 +826,55 @@ final class LibrarySyncManager {
             syncProgress = "Prefetching cover art… \(fetched)/\(total)"
         }
         return fetched
+    }
+
+    /// Decode all disk-cached cover art into the memory cache in background batches.
+    /// No network traffic — pure disk→CPU→memory. Runs at background priority so it
+    /// doesn't compete with UI rendering but completes before the user starts scrolling.
+    private func warmMemoryFromDisk(coverArtIds: Set<String>, client: SubsonicClient) async {
+        let pipeline = ImagePipeline.shared
+        let dataCache = pipeline.configuration.dataCache as? DataCache
+        syncProgress = "Warming image cache…"
+
+        // Only decode images that are on disk but not yet in memory.
+        let diskOnlyIds: [String] = coverArtIds.compactMap { id in
+            let url = client.coverArtURL(id: id, size: CoverArtSize.gridThumb)
+            var request = ImageRequest(url: url)
+            request.userInfo[.imageIdKey] = client.coverArtCacheKey(id: id, size: CoverArtSize.gridThumb)
+            if pipeline.cache.containsCachedImage(for: request) { return nil }
+            let key = pipeline.cache.makeDataCacheKey(for: request)
+            return dataCache?.containsData(for: key) == true ? id : nil
+        }
+
+        guard !diskOnlyIds.isEmpty else {
+            syncLog.info("Memory warm skipped — all images already in memory")
+            return
+        }
+
+        syncLog.info("Warming \(diskOnlyIds.count) images from disk into memory")
+
+        let batchSize = 20
+        var warmed = 0
+        for batchStart in stride(from: 0, to: diskOnlyIds.count, by: batchSize) {
+            guard !Task.isCancelled else { break }
+            let batch = diskOnlyIds[batchStart..<min(batchStart + batchSize, diskOnlyIds.count)]
+            let batchPairs: [(URL, String)] = batch.map { id in
+                (client.coverArtURL(id: id, size: CoverArtSize.gridThumb),
+                 client.coverArtCacheKey(id: id, size: CoverArtSize.gridThumb))
+            }
+            await withTaskGroup(of: Void.self) { group in
+                for (url, stableKey) in batchPairs {
+                    group.addTask(priority: .background) {
+                        var request = ImageRequest(url: url)
+                        request.userInfo[.imageIdKey] = stableKey
+                        _ = try? await pipeline.image(for: request)
+                    }
+                }
+            }
+            warmed += batch.count
+            syncProgress = "Warming image cache… \(warmed)/\(diskOnlyIds.count)"
+        }
+        syncLog.info("Memory warm complete: \(warmed) images")
     }
 
     // MARK: - Sync History
