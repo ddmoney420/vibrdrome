@@ -154,27 +154,24 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            GeometryReader { geometry in
-                NavigationStack(path: $detailPath) {
-                    detailView
-                        .navigationDestination(for: SidebarNavRoute.self) { route in
-                            switch route {
-                            case .album(let id):
-                                AlbumDetailView(albumId: id)
-                            case .artist(let id):
-                                ArtistDetailView(artistId: id)
-                            case .song(let id):
-                                SongDetailView(songId: id)
-                            case .genre(let name):
-                                AlbumsView(listType: .alphabeticalByName,
-                                           title: name.cleanedGenreDisplay, initialGenreFilter: name)
-                            case .label(let name):
-                                AlbumsView(listType: .alphabeticalByName,
-                                           title: name, initialLabelFilter: name)
-                            }
+            NavigationStack(path: $detailPath) {
+                detailView
+                    .navigationDestination(for: SidebarNavRoute.self) { route in
+                        switch route {
+                        case .album(let id):
+                            AlbumDetailView(albumId: id)
+                        case .artist(let id):
+                            ArtistDetailView(artistId: id)
+                        case .song(let id):
+                            SongDetailView(songId: id)
+                        case .genre(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name.cleanedGenreDisplay, initialGenreFilter: name)
+                        case .label(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name, initialLabelFilter: name)
                         }
-                }
-                .environment(\.contentWidth, geometry.size.width)
+                    }
             }
             .inspector(isPresented: Binding(
                 get: { appState.activeSidePanel != nil },
