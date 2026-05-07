@@ -137,15 +137,16 @@ struct AlbumInfo2: Decodable, Sendable {
 
 // MARK: - Album Models
 
-struct RecordLabel: Decodable, Sendable {
+struct RecordLabel: Decodable, Sendable, Equatable {
     let name: String
 }
 
-struct ItemGenre: Decodable, Sendable {
+/// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
+struct ItemGenre: Decodable, Sendable, Equatable {
     let name: String
 }
 
-struct Album: Decodable, Identifiable, Sendable {
+struct Album: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let name: String
     let artist: String?
@@ -155,6 +156,7 @@ struct Album: Decodable, Identifiable, Sendable {
     let duration: Int?
     let year: Int?
     let genre: String?
+    let genres: [ItemGenre]?
     let starred: String?
     let created: String?
     let userRating: Int?
@@ -162,28 +164,17 @@ struct Album: Decodable, Identifiable, Sendable {
     let replayGain: ReplayGain?
     let musicBrainzId: String?
     let recordLabels: [RecordLabel]?
-    let genres: [ItemGenre]?
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
 
-    /// All genre names, deduplicated. Prefers the OpenSubsonic `genres` array when present,
-    /// then falls back to `genre` / per-song genres (semicolon-split).
+    /// All genres for this album. Prefers the OpenSubsonic `genres` array when present;
+    /// falls back to the legacy single `genre` string.
     var allGenres: [String] {
-        if let genres, !genres.isEmpty {
-            return genres.map(\.name)
+        if let items = genres, !items.isEmpty {
+            return items.map(\.name)
         }
-        var seen = Set<String>()
-        var result: [String] = []
-        let sources = (song ?? []).compactMap(\.genre) + [genre].compactMap { $0 }
-        for raw in sources {
-            for part in raw.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) })
-            where !part.isEmpty && !seen.contains(part) {
-                seen.insert(part)
-                result.append(part)
-            }
-        }
-        return result
+        return genre.map { [$0] } ?? []
     }
 }
 

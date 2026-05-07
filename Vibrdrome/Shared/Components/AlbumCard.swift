@@ -6,7 +6,7 @@ struct AlbumCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AlbumArtView(coverArtId: album.coverArt, size: 56)
+            AlbumArtView(coverArtId: album.coverArt, size: 56, requestSize: CoverArtSize.listThumb)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(album.name)

@@ -59,7 +59,7 @@ struct SongDetailView: View {
 
     private func header(_ song: Song) -> some View {
         VStack(spacing: 16) {
-            AlbumArtView(coverArtId: song.coverArt, size: 280, cornerRadius: 14)
+            AlbumArtView(coverArtId: song.coverArt, size: 280, cornerRadius: 14, requestSize: CoverArtSize.detail)
                 .shadow(color: .black.opacity(0.3), radius: 18, y: 8)
 
             VStack(spacing: 6) {

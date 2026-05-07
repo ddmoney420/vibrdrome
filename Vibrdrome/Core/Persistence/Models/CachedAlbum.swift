@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class CachedAlbum {
+    #Index<CachedAlbum>([\.name], [\.artistId], [\.year], [\.isStarred], [\.userRating], [\.coverArtId])
+
     @Attribute(.unique) var id: String
     var name: String
     var artistName: String?
@@ -55,7 +57,7 @@ final class CachedAlbum {
 
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
-        Album(
+        let album = Album(
             id: id,
             name: name,
             artist: artistName,
@@ -65,14 +67,15 @@ final class CachedAlbum {
             duration: duration,
             year: year,
             genre: genres.first,
+            genres: genres.map { ItemGenre(name: $0) },
             starred: isStarred ? "true" : nil,
             created: created,
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
             replayGain: nil,
             musicBrainzId: nil,
-            recordLabels: label.map { [RecordLabel(name: $0)] },
-            genres: genres.isEmpty ? nil : genres.map { ItemGenre(name: $0) }
+            recordLabels: label.map { [RecordLabel(name: $0)] }
         )
+        return album
     }
 }
