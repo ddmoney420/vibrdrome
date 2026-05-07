@@ -90,6 +90,7 @@ final class AlbumsViewModel {
     private var searchTask: Task<Void, Never>?
     private var geometryTask: Task<Void, Never>?
     private var isLoadingPages = false
+    private var lastBulkPrefetchCount = 0
     /// Total count known from disk seed — lets us avoid incorrectly setting hasMore=true
     /// when the server returns a full page that doesn't actually imply there are more pages.
     private var seededTotalCount: Int?
@@ -161,7 +162,7 @@ final class AlbumsViewModel {
     ) async {
         downloadedAlbumNames = Set(downloadedSongs.compactMap { $0.albumName?.lowercased() })
         if albums.isEmpty {
-            seedFromDisk(appState: appState, modelContext: modelContext, filterRaw: filterRaw)
+            await seedFromDisk(appState: appState, filterRaw: filterRaw)
             await loadAlbums(appState: appState, filterRaw: filterRaw)
         }
         if availableGenres.isEmpty {
@@ -208,7 +209,7 @@ final class AlbumsViewModel {
         guard containerWidth > 0 else { return }
         geometryTask?.cancel()
         geometryTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(80))
+            try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, let self else { return }
             self.applyGridGeometry(containerWidth: containerWidth, minCellWidth: minCellWidth)
         }
@@ -445,44 +446,81 @@ final class AlbumsViewModel {
     // MARK: Private helpers
 
     /// Instantly populate the grid from disk on cold launch so it's never empty while
+    /// Instantly populate the grid from disk on cold launch so it's never empty while
     /// waiting for the network. Uses persisted album ID ordering + CachedAlbum rows.
     /// Skipped for .random (stale random is misleading).
-    private func seedFromDisk(appState: AppState, modelContext: ModelContext, filterRaw: String) {
+    private func seedFromDisk(appState: AppState, filterRaw: String) async {
         guard effectiveListType != .random else { return }
 
-        // Build an id→Album lookup from CachedAlbum (falls back to libraryCache if ready)
-        let lookup: [String: Album]
+        // Fast path: libraryCache is already populated on main — no I/O needed.
         if let cached = appState.libraryCache.albums, !cached.isEmpty {
-            lookup = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
-        } else {
-            var descriptor = FetchDescriptor<CachedAlbum>()
-            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId, \.coverArtId, \.year, \.isStarred, \.userRating]
-            descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
-            guard let rows = try? modelContext.fetch(descriptor), !rows.isEmpty else { return }
-            lookup = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.toAlbum()) })
+            applySeedLookup(Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) }),
+                            filterRaw: filterRaw, client: appState.subsonicClient)
+            return
         }
-        guard !lookup.isEmpty else { return }
 
+        // Slow path: fetch from SwiftData off the main actor so we don't block the
+        // navigation transition. Creates its own context to stay off-main.
+        let container = PersistenceController.shared.container
+        let listType = effectiveListType
+        let genre = genre
+        let fromYear = fromYear
+        let toYear = toYear
+        let persistedIds = loadPersistedOrder()
+        let client = appState.subsonicClient
+
+        let result = await Task.detached(priority: .userInitiated) { () -> (lookup: [String: Album], ids: [String]?) in
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            var descriptor = FetchDescriptor<CachedAlbum>()
+            descriptor.propertiesToFetch = [\.id, \.name, \.artistName, \.artistId,
+                                             \.coverArtId, \.year, \.isStarred, \.userRating]
+            descriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
+            guard let rows = try? context.fetch(descriptor), !rows.isEmpty else {
+                return ([:], nil)
+            }
+            let lookup = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.toAlbum()) })
+            return (lookup, persistedIds)
+        }.value
+
+        guard !result.lookup.isEmpty else { return }
+        applySeedLookup(result.lookup, filterRaw: filterRaw, client: client,
+                        listType: listType, genre: genre, fromYear: fromYear, toYear: toYear,
+                        persistedIds: result.ids)
+    }
+
+    private func applySeedLookup(
+        _ lookup: [String: Album],
+        filterRaw: String,
+        client: SubsonicClient,
+        listType: AlbumListType? = nil,
+        genre: String? = nil,
+        fromYear: Int? = nil,
+        toYear: Int? = nil,
+        persistedIds: [String]? = nil
+    ) {
+        let resolvedType = listType ?? effectiveListType
+        let resolvedGenre = genre ?? self.genre
+        let resolvedFrom = fromYear ?? self.fromYear
+        let resolvedTo = toYear ?? self.toYear
         let totalKnown = lookup.count
 
-        // For alphabetical sort orders, derive ordering locally without a persisted list.
-        if effectiveListType == .alphabeticalByName && genre == nil && fromYear == nil && toYear == nil {
+        if resolvedType == .alphabeticalByName && resolvedGenre == nil && resolvedFrom == nil && resolvedTo == nil {
             let seeded = lookup.values.sorted { $0.name < $1.name }
-            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
+            applySeeded(seeded, filterRaw: filterRaw, client: client, fullLibraryCount: totalKnown)
             return
         }
-        if effectiveListType == .alphabeticalByArtist && genre == nil && fromYear == nil && toYear == nil {
+        if resolvedType == .alphabeticalByArtist && resolvedGenre == nil && resolvedFrom == nil && resolvedTo == nil {
             let seeded = lookup.values.sorted { ($0.artist ?? "") < ($1.artist ?? "") }
-            applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
+            applySeeded(seeded, filterRaw: filterRaw, client: client, fullLibraryCount: totalKnown)
             return
         }
 
-        // For server-ordered sorts, reconstruct ordering from persisted ID list.
-        guard let ids = loadPersistedOrder() else { return }
+        let ids = persistedIds ?? loadPersistedOrder()
+        guard let ids else { return }
         let seeded = ids.compactMap { lookup[$0] }
         guard !seeded.isEmpty else { return }
-        // If the persisted ID list covers the full library, the scroll bar can reflect everything.
-        applySeeded(seeded, filterRaw: filterRaw, client: appState.subsonicClient, fullLibraryCount: totalKnown)
+        applySeeded(seeded, filterRaw: filterRaw, client: client, fullLibraryCount: totalKnown)
     }
 
     private func applySeeded(_ seeded: [Album], filterRaw: String, client: SubsonicClient, fullLibraryCount: Int? = nil) {
@@ -636,10 +674,14 @@ final class AlbumsViewModel {
                 return req
             }
         }
-        // Warm full-res into disk cache so cells get a fast hit on first appearance.
-        bulkPrefetcher.startPrefetching(with: prefetchRequests.compactMap { $0 })
-        // Warm blur thumbnails into memory — they're ~1 KB each so the whole library fits easily.
-        thumbPrefetcher.startPrefetching(with: blurRequests.compactMap { $0 })
+        // Only kick off bulk disk prefetch when the album list has grown — avoids
+        // re-submitting thousands of Nuke tasks on every geometry change.
+        let currentCount = cachedFilteredAlbums.count
+        if currentCount > lastBulkPrefetchCount {
+            lastBulkPrefetchCount = currentCount
+            bulkPrefetcher.startPrefetching(with: prefetchRequests.compactMap { $0 })
+            thumbPrefetcher.startPrefetching(with: blurRequests.compactMap { $0 })
+        }
     }
 
     private func makeGridImageRequest(url: URL, cacheKey: String? = nil) -> ImageRequest {
