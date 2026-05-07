@@ -27,6 +27,13 @@ extension AudioEngine {
     /// so callers can pass them back to skipToIndex / removeFromQueue.
     var upNextEntries: [(index: Int, song: Song)] {
         guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
+        
+        if shuffleEnabled {
+            let entries = nextSongIndices(count: 5)
+            return (0 ..< entries.count).map { idx in
+                (index: entries[idx], song: queue[entries[idx]])
+            }
+        }
         return (currentIndex + 1 ..< queue.count).map { idx in
             (index: idx, song: queue[idx])
         }

@@ -209,49 +209,6 @@ struct QueueView: View {
         }
     }
 
-    @ViewBuilder
-    private func upNextRow(song: Song, index: Int) -> some View {
-        let playAction = {
-            #if os(iOS)
-            Haptics.light()
-            #endif
-            let targetIndex = engine.shuffleEnabled ? engine.queue.firstIndex(where: { $0.id == song.id }) : (engine.currentIndex + 1 + index)
-            if let idx = targetIndex { engine.play(song: song, from: engine.queue, at: idx) }
-        }
-
-        HStack(spacing: 12) {
-            AlbumArtView(coverArtId: song.coverArt, size: 40)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.title).font(.body).lineLimit(1)
-                Text(song.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
-            Spacer()
-            if let duration = song.duration {
-                Text(formatDuration(duration)).font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: playAction)
-        .contextMenu {
-            Button(action: playAction) { Label("Play Now", systemImage: "play.fill") }
-            Button { engine.addToQueueNext(song) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
-
-            if !engine.shuffleEnabled {
-                Divider()
-                Button(role: .destructive) { engine.removeFromQueue(atAbsolute: index) } label: {
-                    Label("Remove from Queue", systemImage: "minus.circle")
-                }
-            }
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if !engine.shuffleEnabled {
-                Button(role: .destructive) { engine.removeFromQueue(atAbsolute: index) } label: {
-                    Label("Remove", systemImage: "trash")
-                }.tint(.red)
-            }
-        }
-    }
-
     private func saveQueueAsPlaylist() {
         let songs = engine.queue
         guard !songs.isEmpty else { return }
