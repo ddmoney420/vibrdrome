@@ -1,5 +1,18 @@
 import Foundation
 
+// MARK: - Notification Names
+
+extension Notification.Name {
+    /// Posted to navigate to the Search view and focus its search bar.
+    static let navigateToSearch = Notification.Name("com.vibrdrome.navigateToSearch")
+    /// Posted to focus the search bar in the currently visible view.
+    static let focusSearchBar = Notification.Name("com.vibrdrome.focusSearchBar")
+    /// Posted when a song's starred state changes. userInfo: ["id": String, "starred": Bool]
+    static let songStarredChanged = Notification.Name("com.vibrdrome.songStarredChanged")
+    /// Posted when a song's rating changes. userInfo: ["id": String, "rating": Int]
+    static let songRatingChanged = Notification.Name("com.vibrdrome.songRatingChanged")
+}
+
 /// Centralized UserDefaults key constants.
 /// Use with both `UserDefaults.standard` and `@AppStorage`.
 enum UserDefaultsKeys {
@@ -20,6 +33,7 @@ enum UserDefaultsKeys {
     static let scrobblingEnabled = "scrobblingEnabled"
     static let preloadSongs = "preloadSongs"
     static let keepSongsInCacheAfterPlayback = "keepSongsInCacheAfterPlayback"
+    static let autoSuggestEnabled = "autoSuggestEnabled"
 
     // MARK: - Equalizer
 
@@ -69,6 +83,8 @@ enum UserDefaultsKeys {
     static let showAirPlayInToolbar = "showAirPlayInToolbar"
     static let showLyricsInToolbar = "showLyricsInToolbar"
     static let showSettingsInToolbar = "showSettingsInToolbar"
+    static let showRadioMixInToolbar = "showRadioMixInToolbar"
+    static let nowPlayingToolbarBackground = "nowPlayingToolbarBackground"
     static let nowPlayingToolbarOrder = "nowPlayingToolbarOrder"
 
     // MARK: - Discord
@@ -92,6 +108,11 @@ enum UserDefaultsKeys {
 
     static let adaptiveBitrateEnabled = "adaptiveBitrateEnabled"
 
+    // MARK: - ReplayGain Pre-Gain
+
+    static let replayGainPreGainDb = "replayGainPreGainDb"
+    static let replayGainFallbackDb = "replayGainFallbackDb"
+
     // MARK: - Player Behavior
 
     static let disableSpinningArt = "disableSpinningArt"
@@ -108,6 +129,8 @@ enum UserDefaultsKeys {
     static let enableLiquidGlass = "enableLiquidGlass"
     static let enableMiniPlayerTint = "enableMiniPlayerTint"
     static let albumBackgroundStyle = "albumBackgroundStyle"
+    static let gridDensity = "gridDensity"
+    static let showLosslessBadge = "showLosslessBadge"
 
     // MARK: - Tab Bar Extended
 
@@ -118,10 +141,32 @@ enum UserDefaultsKeys {
     static let showSongsTab = "showSongsTab"
     static let showGenresTab = "showGenresTab"
     static let showFavoritesTab = "showFavoritesTab"
+    static let showLibraryHomeTab = "showLibraryHomeTab"
     static let tabBarOrder = "tabBarOrder"
 
     // MARK: - Library Layout
 
     static let libraryLayout = "libraryLayout"
     static let activeMusicFolderId = "activeMusicFolderId"
+
+    // MARK: - macOS Track Table Columns
+
+    /// Key prefix for per-view column config. Full key = prefix + viewKey (e.g. "songs", "album").
+    static let trackTableColumnsPrefix = "trackTableColumns_"
+
+    // MARK: - macOS Layout
+
+    static let macNowPlayingPlacement = "macNowPlayingPlacement"
+    static let macSidePanelMechanic = "macSidePanelMechanic"
+    static let macSidePanelWidth = "macSidePanelWidth"
+    static let macMiniPlayerPanelTrigger = "macMiniPlayerPanelTrigger"
+
+    // MARK: - Library Sync
+
+    static let lastLibrarySyncDate = "lastLibrarySyncDate"
+    static let lastFullSyncDate = "lastFullSyncDate"
+    static let lastServerModified = "lastServerModified"
+    static let backgroundSyncEnabled = "backgroundSyncEnabled"
+    static let syncPollingInterval = "syncPollingInterval"
+    static let lastCoverArtPrefetchDate = "lastCoverArtPrefetchDate"
 }

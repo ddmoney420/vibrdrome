@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 #if os(iOS)
 // MARK: - iOS-specific views for NowPlayingView
@@ -104,6 +103,12 @@ extension NowPlayingView {
                     let songId = song.id
                     let wasStarred = isStarred
                     isStarred = !wasStarred
+                    engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
+                    NotificationCenter.default.post(
+                        name: .songStarredChanged,
+                        object: nil,
+                        userInfo: ["id": songId, "starred": !wasStarred]
+                    )
                     Task {
                         do {
                             if wasStarred {
@@ -118,6 +123,12 @@ extension NowPlayingView {
                         } catch {
                             if engine.currentSong?.id == songId {
                                 isStarred = wasStarred
+                                engine.updateQueueSongStarred(id: songId, starred: wasStarred)
+                                NotificationCenter.default.post(
+                                    name: .songStarredChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "starred": wasStarred]
+                                )
                             }
                         }
                     }
@@ -139,14 +150,22 @@ extension NowPlayingView {
                     ForEach(1...5, id: \.self) { star in
                         Image(systemName: star <= currentRating ? "star.fill" : "star")
                             .font(.title2)
-                            .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.5))
+                            .foregroundColor(star <= currentRating ? .yellow : .white.opacity(0.6))
+                            .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
+                            .accessibilityAddTraits(.isButton)
                             .onTapGesture {
                                 Haptics.light()
                                 let newRating = star == currentRating ? 0 : star
                                 currentRating = newRating
                                 guard let songId = engine.currentSong?.id else { return }
+                                engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
+                                NotificationCenter.default.post(
+                                    name: .songRatingChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "rating": newRating]
+                                )
                                 Task {
-                                    try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                                    try? await OfflineActionQueue.shared.setRating(id: songId, rating: newRating)
                                 }
                             }
                     }
@@ -167,43 +186,6 @@ extension NowPlayingView {
                 .accessibilityIdentifier("queueButton")
             }
         }
-    }
-
-    // MARK: - Streaming Info
-
-    var streamingInfo: some View {
-        Group {
-            if let song = engine.currentSong {
-                let downloaded = isCurrentSongDownloaded
-                let suffix = song.suffix?.uppercased() ?? "—"
-                if downloaded {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 9))
-                        Text("Downloaded · \(suffix)")
-                    }
-                } else {
-                    let bitRate = song.bitRate.map { "\($0) kbps" } ?? "—"
-                    HStack(spacing: 4) {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 9))
-                        Text("\(bitRate) · \(suffix)")
-                    }
-                }
-            }
-        }
-        .font(.caption2)
-        .foregroundStyle(.white.opacity(0.5))
-        .frame(maxWidth: .infinity)
-    }
-
-    var isCurrentSongDownloaded: Bool {
-        guard let songId = engine.currentSong?.id else { return false }
-        let modelContext = PersistenceController.shared.container.mainContext
-        let descriptor = FetchDescriptor<DownloadedSong>(
-            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-        )
-        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
     }
 
     // MARK: - iOS Playback Row
@@ -289,7 +271,8 @@ extension NowPlayingView {
         HStack(spacing: 8) {
             Image(systemName: "speaker.fill")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -312,15 +295,28 @@ extension NowPlayingView {
                 )
             }
             .frame(height: 20)
+            .accessibilityLabel("Volume")
+            .accessibilityValue(String(format: "%.0f%%", engine.userVolume * 100))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    engine.userVolume = min(1, engine.userVolume + 0.1)
+                case .decrement:
+                    engine.userVolume = max(0, engine.userVolume - 0.1)
+                @unknown default: break
+                }
+            }
 
             Image(systemName: "speaker.wave.3.fill")
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.white.opacity(0.7))
+                .accessibilityHidden(true)
         }
     }
 
     // MARK: - Bottom Toolbar (6 icons)
 
+    @ViewBuilder
     var bottomToolbar: some View {
         let orderedItems = NowPlayingToolbarItem.decodeOrder(from: toolbarOrderJSON)
         let visibleItems = orderedItems.filter { item in
@@ -330,24 +326,42 @@ extension NowPlayingView {
             case .airplay: return showAirPlayInToolbar
             case .lyrics: return showLyricsInToolbar
             case .settings: return showSettingsInToolbar
+            case .radioMix: return showRadioMixInToolbar
             }
         }
-        return HStack(spacing: 0) {
-            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                toolbarButton(for: item)
-                if index < visibleItems.count - 1 {
-                    Spacer()
+        // Hide the entire row when the user has disabled every item --
+        // previously the empty pill still rendered.
+        if !visibleItems.isEmpty {
+            HStack(spacing: 0) {
+                ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                    toolbarButton(for: item)
+                    if index < visibleItems.count - 1 {
+                        Spacer()
+                    }
                 }
             }
+            .font(.title3)
+            .fontWeight(.semibold)
+            .buttonStyle(.plain)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .modifier(ToolbarBackgroundModifier(enabled: nowPlayingToolbarBackground))
         }
-        .font(.title3)
-        .fontWeight(.semibold)
-        .buttonStyle(.plain)
-        .foregroundColor(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .modifier(GlassEffectToolbarModifier())
+    }
+
+    /// Toggles the pill background + glass effect on the bottom toolbar.
+    private struct ToolbarBackgroundModifier: ViewModifier {
+        let enabled: Bool
+        func body(content: Content) -> some View {
+            if enabled {
+                content
+                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    .modifier(GlassEffectToolbarModifier())
+            } else {
+                content
+            }
+        }
     }
 
     @ViewBuilder
@@ -364,12 +378,7 @@ extension NowPlayingView {
         case .eq:
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.eqEnabled
-                            ? .accentColor
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .accentColor : nil
-                    )
+                    .foregroundColor(engine.eqEnabled ? .accentColor : nil)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Equalizer")
@@ -397,6 +406,19 @@ extension NowPlayingView {
             }
             .accessibilityLabel("Quick Settings")
             .accessibilityIdentifier("quickSettingsButton")
+
+        case .radioMix:
+            Button {
+                guard let song = engine.currentSong else { return }
+                Haptics.light()
+                AudioEngine.shared.startSongSimilarityMix(song)
+            } label: {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .disabled(engine.currentSong == nil)
+            .accessibilityLabel("Start Radio Mix")
+            .accessibilityIdentifier("radioMixButton")
         }
     }
 

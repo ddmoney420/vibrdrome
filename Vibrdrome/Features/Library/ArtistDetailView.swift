@@ -1,25 +1,34 @@
 import SwiftUI
+import SwiftData
 
 struct ArtistDetailView: View {
     let artistId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var artist: Artist?
     @State private var topSongs: [Song] = []
     @State private var similarArtists: [Artist] = []
     @State private var biography: String?
     @State private var isLoading = true
     @State private var error: String?
-    @State private var showAllTopSongs = false
     @State private var showFullBio = false
+    @State private var isStarred = false
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "artist")
+    #endif
 
     var body: some View {
         List {
             // Top Songs section
             if !topSongs.isEmpty {
                 Section {
-                    let displayed = showAllTopSongs ? topSongs : Array(topSongs.prefix(5))
-                    ForEach(Array(displayed.enumerated()), id: \.element.id) { index, song in
+                    #if os(macOS)
+                    MacTrackTableView(songs: topSongs, settings: columnSettings)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                    #else
+                    ForEach(Array(topSongs.enumerated()), id: \.element.id) { index, song in
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -27,18 +36,9 @@ struct ArtistDetailView: View {
                             }
                             .trackContextMenu(song: song, queue: topSongs, index: index)
                     }
-
-                    if topSongs.count > 5 {
-                        Button {
-                            withAnimation { showAllTopSongs.toggle() }
-                        } label: {
-                            Text(showAllTopSongs ? "Show Less" : "See All \(topSongs.count) Songs")
-                                .font(.caption)
-                                .foregroundColor(.accentColor)
-                        }
-                    }
+                    #endif
                 } header: {
-                    Text("Top Songs")
+                    Text("Top Tracks")
                 }
             }
 
@@ -76,6 +76,7 @@ struct ArtistDetailView: View {
                             AlbumCard(album: album)
                         }
                         .accessibilityIdentifier("artistAlbumRow_\(album.id)")
+                        .albumGetInfoContextMenu(album: album)
                     }
                 } header: {
                     Text("Albums (\(albums.count))")
@@ -107,6 +108,7 @@ struct ArtistDetailView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("similarArtist_\(similar.id)")
+                                .artistGetInfoContextMenu(artist: similar)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -147,6 +149,18 @@ struct ArtistDetailView: View {
             }
         }
         .toolbar {
+            if artist != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        toggleArtistStar()
+                    } label: {
+                        Image(systemName: isStarred ? "heart.fill" : "heart")
+                            .foregroundStyle(isStarred ? Color.pink : Color.accentColor)
+                    }
+                    .accessibilityLabel(isStarred ? "Unfavorite Artist" : "Favorite Artist")
+                    .accessibilityIdentifier("artistFavoriteButton")
+                }
+            }
             if let artist {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -163,15 +177,39 @@ struct ArtistDetailView: View {
     }
 
     private func loadArtist() async {
-        isLoading = true
+        // Show cached artist with album list instantly
+        if artist == nil {
+            let aid = artistId
+            let artistDesc = FetchDescriptor<CachedArtist>(
+                predicate: #Predicate { $0.id == aid }
+            )
+            if let cached = try? modelContext.fetch(artistDesc).first {
+                // Find this artist's albums in the cache
+                let albumDesc = FetchDescriptor<CachedAlbum>(
+                    predicate: #Predicate<CachedAlbum> { $0.artistId == aid },
+                    sortBy: [SortDescriptor(\CachedAlbum.year, order: .reverse)]
+                )
+                let cachedAlbums = (try? modelContext.fetch(albumDesc)) ?? []
+                let albums = cachedAlbums.map { $0.toAlbum() }
+                artist = Artist(
+                    id: cached.id, name: cached.name,
+                    coverArt: cached.coverArtId,
+                    albumCount: cached.albumCount,
+                    starred: cached.isStarred ? "true" : nil,
+                    album: albums.isEmpty ? nil : albums
+                )
+            }
+        }
+        isLoading = artist == nil
         error = nil
         defer { isLoading = false }
         do {
             let loadedArtist = try await appState.subsonicClient.getArtist(id: artistId)
             artist = loadedArtist
+            isStarred = loadedArtist.starred != nil
             // Load top songs and similar artists in parallel
             async let topSongsResult = appState.subsonicClient.getTopSongs(
-                artist: loadedArtist.name, count: 20
+                artist: loadedArtist.name, count: 10
             )
             async let artistInfoResult = appState.subsonicClient.getArtistInfo(id: artistId)
             topSongs = try await topSongsResult
@@ -187,5 +225,24 @@ struct ArtistDetailView: View {
     private func cleanBiography(_ text: String) -> String {
         text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func toggleArtistStar() {
+        let wasStarred = isStarred
+        isStarred.toggle()
+        #if os(iOS)
+        Haptics.light()
+        #endif
+        Task {
+            do {
+                if wasStarred {
+                    try await OfflineActionQueue.shared.unstar(artistId: artistId)
+                } else {
+                    try await OfflineActionQueue.shared.star(artistId: artistId)
+                }
+            } catch {
+                isStarred = wasStarred
+            }
+        }
     }
 }

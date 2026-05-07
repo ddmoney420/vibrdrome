@@ -38,6 +38,14 @@ final class EQEngine {
         currentPresetId = preset.id
         customGains = preset.gains
         syncCoefficients()
+        let isFlat = preset.id == "flat"
+        if !isFlat && !AudioEngine.shared.eqEnabled {
+            AudioEngine.shared.applyEQToggle(enabled: true)
+            UserDefaults.standard.set(true, forKey: UserDefaultsKeys.eqEnabled)
+        } else if isFlat && AudioEngine.shared.eqEnabled {
+            AudioEngine.shared.applyEQToggle(enabled: false)
+            UserDefaults.standard.set(false, forKey: UserDefaultsKeys.eqEnabled)
+        }
     }
 
     /// Update individual band gain (clamped to ±12 dB)
@@ -46,6 +54,10 @@ final class EQEngine {
         customGains[index] = min(max(gain, -12), 12)
         currentPresetId = "custom"
         syncCoefficients()
+        if !AudioEngine.shared.eqEnabled {
+            AudioEngine.shared.applyEQToggle(enabled: true)
+            UserDefaults.standard.set(true, forKey: UserDefaultsKeys.eqEnabled)
+        }
     }
 
     /// Push current gains to the shared coefficient store (picked up by audio taps)

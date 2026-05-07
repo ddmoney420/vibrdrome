@@ -38,10 +38,45 @@ final class AppState {
     enum PendingNavigation: Equatable {
         case artist(id: String)
         case album(id: String)
+        case song(id: String)
         case genre(name: String)
         case playlist(id: String)
     }
     var pendingNavigation: PendingNavigation?
+
+    /// Single-shot trigger consumed by NowPlayingView when it appears or this changes.
+    /// Used by sidebar actions (e.g., Random Mix) to surface the queue panel.
+    enum NowPlayingAction: Equatable {
+        case showQueue
+        case showLyrics
+    }
+    var pendingNowPlayingAction: NowPlayingAction?
+
+    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info / Album Filters).
+    /// Mutually exclusive: setting one closes the others.
+    enum SidePanel: String, Equatable {
+        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters
+    }
+    var activeSidePanel: SidePanel?
+
+    /// Filter state for the macOS filter sidebars.
+    var albumFilter = LibraryFilter()
+    var artistFilter = LibraryFilter()
+    var songFilter = LibraryFilter()
+
+    /// Cached albums state for back-navigation, keyed by view configuration.
+    struct AlbumsViewSnapshot {
+        var albums: [Album]
+        var hasMore: Bool
+        var scrollIndex: Int?
+    }
+    var albumsViewSnapshots: [String: AlbumsViewSnapshot] = [:]
+
+    /// Library sync manager.
+    let librarySyncManager = LibrarySyncManager.shared
+
+    /// Pre-computed model arrays so library tabs are instant on first tap.
+    let libraryCache = LibraryDataCache()
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?
@@ -99,6 +134,8 @@ final class AppState {
         #if os(iOS)
         SubsonicClientProvider.shared.client = subsonicClient
         #endif
+        LibrarySyncManager.shared.client = subsonicClient
+        LibrarySyncManager.shared.container = PersistenceController.shared.container
     }
 
     func loadSavedCredentials() {
@@ -148,18 +185,27 @@ final class AppState {
         return true
     }
 
-    func saveCredentials(url: String, username: String, password: String) {
+    func saveCredentials(url: String, username: String, password: String, name: String? = nil) {
         configure(url: url, username: username, password: password)
         guard isConfigured else { return }
+
+        let trimmedName = name?.trimmingCharacters(in: .whitespaces)
+        let resolvedName: String = {
+            if let trimmedName, !trimmedName.isEmpty { return trimmedName }
+            return extractServerName(from: serverURL)
+        }()
 
         // Update or create server config
         if let activeId = activeServerId,
            let index = servers.firstIndex(where: { $0.id == activeId }) {
             servers[index].url = serverURL
             servers[index].username = username
+            if let trimmedName, !trimmedName.isEmpty {
+                servers[index].name = trimmedName
+            }
             keychain["server_\(activeId)"] = password
         } else {
-            let config = SavedServer(name: extractServerName(from: serverURL), url: serverURL, username: username)
+            let config = SavedServer(name: resolvedName, url: serverURL, username: username)
             servers.append(config)
             activeServerId = config.id
             keychain["server_\(config.id)"] = password
@@ -178,6 +224,13 @@ final class AppState {
         requiresReAuth = false
     }
 
+    func resetLibraryFilterState() {
+        albumFilter = LibraryFilter()
+        artistFilter = LibraryFilter()
+        songFilter = LibraryFilter()
+        albumsViewSnapshots = [:]
+    }
+
     func clearCredentials() {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.serverURL)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.username)
@@ -186,6 +239,7 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
+        resetLibraryFilterState()
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(
             baseURL: URL(string: "https://localhost")!,
@@ -210,6 +264,7 @@ final class AppState {
               let password = keychain["server_\(id)"] else { return }
         activeServerId = id
         UserDefaults.standard.set(id, forKey: Self.activeServerKey)
+        resetLibraryFilterState()
         configure(url: server.url, username: server.username, password: password)
 
         // Update legacy keys

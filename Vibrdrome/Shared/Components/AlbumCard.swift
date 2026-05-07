@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AlbumCard: View {
     let album: Album
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         HStack(spacing: 12) {

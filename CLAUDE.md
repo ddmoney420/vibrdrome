@@ -45,28 +45,38 @@ xcodegen generate
 - **Website-only changes** (docs/ folder) do not need CI — consider skipping CI with `[skip ci]` in commit message when only docs change
 - Before pushing, ask: "Does this need CI, or can I verify locally?"
 - **ALWAYS run SwiftLint before committing** — zero violations required
-- **Branching**: Use `develop` for feature work, merge to `main` for releases. Direct commits to `main` only for hotfixes.
+- **Branching**: `main` is protected. All work goes on `develop`. Merge to `main` via PR only.
+  - `main` requires: PR + CI passing (SwiftLint + Build iOS). No direct pushes.
+  - `develop` is the daily working branch. Commit freely here.
+  - Release flow: finish work on `develop` -> create PR to `main` -> CI passes -> merge -> archive and upload to TestFlight.
+  - Hotfixes: `enforce_admins` is off, so repo owner can bypass protection in emergencies.
+  - Tag each release: `v1.0.0-beta.39`, etc.
 - **Never send messages to external people** without explicit user review and approval
 
 ## Pre-TestFlight Checklist
 
-Run in order before every TestFlight build:
+Run in order before every TestFlight build. Every step is mandatory -- no "if applicable", no "if new features", no skipping.
 
-1. `swiftlint` — 0 violations
-2. Unit tests: `xcodebuild test -only-testing:VibrdromeTests` — all pass
-3. UI tests: `xcodebuild test -only-testing:VibrdromeUITests/RotationTests` — all pass
+1. `swiftlint` -- 0 violations
+2. Unit tests: `xcodebuild test -only-testing:VibrdromeTests` -- all pass
+3. UI tests: `xcodebuild test -only-testing:VibrdromeUITests/RotationTests` -- all pass
 4. Security audit on recent changes
 5. Build iOS with 0 warnings
 6. Build macOS with 0 warnings
 7. Build watchOS with 0 warnings
 8. Device test on phone (see TESTING.md for full regression checklist)
-9. Update CHANGELOG.md with build number and TestFlight notes
-10. Update docs/changelog.html with new build entry
-11. Update docs/features.html if new features were added
-12. Update docs/index.html feature grid if new features were added
-13. Update TESTING.md with test items for new features
-14. Increment CURRENT_PROJECT_VERSION in project.yml (all 3 targets)
-13. Regenerate xcodegen and restore entitlements
+9. Update `CHANGELOG.md` -- new build entry, no exceptions
+10. Update `docs/changelog.html` -- matching HTML entry, no exceptions
+11. Update `docs/features.html` -- add or refresh any feature text that changed; if nothing changed, verify by re-reading
+12. Update `docs/index.html` feature grid -- same rule as features.html
+13. Update `docs/User-Guide.md` -- add or refresh any user-facing behavior that changed
+14. Update `docs/TESTING-CHECKLIST.md` -- add test items for every user-visible change
+15. Update `docs/APPSTORE-METADATA.md` "What's New" block for the new build, and refresh any description lines the build affects
+16. Update `TESTING.md` -- test items for every new feature and regression area
+17. Increment `CURRENT_PROJECT_VERSION` in `project.yml` (all 3 targets)
+18. Regenerate xcodegen and restore entitlements
+
+The pre-commit hook (`scripts/hooks/pre-commit`) enforces steps 9-16: if `project.yml`'s `CURRENT_PROJECT_VERSION` bumps in a commit, the required doc files must be touched in the same commit. Do not bypass with `--no-verify`; the hook is the safety net.
 
 ## Post-XcodeGen Entitlements Restore
 

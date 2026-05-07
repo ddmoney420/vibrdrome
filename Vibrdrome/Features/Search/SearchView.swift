@@ -6,7 +6,7 @@ private let maxRecentSearches = 10
 
 struct SearchView: View {
     @Environment(AppState.self) var appState
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) var modelContext
     @State private var query = ""
     @State private var results: SearchResult3?
     @State private var isSearching = false
@@ -23,6 +23,7 @@ struct SearchView: View {
     @State var showGenrePicker = false
     @State var showYearPicker = false
     @State var showFormatPicker = false
+    @State private var searchIsActive = false
 
     let formatOptions = ["FLAC", "MP3", "AAC", "OGG", "OPUS", "WAV"]
 
@@ -47,7 +48,16 @@ struct SearchView: View {
         .padding(.bottom, 80)
         #endif
         .navigationTitle("Search")
-        .searchable(text: $query, prompt: "Artists, albums, songs...")
+        .searchable(text: $query, isPresented: $searchIsActive, prompt: "Artists, albums, songs...")
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                searchIsActive = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         .onSubmit(of: .search) {
             saveRecentSearch(query)
         }
@@ -108,6 +118,7 @@ struct SearchView: View {
                             artistBubble(artist)
                         }
                         .buttonStyle(.plain)
+                        .artistGetInfoContextMenu(artist: artist)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -131,6 +142,7 @@ struct SearchView: View {
                             albumTile(album)
                         }
                         .buttonStyle(.plain)
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -202,25 +214,7 @@ struct SearchView: View {
             if showAlbumArtInLists {
                 AlbumArtView(coverArtId: song.coverArt, size: 48, cornerRadius: 8)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    if let artist = song.artist {
-                        Text(artist)
-                    }
-                    if let album = song.album {
-                        Text("·")
-                        Text(album)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
+            songRowTitleBlock(song)
 
             Spacer()
 
@@ -246,6 +240,28 @@ struct SearchView: View {
             AudioEngine.shared.play(song: song, from: songs, at: index)
         }
         .trackContextMenu(song: song, queue: songs, index: index)
+    }
+
+    @ViewBuilder
+    private func songRowTitleBlock(_ song: Song) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(song.title)
+                .font(.body)
+                .lineLimit(1)
+
+            HStack(spacing: 4) {
+                if let artist = song.artist {
+                    Text(artist)
+                }
+                if let album = song.album {
+                    Text("·")
+                    Text(album)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
     }
 
     // MARK: - Empty & Error States
@@ -335,6 +351,12 @@ struct SearchView: View {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
 
+        // Show local results instantly while waiting for network
+        let localResults = searchLocally(query: query)
+        if let localResults, resultCount(localResults) > 0, results == nil {
+            results = localResults
+        }
+
         isSearching = true
         defer { isSearching = false }
 
@@ -370,16 +392,63 @@ struct SearchView: View {
             results = searchResults
         } catch {
             guard !Task.isCancelled else { return }
-            // Offline fallback: search downloaded songs locally
-            let offlineResults = searchDownloadsLocally(query: query)
-            if let songs = offlineResults, !songs.isEmpty {
+            // Offline fallback: search cached library locally
+            let offlineResults = searchLocally(query: query)
+                ?? searchDownloadsLocally(query: query).map {
+                    SearchResult3(artist: nil, album: nil, song: $0)
+                }
+            if let offlineResults, resultCount(offlineResults) > 0 {
                 searchError = nil
-                results = SearchResult3(artist: nil, album: nil, song: songs)
+                results = offlineResults
             } else {
                 searchError = ErrorPresenter.userMessage(for: error)
                 results = nil
             }
         }
+    }
+
+    private func searchLocally(query: String) -> SearchResult3? {
+        let q = query
+
+        // Search cached songs using predicate
+        var songDescriptor = FetchDescriptor<CachedSong>(
+            predicate: #Predicate<CachedSong> {
+                $0.title.localizedStandardContains(q)
+                || ($0.artist?.localizedStandardContains(q) ?? false)
+                || ($0.albumName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        songDescriptor.fetchLimit = 40
+        let matchedSongs = ((try? modelContext.fetch(songDescriptor)) ?? []).map { $0.toSong() }
+
+        // Search cached albums using predicate
+        var albumDescriptor = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate<CachedAlbum> {
+                $0.name.localizedStandardContains(q)
+                || ($0.artistName?.localizedStandardContains(q) ?? false)
+            }
+        )
+        albumDescriptor.fetchLimit = 20
+        let matchedAlbums = ((try? modelContext.fetch(albumDescriptor)) ?? []).map { $0.toAlbum() }
+
+        // Search cached artists using predicate
+        var artistDescriptor = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate<CachedArtist> {
+                $0.name.localizedStandardContains(q)
+            }
+        )
+        artistDescriptor.fetchLimit = 20
+        let matchedArtists = ((try? modelContext.fetch(artistDescriptor)) ?? []).map { $0.toArtist() }
+
+        guard !matchedSongs.isEmpty || !matchedAlbums.isEmpty || !matchedArtists.isEmpty else {
+            return nil
+        }
+
+        return SearchResult3(
+            artist: matchedArtists.isEmpty ? nil : Array(matchedArtists),
+            album: matchedAlbums.isEmpty ? nil : Array(matchedAlbums),
+            song: matchedSongs.isEmpty ? nil : Array(matchedSongs)
+        )
     }
 
     private func searchDownloadsLocally(query: String) -> [Song]? {

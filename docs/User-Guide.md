@@ -32,11 +32,28 @@ Use the **Playlists** tab to view and manage your server-side playlists.
 ## Playback
 
 - **Play a song**: Tap any song to start playback. The remaining songs in the list are added to your queue.
-- **Mini player**: Appears at the bottom of the screen during playback. Tap it to open the full-screen player.
+- **Mini player**: Appears at the bottom of the screen during playback. Tap it to open the full-screen player. On iPad it stays pinned to the bottom even when the floating keyboard is up.
 - **Full-screen player**: Shows album art, playback progress, and controls. Swipe down to dismiss.
 - **Queue**: Tap the queue icon in the player to view and reorder upcoming tracks.
 - **Shuffle**: Tap the shuffle icon to randomize your queue.
 - **Repeat**: Tap the repeat icon to cycle through off, repeat all, and repeat one.
+- **Radio Mix**: Open the player toolbar and tap the Radio Mix button to queue up songs similar to the one currently playing. Rearrange or hide toolbar items in **Settings > Player > Now Playing Toolbar**.
+
+## Get Info
+
+Long-press any song, album, or artist and choose **Get Info** to inspect its metadata:
+
+- **Overview** tab: cover art, title, year, duration, bitrate/format, ReplayGain, MusicBrainz and Last.fm links.
+- **Raw Metadata** tab: the full Subsonic API response plus Navidrome file tags (rawTags) for deeper diagnostics.
+
+On iOS, Get Info opens as a sheet. On macOS it opens its own window, so you can have several open at once while you keep browsing.
+
+## macOS Keyboard Shortcuts
+
+- **⌘K** -- Go to Search tab.
+- **⌘F** -- Focus the search bar in the current view.
+
+Both shortcuts are listed in the **Navigate** menu in the menu bar. CMD+F is intercepted before AppKit's Find panel can claim it, so it focuses Vibrdrome's search instead of making a beep.
 
 ## Downloads (Offline Playback)
 
@@ -69,8 +86,12 @@ Bookmarks sync with your server.
 Add and listen to internet radio streams:
 
 - Go to **Radio** in the Library tab.
-- Tap **Add Radio Station** and enter the stream URL and a name.
+- Tap **Add Radio Station** and fill in the labeled sections:
+  - **Name** -- the display name shown in the Radio grid.
+  - **Stream URL** -- the actual audio stream (e.g. `https://example.com/stream.mp3`, or a `.pls` / `.m3u` playlist).
+  - **Homepage** (optional) -- the station's website, used for the favicon and info.
 - Tap a station to start streaming.
+- To delete a station, long-press its card and choose **Delete Station**. This works in portrait and landscape, iPhone, iPad, and Mac.
 
 ## Settings
 
@@ -78,8 +99,24 @@ Access settings from the **Settings** tab:
 
 - **Server Management** -- Add, edit, or remove servers.
 - **Playback Quality** -- Set bitrate limits separately for Wi-Fi and cellular connections. Lower bitrates save data and battery; higher bitrates improve audio quality.
-- **Appearance** -- Choose a theme (light, dark, or system), pick an accent color, and adjust text size via Dynamic Type.
+- **Appearance** -- Choose a theme (light, dark, or system), pick an accent color, and adjust text size via Dynamic Type. On iOS 26, enable **Liquid Glass** to give the Now Playing toolbar and mini player a frosted, glass-like background.
 - **Cache** -- Clear the image or audio cache to free storage.
+
+## CarPlay
+
+When your iPhone is connected to CarPlay, Vibrdrome shows a dedicated CarPlay interface.
+
+- **Artists and Albums** use two-letter drill-down for large collections: pick a first letter, then a second letter to jump straight to that slice instead of scrolling a long list.
+- **Now Playing** shows shuffle, repeat, progress, and Up Next. It no longer auto-pushes on track start, so the list you were browsing stays visible.
+- Playback keeps its position through short call or text interruptions: when audio resumes it seeks back to where it was before the interruption rather than restarting from 0.
+
+## Visualizer
+
+Open the visualizer from the Now Playing screen (waveform icon). Swipe sideways to cycle presets, swipe down to dismiss, tap once to toggle controls.
+
+- **Spectrum / Waveform / Aurora** react to the real frequency content of the audio: bass on the left of the screen, treble on the right. Spectrum shows classic peak-hold caps floating above each bar.
+- Other presets animate from an overall energy curve and still pulse with the music.
+- See **Settings > Accessibility** for photosensitivity controls.
 
 ## Multi-Server Support
 

@@ -1,13 +1,32 @@
+import SwiftData
 import SwiftUI
 
 struct GenresView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @Query private var genreArtworks: [GenreArtwork]
     @State private var genres: [Genre] = []
     @State private var isLoading = true
     @State private var error: String?
-    @State private var genreArt: [String: String] = [:] // genre → coverArtId
+
+    private var genreArtworkMap: [String: String] {
+        // `uniqueKeysWithValues:` crashes on duplicate keys. Even with
+        // `@Attribute(.unique)` on GenreArtwork.genre, a single stray
+        // duplicate (concurrent insert race, pre-existing data, migration
+        // edge case) would fatalError every time the user opens Genres.
+        // `uniquingKeysWith:` keeps the first entry and moves on.
+        Dictionary(
+            genreArtworks.map { ($0.genre, $0.coverArtId) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var sortBy: GenreSortOption = .name
+    @AppStorage("genresViewStyle") private var showAsList = true
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
+    @State private var cachedFilteredGenres: [Genre] = []
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -19,7 +38,7 @@ struct GenresView: View {
         }
     }
 
-    private var filteredGenres: [Genre] {
+    private func computeFilteredGenres() -> [Genre] {
         let base: [Genre]
         if searchText.isEmpty {
             base = genres
@@ -37,41 +56,28 @@ struct GenresView: View {
     }
 
     var body: some View {
-        List(filteredGenres) { genre in
-            NavigationLink {
-                AlbumsView(listType: .byGenre, title: genre.value, genre: genre.value)
-            } label: {
-                HStack(spacing: 12) {
-                    AlbumArtView(
-                        coverArtId: genreArt[genre.value],
-                        size: 48,
-                        cornerRadius: 8
-                    )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(genre.value)
-                            .font(.body)
-                        Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
+        Group {
+            if showAsList {
+                genreList
+            } else {
+                genreGrid
             }
-            .accessibilityIdentifier("genreRow_\(genre.value)")
         }
-        .listStyle(.plain)
         #if os(iOS)
         .contentMargins(.bottom, 80)
         #endif
         .navigationTitle("Genres")
         #if os(iOS)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Genres")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Genres")
         #else
-        .searchable(text: $searchText, prompt: "Search Genres")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Genres")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         #endif
         .overlay {
             if isLoading && genres.isEmpty {
@@ -94,6 +100,17 @@ struct GenresView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Image(systemName: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .accessibilityLabel(showAsList ? "Grid View" : "List View")
+                .accessibilityIdentifier("genresViewToggle")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ForEach(GenreSortOption.allCases, id: \.self) { option in
@@ -120,16 +137,101 @@ struct GenresView: View {
             }
         }
         .task { await loadGenres() }
+        .onChange(of: searchText) { recomputeFilteredGenres() }
+        .onChange(of: sortBy) { recomputeFilteredGenres() }
         .refreshable { await loadGenres() }
+    }
+
+    // MARK: - List view
+
+    private var genreList: some View {
+        List(cachedFilteredGenres) { genre in
+            NavigationLink {
+                AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
+            } label: {
+                HStack(spacing: 12) {
+                    GenreIconView(genre: genre.value, coverArtId: genreArtworkMap[genre.value])
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(genre.value.cleanedGenreDisplay)
+                            .font(.body)
+                        Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            }
+            .accessibilityIdentifier("genreRow_\(genre.value)")
+        }
+        .listStyle(.plain)
+    }
+
+    // MARK: - Grid view
+
+    private var genreGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+            ], spacing: 20) {
+                ForEach(cachedFilteredGenres) { genre in
+                    NavigationLink {
+                        AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
+                    } label: {
+                        genreCard(genre)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("genreCard_\(genre.value)")
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func genreCard(_ genre: Genre) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            GenreIconView(genre: genre.value, coverArtId: genreArtworkMap[genre.value])
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+
+            Text(genre.value.cleanedGenreDisplay)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            Text(verbatim: "\(genre.albumCount ?? 0) albums · \(genre.songCount ?? 0) songs")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func recomputeFilteredGenres() {
+        cachedFilteredGenres = computeFilteredGenres()
     }
 
     private func loadGenres() async {
         let client = appState.subsonicClient
-        // Show cached data instantly
+
+        // Try local SwiftData first — derive genres from cached songs
+        if genres.isEmpty {
+            let localGenres = deriveGenresFromCache()
+            if !localGenres.isEmpty {
+                genres = localGenres
+                recomputeFilteredGenres()
+            }
+        }
+
+        // Show cached API response if no local data
         if genres.isEmpty,
            let cached = await client.cachedResponse(for: .getGenres, ttl: 3600) {
             genres = (cached.genres?.genre ?? [])
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
         }
         isLoading = genres.isEmpty
         error = nil
@@ -137,20 +239,43 @@ struct GenresView: View {
         do {
             genres = try await client.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
             await loadGenreArt(client: client)
         } catch {
-            if genres.isEmpty {
+            // If network fails but we have local data, load art from cache
+            if !genres.isEmpty {
+                await loadGenreArt(client: client)
+            } else {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
         }
     }
 
-    private func loadGenreArt(client: SubsonicClient) async {
-        for genre in genres.prefix(30) where genreArt[genre.value] == nil {
-            if let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
-               let coverArt = albums.first?.coverArt {
-                genreArt[genre.value] = coverArt
+    private func deriveGenresFromCache() -> [Genre] {
+        // Use albums (much fewer records) to derive genre counts
+        let allAlbums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        var genreAlbumCount: [String: Int] = [:]
+        var genreSongCount: [String: Int] = [:]
+
+        for album in allAlbums {
+            for genre in album.genres where !genre.isEmpty {
+                genreAlbumCount[genre, default: 0] += 1
+                genreSongCount[genre, default: 0] += album.songCount ?? 0
             }
         }
+
+        return genreAlbumCount.map { key, albumCount in
+            Genre(songCount: genreSongCount[key] ?? 0, albumCount: albumCount, value: key)
+        }.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+    }
+
+    private func loadGenreArt(client: SubsonicClient) async {
+        let existing = Set(genreArtworks.map(\.genre))
+        for genre in genres where !existing.contains(genre.value) {
+            guard let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
+                  let coverArt = albums.first?.coverArt else { continue }
+            modelContext.insert(GenreArtwork(genre: genre.value, coverArtId: coverArt))
+        }
+        try? modelContext.save()
     }
 }

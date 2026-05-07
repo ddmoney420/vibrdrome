@@ -39,7 +39,17 @@ extension AudioEngine {
             return
         }
 
+        // Ensure audio session is active (may have been deactivated since app launch)
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+
         submitScrobbleIfNeeded()
+
+        // Clear history when loading a brand new queue
+        if newQueue != nil {
+            playHistory = []
+        }
 
         if isCrossfading {
             incrementGeneration()
@@ -74,21 +84,15 @@ extension AudioEngine {
         if newMode != activeMode {
             tearDownCurrentMode()
             activeMode = newMode
+        } else if activeMode == .crossfade {
+            // Same mode but new track — stop the old crossfade players
+            crossfadeController.cancelRamp()
+            crossfadeController.activePlayer?.pause()
+            crossfadeController.inactivePlayer?.pause()
         }
 
         let url = resolveURL(for: song)
         currentReplayGainFactor = computeReplayGainFactor(for: song)
-
-        switch activeMode {
-        case .gapless:
-            replacePlayerItem(with: url)
-            applyEffectiveVolume()
-            gaplessPlayer?.rate = playbackRate
-            prepareLookahead()
-        case .crossfade:
-            startCrossfadePlayback(url: url)
-            applyEffectiveVolume()
-        }
 
         isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
@@ -99,6 +103,8 @@ extension AudioEngine {
         } else {
             startPredownloadIfNeeded(startIndex: index, queue: newQueue!)
         }
+
+        scheduleDebouncedPlayerSwap(url: url, mode: activeMode)
     }
 
     /// UI testing path for play — updates observable state without AVPlayer
@@ -185,14 +191,11 @@ extension AudioEngine {
         gaplessPlayer?.play()
         isPlaying = true
 
-        var info = [String: Any]()
-        info[MPMediaItemPropertyTitle] = station.name
-        info[MPMediaItemPropertyArtist] = "Internet Radio"
-        info[MPNowPlayingInfoPropertyIsLiveStream] = true
-        info[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-        // Clear previous artwork immediately to prevent stale album art
-        info[MPMediaItemPropertyArtwork] = nil
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // Seed NowPlayingManager's currentInfo with station metadata so
+        // subsequent updateElapsedTime / updatePlaybackState ticks don't
+        // overwrite with the previous song's info. Previously we wrote to
+        // MPNowPlayingInfoCenter directly, which got clobbered within ~500ms.
+        NowPlayingManager.shared.update(station: station, isPlaying: true)
 
         loadRadioArtwork(for: station)
     }
@@ -211,9 +214,7 @@ extension AudioEngine {
             guard let image = NSImage(data: data) else { return }
             #endif
             let artwork = makeRadioArtwork(from: image)
-            var nowInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            nowInfo[MPMediaItemPropertyArtwork] = artwork
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowInfo
+            NowPlayingManager.shared.setCurrentArtwork(artwork)
         }
     }
 
@@ -240,15 +241,28 @@ extension AudioEngine {
         // Route through play()/playRadio() for full setup.
         if gaplessPlayer == nil {
             if let station = currentRadioStation {
+                playbackLog.info("resume path=coldStart.radio station=\(station.name)")
                 playRadio(station: station)
                 return
             }
             if let song = currentSong {
                 let savedTime = currentTime
+                playbackLog.info("resume path=coldStart.song savedTime=\(savedTime)")
                 play(song: song)
-                if savedTime > 1 { seek(to: savedTime) }
+                // Always seek if we have any saved position. Previously a >1s
+                // guard meant interruptions in the first second of a track
+                // silently restarted from 0.
+                if savedTime > 0 { seek(to: savedTime) }
                 return
             }
+        }
+
+        // If track is at or past its end (e.g. after sleep timer "end of track"),
+        // advance to next track instead of resuming dead audio
+        if duration > 0 && currentTime >= duration - 0.5 {
+            playbackLog.info("resume path=atEndAdvance currentTime=\(self.currentTime) duration=\(self.duration)")
+            next()
+            return
         }
 
         switch activeMode {
@@ -266,15 +280,31 @@ extension AudioEngine {
             || gaplessPlayer?.currentItem?.status == .failed
         if let song = currentSong, itemNeedsReload {
             let savedTime = currentTime
+            let statusRaw = gaplessPlayer?.currentItem?.status.rawValue ?? -1
+            playbackLog.info("resume path=gapless.reload savedTime=\(savedTime) itemStatus=\(statusRaw)")
             let url = resolveURL(for: song)
             replacePlayerItem(with: url)
-            if savedTime > 0 { seek(to: savedTime) }
+            // Seek BEFORE setting rate so the player doesn't audibly play from
+            // position 0 for a few hundred ms while the async seek completes.
+            // On slow/streaming sources, that gap is what users perceive as
+            // "the song restarted" after a CarPlay call/text interruption.
+            let targetRate = playbackRate
+            if savedTime > 0 {
+                seekInternal(to: savedTime) { [weak self] in
+                    self?.gaplessPlayer?.rate = targetRate
+                }
+            } else {
+                gaplessPlayer?.rate = targetRate
+            }
             prepareLookahead()
-        } else if eqEnabled, let item = gaplessPlayer?.currentItem {
-            // Reapply EQ tap after interruption to reset stale delay buffers
-            applyEQTapIfNeeded(to: item)
+        } else {
+            playbackLog.info("resume path=gapless.normal currentTime=\(self.currentTime)")
+            if eqEnabled, let item = gaplessPlayer?.currentItem {
+                // Reapply EQ tap after interruption to reset stale delay buffers
+                applyEQTapIfNeeded(to: item)
+            }
+            gaplessPlayer?.rate = playbackRate
         }
-        gaplessPlayer?.rate = playbackRate
     }
 
     private func resumeCrossfadeMode() {
@@ -440,10 +470,13 @@ extension AudioEngine {
                 currentIndex = queue.count - 1
                 refillRadioIfNeeded()
                 return false
+            } else if UserDefaults.standard.bool(forKey: UserDefaultsKeys.autoSuggestEnabled) {
+                currentIndex = queue.count - 1
+                autoSuggestMore()
+                return false
             } else {
                 currentIndex = queue.count - 1
-                // Auto-continue with similar songs instead of stopping
-                autoSuggestMore()
+                pause()
                 return false
             }
         }
@@ -475,6 +508,8 @@ extension AudioEngine {
 
     func handleTrackEnd() {
         SleepTimer.shared.trackDidEnd()
+        // Record the outgoing song (it reached its end)
+        if let current = currentSong { recordSongAsPlayed(current) }
         if !isPlaying { return }
 
         switch repeatMode {
@@ -519,6 +554,8 @@ extension AudioEngine {
 
     func handleAutoAdvance() {
         submitScrobbleIfNeeded()
+        // Explicitly record the outgoing song (it fully played to completion)
+        if let current = currentSong { recordSongAsPlayed(current) }
 
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
             playbackLog.warning("Auto-advance but no valid lookahead index")
@@ -567,6 +604,20 @@ extension AudioEngine {
     /// Unlike play(song:from:at:), this preserves the full queue intact.
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
+        if isUITesting {
+            currentIndex = index
+            currentSong = queue[index]
+            return
+        }
+
+        submitScrobbleIfNeeded()
+
+        if isCrossfading {
+            incrementGeneration()
+            crossfadeController.forceComplete()
+            isCrossfading = false
+        }
+
         let song = queue[index]
         
         let isNewTrack = currentSong?.id != song.id
@@ -587,12 +638,34 @@ extension AudioEngine {
         duration = 0
 
         let url = resolveURL(for: song)
-        replacePlayerItem(with: url)
-        activePlayer?.play()
-        isPlaying = true
+        currentReplayGainFactor = computeReplayGainFactor(for: song)
 
+        isPlaying = true
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
+
+        scheduleDebouncedPlayerSwap(url: url, mode: activeMode)
+    }
+
+    /// Coalesce rapid play()/skipToIndex() calls. UI state updates immediately,
+    /// but the AVPlayer item swap is delayed briefly so spam-tapping collapses
+    /// into a single replacement rather than churning the audio session.
+    func scheduleDebouncedPlayerSwap(url: URL, mode: PlaybackMode) {
+        playbackSwapTask?.cancel()
+        playbackSwapTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled, let self else { return }
+            switch mode {
+            case .gapless:
+                self.replacePlayerItem(with: url)
+                self.applyEffectiveVolume()
+                self.gaplessPlayer?.rate = self.playbackRate
+                self.prepareLookahead()
+            case .crossfade:
+                self.startCrossfadePlayback(url: url)
+                self.applyEffectiveVolume()
+            }
+        }
     }
 
     /// Auto-suggest similar songs when the queue runs out

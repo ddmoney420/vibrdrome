@@ -9,7 +9,10 @@ struct PlaylistsView: View {
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
     @AppStorage("playlistViewStyle") private var showAsList = false
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     @State private var searchText = ""
+    @State private var searchIsActive = false
     @State private var sortBy: PlaylistSortOption = .name
 
     enum PlaylistSortOption: String, CaseIterable {
@@ -69,8 +72,12 @@ struct PlaylistsView: View {
         #if os(iOS)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Playlists")
         #else
-        .searchable(text: $searchText, prompt: "Search Playlists")
+        .searchable(text: $searchText, isPresented: $searchIsActive, prompt: "Search Playlists")
         #endif
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearchBar)) { _ in
+            searchIsActive = false
+            DispatchQueue.main.async { searchIsActive = true }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -125,6 +132,17 @@ struct PlaylistsView: View {
                 Button { showSmartSheet = true } label: {
                     Label("Smart Mix", systemImage: "sparkles")
                 }
+            }
+            ToolbarItem {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showAsList.toggle()
+                    }
+                } label: {
+                    Label(showAsList ? "Grid View" : "List View",
+                          systemImage: showAsList ? "square.grid.2x2" : "list.bullet")
+                }
+                .help(showAsList ? "Show as Grid" : "Show as List")
             }
             ToolbarItem {
                 Menu {
@@ -239,7 +257,7 @@ struct PlaylistsView: View {
 
     private var playlistGrid: some View {
         LazyVGrid(columns: [
-            GridItem(.adaptive(minimum: 180, maximum: 240), spacing: 16)
+            GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
         ], spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
@@ -248,45 +266,7 @@ struct PlaylistsView: View {
                     playlistCard(playlist)
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
-                                if let songs = detail.entry, let first = songs.first {
-                                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
-                                    .error("Failed to load playlist for playback: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    Button {
-                        Task {
-                            do {
-                                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
-                                if var songs = detail.entry, !songs.isEmpty {
-                                    songs.shuffle()
-                                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                                }
-                            } catch {
-                                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
-                                    .error("Failed to load playlist for shuffle: \(error)")
-                            }
-                        }
-                    } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        deletePlaylist(playlist)
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
+                .contextMenu { playlistContextMenu(playlist) }
             }
         }
         .padding(.horizontal, 16)
@@ -332,6 +312,7 @@ struct PlaylistsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .contextMenu { playlistContextMenu(playlist) }
 
                 if playlist.id != filteredPlaylists.last?.id {
                     Divider().padding(.leading, 86)
@@ -342,9 +323,11 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            PlaylistMosaicView(playlist: playlist, size: Theme.playlistCardSize, cornerRadius: 12)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                PlaylistMosaicView(playlist: playlist, size: geo.size.width, cornerRadius: 12)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(playlist.name)
                 .font(.subheadline)
@@ -361,6 +344,50 @@ struct PlaylistsView: View {
                 Text(verbatim: "\(playlist.songCount ?? 0) songs")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func playlistContextMenu(_ playlist: Playlist) -> some View {
+        Button {
+            playlistAction(playlist) { songs in
+                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs, at: 0) }
+            }
+        } label: { Label("Play", systemImage: "play.fill") }
+
+        Button {
+            playlistAction(playlist) { songs in
+                var shuffled = songs; shuffled.shuffle()
+                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled, at: 0) }
+            }
+        } label: { Label("Shuffle", systemImage: "shuffle") }
+
+        Button {
+            playlistAction(playlist) { songs in AudioEngine.shared.addToQueueNext(songs) }
+        } label: { Label("Play Next", systemImage: "text.insert") }
+
+        Button {
+            playlistAction(playlist) { songs in AudioEngine.shared.addToQueue(songs) }
+        } label: { Label("Add to Queue", systemImage: "text.append") }
+
+        Divider()
+
+        Button(role: .destructive) {
+            deletePlaylist(playlist)
+        } label: { Label("Delete", systemImage: "trash") }
+    }
+
+    private func playlistAction(_ playlist: Playlist, action: @escaping ([Song]) -> Void) {
+        Task {
+            do {
+                let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
+                if let songs = detail.entry, !songs.isEmpty { action(songs) }
+            } catch {
+                Logger(subsystem: "com.vibrdrome.app", category: "Playlists")
+                    .error("Playlist action failed: \(error)")
             }
         }
     }

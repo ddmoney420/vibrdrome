@@ -5,6 +5,7 @@ struct PlaylistDetailView: View {
     let playlistId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var playlist: Playlist?
     @State private var isLoading = true
     @State private var error: String?
@@ -16,7 +17,11 @@ struct PlaylistDetailView: View {
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
+    @State private var showRemoveOfflineConfirmation = false
     @Query private var downloadedSongs: [DownloadedSong]
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "playlist")
+    #endif
 
     private var filteredSongs: [Song] {
         guard let songs = playlist?.entry else { return [] }
@@ -76,6 +81,28 @@ struct PlaylistDetailView: View {
                             .buttonStyle(.bordered)
                             .accessibilityIdentifier("playlistShuffleButton")
                             .disabled(playlist.entry?.isEmpty ?? true)
+
+                            Menu {
+                                Button {
+                                    if let songs = playlist.entry, !songs.isEmpty {
+                                        AudioEngine.shared.addToQueueNext(songs)
+                                    }
+                                } label: {
+                                    Label("Play Next", systemImage: "text.insert")
+                                }
+                                Button {
+                                    if let songs = playlist.entry, !songs.isEmpty {
+                                        AudioEngine.shared.addToQueue(songs)
+                                    }
+                                } label: {
+                                    Label("Add to Queue", systemImage: "text.append")
+                                }
+                            } label: {
+                                Label("More", systemImage: "ellipsis.circle")
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("playlistMoreButton")
+                            .disabled(playlist.entry?.isEmpty ?? true)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -86,6 +113,11 @@ struct PlaylistDetailView: View {
 
                 // Songs
                 Section {
+                    #if os(macOS)
+                    MacTrackTableView(songs: filteredSongs, settings: columnSettings)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                    #else
                     ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
                         HStack(spacing: 0) {
                             if isSelecting {
@@ -127,6 +159,7 @@ struct PlaylistDetailView: View {
                             at: IndexSet(originalIndices), songs: allSongs
                         )
                     }
+                    #endif
                 }
 
                 // Batch action bar
@@ -217,8 +250,18 @@ struct PlaylistDetailView: View {
                         if let playlist, let songs = playlist.entry, !songs.isEmpty {
                             let isFullyDownloaded = DownloadManager.shared.isPlaylistDownloaded(playlistId: playlistId)
                             if isFullyDownloaded {
+                                Button {
+                                    isDownloading = true
+                                    DownloadManager.shared.refreshOfflinePlaylist(
+                                        playlist: playlist,
+                                        songs: songs,
+                                        client: appState.subsonicClient
+                                    )
+                                } label: {
+                                    Label("Refresh Download", systemImage: "arrow.triangle.2.circlepath")
+                                }
                                 Button(role: .destructive) {
-                                    DownloadManager.shared.removeOfflinePlaylist(playlistId: playlistId)
+                                    showRemoveOfflineConfirmation = true
                                 } label: {
                                     Label("Remove Offline", systemImage: "icloud.slash")
                                 }
@@ -244,6 +287,14 @@ struct PlaylistDetailView: View {
         .sheet(isPresented: $showBatchAddToPlaylist) {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
+        }
+        .alert("Remove Offline Playlist?", isPresented: $showRemoveOfflineConfirmation) {
+            Button("Remove", role: .destructive) {
+                DownloadManager.shared.removeOfflinePlaylist(playlistId: playlistId)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Songs from this download will be deleted unless they're also part of another offline playlist.")
         }
         .sheet(isPresented: $showEditSheet) {
             if let playlist {
@@ -281,14 +332,57 @@ struct PlaylistDetailView: View {
     }
 
     private func loadPlaylist() async {
-        isLoading = true
+        // Show cached playlist data instantly while fetching fresh
+        if playlist == nil {
+            playlist = loadCachedPlaylist()
+        }
+        isLoading = playlist == nil
         error = nil
         defer { isLoading = false }
         do {
             playlist = try await appState.subsonicClient.getPlaylist(id: playlistId)
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            if playlist == nil {
+                self.error = ErrorPresenter.userMessage(for: error)
+            }
         }
+    }
+
+    private func loadCachedPlaylist() -> Playlist? {
+        let pid = playlistId
+        var descriptor = FetchDescriptor<CachedPlaylist>(
+            predicate: #Predicate { $0.id == pid }
+        )
+        descriptor.fetchLimit = 1
+        guard let cached = try? modelContext.fetch(descriptor).first else { return nil }
+
+        // Resolve entries to songs in a single fetch + dictionary lookup.
+        // Previously this did one modelContext.fetch per entry — a 1000-song playlist
+        // issued 1000 queries on the main thread.
+        let sortedEntries = cached.entries.sorted { $0.order < $1.order }
+        let entrySongIds = sortedEntries.map(\.songId)
+        let idSet = Set(entrySongIds)
+        let songsDesc = FetchDescriptor<CachedSong>(
+            predicate: #Predicate<CachedSong> { idSet.contains($0.id) }
+        )
+        let cachedSongs = (try? modelContext.fetch(songsDesc)) ?? []
+        let songMap = Dictionary(uniqueKeysWithValues: cachedSongs.map { ($0.id, $0) })
+        let songs: [Song] = sortedEntries.compactMap { entry in
+            songMap[entry.songId]?.toSong()
+        }
+
+        return Playlist(
+            id: cached.id,
+            name: cached.name,
+            songCount: cached.songCount,
+            duration: cached.duration,
+            created: nil,
+            changed: nil,
+            coverArt: cached.coverArtId,
+            owner: cached.owner,
+            isPublic: cached.isPublic,
+            entry: songs.isEmpty ? nil : songs
+        )
     }
 
     private func toggleSelection(_ songId: String) {

@@ -22,6 +22,24 @@ extension AudioEngine {
         guard currentIndex > 0 else { return [] }
         return Array(queue[0..<currentIndex].reversed().prefix(20))
     }
+    
+    /// Upcoming tracks (queue[currentIndex+1...]) with absolute queue indices
+    /// so callers can pass them back to skipToIndex / removeFromQueue.
+    var upNextEntries: [(index: Int, song: Song)] {
+        guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
+        return (currentIndex + 1 ..< queue.count).map { idx in
+            (index: idx, song: queue[idx])
+        }
+    }
+
+    /// All queue tracks except the currently playing one, with absolute queue indices.
+    /// Used by QueueView and SidePanels for full-queue display.
+    var queueEntries: [(index: Int, song: Song)] {
+        guard !queue.isEmpty else { return [] }
+        return queue.enumerated()
+            .filter { $0.offset != currentIndex }
+            .map { (index: $0.offset, song: $0.element) }
+    }
 
     func addToQueue(_ song: Song) {
         queue.append(song)
@@ -35,18 +53,68 @@ extension AudioEngine {
         if activeMode == .gapless { prepareLookahead() }
     }
 
-    func removeFromQueue(at index: Int) {
-        let absoluteIndex = currentIndex + 1 + index
-        guard absoluteIndex > currentIndex, absoluteIndex < queue.count else { return }
-        queue.remove(at: absoluteIndex)
-        if index == 0 && activeMode == .gapless { prepareLookahead() }
+    func addToQueueNext(_ songs: [Song]) {
+        let insertAt = min(currentIndex + 1, queue.count)
+        queue.insert(contentsOf: songs, at: insertAt)
+        if activeMode == .gapless { prepareLookahead() }
     }
 
+    func addToQueue(_ songs: [Song]) {
+        queue.append(contentsOf: songs)
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
+    /// Remove a track from the queue by its absolute queue index.
+    func removeFromQueue(atAbsolute index: Int) {
+        guard index >= 0, index < queue.count, index != currentIndex else { return }
+        queue.remove(at: index)
+        if index < currentIndex { currentIndex -= 1 }
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
+    /// Reorder tracks within the Up Next section only.
+    /// Source/destination are offsets into `upNextEntries`; they get shifted
+    /// by currentIndex+1 to land in the real queue array. Tracks before the
+    /// current track are untouched.
+    func moveInUpNext(from source: IndexSet, to destination: Int) {
+        let startIndex = currentIndex + 1
+        guard startIndex < queue.count else { return }
+        let upNextCount = queue.count - startIndex
+        guard destination >= 0, destination <= upNextCount else { return }
+        let absoluteSource = IndexSet(source.compactMap { offset in
+            let abs = startIndex + offset
+            return abs < queue.count ? abs : nil
+        })
+        guard !absoluteSource.isEmpty else { return }
+        let absoluteDestination = startIndex + destination
+        queue.move(fromOffsets: absoluteSource, toOffset: absoluteDestination)
+        if activeMode == .gapless { prepareLookahead() }
+    }
+
+    /// Reorder tracks within the queue display (all tracks except currently playing).
+    /// Source/destination are relative to `queueEntries` (the all-except-current array).
     func moveInQueue(from source: IndexSet, to destination: Int) {
-        guard currentIndex + 1 < queue.count else { return }
-        var upNextSlice = Array(queue[(currentIndex + 1)...])
-        upNextSlice.move(fromOffsets: source, toOffset: destination)
-        queue.replaceSubrange((currentIndex + 1)..., with: upNextSlice)
+        guard queue.count > 1 else { return }
+        let savedSong = queue[currentIndex]
+        let afterCurrentId: String? = currentIndex + 1 < queue.count
+            ? queue[currentIndex + 1].id : nil
+
+        var items = Array(queue)
+        items.remove(at: currentIndex)
+        items.move(fromOffsets: source, toOffset: destination)
+
+        // Reinsert current song right before the track that was originally after it
+        let insertAt: Int
+        if let afterId = afterCurrentId,
+           let pos = items.firstIndex(where: { $0.id == afterId }) {
+            insertAt = pos
+        } else {
+            insertAt = items.count
+        }
+        items.insert(savedSong, at: insertAt)
+
+        queue = items
+        currentIndex = insertAt
         if activeMode == .gapless { prepareLookahead() }
     }
 

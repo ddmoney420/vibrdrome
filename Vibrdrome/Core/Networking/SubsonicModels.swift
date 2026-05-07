@@ -35,6 +35,7 @@ struct SubsonicResponseBody: Decodable {
     let playQueue: PlayQueue?
     let bookmarks: BookmarksWrapper?
     let artistInfo2: ArtistInfo2?
+    let albumInfo: AlbumInfo2?
     let similarSongs2: SimilarSongs2Response?
     let topSongs: TopSongsResponse?
     let musicFolders: MusicFoldersWrapper?
@@ -48,7 +49,7 @@ struct SubsonicResponseBody: Decodable {
         case artists, artist, album, song, searchResult3
         case playlists, playlist, genres, starred2, albumList2, randomSongs
         case internetRadioStations, lyricsList, playQueue, bookmarks
-        case artistInfo2, similarSongs2, topSongs
+        case artistInfo2, albumInfo, similarSongs2, topSongs
         case musicFolders, directory, indexes
         case jukeboxStatus, jukeboxPlaylist
     }
@@ -77,6 +78,7 @@ struct SubsonicResponseBody: Decodable {
         playQueue = try container.decodeIfPresent(PlayQueue.self, forKey: .playQueue)
         bookmarks = try container.decodeIfPresent(BookmarksWrapper.self, forKey: .bookmarks)
         artistInfo2 = try container.decodeIfPresent(ArtistInfo2.self, forKey: .artistInfo2)
+        albumInfo = try container.decodeIfPresent(AlbumInfo2.self, forKey: .albumInfo)
         similarSongs2 = try container.decodeIfPresent(SimilarSongs2Response.self, forKey: .similarSongs2)
         topSongs = try container.decodeIfPresent(TopSongsResponse.self, forKey: .topSongs)
         musicFolders = try container.decodeIfPresent(MusicFoldersWrapper.self, forKey: .musicFolders)
@@ -124,7 +126,25 @@ struct ArtistInfo2: Decodable, Sendable {
     let largeImageUrl: String?
 }
 
+struct AlbumInfo2: Decodable, Sendable {
+    let notes: String?
+    let musicBrainzId: String?
+    let lastFmUrl: String?
+    let smallImageUrl: String?
+    let mediumImageUrl: String?
+    let largeImageUrl: String?
+}
+
 // MARK: - Album Models
+
+struct RecordLabel: Decodable, Sendable {
+    let name: String
+}
+
+/// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
+struct ItemGenre: Decodable, Sendable {
+    let name: String
+}
 
 struct Album: Decodable, Identifiable, Sendable {
     let id: String
@@ -136,10 +156,26 @@ struct Album: Decodable, Identifiable, Sendable {
     let duration: Int?
     let year: Int?
     let genre: String?
+    let genres: [ItemGenre]?
     let starred: String?
     let created: String?
+    let userRating: Int?
     let song: [Song]?
     let replayGain: ReplayGain?
+    let musicBrainzId: String?
+    let recordLabels: [RecordLabel]?
+
+    /// First record label name, for convenience.
+    var label: String? { recordLabels?.first?.name }
+
+    /// All genres for this album. Prefers the OpenSubsonic `genres` array when present;
+    /// falls back to the legacy single `genre` string.
+    var allGenres: [String] {
+        if let items = genres, !items.isEmpty {
+            return items.map(\.name)
+        }
+        return genre.map { [$0] } ?? []
+    }
 }
 
 struct AlbumList2Response: Decodable, Sendable {
@@ -160,7 +196,7 @@ struct TopSongsResponse: Decodable, Sendable {
 
 // MARK: - Song Model
 
-struct Song: Decodable, Identifiable, Sendable {
+struct Song: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let parent: String?
     let title: String
@@ -210,9 +246,39 @@ struct Song: Decodable, Identifiable, Sendable {
         self.starred = starred; self.userRating = userRating
         self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
     }
+
+    func withStarred(_ starred: String?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate, path: path,
+            discNumber: discNumber, created: created,
+            starred: starred, userRating: userRating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
+
+    func withUserRating(_ rating: Int?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate, path: path,
+            discNumber: discNumber, created: created,
+            starred: starred, userRating: rating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
 }
 
-struct ReplayGain: Decodable, Sendable {
+struct ReplayGain: Decodable, Sendable, Equatable {
     let trackGain: Double?
     let albumGain: Double?
     let trackPeak: Double?

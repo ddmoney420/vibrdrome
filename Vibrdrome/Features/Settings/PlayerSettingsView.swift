@@ -1,3 +1,4 @@
+import KeychainAccess
 import SwiftUI
 
 // MARK: - Last.fm Auth Status
@@ -26,22 +27,29 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
+    @AppStorage(UserDefaultsKeys.autoSuggestEnabled) private var autoSuggestEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
     @AppStorage(UserDefaultsKeys.preloadSongs) private var preloadSongs: Int = 0
     @AppStorage(UserDefaultsKeys.keepSongsInCacheAfterPlayback) private var keepSongsInCacheAfterPlayback: Bool = false
     @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
+    @AppStorage(UserDefaultsKeys.replayGainPreGainDb) private var replayGainPreGainDb: Double = 0
+    @AppStorage(UserDefaultsKeys.replayGainFallbackDb) private var replayGainFallbackDb: Double = 0
     @AppStorage(UserDefaultsKeys.eqEnabled) private var eqEnabled: Bool = false
 
     // Scrobbling
     @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
-    @AppStorage(UserDefaultsKeys.listenBrainzToken) private var listenBrainzToken: String = ""
     @AppStorage(UserDefaultsKeys.lastFmEnabled) private var lastFmEnabled: Bool = false
-    @AppStorage(UserDefaultsKeys.lastFmApiKey) private var lastFmApiKey: String = ""
-    @AppStorage(UserDefaultsKeys.lastFmSecret) private var lastFmSecret: String = ""
-    @AppStorage(UserDefaultsKeys.lastFmSessionKey) private var lastFmSessionKey: String = ""
     @AppStorage(UserDefaultsKeys.lastFmUsername) private var lastFmUsername: String = ""
+
+    // Credentials stored in Keychain, not UserDefaults
+    private static let lastFmKC = Keychain(service: "com.vibrdrome.lastfm")
+    private static let lbKC = Keychain(service: "com.vibrdrome.listenbrainz")
+    @State private var listenBrainzToken: String = lbKC["token"] ?? ""
+    @State private var lastFmApiKey: String = lastFmKC["apiKey"] ?? ""
+    @State private var lastFmSecret: String = lastFmKC["secret"] ?? ""
+    @State private var lastFmSessionKey: String = lastFmKC["sessionKey"] ?? ""
     @State private var lastFmPassword: String = ""
     @State private var lastFmAuthStatus: LastFmAuthStatus = .idle
     @State private var lastFmAuthError: String?
@@ -55,11 +63,14 @@ struct PlayerSettingsView: View {
     // Controls / Now Playing Toolbar
     @AppStorage(UserDefaultsKeys.showVolumeSlider) private var showVolumeSlider: Bool = true
     @AppStorage(UserDefaultsKeys.showAudioQualityInfo) private var showAudioQualityInfo: Bool = true
+    @AppStorage(UserDefaultsKeys.showLosslessBadge) private var showLosslessBadge: Bool = true
     @AppStorage(UserDefaultsKeys.showVisualizerInToolbar) private var showVisualizerInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showEQInToolbar) private var showEQInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showAirPlayInToolbar) private var showAirPlayInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showLyricsInToolbar) private var showLyricsInToolbar: Bool = true
     @AppStorage(UserDefaultsKeys.showSettingsInToolbar) private var showSettingsInToolbar: Bool = true
+    @AppStorage(UserDefaultsKeys.showRadioMixInToolbar) private var showRadioMixInToolbar: Bool = false
+    @AppStorage(UserDefaultsKeys.nowPlayingToolbarBackground) private var nowPlayingToolbarBackground: Bool = true
     @AppStorage(UserDefaultsKeys.nowPlayingToolbarOrder) private var toolbarOrderJSON: String = "[]"
 
     // Song Display
@@ -142,6 +153,12 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("gaplessPlaybackToggle")
 
+            Toggle(isOn: $autoSuggestEnabled) {
+                Label("Auto-Suggest", systemImage: "sparkles")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("autoSuggestToggle")
+
             Picker(selection: $crossfadeDuration) {
                 Text("Off").tag(0)
                 Text("2s").tag(2)
@@ -195,6 +212,34 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("replayGainPicker")
 
+            if replayGainMode != "off" {
+                HStack {
+                    Label("RG Pre-Gain", systemImage: "plus.forwardslash.minus")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text(String(format: "%+.1f dB", replayGainPreGainDb))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $replayGainPreGainDb, in: 0...6, step: 0.5)
+                    .accessibilityLabel("ReplayGain Pre-Gain")
+                    .accessibilityValue(String(format: "%.1f dB", replayGainPreGainDb))
+                    .accessibilityIdentifier("replayGainPreGainSlider")
+
+                HStack {
+                    Label("Fallback Gain", systemImage: "speaker.slash")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text(String(format: "%+.1f dB", replayGainFallbackDb))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $replayGainFallbackDb, in: -6...0, step: 0.5)
+                    .accessibilityLabel("Fallback Gain")
+                    .accessibilityValue(String(format: "%.1f dB", replayGainFallbackDb))
+                    .accessibilityIdentifier("replayGainFallbackSlider")
+            }
+
             Toggle(isOn: $eqEnabled) {
                 Label("Equalizer", systemImage: "slider.vertical.3")
                     .foregroundColor(.primary)
@@ -240,6 +285,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("listenBrainzTokenField")
+                    .onChange(of: listenBrainzToken) { _, val in
+                        Self.lbKC["token"] = val.isEmpty ? nil : val
+                    }
             }
 
             Toggle(isOn: $lastFmEnabled) {
@@ -256,6 +304,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("lastFmApiKeyField")
+                    .onChange(of: lastFmApiKey) { _, val in
+                        Self.lastFmKC["apiKey"] = val.isEmpty ? nil : val
+                    }
 
                 SecureField("Shared Secret", text: $lastFmSecret)
                     .textContentType(.password)
@@ -264,6 +315,9 @@ struct PlayerSettingsView: View {
                     .textInputAutocapitalization(.never)
                     #endif
                     .accessibilityIdentifier("lastFmSecretField")
+                    .onChange(of: lastFmSecret) { _, val in
+                        Self.lastFmKC["secret"] = val.isEmpty ? nil : val
+                    }
 
                 if lastFmSessionKey.isEmpty {
                     TextField("Last.fm Username", text: $lastFmUsername)
@@ -288,9 +342,7 @@ struct PlayerSettingsView: View {
                             lastFmPassword = ""
                             if error == nil {
                                 lastFmAuthStatus = .success
-                                lastFmSessionKey = UserDefaults.standard.string(
-                                    forKey: UserDefaultsKeys.lastFmSessionKey
-                                ) ?? ""
+                                lastFmSessionKey = Self.lastFmKC["sessionKey"] ?? ""
                             } else {
                                 lastFmAuthStatus = .failed
                                 lastFmAuthError = error
@@ -328,6 +380,7 @@ struct PlayerSettingsView: View {
                         Spacer()
                         Button("Sign Out") {
                             lastFmSessionKey = ""
+                            Self.lastFmKC["sessionKey"] = nil
                             lastFmPassword = ""
                             lastFmAuthStatus = .idle
                         }
@@ -374,6 +427,23 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("showAudioQualityInfoToggle")
 
+            Toggle(isOn: $showLosslessBadge) {
+                Label("Lossless Badge", systemImage: "waveform.badge.plus")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("showLosslessBadgeToggle")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $nowPlayingToolbarBackground) {
+                    Label("Toolbar Background", systemImage: "rectangle.fill")
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("nowPlayingToolbarBackgroundToggle")
+                Text("Rounded pill + translucent backdrop behind the bottom icon row. Turn off for a cleaner look.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             nowPlayingToolbarSubsection
         } header: {
             settingSectionHeader("Controls", icon: "slider.horizontal.3", color: .blue)
@@ -407,6 +477,7 @@ struct PlayerSettingsView: View {
         case .airplay: return $showAirPlayInToolbar
         case .lyrics: return $showLyricsInToolbar
         case .settings: return $showSettingsInToolbar
+        case .radioMix: return $showRadioMixInToolbar
         }
     }
 
@@ -417,6 +488,7 @@ struct PlayerSettingsView: View {
         case .airplay: return "AirPlay"
         case .lyrics: return "Lyrics"
         case .settings: return "Quick Settings"
+        case .radioMix: return "Radio Mix"
         }
     }
 
@@ -427,6 +499,7 @@ struct PlayerSettingsView: View {
         case .airplay: return "airplayaudio"
         case .lyrics: return "quote.bubble"
         case .settings: return "gearshape"
+        case .radioMix: return "dot.radiowaves.left.and.right"
         }
     }
 

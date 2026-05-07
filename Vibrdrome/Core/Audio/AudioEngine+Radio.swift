@@ -79,33 +79,43 @@ extension AudioEngine {
         })
     }
 
-    /// Start radio seeded from a specific song
+    /// Start radio seeded from a specific song. When the song has an artist
+    /// tag this falls into artist radio (artist + related artists); otherwise
+    /// it uses song-level similarity. Use `startSongSimilarityMix(_:)` when
+    /// the caller specifically wants "songs like this one" regardless of
+    /// whether the artist tag is present.
     func startRadioFromSong(_ song: Song) {
         if let artistName = song.artist {
             startRadio(artistName: artistName)
         } else {
-            stopRadioMode()
-            isRadioMode = true
-            radioSeedArtistName = nil
-            clearRadioSkippedIds()
-            setRadioRefillTask(Task { [weak self] in
-                guard let self else { return }
-                let client = AppState.shared.subsonicClient
-                var songs = (try? await client.getSimilarSongs(
-                    id: song.id, count: 30
-                )) ?? []
-                if songs.isEmpty {
-                    songs = (try? await client.getRandomSongs(size: 20)) ?? []
-                }
-                guard !Task.isCancelled else { return }
-                let unique = self.deduplicateRadioSongs(songs, against: [])
-                guard let first = unique.first else {
-                    self.isRadioMode = false
-                    return
-                }
-                self.play(song: first, from: unique)
-            })
+            startSongSimilarityMix(song)
         }
+    }
+
+    /// Play a mix of songs similar to the given track, independent of the
+    /// artist-radio path. Uses `getSimilarSongs` directly so the result is a
+    /// song-level similarity queue, matching what "Instant Mix" / "Radio Mix"
+    /// means in Apple Music / Spotify.
+    func startSongSimilarityMix(_ song: Song) {
+        stopRadioMode()
+        isRadioMode = true
+        radioSeedArtistName = nil
+        clearRadioSkippedIds()
+        setRadioRefillTask(Task { [weak self] in
+            guard let self else { return }
+            let client = AppState.shared.subsonicClient
+            var songs = (try? await client.getSimilarSongs(id: song.id, count: 30)) ?? []
+            if songs.isEmpty {
+                songs = (try? await client.getRandomSongs(size: 20)) ?? []
+            }
+            guard !Task.isCancelled else { return }
+            let unique = self.deduplicateRadioSongs(songs, against: [])
+            guard let first = unique.first else {
+                self.isRadioMode = false
+                return
+            }
+            self.play(song: first, from: unique)
+        })
     }
 
     /// Skip current track and block it from future radio results

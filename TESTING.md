@@ -21,6 +21,19 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Gapless playback (two tracks transition without gap)
 - [ ] Crossfade works when enabled in settings
 - [ ] Playback rate (speed) changes work
+- [ ] Sleep timer "End of Track": after it pauses, pressing play advances to next track
+- [ ] Recently Played in Queue shows only songs actually listened to (not unplayed queue entries)
+- [ ] Spam-tap play/pause rapidly — no audio glitching or dropouts
+- [ ] Spam-tap different track rows rapidly — audio settles on the last-tapped track without churn
+- [ ] Now Playing: disable all toolbar items in Settings -> Player -> Controls; bottom row hides entirely (no empty pill)
+- [ ] Settings -> Player -> Toolbar Background toggle: off = no pill behind bottom icons; on = pill visible
+- [ ] Settings -> Player -> Controls -> Radio Mix toggle on; Now Playing shows the radio tower icon; tapping plays similar songs to current track
+- [ ] iPad Radio tab (landscape grid view): long-press any station card -> "Delete Station" menu appears
+- [ ] Radio -> Add URL: three labeled sections (Name, Stream URL, Homepage) with explainer footers
+- [ ] Settings -> Appearance: Liquid Glass toggle shows subtitle "Tinted pill backgrounds and translucent tab bar..."
+- [ ] iPad: with mini player visible, switch keyboard to floating mode; mini player stays pinned at screen bottom
+- [ ] macOS: menu bar shows Navigate menu with "Go to Search ⌘K" and "Focus Search ⌘F"; both shortcuts fire without beeping
+- [ ] Long-press any song/album/artist -> "Get Info" item; opens sheet (iOS) or window (macOS) with Overview and Raw metadata tabs
 
 ## Library & Navigation
 
@@ -31,12 +44,26 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Search filter chips (Genre, Year, Format) appear and filter results
 - [ ] Navigate to artist detail (from search, album, or Now Playing)
 - [ ] Navigate to album detail
+- [ ] Tap album card in artist detail → opens album detail (no bounce back to artist)
+- [ ] Search "beats" in Albums tab returns matches anywhere in the library (e.g. "Beats, Rhymes and Life"), not just loaded pages
+- [ ] Genre containing a semicolon (e.g. "Hip Hop; Pop") renders without the semicolon, and tapping loads albums without error
+- [ ] Library tab shows Playlists / Artists / Albums / Songs / Genres / Downloaded list + Recently Added carousel
+- [ ] Favorites tab has Songs / Albums / Artists segmented picker and grid-list toggle on Albums/Artists
+- [ ] Heart button on Album Detail toolbar favorites the album (verify in Favorites tab)
+- [ ] Heart button on Artist Detail toolbar favorites the artist (verify in Favorites tab)
+- [ ] Artists and Albums toolbar filter menu (All / Favorites / Downloaded) filters the list correctly
+- [ ] Genres list shows real album artwork (not AI icons); no flickering when new artwork loads
+- [ ] Home tab shows Favorite Albums and Featured Genre carousels when data is available
+- [ ] CarPlay genres list shows album art
+- [ ] After phone call or Siri-read text, CarPlay playback resumes automatically
 - [ ] Artist detail shows biography (About section)
 - [ ] Artist detail shows Similar Artists carousel
 - [ ] Genre list shows artwork
 - [ ] Generations shows decade cards
 - [ ] Playlists load (grid and list view toggle)
 - [ ] Playlist mosaic shows 2x2 album art grid
+- [ ] Playlist context menu: Play, Shuffle, Play Next, Add to Queue, Delete (grid + list)
+- [ ] Playlist detail: "More" menu with Play Next and Add to Queue
 - [ ] Radio stations load (grid and list view toggle)
 - [ ] Library folder switching (if multi-library server)
 - [ ] Customizable library (add/remove/reorder pills and carousels)
@@ -56,6 +83,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Star rating works (tap to rate, tap same to clear)
 - [ ] No back button (pull-down to dismiss only)
 - [ ] Streaming info shows below progress (WiFi icon + bitrate + format)
+- [ ] ReplayGain info shows below streaming info when RG tags present (T: +X.X dB / A: +X.X dB)
 - [ ] Progress slider has small dot thumb (not blob)
 - [ ] Circular progress ring around play/pause button
 - [ ] "Playing from" label shows playlist/shuffle context (not album)
@@ -66,9 +94,21 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] AirPlay button opens system route picker
 - [ ] Settings gear opens Quick Settings sheet
 - [ ] Quick Settings: sleep timer, speed, crossfade, download, share all work
+- [ ] Sleep timer: no volume pop on expire (smooth volume fade to silence)
+- [ ] Landscape layout: art left, controls right (iPhone and iPad)
 - [ ] EQ sheet opens from toolbar
 - [ ] Lyrics sheet opens (synced lyrics auto-scroll and tap-to-seek)
+- [ ] Lyrics with negative offset don't break sync
 - [ ] Visualizer opens (if not disabled)
+- [ ] Visualizer does not cause audio stutter on open
+- [ ] Spectrum preset: bass-heavy track spikes the left side of the bar graph (Build 51)
+- [ ] Spectrum preset: cymbal-heavy track spikes the right side (Build 51)
+- [ ] Spectrum preset: each bar has a white peak-hold cap that snaps up on transients and decays slowly (Build 51)
+- [ ] Waveform preset: mirrored ribbon bulges based on real frequency content; silence collapses it to a flat line (Build 51)
+- [ ] Aurora preset: ribbons bend with frequency content (left vs right differ) rather than pure sine sweeps (Build 51)
+- [ ] All 18 presets render and animate (switch via swipe or preset picker) (Build 51)
+- [ ] macOS build: visualizer renders correctly (not black), reacts to audio (Build 51)
+- [ ] Console filtered to subsystem:com.vibrdrome.app shows `Spectrum diag` line once per second during playback (Build 51)
 - [ ] Queue opens
 - [ ] Long-press album art shows save/share options
 - [ ] Drag to dismiss works
@@ -85,14 +125,18 @@ Run through this checklist before every TestFlight build. Each item should be ve
 
 ## Queue
 
-- [ ] Tap to jump to track
+- [ ] Tap to jump to track (plays audio, all other tracks remain visible)
+- [ ] Passed-over tracks shown dimmed (50% opacity)
+- [ ] After tapped track finishes, next track plays
 - [ ] Swipe left to remove
 - [ ] Drag to reorder
-- [ ] Long-press context menu works
+- [ ] Long-press context menu: full track menu with Remove from Queue
 - [ ] Save as Playlist from menu
-- [ ] Total duration shows in "Up Next" header
-- [ ] Recently Played section shows previous songs (dimmed)
+- [ ] Total duration shows in "Queue" header
+- [ ] Recently Played section shows songs that actually played
+- [ ] Brief skips (<30s) do not appear in Recently Played
 - [ ] Smart shuffle avoids consecutive same-artist tracks
+- [ ] Auto-Suggest toggle: when off, playback stops at end of queue
 
 ## Swipe Actions
 
@@ -120,6 +164,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Per-track download icon (bigger, .callout size)
 - [ ] Per-track inline "..." menu (Play Next, Add to Queue, Start Radio, Share)
 - [ ] Text contrast readable in light mode
+- [ ] Tappable artist name in album header navigates to artist page
+- [ ] Tapping any part of a song row (title, artist text, whitespace) plays the track — does NOT navigate to artist
+- [ ] Long-press on song row shows "Go to Album" and "Go to Artist" in context menu
 - [ ] Multi-disc separator shows for multi-disc albums
 - [ ] Similar Albums carousel at bottom
 - [ ] Album sort: Name, Artist, Year, Recently Added all work
@@ -147,11 +194,20 @@ Run through this checklist before every TestFlight build. Each item should be ve
 ## CarPlay
 
 - [ ] App appears on CarPlay dashboard
-- [ ] Browse library
-- [ ] Search works (Library > Search)
+- [ ] Browse library (Artists, Albums, Favorites, etc.)
+- [ ] Discover shows random songs (Library > Discover)
 - [ ] Play/pause/skip from CarPlay
 - [ ] No logout on CarPlay connect/disconnect
 - [ ] Artwork shows on all lists
+- [ ] Now Playing template shows current track with progress
+- [ ] Shuffle and repeat buttons work in Now Playing
+- [ ] Up Next queue shows upcoming tracks
+- [ ] Track start no longer auto-pushes to Now Playing; browse list stays visible (Build 51)
+- [ ] Artists list shows a first-letter picker; tap any letter and a second-letter picker appears; pick a 2-letter combo to drill into that slice (Build 51)
+- [ ] Albums list: same first-letter then second-letter drill-down (Build 51)
+- [ ] Alphabet index fits the screen without clipping; Albums and Starred show every entry (no hard cap) (Build 51)
+- [ ] Playing music, trigger a short incoming call or text; after the interruption ends, playback resumes from the saved position, not from 0 (Build 51)
+- [ ] State refreshes correctly on CarPlay reconnect
 
 ## Radio
 
@@ -170,6 +226,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Downloads view Play All / Shuffle buttons work
 - [ ] Tap a downloaded song to play from that point
 - [ ] Search works offline (finds downloaded songs by title/artist/album)
+- [ ] Download concurrency capped at 3 (no more than 3 simultaneous downloads)
 
 ## Scrobbling
 
@@ -179,6 +236,10 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Last.fm: "Signed in as [username]" appears with green checkmark after auth
 - [ ] Last.fm: Sign Out clears session and shows login fields again
 - [ ] Last.fm: scrobble appears on last.fm profile after playing 50%+ of a track
+- [ ] Last.fm: special characters in password don't break auth (URL encoding)
+- [ ] Last.fm: error messages shown in UI on auth failure
+- [ ] Offline scrobble queue: scrobbles queued while offline
+- [ ] Offline scrobble queue: queued scrobbles flush on reconnect (ListenBrainz and Last.fm)
 - [ ] Now Playing notification sent on track start
 
 ## Settings 2.0
@@ -186,6 +247,7 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Settings > Player sub-page opens (behavior, playback, scrobbling, controls, song display)
 - [ ] Settings > Appearance sub-page opens (theme, glass, accent, text, mini player)
 - [ ] Settings > Tab Bar sub-page opens (reorder tabs, toggle show/hide, settings location)
+- [ ] Tab Bar: optional dock tabs for Artists, Albums, Songs, Genres, Favorites (all default OFF)
 - [ ] All settings pages scrollable to bottom (mini player doesn't block)
 - [ ] Disable Spinning Art toggle stops mini player rotation
 - [ ] Reduce Motion also stops spinning art
@@ -198,17 +260,17 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Now Playing Toolbar drag-to-reorder
 - [ ] Tab Bar drag-to-reorder with Downloads tab option
 - [ ] Settings in Navigation Bar moves Settings to top-right gear
-- [ ] Server name shows in title bar
+- [ ] Toolbar shows only 2 buttons: + and profile
+- [ ] Profile menu shows server name with green connection dot, music folders, downloads
 - [ ] + button shows New Playlist / New Smart Playlist
-- [ ] Profile menu shows server, music folders, downloads
-- [ ] Connection indicator (green/red dot)
 - [ ] Haptic on tab switch
 - [ ] Backup Settings exports named file (vibrdrome-backup-DATE.json)
 - [ ] Restore Settings imports from JSON file and applies settings
 - [ ] Crossfade Curve picker appears when crossfade > 0
 
-## Playlist Sharing
+## Playlists
 
+- [ ] Playlist delete swipe targets correct song when search is active
 - [ ] Make Public / Make Private toggle in playlist menu
 - [ ] Globe icon shows on public playlists in list
 

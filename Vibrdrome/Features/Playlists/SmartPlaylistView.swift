@@ -248,7 +248,7 @@ struct SmartPlaylistView: View {
                         Button {
                             Task { await generateGenreMix(genre: genre) }
                         } label: {
-                            Text(genre.value)
+                            Text(genre.value.cleanedGenreDisplay)
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .padding(.horizontal, 12)

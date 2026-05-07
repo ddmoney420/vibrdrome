@@ -15,9 +15,11 @@ struct UserDefaultsKeysTests {
     }
 
     @Test func totalKeyCount() {
-        // 4 server + 4 audio + 4 EQ + 3 downloads + 2 streaming + 3 carplay
-        // + 14 appearance + 1 discord + 2 listenbrainz + 4 lastfm + 1 adaptive + 2 library = 44
-        #expect(allKeyValues().count == 44)
+        // 4 server + 5 audio + 4 EQ + 3 downloads + 2 streaming + 3 carplay
+        // + 14 appearance + 6 toolbar + 1 discord + 2 listenbrainz + 5 lastfm
+        // + 1 adaptive + 8 player behavior + 3 appearance ext
+        // + 8 tab bar ext + 2 library = 71
+        #expect(allKeyValues().count == 71)
     }
 
     // MARK: - No Empty Keys
@@ -99,10 +101,48 @@ struct UserDefaultsKeysTests {
         #expect(UserDefaultsKeys.lastFmApiKey == "lastFmApiKey")
         #expect(UserDefaultsKeys.lastFmSecret == "lastFmSecret")
         #expect(UserDefaultsKeys.lastFmSessionKey == "lastFmSessionKey")
+        #expect(UserDefaultsKeys.lastFmUsername == "lastFmUsername")
     }
 
     @Test func adaptiveBitrateKeys() {
         #expect(UserDefaultsKeys.adaptiveBitrateEnabled == "adaptiveBitrateEnabled")
+    }
+
+    @Test func nowPlayingToolbarKeys() {
+        #expect(UserDefaultsKeys.showVisualizerInToolbar == "showVisualizerInToolbar")
+        #expect(UserDefaultsKeys.showEQInToolbar == "showEQInToolbar")
+        #expect(UserDefaultsKeys.showAirPlayInToolbar == "showAirPlayInToolbar")
+        #expect(UserDefaultsKeys.showLyricsInToolbar == "showLyricsInToolbar")
+        #expect(UserDefaultsKeys.showSettingsInToolbar == "showSettingsInToolbar")
+        #expect(UserDefaultsKeys.nowPlayingToolbarOrder == "nowPlayingToolbarOrder")
+    }
+
+    @Test func playerBehaviorKeys() {
+        #expect(UserDefaultsKeys.disableSpinningArt == "disableSpinningArt")
+        #expect(UserDefaultsKeys.rememberPlaybackPosition == "rememberPlaybackPosition")
+        #expect(UserDefaultsKeys.enableMiniPlayerSwipe == "enableMiniPlayerSwipe")
+        #expect(UserDefaultsKeys.showVolumeSlider == "showVolumeSlider")
+        #expect(UserDefaultsKeys.showAudioQualityInfo == "showAudioQualityInfo")
+        #expect(UserDefaultsKeys.showHeartInPlayer == "showHeartInPlayer")
+        #expect(UserDefaultsKeys.showRatingInPlayer == "showRatingInPlayer")
+        #expect(UserDefaultsKeys.showQueueInPlayer == "showQueueInPlayer")
+    }
+
+    @Test func appearanceExtendedKeys() {
+        #expect(UserDefaultsKeys.enableLiquidGlass == "enableLiquidGlass")
+        #expect(UserDefaultsKeys.enableMiniPlayerTint == "enableMiniPlayerTint")
+        #expect(UserDefaultsKeys.albumBackgroundStyle == "albumBackgroundStyle")
+    }
+
+    @Test func tabBarExtendedKeys() {
+        #expect(UserDefaultsKeys.settingsInNavBar == "settingsInNavBar")
+        #expect(UserDefaultsKeys.showDownloadsTab == "showDownloadsTab")
+        #expect(UserDefaultsKeys.showArtistsTab == "showArtistsTab")
+        #expect(UserDefaultsKeys.showAlbumsTab == "showAlbumsTab")
+        #expect(UserDefaultsKeys.showSongsTab == "showSongsTab")
+        #expect(UserDefaultsKeys.showGenresTab == "showGenresTab")
+        #expect(UserDefaultsKeys.showFavoritesTab == "showFavoritesTab")
+        #expect(UserDefaultsKeys.tabBarOrder == "tabBarOrder")
     }
 
     @Test func libraryLayoutKeys() {
@@ -122,6 +162,7 @@ struct UserDefaultsKeysTests {
             // Audio
             UserDefaultsKeys.gaplessPlayback,
             UserDefaultsKeys.crossfadeDuration,
+            UserDefaultsKeys.crossfadeCurve,
             UserDefaultsKeys.replayGainMode,
             UserDefaultsKeys.scrobblingEnabled,
             // EQ
@@ -155,6 +196,13 @@ struct UserDefaultsKeysTests {
             UserDefaultsKeys.visualizerWarningShown,
             UserDefaultsKeys.showAlbumArtInLists,
             UserDefaultsKeys.visualizerPreset,
+            // Now Playing Toolbar
+            UserDefaultsKeys.showVisualizerInToolbar,
+            UserDefaultsKeys.showEQInToolbar,
+            UserDefaultsKeys.showAirPlayInToolbar,
+            UserDefaultsKeys.showLyricsInToolbar,
+            UserDefaultsKeys.showSettingsInToolbar,
+            UserDefaultsKeys.nowPlayingToolbarOrder,
             // Discord
             UserDefaultsKeys.discordRPCEnabled,
             // ListenBrainz
@@ -165,8 +213,31 @@ struct UserDefaultsKeysTests {
             UserDefaultsKeys.lastFmApiKey,
             UserDefaultsKeys.lastFmSecret,
             UserDefaultsKeys.lastFmSessionKey,
+            UserDefaultsKeys.lastFmUsername,
             // Adaptive Bitrate
             UserDefaultsKeys.adaptiveBitrateEnabled,
+            // Player Behavior
+            UserDefaultsKeys.disableSpinningArt,
+            UserDefaultsKeys.rememberPlaybackPosition,
+            UserDefaultsKeys.enableMiniPlayerSwipe,
+            UserDefaultsKeys.showVolumeSlider,
+            UserDefaultsKeys.showAudioQualityInfo,
+            UserDefaultsKeys.showHeartInPlayer,
+            UserDefaultsKeys.showRatingInPlayer,
+            UserDefaultsKeys.showQueueInPlayer,
+            // Appearance Extended
+            UserDefaultsKeys.enableLiquidGlass,
+            UserDefaultsKeys.enableMiniPlayerTint,
+            UserDefaultsKeys.albumBackgroundStyle,
+            // Tab Bar Extended
+            UserDefaultsKeys.settingsInNavBar,
+            UserDefaultsKeys.showDownloadsTab,
+            UserDefaultsKeys.showArtistsTab,
+            UserDefaultsKeys.showAlbumsTab,
+            UserDefaultsKeys.showSongsTab,
+            UserDefaultsKeys.showGenresTab,
+            UserDefaultsKeys.showFavoritesTab,
+            UserDefaultsKeys.tabBarOrder,
             // Library
             UserDefaultsKeys.libraryLayout,
             UserDefaultsKeys.activeMusicFolderId,

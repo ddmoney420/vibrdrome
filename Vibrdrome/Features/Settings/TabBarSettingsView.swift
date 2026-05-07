@@ -32,9 +32,29 @@ struct TabBarSettingsView: View {
     private var defaultTabItems: [TabItemConfig] {
         var items = [
             TabItemConfig(
-                id: "library", name: "Library", icon: "music.note.house.fill",
-                description: "Browse your music library",
+                id: "library", name: "Home", icon: "house.fill",
+                description: "Carousels and quick access",
                 isAlwaysShown: true, defaultsKey: nil, defaultValue: true
+            ),
+            TabItemConfig(
+                id: "favorites", name: "Favorites", icon: "heart.fill",
+                description: "Your favorited songs, albums, and artists",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showFavoritesTab, defaultValue: true
+            ),
+            TabItemConfig(
+                id: "library-home", name: "Library", icon: "music.note.house.fill",
+                description: "Playlists, artists, albums, songs, genres, downloads",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showLibraryHomeTab, defaultValue: true
+            ),
+            TabItemConfig(
+                id: "search", name: "Search", icon: "magnifyingglass",
+                description: "Search songs, albums, and artists",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showSearchTab, defaultValue: true
+            ),
+            TabItemConfig(
+                id: "radio", name: "Radio", icon: "antenna.radiowaves.left.and.right",
+                description: "Internet radio stations",
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showRadioTab, defaultValue: true
             ),
             TabItemConfig(
                 id: "artists", name: "Artists", icon: "music.mic",
@@ -57,24 +77,9 @@ struct TabBarSettingsView: View {
                 isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showGenresTab, defaultValue: false
             ),
             TabItemConfig(
-                id: "favorites", name: "Favorites", icon: "heart.fill",
-                description: "Your favorited songs and albums",
-                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showFavoritesTab, defaultValue: false
-            ),
-            TabItemConfig(
-                id: "search", name: "Search", icon: "magnifyingglass",
-                description: "Search songs, albums, and artists",
-                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showSearchTab, defaultValue: true
-            ),
-            TabItemConfig(
                 id: "playlists", name: "Playlists", icon: "music.note.list",
                 description: "Your playlists",
-                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showPlaylistsTab, defaultValue: true
-            ),
-            TabItemConfig(
-                id: "radio", name: "Radio", icon: "antenna.radiowaves.left.and.right",
-                description: "Internet radio stations",
-                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showRadioTab, defaultValue: true
+                isAlwaysShown: false, defaultsKey: UserDefaultsKeys.showPlaylistsTab, defaultValue: false
             ),
             TabItemConfig(
                 id: "downloads", name: "Downloads", icon: "arrow.down.circle.fill",
@@ -126,7 +131,7 @@ struct TabBarSettingsView: View {
         } header: {
             settingSectionHeader("Settings Location", icon: "location.fill", color: .blue)
         } footer: {
-            Text("Settings will appear as a gear icon in the top-right of Library.")
+            Text("Settings will appear as a gear icon in the top-right of Home.")
         }
     }
 

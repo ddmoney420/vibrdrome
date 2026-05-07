@@ -2,6 +2,9 @@ import KeychainAccess
 import SwiftUI
 
 struct ServerManagerView: View {
+    /// When true, the view is pushed via NavigationLink (no own NavigationStack or Done button)
+    var embedded: Bool = false
+
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showAddServer = false
@@ -9,38 +12,47 @@ struct ServerManagerView: View {
     @State private var deleteConfirmServer: SavedServer?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(appState.servers) { server in
-                        serverRow(server)
+        if embedded {
+            serverList
+        } else {
+            NavigationStack {
+                serverList
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { dismiss() }
+                        }
                     }
-                } header: {
-                    if !appState.servers.isEmpty {
-                        Text("Servers")
-                    }
-                }
+            }
+        }
+    }
 
-                Section {
-                    Button {
-                        showAddServer = true
-                    } label: {
-                        Label("Add Server", systemImage: "plus.circle.fill")
-                            .foregroundColor(.accentColor)
-                            .fontWeight(.medium)
-                    }
-                    .accessibilityIdentifier("addServerButton")
+    private var serverList: some View {
+        List {
+            Section {
+                ForEach(appState.servers) { server in
+                    serverRow(server)
+                }
+            } header: {
+                if !appState.servers.isEmpty {
+                    Text("Servers")
                 }
             }
-            .navigationTitle("Servers")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+
+            Section {
+                Button {
+                    showAddServer = true
+                } label: {
+                    Label("Add Server", systemImage: "plus.circle.fill")
+                        .foregroundColor(.accentColor)
+                        .fontWeight(.medium)
                 }
+                .accessibilityIdentifier("addServerButton")
             }
+        }
+        .navigationTitle("Servers")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
             .sheet(isPresented: $showAddServer) {
                 ServerEditView(mode: .add) { name, url, username, password in
                     appState.addServer(name: name, url: url, username: username, password: password)
@@ -68,7 +80,6 @@ struct ServerManagerView: View {
                     Text("Remove \"\(server.name)\" and its saved credentials?")
                 }
             }
-        }
     }
 
     private func serverRow(_ server: SavedServer) -> some View {

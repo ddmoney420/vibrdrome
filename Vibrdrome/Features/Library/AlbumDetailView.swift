@@ -1,16 +1,25 @@
 import SwiftUI
+import SwiftData
+import NukeUI
 
 struct AlbumDetailView: View {
     let albumId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var album: Album?
+    @State private var albumNotes: String?
+    @State private var showFullNotes = false
     @State private var isLoading = true
     @State private var error: String?
     @State private var similarAlbums: [Album] = []
     @State private var selectedSongs = Set<String>()
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
+    @State private var isStarred = false
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "album")
+    #endif
 
     var body: some View {
         ScrollView {
@@ -27,6 +36,13 @@ struct AlbumDetailView: View {
                     let discs = Set(songs.compactMap(\.discNumber)).sorted()
                     let hasMultipleDiscs = discs.count > 1
 
+                    #if os(macOS)
+                    MacTrackTableView(
+                        songs: songs,
+                        settings: columnSettings,
+                        showDiscSeparators: hasMultipleDiscs
+                    )
+                    #else
                     LazyVStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             // Disc separator
@@ -47,40 +63,12 @@ struct AlbumDetailView: View {
                                 .background(.ultraThinMaterial)
                             }
 
-                            HStack(spacing: 0) {
-                                if isSelecting {
-                                    Button {
-                                        toggleSelection(song.id)
-                                    } label: {
-                                        Image(systemName: selectedSongs.contains(song.id)
-                                              ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(selectedSongs.contains(song.id)
-                                                             ? Color.accentColor : .secondary)
-                                            .font(.title3)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.leading, 16)
-                                    .padding(.trailing, 4)
-                                }
-
-                                TrackRow(song: song, showTrackNumber: true)
-                                    .padding(.horizontal, isSelecting ? 8 : 16)
-                                    .padding(.vertical, 8)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if isSelecting {
-                                            toggleSelection(song.id)
-                                        } else {
-                                            AudioEngine.shared.play(song: song, from: songs, at: index)
-                                        }
-                                    }
-                                    .accessibilityIdentifier("trackRow_\(index)")
-                                    .trackContextMenu(song: song, queue: songs, index: index)
-                            }
+                            trackRowContainer(song: song, songs: songs, index: index)
                             Divider()
                                 .padding(.leading, isSelecting ? 72 : 56)
                         }
                     }
+                    #endif
 
                     // Batch action bar
                     if isSelecting && !selectedSongs.isEmpty {
@@ -89,6 +77,9 @@ struct AlbumDetailView: View {
 
                     // Album info footer
                     albumFooter(album)
+
+                    // About / notes
+                    aboutSection
 
                     // Similar albums
                     similarAlbumsSection
@@ -104,6 +95,16 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    toggleAlbumStar()
+                } label: {
+                    Image(systemName: isStarred ? "heart.fill" : "heart")
+                        .foregroundStyle(isStarred ? Color.pink : Color.accentColor)
+                }
+                .accessibilityLabel(isStarred ? "Unfavorite Album" : "Favorite Album")
+                .accessibilityIdentifier("albumFavoriteButton")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -150,39 +151,118 @@ struct AlbumDetailView: View {
     #if os(macOS)
     @ViewBuilder
     private func albumHeaderMacOS(_ album: Album) -> some View {
-        HStack(alignment: .top, spacing: 20) {
-            AlbumArtView(coverArtId: album.coverArt, size: 200, cornerRadius: 12)
-                .shadow(radius: 8)
+        ZStack {
+            blurredArt(coverArtId: album.coverArt)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(album.name)
-                    .font(.title2)
-                    .bold()
+            HStack(alignment: .top, spacing: 24) {
+                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14)
+                    .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
-                if let artist = album.artist {
-                    if let artistId = album.artistId {
-                        Button {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(album.name)
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.white)
+
+                    if let artist = album.artist {
+                        if let artistId = album.artistId {
+                            Button {
+                                appState.pendingNavigation = .artist(id: artistId)
+                            } label: {
+                                Text(artist)
+                                    .font(.title3)
+                                    .foregroundColor(.white.opacity(0.85))
+                            }
+                            .buttonStyle(.plain)
+                        } else {
                             Text(artist)
-                                .font(.body)
-                                .foregroundColor(.accentColor)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.7))
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        Text(artist)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
                     }
+
+                    albumMetadataRow(album)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    Spacer(minLength: 12)
+
+                    macOSHeaderActionButtons(album)
                 }
-
-                albumMetadataRow(album)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
             }
-
-            Spacer()
+            .padding(28)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+    }
+
+    @ViewBuilder
+    private func macOSHeaderActionButtons(_ album: Album) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                if let songs = album.song, let first = songs.first {
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.white, in: Capsule())
+                    .foregroundStyle(.black)
+            }
+            .buttonStyle(.plain)
+            .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumPlayButton")
+
+            Button {
+                if var songs = album.song, !songs.isEmpty {
+                    songs.shuffle()
+                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                }
+            } label: {
+                Label("Shuffle", systemImage: "shuffle")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(album.song?.isEmpty ?? true)
+            .accessibilityIdentifier("albumShuffleButton")
+
+            albumMoreMenu(album) {
+                Label("More", systemImage: "ellipsis")
+                    .fontWeight(.semibold)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 22)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func blurredArt(coverArtId: String?) -> some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black
+                if let coverArtId {
+                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 600)) { state in
+                        if let image = state.image {
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .blur(radius: 60)
+                    .saturation(1.3)
+                    .overlay(Color.black.opacity(0.35))
+                }
+            }
+        }
     }
     #else
     @ViewBuilder
@@ -256,7 +336,7 @@ struct AlbumDetailView: View {
             }
             if let genre = album.genre {
                 Text("·")
-                Text(genre)
+                Text(genre.cleanedGenreDisplay)
             }
             if let count = album.songCount {
                 Text("·")
@@ -297,7 +377,6 @@ struct AlbumDetailView: View {
     @ViewBuilder
     private func circularActionButtons(_ album: Album) -> some View {
         HStack(spacing: 16) {
-            // Shuffle
             Button {
                 if var songs = album.song, !songs.isEmpty {
                     Haptics.medium()
@@ -306,9 +385,7 @@ struct AlbumDetailView: View {
                 }
             } label: {
                 Image(systemName: "shuffle")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
+                    .font(.body).fontWeight(.semibold).foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
                     .modifier(GlassEffectCircleModifier())
@@ -316,7 +393,6 @@ struct AlbumDetailView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumShuffleButton")
 
-            // Play pill
             Button {
                 if let songs = album.song, let first = songs.first {
                     Haptics.medium()
@@ -325,35 +401,22 @@ struct AlbumDetailView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "play.fill")
-                    Text("Play")
-                        .fontWeight(.semibold)
+                    Text("Play").fontWeight(.semibold)
                 }
-                .font(.body)
-                .foregroundStyle(.black)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .font(.body).foregroundStyle(.black)
+                .frame(maxWidth: .infinity).frame(height: 44)
                 .background(.white, in: Capsule())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("albumPlayButton")
 
-            // Download
-            Button {
-                if let songs = album.song {
-                    Haptics.light()
-                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
-                }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
+            albumMoreMenu(album) {
+                Image(systemName: "ellipsis")
+                    .font(.body).fontWeight(.semibold).foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .background(.ultraThinMaterial, in: Circle())
                     .modifier(GlassEffectCircleModifier())
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("albumDownloadButton")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -363,34 +426,85 @@ struct AlbumDetailView: View {
     #if os(macOS)
     @ViewBuilder
     private func macOSActionButtons(_ album: Album) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                if let songs = album.song, let first = songs.first {
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                }
-            } label: {
-                Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(album.song?.isEmpty ?? true)
-
-            Button {
-                if var songs = album.song, !songs.isEmpty {
-                    songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                }
-            } label: {
-                Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(album.song?.isEmpty ?? true)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        EmptyView()
     }
     #endif
+
+    private func albumMoreMenu<Label: View>(_ album: Album, @ViewBuilder label: () -> Label) -> some View {
+        Menu {
+            Button {
+                if let songs = album.song, !songs.isEmpty {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    AudioEngine.shared.addToQueueNext(songs)
+                }
+            } label: { SwiftUI.Label("Play Next", systemImage: "text.insert") }
+
+            Button {
+                if let songs = album.song, !songs.isEmpty {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    AudioEngine.shared.addToQueue(songs)
+                }
+            } label: { SwiftUI.Label("Add to Queue", systemImage: "text.append") }
+
+            Button {
+                if let songs = album.song {
+                    #if os(iOS)
+                    Haptics.light()
+                    #endif
+                    DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
+                }
+            } label: { SwiftUI.Label("Download", systemImage: "arrow.down.circle") }
+        } label: {
+            label()
+        }
+        .disabled(album.song?.isEmpty ?? true)
+        .accessibilityLabel("More Options")
+        .accessibilityIdentifier("albumMoreButton")
+    }
+
+    @ViewBuilder
+    private func trackRowContainer(song: Song, songs: [Song], index: Int) -> some View {
+        #if os(iOS)
+        let bg = Color(.systemBackground)
+        #else
+        let bg = Color(.windowBackgroundColor)
+        #endif
+        HStack(spacing: 0) {
+            if isSelecting {
+                Button {
+                    toggleSelection(song.id)
+                } label: {
+                    Image(systemName: selectedSongs.contains(song.id)
+                          ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selectedSongs.contains(song.id)
+                                         ? Color.accentColor : .secondary)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 16)
+                .padding(.trailing, 4)
+            }
+
+            TrackRow(song: song, showTrackNumber: true)
+                .padding(.horizontal, isSelecting ? 8 : 16)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isSelecting {
+                        toggleSelection(song.id)
+                    } else {
+                        AudioEngine.shared.play(song: song, from: songs, at: index)
+                    }
+                }
+                .accessibilityIdentifier("trackRow_\(index)")
+                .trackContextMenu(song: song, queue: songs, index: index)
+        }
+        .background(bg)
+    }
 
     @ViewBuilder
     private func albumFooter(_ album: Album) -> some View {
@@ -403,6 +517,42 @@ struct AlbumDetailView: View {
                     .padding(.vertical, 12)
             }
         }
+    }
+
+    @ViewBuilder
+    private var aboutSection: some View {
+        if let albumNotes, !albumNotes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("About")
+                    .font(.title3)
+                    .bold()
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                Text(cleanNotes(albumNotes))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(showFullNotes ? nil : 5)
+                    .padding(.horizontal, 16)
+
+                if albumNotes.count > 240 {
+                    Button {
+                        withAnimation { showFullNotes.toggle() }
+                    } label: {
+                        Text(showFullNotes ? "Show Less" : "Read More")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
+    private func cleanNotes(_ text: String) -> String {
+        text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @ViewBuilder
@@ -438,6 +588,7 @@ struct AlbumDetailView: View {
                                 .frame(width: Theme.albumCardSize)
                             }
                             .buttonStyle(.plain)
+                            .albumGetInfoContextMenu(album: similar)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -466,11 +617,42 @@ struct AlbumDetailView: View {
     }
 
     private func loadAlbum() async {
-        isLoading = true
+        // Show cached album header instantly if available
+        if album == nil {
+            let aid = albumId
+            let descriptor = FetchDescriptor<CachedAlbum>(
+                predicate: #Predicate { $0.id == aid }
+            )
+            if let cached = try? modelContext.fetch(descriptor).first {
+                var preview = cached.toAlbum()
+                // Attach cached songs if available
+                let songs = cached.songs
+                    .sorted { ($0.discNumber ?? 0, $0.track ?? 0) < ($1.discNumber ?? 0, $1.track ?? 0) }
+                    .map { $0.toSong() }
+                if !songs.isEmpty {
+                    preview = Album(
+                        id: preview.id, name: preview.name, artist: preview.artist,
+                        artistId: preview.artistId, coverArt: preview.coverArt,
+                        songCount: preview.songCount, duration: preview.duration,
+                        year: preview.year, genre: preview.genre, genres: preview.genres,
+                        starred: preview.starred, created: preview.created,
+                        userRating: preview.userRating, song: songs,
+                        replayGain: nil, musicBrainzId: nil, recordLabels: nil
+                    )
+                }
+                album = preview
+            }
+        }
+        isLoading = album == nil
         error = nil
         defer { isLoading = false }
         do {
             album = try await appState.subsonicClient.getAlbum(id: albumId)
+            isStarred = album?.starred != nil
+            // Load album notes (info2) in background — non-fatal if it fails
+            if let info = try? await appState.subsonicClient.getAlbumInfo(id: albumId) {
+                albumNotes = info.notes
+            }
             // Load similar albums from first song
             if let firstSong = album?.song?.first {
                 let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)
@@ -489,6 +671,25 @@ struct AlbumDetailView: View {
             }
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+
+    private func toggleAlbumStar() {
+        let wasStarred = isStarred
+        isStarred.toggle()
+        #if os(iOS)
+        Haptics.light()
+        #endif
+        Task {
+            do {
+                if wasStarred {
+                    try await OfflineActionQueue.shared.unstar(albumId: albumId)
+                } else {
+                    try await OfflineActionQueue.shared.star(albumId: albumId)
+                }
+            } catch {
+                isStarred = wasStarred
+            }
         }
     }
 }

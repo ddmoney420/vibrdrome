@@ -29,7 +29,13 @@ final class AudioEngine {
     // MARK: - State
 
     var isPlaying = false
-    var currentSong: Song?
+    var currentSong: Song? {
+        didSet {
+            if let old = oldValue, old.id != currentSong?.id {
+                recordSongIfPlayed(old)
+            }
+        }
+    }
     var currentRadioStation: InternetRadioStation?
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
@@ -115,6 +121,8 @@ final class AudioEngine {
 
     var queue: [Song] = []
     var currentIndex: Int = 0
+    /// Tracks actually played (song IDs in order), for accurate "recently played" display
+    var playHistory: [Song] = []
     var shuffleEnabled = false
     var repeatMode: RepeatMode = .off
     var shufflePlayCount = 0
@@ -176,12 +184,41 @@ final class AudioEngine {
     // inserted a fallback, so we don't insert multiple times per track.
     var nearEndCheckSongId: String?
 
+    /// Debounce token for rapid play() calls. Spam-tapping different tracks or
+    /// play/pause would otherwise swap AVPlayer items faster than the audio
+    /// session can re-prime, producing audible glitches.
+    var playbackSwapTask: Task<Void, Never>?
+
     func incrementGeneration() { generation += 1 }
     var generationValue: Int { generation }
     var isScrobbleSubmitted: Bool { scrobbleSubmitted }
     func resetScrobbleState() { scrobbleSubmitted = false; trackStartTime = Date() }
     func markScrobbleSubmitted() { scrobbleSubmitted = true; lastScrobbleTime = Date() }
     var hasLookahead: Bool { lookaheadItem != nil }
+
+    // MARK: - Play History Helpers
+
+    /// Record a song only if it was listened to meaningfully (>30s or >30% of duration).
+    /// Used by the currentSong didSet for manual skips/taps.
+    func recordSongIfPlayed(_ song: Song) {
+        let dominated = duration > 0 ? currentTime > duration * 0.3 : currentTime > 30
+        guard dominated || currentTime > 30 else { return }
+        guard playHistory.last?.id != song.id else { return }
+        var updated = playHistory
+        updated.append(song)
+        if updated.count > 50 { updated.removeFirst() }
+        playHistory = updated
+    }
+
+    /// Force-record a song in play history (track played to completion).
+    /// Used by handleAutoAdvance/handleTrackEnd where we know it fully played.
+    func recordSongAsPlayed(_ song: Song) {
+        guard playHistory.last?.id != song.id else { return }
+        var updated = playHistory
+        updated.append(song)
+        if updated.count > 50 { updated.removeFirst() }
+        playHistory = updated
+    }
 
     // Observer accessor methods for extensions
     func removeCurrentTimeObserver() {
@@ -305,19 +342,63 @@ final class AudioEngine {
         }
     }
 
-    /// Compute ReplayGain factor for a song
+    /// Compute ReplayGain factor for a song, including user pre-gain adjustments.
+    /// - Pre-gain for tagged tracks: boosts to compensate for -18 LUFS target (0 to +6 dB)
+    /// - Fallback for untagged tracks/radio: attenuates hot masters (0 to -6 dB)
     func computeReplayGainFactor(for song: Song) -> Float {
-        guard let rg = song.replayGain else { return 1.0 }
+        let defaults = UserDefaults.standard
+        let preGainDb = defaults.double(forKey: UserDefaultsKeys.replayGainPreGainDb)
+        let fallbackDb = defaults.double(forKey: UserDefaultsKeys.replayGainFallbackDb)
+
+        guard replayGainMode != .off else { return 1.0 }
+
+        guard let rg = song.replayGain else {
+            // No ReplayGain tags — apply fallback attenuation
+            if fallbackDb != 0 {
+                return max(0.0, min(1.5, Float(pow(10, fallbackDb / 20))))
+            }
+            return 1.0
+        }
+
         let gain: Double?
         switch replayGainMode {
         case .off: return 1.0
         case .track: gain = rg.trackGain
         case .album: gain = rg.albumGain ?? rg.trackGain
         }
-        guard let gainDb = gain else { return 1.0 }
-        let linear = Float(pow(10, gainDb / 20))
+        guard let gainDb = gain else {
+            // RG metadata exists but no gain value — apply fallback
+            if fallbackDb != 0 {
+                return max(0.0, min(1.5, Float(pow(10, fallbackDb / 20))))
+            }
+            return 1.0
+        }
+
+        let totalDb = gainDb + preGainDb
+        let linear = Float(pow(10, totalDb / 20))
         // Cap at 1.5x (+3.5dB) to prevent clipping on hot masters
         return max(0.0, min(1.5, linear))
+    }
+
+    // MARK: - Queue Metadata
+
+    func updateQueueSongStarred(id: String, starred: Bool) {
+        let starredValue: String? = starred ? "true" : nil
+        for index in queue.indices where queue[index].id == id {
+            queue[index] = queue[index].withStarred(starredValue)
+        }
+        if currentSong?.id == id {
+            currentSong = currentSong?.withStarred(starredValue)
+        }
+    }
+
+    func updateQueueSongRating(id: String, rating: Int?) {
+        for index in queue.indices where queue[index].id == id {
+            queue[index] = queue[index].withUserRating(rating)
+        }
+        if currentSong?.id == id {
+            currentSong = currentSong?.withUserRating(rating)
+        }
     }
 
     // MARK: - Shuffle / Repeat
@@ -354,9 +435,19 @@ final class AudioEngine {
         Task {
             do {
                 let tracks = try await item.asset.loadTracks(withMediaType: .audio)
-                guard self.generation == gen, let track = tracks.first else { return }
+                guard self.generation == gen else {
+                    audioLog.info("EQ tap skipped: generation mismatch")
+                    return
+                }
+                guard let track = tracks.first else {
+                    audioLog.warning("EQ tap skipped: no audio tracks in asset")
+                    return
+                }
                 if let mix = EQTapProcessor.createAudioMix(track: track) {
                     item.audioMix = mix
+                    audioLog.info("EQ tap applied to item (tracks=\(tracks.count))")
+                } else {
+                    audioLog.warning("EQ tap skipped: createAudioMix returned nil")
                 }
             } catch {
                 audioLog.error("Failed to apply EQ tap: \(error)")
@@ -485,6 +576,9 @@ final class AudioEngine {
         tearDownObservers()
         clearLookahead()
         generation += 1
+
+        // Stop current playback before replacing to prevent audio overlap
+        gaplessPlayer?.pause()
 
         let item = Self.makePlayerItem(url: url)
         applyEQTapIfNeeded(to: item)

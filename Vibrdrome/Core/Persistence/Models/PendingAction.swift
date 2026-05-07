@@ -12,6 +12,9 @@ final class PendingAction {
     /// "pending", "failed"
     var status: String = "pending"
 
+    // Rating value for setRating actions (0 = clear)
+    var ratingValue: Int = 0
+
     // Song metadata for external scrobble services (ListenBrainz, Last.fm)
     var songTitle: String?
     var songArtist: String?

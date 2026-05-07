@@ -4,18 +4,22 @@ import SwiftData
 struct PlayHistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PlayHistory.playedAt, order: .reverse) private var allPlays: [PlayHistory]
+    @State private var cachedTodayCount: Int = 0
+    @State private var cachedWeekCount: Int = 0
+    @State private var cachedTopArtists: [(String, Int)] = []
+    @State private var cachedTopAlbums: [(String, String?, Int)] = []
 
     var body: some View {
         List {
-            if !todayPlays.isEmpty {
+            if cachedTodayCount > 0 {
                 statsSection
             }
 
-            if !topArtists.isEmpty {
+            if !cachedTopArtists.isEmpty {
                 topArtistsSection
             }
 
-            if !topAlbums.isEmpty {
+            if !cachedTopAlbums.isEmpty {
                 topAlbumsSection
             }
 
@@ -39,40 +43,35 @@ struct PlayHistoryView: View {
                 }
             }
         }
+        .onChange(of: allPlays) { recomputeStats() }
+        .onAppear { recomputeStats() }
     }
 
     // MARK: - Computed Data
 
-    private var todayPlays: [PlayHistory] {
-        allPlays.filter { Calendar.current.isDateInToday($0.playedAt) }
-    }
-
-    private var weekPlays: [PlayHistory] {
+    private func recomputeStats() {
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
-        return allPlays.filter { $0.playedAt >= weekAgo }
-    }
+        let weekPlays = allPlays.filter { $0.playedAt >= weekAgo }
 
-    private var topArtists: [(String, Int)] {
-        let week = weekPlays
-        var counts: [String: Int] = [:]
-        for play in week {
+        cachedTodayCount = allPlays.filter { Calendar.current.isDateInToday($0.playedAt) }.count
+        cachedWeekCount = weekPlays.count
+
+        var artistCounts: [String: Int] = [:]
+        for play in weekPlays {
             if let artist = play.artistName {
-                counts[artist, default: 0] += 1
+                artistCounts[artist, default: 0] += 1
             }
         }
-        return counts.sorted { $0.value > $1.value }.prefix(5).map { ($0.key, $0.value) }
-    }
+        cachedTopArtists = artistCounts.sorted { $0.value > $1.value }.prefix(5).map { ($0.key, $0.value) }
 
-    private var topAlbums: [(String, String?, Int)] {
-        let week = weekPlays
-        var counts: [String: (artist: String?, count: Int)] = [:]
-        for play in week {
+        var albumCounts: [String: (artist: String?, count: Int)] = [:]
+        for play in weekPlays {
             if let album = play.albumName {
-                let existing = counts[album]
-                counts[album] = (play.artistName, (existing?.count ?? 0) + 1)
+                let existing = albumCounts[album]
+                albumCounts[album] = (play.artistName, (existing?.count ?? 0) + 1)
             }
         }
-        return counts.sorted { $0.value.count > $1.value.count }
+        cachedTopAlbums = albumCounts.sorted { $0.value.count > $1.value.count }
             .prefix(5)
             .map { ($0.key, $0.value.artist, $0.value.count) }
     }
@@ -82,8 +81,8 @@ struct PlayHistoryView: View {
     private var statsSection: some View {
         Section {
             HStack(spacing: 24) {
-                statBadge(value: todayPlays.count, label: "Today")
-                statBadge(value: weekPlays.count, label: "This Week")
+                statBadge(value: cachedTodayCount, label: "Today")
+                statBadge(value: cachedWeekCount, label: "This Week")
                 statBadge(value: allPlays.count, label: "All Time")
             }
             .frame(maxWidth: .infinity)
@@ -106,7 +105,7 @@ struct PlayHistoryView: View {
 
     private var topArtistsSection: some View {
         Section("Top Artists This Week") {
-            ForEach(topArtists, id: \.0) { artist, count in
+            ForEach(cachedTopArtists, id: \.0) { artist, count in
                 HStack {
                     Text(artist)
                         .font(.body)
@@ -121,7 +120,7 @@ struct PlayHistoryView: View {
 
     private var topAlbumsSection: some View {
         Section("Top Albums This Week") {
-            ForEach(topAlbums, id: \.0) { album, artist, count in
+            ForEach(cachedTopAlbums, id: \.0) { album, artist, count in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(album)

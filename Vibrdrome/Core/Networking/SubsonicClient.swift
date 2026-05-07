@@ -14,7 +14,23 @@ final class SubsonicClient {
     private static let maxRetries = 3
     private static let retryDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000] // 1s, 2s, 4s
 
+    /// Internal marker for HTTP 429 so retry delay can honor Retry-After when present.
+    private struct RateLimitError: Error {
+        let retryAfterNanoseconds: UInt64?
+    }
+
     var isConnected: Bool = false
+    /// Navidrome serverVersion string from the last successful ping (e.g. "0.52.5").
+    private(set) var serverVersion: String?
+
+    /// WebP cover art requires Navidrome ≥ 0.49.0. Older servers and non-Navidrome
+    /// Subsonic implementations don't support the `format` parameter on getCoverArt.
+    var supportsWebP: Bool {
+        guard let v = serverVersion else { return false }
+        let parts = v.split(separator: ".").compactMap { Int($0) }
+        guard parts.count >= 2 else { return false }
+        return (parts[0], parts[1]) >= (0, 49)
+    }
 
     init(baseURL: URL, username: String, password: String) {
         self.baseURL = baseURL
@@ -33,6 +49,9 @@ final class SubsonicClient {
     // MARK: - Retry Logic
 
     private func isRetryable(_ error: Error) -> Bool {
+        if error is RateLimitError {
+            return true
+        }
         if let urlError = error as? URLError {
             switch urlError.code {
             case .timedOut, .networkConnectionLost, .notConnectedToInternet,
@@ -45,7 +64,7 @@ final class SubsonicClient {
         if let subsonicError = error as? SubsonicError {
             switch subsonicError {
             case .httpError(let code):
-                return code >= 500 // Only retry server errors, not 4xx
+                return code == 429 || code >= 500
             default:
                 return false
             }
@@ -53,30 +72,71 @@ final class SubsonicClient {
         return false
     }
 
+    private func retryDelayNanoseconds(for error: Error, attempt: Int) -> UInt64? {
+        guard isRetryable(error) else { return nil }
+
+        if let rateLimitError = error as? RateLimitError,
+           let retryAfter = rateLimitError.retryAfterNanoseconds {
+            return retryAfter
+        }
+
+        return Self.retryDelays[min(attempt, Self.retryDelays.count - 1)]
+    }
+
+    private func parseRetryAfterNanoseconds(from response: HTTPURLResponse) -> UInt64? {
+        guard let header = response.value(forHTTPHeaderField: "Retry-After")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !header.isEmpty else {
+            return nil
+        }
+
+        if let seconds = TimeInterval(header), seconds > 0 {
+            return UInt64(seconds * 1_000_000_000)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
+
+        guard let retryDate = formatter.date(from: header) else { return nil }
+        let seconds = max(0, retryDate.timeIntervalSinceNow)
+        guard seconds > 0 else { return nil }
+        return UInt64(seconds * 1_000_000_000)
+    }
+
     // MARK: - Core Request
 
     private func request(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
-        var lastError: Error?
-
         for attempt in 0...Self.maxRetries {
-            if attempt > 0 {
-                let delay = Self.retryDelays[min(attempt - 1, Self.retryDelays.count - 1)]
-                networkLog.info("Retry \(attempt)/\(Self.maxRetries) for \(endpoint.path) after \(delay / 1_000_000_000)s")
-                try await Task.sleep(nanoseconds: delay)
-            }
-
             do {
                 return try await performRequest(endpoint)
             } catch {
-                lastError = error
-                if !isRetryable(error) {
+                if attempt == Self.maxRetries {
+                    if error is RateLimitError {
+                        throw SubsonicError.httpError(429)
+                    }
                     throw error
                 }
-                networkLog.warning("Transient error on \(endpoint.path): \(error.localizedDescription)")
+
+                guard let delay = retryDelayNanoseconds(for: error, attempt: attempt) else {
+                    throw error
+                }
+
+                if error is RateLimitError {
+                    networkLog.warning("Rate limited on \(endpoint.path); retry \(attempt + 1)/\(Self.maxRetries) after \(delay / 1_000_000_000)s")
+                } else {
+                    networkLog.warning("Transient error on \(endpoint.path): \(error.localizedDescription)")
+                    networkLog.info("Retry \(attempt + 1)/\(Self.maxRetries) for \(endpoint.path) after \(delay / 1_000_000_000)s")
+                }
+
+                try await Task.sleep(nanoseconds: delay)
             }
         }
 
-        throw lastError!
+        // Unreachable: the for-loop above always exits via `return` on success or `throw`
+        // on the final attempt. Using fatalError makes that invariant explicit and will
+        // surface immediately if the control-flow assumption is ever broken by a refactor.
+        fatalError("SubsonicClient.request retry loop exited without returning or throwing")
     }
 
     private func performRequest(_ endpoint: SubsonicEndpoint) async throws -> SubsonicResponseBody {
@@ -87,6 +147,11 @@ final class SubsonicClient {
             throw SubsonicError.invalidURL
         }
         components.queryItems = auth.authParameters() + endpoint.queryItems
+        // URLComponents leaves ';' unencoded (it's a sub-delimiter per RFC 3986), but
+        // some servers parse ';' as an alternative query-parameter separator and reject
+        // the request. Force-encode it so genre values like "Hip Hop; Pop" work.
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: ";", with: "%3B")
 
         guard let url = components.url else {
             throw SubsonicError.invalidURL
@@ -97,6 +162,9 @@ final class SubsonicClient {
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if statusCode == 429, let httpResponse = response as? HTTPURLResponse {
+                throw RateLimitError(retryAfterNanoseconds: parseRetryAfterNanoseconds(from: httpResponse))
+            }
             if statusCode == 401, !AppState.shared.requiresReAuth {
                 networkLog.warning("401 Unauthorized — triggering re-authentication prompt")
                 AppState.shared.requiresReAuth = true
@@ -168,6 +236,8 @@ final class SubsonicClient {
             resolvingAgainstBaseURL: false
         ) else { return baseURL }
         components.queryItems = auth.authParameters() + extra
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: ";", with: "%3B")
         return components.url ?? baseURL
     }
 
@@ -181,7 +251,92 @@ final class SubsonicClient {
     func coverArtURL(id: String, size: Int? = nil) -> URL {
         var extra = [URLQueryItem(name: "id", value: id)]
         if let size { extra.append(URLQueryItem(name: "size", value: "\(size)")) }
+        if supportsWebP { extra.append(URLQueryItem(name: "format", value: "webp")) }
         return buildURL(path: "/rest/getCoverArt", extra: extra)
+    }
+
+    // MARK: - Raw JSON Metadata
+
+    /// Returns the raw decoded JSON object under `subsonic-response` for an endpoint.
+    /// Useful for diagnostics and exposing metadata fields not modeled in typed structs.
+    func rawSubsonicResponse(for endpoint: SubsonicEndpoint) async throws -> [String: Any] {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent(endpoint.path),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SubsonicError.invalidURL
+        }
+        components.queryItems = auth.authParameters() + endpoint.queryItems
+
+        guard let url = components.url else {
+            throw SubsonicError.invalidURL
+        }
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw SubsonicError.httpError(statusCode)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let root = json as? [String: Any],
+              let subsonic = root["subsonic-response"] as? [String: Any] else {
+            let error = NSError(
+                domain: "SubsonicClient",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Unexpected JSON format"]
+            )
+            throw SubsonicError.decodingError(error)
+        }
+
+        if let status = subsonic["status"] as? String, status != "ok" {
+            if let error = subsonic["error"] as? [String: Any] {
+                let code = error["code"] as? Int ?? 0
+                let message = error["message"] as? String ?? "Unknown API error"
+                throw SubsonicError.apiError(code: code, message: message)
+            }
+            throw SubsonicError.apiError(code: 0, message: "Server returned status: \(status)")
+        }
+
+        return subsonic
+    }
+
+    /// Returns Navidrome inspect metadata for a media item ID when available.
+    /// This endpoint includes `rawTags` with full file tag key/value arrays.
+    func inspectMetadata(id: String) async throws -> [String: Any] {
+        guard var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/inspect"),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SubsonicError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "id", value: id)] + auth.authParameters()
+
+        guard let url = components.url else {
+            throw SubsonicError.invalidURL
+        }
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw SubsonicError.httpError(statusCode)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let payload = json as? [String: Any] else {
+            let error = NSError(
+                domain: "SubsonicClient",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Unexpected inspect JSON format"]
+            )
+            throw SubsonicError.decodingError(error)
+        }
+
+        return payload
     }
 
     func downloadURL(id: String) -> URL {
@@ -194,6 +349,7 @@ final class SubsonicClient {
         do {
             let body = try await request(.ping)
             isConnected = body.status == "ok"
+            if let sv = body.serverVersion { serverVersion = sv }
             return isConnected
         } catch {
             isConnected = false
@@ -366,6 +522,14 @@ final class SubsonicClient {
         )
     }
 
+    func getAlbumInfo(id: String) async throws -> AlbumInfo2 {
+        let body = try await request(.getAlbumInfo2(id: id))
+        return body.albumInfo ?? AlbumInfo2(
+            notes: nil, musicBrainzId: nil, lastFmUrl: nil,
+            smallImageUrl: nil, mediumImageUrl: nil, largeImageUrl: nil
+        )
+    }
+
     func getSimilarSongs(id: String, count: Int = 50) async throws -> [Song] {
         let body = try await request(.getSimilarSongs2(id: id, count: count))
         return body.similarSongs2?.song ?? []
@@ -381,8 +545,8 @@ final class SubsonicClient {
         return body.musicFolders?.musicFolder ?? []
     }
 
-    func getIndexes(musicFolderId: String? = nil) async throws -> IndexesResponse {
-        let body = try await request(.getIndexes(musicFolderId: musicFolderId))
+    func getIndexes(musicFolderId: String? = nil, ifModifiedSince: Int? = nil) async throws -> IndexesResponse {
+        let body = try await request(.getIndexes(musicFolderId: musicFolderId, ifModifiedSince: ifModifiedSince))
         guard let indexes = body.indexes else {
             throw SubsonicError.apiError(code: 70, message: "Indexes not found")
         }
@@ -449,6 +613,13 @@ final class SubsonicClient {
         self.baseURL = baseURL
         self.auth = SubsonicAuth(username: username, password: password)
         self.isConnected = false
+        self.serverVersion = nil
         Task { await clearCache() }
     }
+
+    #if DEBUG
+    func setServerVersionForTesting(_ version: String) {
+        serverVersion = version
+    }
+    #endif
 }

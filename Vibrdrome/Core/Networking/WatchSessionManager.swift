@@ -58,11 +58,37 @@ final class WatchSessionManager: NSObject, ObservableObject {
     func sendNowPlayingUpdate(title: String, artist: String, album: String,
                               isPlaying: Bool, coverArtData: Data?) {
         guard isReady else { return }
-        sendNowPlayingUpdate(title: title, artist: artist, album: album, isPlaying: isPlaying)
+        let engine = AudioEngine.shared
 
-        // Send cover art via message (too large for application context)
-        if let artData = coverArtData, wcSession?.isReachable == true {
-            wcSession?.sendMessage(["coverArtData": artData], replyHandler: nil)
+        var context: [String: Any] = [
+            "title": title,
+            "artist": artist,
+            "album": album,
+            "isPlaying": isPlaying,
+            "elapsed": engine.currentTime,
+            "duration": engine.duration,
+            "isStarred": engine.currentSong?.starred != nil,
+            "isShuffleOn": engine.shuffleEnabled,
+            "repeatMode": repeatModeString(engine.repeatMode),
+            "sleepTimerActive": SleepTimer.shared.isActive,
+        ]
+
+        let upNext = engine.upNext.prefix(20)
+        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.artist ?? ""] }
+
+        // Include art in the same message so watch processes everything in one snapshot
+        if let artData = coverArtData {
+            context["coverArtData"] = artData
+        }
+
+        // Context update (without art -- too large for applicationContext)
+        var contextWithoutArt = context
+        contextWithoutArt.removeValue(forKey: "coverArtData")
+        try? wcSession?.updateApplicationContext(contextWithoutArt)
+
+        // Send full message including art
+        if wcSession?.isReachable == true {
+            wcSession?.sendMessage(context, replyHandler: nil)
         }
     }
 

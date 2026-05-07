@@ -7,6 +7,7 @@ struct TrackRow: View {
     var queue: [Song]?
     var index: Int?
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var isDownloaded = false
     @State private var isStarred = false
 
@@ -29,11 +30,12 @@ struct TrackRow: View {
                     .frame(width: 28, alignment: .trailing)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(song.title)
                     .font(.body)
                     .foregroundStyle(isCurrentlyPlaying ? Color.accentColor : .primary)
                     .lineLimit(1)
+
                 HStack(spacing: 4) {
                     if let artist = song.artist {
                         if let albumArtist = song.albumArtist,
@@ -59,6 +61,12 @@ struct TrackRow: View {
             Button {
                 let wasStarred = isStarred
                 isStarred = !wasStarred
+                AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: !wasStarred)
+                NotificationCenter.default.post(
+                    name: .songStarredChanged,
+                    object: nil,
+                    userInfo: ["id": song.id, "starred": !wasStarred]
+                )
                 #if os(iOS)
                 Haptics.light()
                 #endif
@@ -74,6 +82,12 @@ struct TrackRow: View {
                         }
                     } catch {
                         isStarred = wasStarred
+                        AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: wasStarred)
+                        NotificationCenter.default.post(
+                            name: .songStarredChanged,
+                            object: nil,
+                            userInfo: ["id": song.id, "starred": wasStarred]
+                        )
                     }
                 }
             } label: {
@@ -82,6 +96,7 @@ struct TrackRow: View {
                     .foregroundStyle(isStarred ? .pink : .secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isStarred ? "Remove from Favorites" : "Add to Favorites")
             .accessibilityIdentifier("trackHeartButton_\(song.id)")
 
             // Download button
@@ -89,6 +104,7 @@ struct TrackRow: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.callout)
                     .foregroundStyle(.green)
+                    .accessibilityLabel("Downloaded")
             } else {
                 Button {
                     #if os(iOS)
@@ -104,6 +120,7 @@ struct TrackRow: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Download Song")
                 .accessibilityIdentifier("trackDownloadButton_\(song.id)")
             }
 
@@ -135,6 +152,7 @@ struct TrackRow: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Song Options")
             .accessibilityIdentifier("trackMenuButton_\(song.id)")
         }
         .contentShape(Rectangle())
@@ -162,6 +180,11 @@ struct TrackRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
+        .onReceive(NotificationCenter.default.publisher(for: .songStarredChanged)) { note in
+            guard let id = note.userInfo?["id"] as? String, id == song.id,
+                  let starred = note.userInfo?["starred"] as? Bool else { return }
+            isStarred = starred
+        }
         .onAppear {
             isStarred = song.starred != nil
             let songId = song.id

@@ -10,37 +10,9 @@ struct QueueView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
-                // Now playing
-                if let current = engine.currentSong {
-                    Section("Now Playing") {
-                        HStack(spacing: 12) {
-                            AlbumArtView(coverArtId: current.coverArt, size: 44)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(current.title)
-                                    .font(.body)
-                                    .bold()
-                                    .lineLimit(1)
-                                Text(current.artist ?? "")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-
-                            if engine.isPlaying {
-                                Image(systemName: "waveform")
-                                    .foregroundStyle(Color.accentColor)
-                                    .symbolEffect(.variableColor)
-                                    .accessibilityLabel("Playing")
-                            }
-                        }
-                    }
-                }
-
-                // Recently played
+                // Recently played (top)
                 let history = engine.recentlyPlayed
                 if !history.isEmpty {
                     Section("Recently Played") {
@@ -59,6 +31,39 @@ struct QueueView: View {
                                 }
                             }
                             .opacity(0.6)
+                        }
+                    }
+                }
+
+                // Now playing (middle, fixed position)
+                if let current = engine.currentSong {
+                    Section("Now Playing") {
+                        EmptyView().id("nowPlayingAnchor")
+                        HStack(spacing: 12) {
+                            AlbumArtView(coverArtId: current.coverArt, size: 44)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(current.title)
+                                    .font(.body)
+                                    .bold()
+                                    .lineLimit(1)
+
+                                if let artist = current.artist {
+                                    Text(artist)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+
+                            Spacer()
+
+                            if engine.isPlaying {
+                                Image(systemName: "waveform")
+                                    .foregroundStyle(Color.accentColor)
+                                    .symbolEffect(.variableColor)
+                                    .accessibilityLabel("Playing")
+                            }
                         }
                     }
                 }
@@ -83,26 +88,58 @@ struct QueueView: View {
                     }
                 }
 
-                // Up next
-                let upNext = engine.shuffleEnabled ? engine.nextSongs(count: 5) : engine.upNext
-                let allUpNext = engine.upNext
-                if !upNext.isEmpty {
-                    let totalSeconds = allUpNext.compactMap(\.duration).reduce(0, +)
-                    let header = engine.shuffleEnabled
-                    ? "Up Next — \(upNext.count)/\(allUpNext.count) songs · \(formatDuration(totalSeconds))"
-                        : "Up Next — \(upNext.count) songs · \(formatDuration(totalSeconds))"
-                    Section(header) {
-                        if engine.shuffleEnabled {
-                            ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
-                                upNextRow(song: song, index: index)
+                // Up Next (tracks after currently playing)
+                let entries = engine.upNextEntries
+                if !entries.isEmpty {
+                    let totalSeconds = entries.compactMap(\.song.duration).reduce(0, +)
+                    Section("Up Next -- \(entries.count) songs -- \(formatDuration(totalSeconds))") {
+                        ForEach(Array(entries.enumerated()), id: \.element.song.id) { _, entry in
+                            HStack(spacing: 12) {
+                                AlbumArtView(coverArtId: entry.song.coverArt, size: 40)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.song.title)
+                                        .font(.body)
+                                        .lineLimit(1)
+
+                                    if let artist = entry.song.artist {
+                                        Text(artist)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+
+                                Spacer()
+
+                                if let duration = entry.song.duration {
+                                    Text(formatDuration(duration))
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                        .monospacedDigit()
+                                }
                             }
-                        } else {
-                            ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
-                                upNextRow(song: song, index: index)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                #if os(iOS)
+                                Haptics.light()
+                                #endif
+                                engine.skipToIndex(entry.index)
                             }
-                            .onMove { source, destination in
-                                engine.moveInQueue(from: source, to: destination)
+                            .trackContextMenu(song: entry.song) {
+                                engine.removeFromQueue(atAbsolute: entry.index)
                             }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    engine.removeFromQueue(atAbsolute: entry.index)
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
+                        }
+                        .onMove { source, destination in
+                            engine.moveInUpNext(from: source, to: destination)
                         }
                     }
                 }
@@ -119,6 +156,12 @@ struct QueueView: View {
             #if os(iOS)
             .listStyle(.insetGrouped)
             #endif
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation { proxy.scrollTo("nowPlayingAnchor", anchor: .top) }
+                }
+            }
+            } // ScrollViewReader
             .navigationTitle("Queue")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

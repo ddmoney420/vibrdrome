@@ -47,10 +47,11 @@ enum SubsonicEndpoint: Sendable {
     case createBookmark(id: String, position: Int, comment: String? = nil)
     case deleteBookmark(id: String)
     case getArtistInfo2(id: String, count: Int = 20)
+    case getAlbumInfo2(id: String)
     case getSimilarSongs2(id: String, count: Int = 50)
     case getTopSongs(artist: String, count: Int = 50)
     case getMusicFolders
-    case getIndexes(musicFolderId: String? = nil)
+    case getIndexes(musicFolderId: String? = nil, ifModifiedSince: Int? = nil)
     case getMusicDirectory(id: String)
     case jukeboxControl(action: String, index: Int? = nil, offset: Int? = nil,
                         ids: [String]? = nil, gain: Float? = nil)
@@ -89,6 +90,7 @@ enum SubsonicEndpoint: Sendable {
         case .createBookmark: "/rest/createBookmark"
         case .deleteBookmark: "/rest/deleteBookmark"
         case .getArtistInfo2: "/rest/getArtistInfo2"
+        case .getAlbumInfo2: "/rest/getAlbumInfo2"
         case .getSimilarSongs2: "/rest/getSimilarSongs2"
         case .getTopSongs: "/rest/getTopSongs"
         case .getMusicFolders: "/rest/getMusicFolders"
@@ -268,6 +270,9 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "count", value: "\(count)"),
             ]
 
+        case .getAlbumInfo2(let id):
+            return [URLQueryItem(name: "id", value: id)]
+
         case .getSimilarSongs2(let id, let count):
             return [
                 URLQueryItem(name: "id", value: id),
@@ -280,9 +285,10 @@ enum SubsonicEndpoint: Sendable {
                 URLQueryItem(name: "count", value: "\(count)")
             ]
 
-        case .getIndexes(let musicFolderId):
+        case .getIndexes(let musicFolderId, let ifModifiedSince):
             var items: [URLQueryItem] = []
             if let musicFolderId { items.append(URLQueryItem(name: "musicFolderId", value: musicFolderId)) }
+            if let ifModifiedSince { items.append(URLQueryItem(name: "ifModifiedSince", value: "\(ifModifiedSince)")) }
             return items
 
         case .getMusicDirectory(let id):

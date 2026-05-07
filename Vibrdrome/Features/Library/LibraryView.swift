@@ -1,14 +1,20 @@
+import SwiftData
 import SwiftUI
 import NukeUI
 
 struct LibraryView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Binding var navPath: NavigationPath
     @State private var recentAlbums: [Album] = []
     @State private var frequentAlbums: [Album] = []
     @State private var randomAlbums: [Album] = []
     @State private var recentlyPlayedAlbums: [Album] = []
     @State private var starredSongs: [Song] = []
+    @State private var favoriteAlbums: [Album] = []
+    @State private var featuredGenreAlbums: [Album] = []
+    @State private var featuredGenreName: String = ""
+    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?)] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
     @State private var isLoadingRandomAlbum = false
@@ -48,7 +54,7 @@ struct LibraryView: View {
             }
             .navigationTitle(activeServerName)
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             #endif
             .toolbar {
                 #if os(iOS)
@@ -71,18 +77,18 @@ struct LibraryView: View {
                     .accessibilityIdentifier("createPlaylistButton")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if settingsInNavBar {
-                        NavigationLink {
-                            SettingsView()
-                        } label: {
-                            Image(systemName: "gear")
+                    HStack(spacing: 14) {
+                        if settingsInNavBar {
+                            NavigationLink {
+                                SettingsView()
+                            } label: {
+                                Image(systemName: "gear")
+                            }
+                            .accessibilityLabel("Settings")
+                            .accessibilityIdentifier("settingsNavBarButton")
                         }
-                        .accessibilityLabel("Settings")
-                        .accessibilityIdentifier("settingsNavBarButton")
+                        profileMenu
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    profileMenu
                 }
                 #else
                 ToolbarItem(placement: .automatic) {
@@ -146,8 +152,11 @@ struct LibraryView: View {
             .navigationDestination(for: AlbumNavItem.self) { item in
                 AlbumDetailView(albumId: item.id)
             }
+            .navigationDestination(for: SongNavItem.self) { item in
+                SongDetailView(songId: item.id)
+            }
             .navigationDestination(for: GenreNavItem.self) { item in
-                AlbumsView(listType: .byGenre, title: item.name, genre: item.name)
+                AlbumsView(listType: .byGenre, title: item.name.cleanedGenreDisplay, genre: item.name)
             }
             .navigationDestination(for: PlaylistNavItem.self) { item in
                 PlaylistDetailView(playlistId: item.id)
@@ -161,6 +170,7 @@ struct LibraryView: View {
     // MARK: - Dynamic Carousel
 
     @ViewBuilder
+    // swiftlint:disable:next cyclomatic_complexity
     private func carouselView(for carousel: LibraryCarousel) -> some View {
         switch carousel {
         case .recentlyAdded:
@@ -189,6 +199,22 @@ struct LibraryView: View {
             if !recentlyPlayedAlbums.isEmpty {
                 albumSection("Recently Played", albums: recentlyPlayedAlbums) {
                     AlbumsView(listType: .recent, title: "Recently Played")
+                }
+            }
+        case .topArtists:
+            if !topArtistNames.isEmpty {
+                topArtistsCarousel
+            }
+        case .favoriteAlbums:
+            if !favoriteAlbums.isEmpty {
+                albumSection("Favorite Albums", albums: favoriteAlbums) {
+                    FavoritesView()
+                }
+            }
+        case .featuredGenre:
+            if !featuredGenreAlbums.isEmpty && !featuredGenreName.isEmpty {
+                albumSection("Featured: \(featuredGenreName)", albums: featuredGenreAlbums) {
+                    AlbumsView(listType: .byGenre, title: featuredGenreName, genre: featuredGenreName)
                 }
             }
         }
@@ -397,6 +423,7 @@ struct LibraryView: View {
                             albumCard(album)
                         }
                         .buttonStyle(.plain)
+                        .albumGetInfoContextMenu(album: album)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -446,8 +473,9 @@ struct LibraryView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
-                    ForEach(starredSongs) { song in
+                    ForEach(Array(starredSongs.enumerated()), id: \.element.id) { index, song in
                         songCard(song)
+                            .trackContextMenu(song: song, queue: starredSongs, index: index)
                             .onTapGesture {
                                 AudioEngine.shared.play(song: song, from: starredSongs, at: starredSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
                             }
@@ -511,6 +539,9 @@ struct LibraryView: View {
                                 Circle()
                                     .fill(appState.isConfigured ? .green : .red)
                                     .frame(width: 8, height: 8)
+                                    .accessibilityLabel(
+                                        appState.isConfigured ? "Connected" : "Disconnected"
+                                    )
                             }
                             Text(server.name)
                             Spacer()
@@ -611,18 +642,22 @@ struct LibraryView: View {
     private func fetchSections(client: SubsonicClient, skipCache: Bool = false) async {
         let folder = folderId
 
-        // Show cached data instantly (only for unfiltered/default)
+        // Show local cache data instantly (Recently Added + Starred from SwiftData)
         if folder == nil, !skipCache {
-            if let cached = await client.cachedResponse(
-                for: .getAlbumList2(type: .newest, size: 10, offset: 0), ttl: 300) {
-                recentAlbums = cached.albumList2?.album ?? []
+            if recentAlbums.isEmpty {
+                var desc = FetchDescriptor<CachedAlbum>(sortBy: [SortDescriptor(\CachedAlbum.created, order: .reverse)])
+                desc.fetchLimit = 10
+                if let cached = try? modelContext.fetch(desc), !cached.isEmpty {
+                    recentAlbums = cached.map { $0.toAlbum() }
+                }
             }
-            if let cached = await client.cachedResponse(
-                for: .getAlbumList2(type: .frequent, size: 10, offset: 0), ttl: 900) {
-                frequentAlbums = cached.albumList2?.album ?? []
-            }
-            if let cached = await client.cachedResponse(for: .getStarred2(), ttl: 300) {
-                if var songs = cached.starred2?.song, !songs.isEmpty {
+            if starredSongs.isEmpty {
+                let starredDesc = FetchDescriptor<CachedSong>(
+                    predicate: #Predicate<CachedSong> { $0.isStarred },
+                    sortBy: [SortDescriptor(\CachedSong.title)]
+                )
+                if let fetched = try? modelContext.fetch(starredDesc), !fetched.isEmpty {
+                    var songs = fetched.map { $0.toSong() }
                     songs.shuffle()
                     starredSongs = Array(songs.prefix(15))
                 }
@@ -641,9 +676,97 @@ struct LibraryView: View {
         randomAlbums = (try? await random) ?? randomAlbums
         recentlyPlayedAlbums = (try? await recentlyPlayed) ?? recentlyPlayedAlbums
 
-        if let result = try? await starred, var songs = result.song, !songs.isEmpty {
-            songs.shuffle()
-            starredSongs = Array(songs.prefix(15))
+        if let result = try? await starred {
+            if var songs = result.song, !songs.isEmpty {
+                songs.shuffle()
+                starredSongs = Array(songs.prefix(15))
+            }
+            if let albums = result.album {
+                favoriteAlbums = Array(albums.prefix(15))
+            }
+        }
+
+        // Featured genre: pick a random genre with enough albums and load 10
+        await loadFeaturedGenre(client: client, folder: folder)
+
+        // Load top artists from local play history
+        loadTopArtists()
+    }
+
+    private func loadFeaturedGenre(client: SubsonicClient, folder: String?) async {
+        guard featuredGenreAlbums.isEmpty else { return }
+        guard let genres = try? await client.getGenres() else { return }
+        // Rotate daily: pick a genre using day-of-year seed so the featured
+        // carousel feels fresh without hitting the server every launch.
+        let seeded = genres.filter { ($0.albumCount ?? 0) >= 5 }
+        guard !seeded.isEmpty else { return }
+        let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
+        let pick = seeded[dayOfYear % seeded.count]
+        featuredGenreName = pick.value.cleanedGenreDisplay
+        if let albums = try? await client.getAlbumList(
+            type: .byGenre, size: 10, genre: pick.value, musicFolderId: folder) {
+            featuredGenreAlbums = albums
+        }
+    }
+
+    private func loadTopArtists() {
+        let context = PersistenceController.shared.container.mainContext
+        let descriptor = FetchDescriptor<PlayHistory>(
+            sortBy: [SortDescriptor(\.playedAt, order: .reverse)]
+        )
+        guard let plays = try? context.fetch(descriptor) else { return }
+        var counts: [String: Int] = [:]
+        var latestArt: [String: String] = [:]
+        for play in plays {
+            let artist = play.artistName ?? "Unknown"
+            counts[artist, default: 0] += 1
+            if latestArt[artist] == nil, let art = play.coverArtId {
+                latestArt[artist] = art
+            }
+        }
+        topArtistNames = counts.sorted { $0.value > $1.value }
+            .prefix(10)
+            .map { (name: $0.key, count: $0.value, coverArtId: latestArt[$0.key]) }
+    }
+
+    private var topArtistsCarousel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your Top Artists")
+                .font(.title3)
+                .bold()
+                .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(topArtistNames, id: \.name) { artist in
+                        VStack(spacing: 6) {
+                            if let coverArtId = artist.coverArtId {
+                                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
+                            } else {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .frame(width: 80, height: 80)
+                                    .overlay {
+                                        Text(String(artist.name.prefix(1)).uppercased())
+                                            .font(.title)
+                                            .bold()
+                                            .foregroundStyle(.secondary)
+                                    }
+                            }
+
+                            Text(artist.name)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .frame(width: 80)
+
+                            Text("\(artist.count) plays")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
         }
     }
 }

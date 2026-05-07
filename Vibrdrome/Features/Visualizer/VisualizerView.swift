@@ -71,10 +71,20 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
     }
 
     func shader(size: CGSize, input: ShaderInput) -> Shader {
-        shaderFunction(
+        if self == .spectrum {
+            return ShaderLibrary.spectrumVis(
+                .float2(Float(size.width), Float(size.height)),
+                .float(input.time), .float(input.energy),
+                .float(input.bass), .float(input.mid), .float(input.treble),
+                .floatArray(input.bands),
+                .floatArray(input.peaks)
+            )
+        }
+        return shaderFunction(
             .float2(Float(size.width), Float(size.height)),
             .float(input.time), .float(input.energy),
-            .float(input.bass), .float(input.mid), .float(input.treble)
+            .float(input.bass), .float(input.mid), .float(input.treble),
+            .floatArray(input.bands)
         )
     }
 }
@@ -86,6 +96,11 @@ struct ShaderInput {
     let bass: Float
     let mid: Float
     let treble: Float
+    /// Per-band FFT magnitudes (count = AudioSpectrum.bandCount). Available to every shader;
+    /// most currently ignore it and animate from the scalar bass/mid/treble values.
+    let bands: [Float]
+    /// Per-band peak-hold values — instant-attack, slow-decay. Consumed only by the Spectrum preset.
+    let peaks: [Float]
 }
 
 // MARK: - Visualizer View
@@ -101,6 +116,8 @@ struct VisualizerView: View {
     @State private var bass: Float = 0
     @State private var mid: Float = 0
     @State private var treble: Float = 0
+    @State private var bands: [Float] = Array(repeating: 0, count: AudioSpectrum.bandCount)
+    @State private var peaks: [Float] = Array(repeating: 0, count: AudioSpectrum.bandCount)
     @State private var showControls = true
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
@@ -128,7 +145,8 @@ struct VisualizerView: View {
                             size: geo.size,
                             input: ShaderInput(
                                 time: time, energy: energy,
-                                bass: bass, mid: mid, treble: treble)))
+                                bass: bass, mid: mid, treble: treble,
+                                bands: bands, peaks: peaks)))
                 }
                 .ignoresSafeArea()
                 #if os(macOS)
@@ -383,11 +401,26 @@ struct VisualizerView: View {
                 mid = energy
                 treble = energy * 0.8
             }
+
+            // Always copy the real per-band array — the Spectrum preset renders
+            // one bar per band directly. If the tap is not delivering (bands all
+            // zero) the bars flatline, which is the correct diagnostic.
+            bands = audioSpectrum.bands
+            // Peak-hold: instant attack, slow linear decay (0.006 / frame ≈ 0.36/s).
+            for i in peaks.indices {
+                if bands[i] > peaks[i] {
+                    peaks[i] = bands[i]
+                } else {
+                    peaks[i] = max(0, peaks[i] - 0.006)
+                }
+            }
         } else {
             energy += (0.0 - energy) * 0.05
             bass += (0.0 - bass) * 0.05
             mid += (0.0 - mid) * 0.05
             treble += (0.0 - treble) * 0.05
+            for i in bands.indices { bands[i] *= 0.95 }
+            for i in peaks.indices { peaks[i] *= 0.9 }
         }
     }
 

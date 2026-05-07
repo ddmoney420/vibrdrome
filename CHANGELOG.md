@@ -4,6 +4,193 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 51 -- April 24, 2026
+- Visualizer: real 32-band FFT now drives Spectrum, Waveform, and Aurora presets. Bass shows on the left, treble on the right; Spectrum gains classic peak-hold caps that snap up to each bar's recent max and decay slowly. The remaining 15 presets receive the full spectrum data but continue to animate from the scalar bass/mid/treble values for now. FFT window bumped 1024 -> 2048 so every log-spaced band gets its own bin at the low end (previously bars 0-5 and 7 were always zero).
+- Visualizer diagnostic logging (#34): one `Spectrum diag` line per second during playback with pcmCalls / fftComputes / lastEnergy / sampleRate so the FFT pipeline is observable from Console.
+- CarPlay: letter-drill root for Artists and Albums (#33). Two-letter navigation makes long collections reachable without endless scrolling. Auto-push to Now Playing on playback start has also been dropped so the current list stays visible.
+- CarPlay: alphabet index fit and hard caps lifted on Albums and Starred (#32). Letter strip now fits the screen without clipping.
+- Audio: CarPlay interruption resume tightened. A call or text interruption near the top of a track previously restarted playback silently from 0; the saved position is now seeked before rate is set, eliminating the audible "song restarted" gap. Path logging added for interruption debugging.
+- GetInfoView: handles SwiftData's `.optional` and `.foreignReference` Mirror display styles in the Raw tab (previously fell through and dropped the row).
+- 536 unit tests in 40 suites; 12 UI rotation tests.
+
+**TestFlight Notes:**
+> Visualizer now reacts to real frequency bands (Spectrum, Waveform, Aurora)
+> with peak-hold caps on Spectrum. CarPlay letter-drill navigation for
+> Artists and Albums. Call or text interruptions no longer restart the
+> track from 0 after resume.
+
+### Build 50 -- April 21, 2026
+- Get Info window (from PR #13): long-press songs/albums/artists -> "Get Info" for a detail sheet with Overview and Raw metadata tabs. macOS opens in a separate window; iOS/iPad uses a sheet.
+- Search keyboard shortcuts on macOS (from PR #14): `CMD+K` jumps to the Search tab and focuses the field, `CMD+F` focuses the search bar in the current view. Discoverable via the new Navigate menu.
+- NowPlaying toolbar: hide the entire row when all items are disabled (previously left an empty rounded pill).
+- New Settings -> Player -> Toolbar Background toggle. Off for plain icons directly on the artwork; on keeps the pill + glass effect.
+- New Radio Mix toolbar item -- plays a mix of songs similar to the current track via Subsonic getSimilarSongs. Off by default, enable in Settings -> Player -> Controls.
+- Radio: grid cards now support long-press -> Delete Station (previously only list view).
+- Add Station form clarified with three labeled sections: Name, Stream URL, and Homepage (optional) each with explainer text.
+- Settings -> Appearance: subtitle under Liquid Glass toggle explains what it does.
+- iPad: mini player stays pinned at the bottom when the floating keyboard appears instead of riding up.
+- 536 unit tests in 40 suites; 12 UI rotation tests.
+
+**TestFlight Notes:**
+> Get Info window, CMD+K/CMD+F shortcuts on macOS, Now Playing toolbar
+> polish, Radio Mix button, Radio grid Delete Station, Add Station
+> clarity, Liquid Glass hint, iPad mini player keyboard fix.
+
+### Build 49 -- April 20, 2026 (Hotfix)
+- Fix: CarPlay Genres crash on tap. Crash log showed `ImageRenderer._uiImage.getter` triggering `EnvironmentValues.subscript.getter` assertion — SwiftUI was eagerly evaluating `GenreIconView`'s `@Environment(AppState.self)` during rasterization and asserting because the CarPlay-side ImageRenderer had no environment chain. Replaced the per-row rasterized fallback with a plain SF Symbol. Album art still loads async and replaces the symbol when available.
+- Removed the now-unused `GenreIconView.uiImage(for:)` rasterization helper.
+
+**TestFlight Notes:**
+> Hotfix for Build 48: CarPlay Genres crash on open fixed. Was caused by SwiftUI rasterization asserting on a missing environment; now uses a plain SF Symbol and loads real album art async.
+
+### Build 48 -- April 19, 2026 (Hotfix)
+- Fix: Genres tab crash on open (`uniqueKeysWithValues:` fatalError on duplicate `GenreArtwork` entries). Replaced with `uniquingKeysWith:` which keeps the first entry and moves on.
+- Fix: same crash surface in CarPlay's genre list.
+- Fix: CarPlay Radio now a flat scrollable list instead of 20-per-section chunks, so all stations are reachable (some head units wouldn't scroll past the first section).
+- Fix: CarPlay Now Playing showed the previous track's title / artwork while a radio station was streaming. `playRadio` wrote station metadata directly to `MPNowPlayingInfoCenter` but `NowPlayingManager` held the old song's info and overwrote it on the next time-tick. Routed radio metadata and artwork through `NowPlayingManager` so it sticks.
+- CarPlay item caps raised: Genres now uncapped, Favorite Songs 20 -> 200, Favorite Albums 20 -> 200 (under CPListTemplate's ~500-item ceiling).
+
+**TestFlight Notes:**
+> Hotfix: Genres tab crash fixed. CarPlay Radio scrolls through all stations now and the Now Playing display shows the correct station info. Favorite Songs/Albums and Genres no longer truncated in CarPlay.
+
+### Build 47 -- April 18, 2026
+- New Library tab (Apple Music-style): single entry point with Playlists / Artists / Albums / Songs / Genres / Downloaded + Recently Added carousel
+- Default tab bar layout: Home, Favorites, Library, Search, Radio (applies to new installs; existing users can rearrange in Settings > Tab Bar)
+- Favorites tab reworked: Songs / Albums / Artists segmented picker, grid-list toggle per category
+- New Home carousels: Favorite Albums and Featured Genre (daily rotating)
+- Album detail and Artist detail now have a heart button to favorite/unfavorite
+- Artists and Albums views: filter menu for All / Favorites / Downloaded
+- Genre list now uses real album artwork (cover art of a representative album per genre) instead of generated icons
+- CarPlay genre list shows matching album art
+- CarPlay random-pause fix: audio resumes after interruptions (Siri, calls, messages) even when iOS omits the shouldResume hint
+- CarPlay route-change fix: no longer pauses on transient head-unit route hiccups
+- Large section headings across Home, Genres, Artists, Albums, Songs, Favorites, Generations
+- Tab Bar settings moved to the same level as Player and Appearance
+- Home tab's header: tighter spacing between Settings gear and profile icon; tab-bar settings label corrected from "Library" to "Home"
+- macOS: window title removed from next to traffic lights
+- iPad landscape mini player no longer stretches full-width
+- Initial server setup screen now has a Server Name field (previously only available when editing an existing server)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Apple Music-style Library tab, favorite albums/artists, favorites segments
+> and grid view, album art on genres and CarPlay, CarPlay audio resume fix,
+> home carousels, filter menus, iPad landscape mini-player width.
+
+### Build 46 -- April 18, 2026
+- Fix: semicolon-containing genres like "Hip Hop; Pop" no longer error on tap; now render as "Hip Hop Pop" while the underlying server query is preserved
+- Fix: first tap on a song or album row now plays / navigates reliably instead of sometimes landing on the artist page (removed nested artist/album Buttons from list rows — "Go to Artist" still available via long-press menu)
+- Fix: Album search now hits the entire library via server search3 instead of only client-side filtering the loaded pages (finds albums like "Beats, Rhymes and Life" regardless of pagination)
+- Fix: Audio glitching when spam-tapping tracks or play/pause (AVPlayer item swap debounced 50ms with cancellation so rapid taps collapse into a single swap instead of churning the audio session)
+- TrackRow title/artist spacing bumped from 2pt to 6pt for clearer touch separation
+- Contributor CARPLAY_ENABLED build flag + CONTRIBUTING.md signing guide
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Fixes: semicolon genre error, first-tap play reliability, album search
+> across entire library, audio glitch on rapid track changes. Contributor
+> build flag for CarPlay.
+
+### Build 45 -- April 17, 2026
+- Album Collections: save album filter presets to macOS/iPad sidebar
+- Genre filter in AlbumsView sort menu
+- 336 AI-generated genre icons (DALL-E 3) with SF Symbol fallback
+- Grid columns up to 10 on macOS (6 on iOS)
+- Auto-Suggest toggle in Settings > Player
+- navigationDestination fix (moved out of List container)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Album Collections in sidebar, 336 genre icons, genre filter on Albums,
+> grid columns up to 10, auto-suggest toggle, tech debt fix.
+
+### Build 44 -- April 16, 2026
+- Queue overhaul: all tracks visible (passed-over tracks dimmed), tap plays without hiding others
+- Recently Played: records gapless auto-advance, filters brief skips (<30s or <30%)
+- Now Playing landscape layout (art left, controls right, auto-rotates)
+- Grid art scales to column count (3/4 columns no longer overlap)
+- Queue context menu: full track menu with Remove from Queue
+- Album detail: opaque row background for context menu preview
+- Watch album art: arrives with metadata (no stale art on track change)
+- Auto-Suggest toggle in Settings > Player (on by default)
+- Cold-start audio session fix (first play after fresh launch)
+- 536 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Queue fixed: tap plays without hiding tracks, all tracks stay visible.
+> Landscape Now Playing layout. Grid columns scale properly. Watch art
+> refreshes on track change. Auto-Suggest toggle added.
+
+### Build 43 -- April 15, 2026
+- Lossless badge in Now Playing for FLAC/ALAC/WAV/AIFF (toggleable in Settings > Player)
+- Your Top Artists carousel on Home with album art from play history
+- Search tab auto-focuses keyboard on open
+- iPad sidebar scrollable past mini player (Settings no longer blocked)
+- Delete all downloads crash fix (proper error handling)
+- CI fix: generic iOS Simulator destination
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Lossless badge, Top Artists carousel, search auto-focus, iPad sidebar fix,
+> download delete crash fix.
+
+### Build 42 — April 15, 2026
+- Tab bar reorder works instantly without kicking to Home
+- Queue layout: Recently Played on top, Now Playing in middle, Up Next below
+- Queue auto-scrolls to Now Playing on open
+- Play history records from all playback paths (gapless, skip, queue tap)
+- Recently Played falls back to queue position on fresh launch
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Tab reorder fixed (instant, no Home kick). Queue reordered: Recently Played,
+> Now Playing, Up Next. Play history tracks all playback paths.
+
+### Build 40 — April 15, 2026
+- Tab bar drag-to-reorder restored in Settings
+- A-Z section index on Artists list with tap-to-jump (split X-Z into individual letters, [Unknown] as #)
+- Grid columns setting (2/3/4) in Appearance, applied to Albums, Artists, Playlists, Genres, Songs, Radio
+- Search bars hidden by default (pull down to reveal) on all browse views
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Tab bar reorder restored, A-Z artist index, configurable grid columns,
+> search bars hidden by default.
+
+### Build 39 — April 14, 2026
+- Fix: Sleep timer "End of Track" resume now advances to next track instead of running past the end
+- Fix: Recently Played now tracks actual play history, not unplayed queue entries
+- Fix: Track title tap no longer navigates to Song Info (use long-press context menu)
+- Fix: Tab bar reorder removed (iOS handles via long-press on tab bar natively)
+- ReplayGain track/album gain values shown in Now Playing streaming info
+- Playlist Play Next / Add to Queue on detail page and context menu (grid + list)
+- Playlist context menu added to list view (was grid-only)
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Sleep timer end-of-track fix, Recently Played accuracy, track title
+> behavior, ReplayGain info display, playlist queue actions.
+
+### Build 38 — April 13, 2026
+- Security: Last.fm/ListenBrainz credentials moved to Keychain, download suffix sanitized
+- Accessibility: VoiceOver labels for star rating, volume slider, track row buttons, connection dot
+- CarPlay: removed CPSearchTemplate (not allowed for audio apps), replaced with Recently Played
+- CarPlay: radio stations split into sections to fix head unit truncation
+- CarPlay: reconnection restores queue and re-setups remote commands
+- macOS: multi-track overlap fix, crossfade players stopped on new track
+- macOS UI overhaul: mini player polish, Now Playing enhancements, album detail styling, grid/list toggles, keyboard shortcuts, settings parity
+- iPad: server manager unresponsive fix (NavigationLink instead of sheet)
+- ReplayGain pre-gain + fallback gain for loudness matching (GitHub issue #4)
+- Album Play Next / Add to Queue on album detail and album context menu
+- Onboarding tip on server config screen
+- Refactored album context menus and action buttons
+- 532 unit tests in 40 suites
+
+**TestFlight Notes:**
+> Security hardening, accessibility audit, CarPlay overhaul (Recently Played
+> replaces broken Search), macOS UI overhaul, iPad fix, ReplayGain pre-gain,
+> album queue actions. 532 tests.
+
 ### Build 37 — April 11, 2026
 - CarPlay: Now Playing template with shuffle, repeat, Up Next queue
 - CarPlay: progress slider and time tracking now update in real-time

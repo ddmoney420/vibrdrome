@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ServerConfigView: View {
     @Environment(AppState.self) private var appState
+    @State private var name = ""
     @State private var url = ""
     @State private var username = ""
     @State private var password = ""
@@ -70,6 +71,10 @@ struct ServerConfigView: View {
 
                 // Fields
                 VStack(spacing: 12) {
+                    TextField("Server Name", text: $name, prompt: Text("My Navidrome"))
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+
                     TextField("Server URL", text: $url, prompt: Text("https://music.example.com"))
                         .textFieldStyle(.roundedBorder)
                         .textContentType(.URL)
@@ -97,7 +102,7 @@ struct ServerConfigView: View {
                 // Buttons
                 VStack(spacing: 10) {
                     Button {
-                        appState.saveCredentials(url: url, username: username, password: password)
+                        appState.saveCredentials(url: url, username: username, password: password, name: name)
                         if !appState.isConfigured {
                             testResult = "Invalid server URL. Please enter a valid URL."
                         }
@@ -167,7 +172,26 @@ struct ServerConfigView: View {
                     .listRowBackground(Color.clear)
                 }
 
+                Section {
+                    Label {
+                        Text("""
+                        Enter your Navidrome server URL and credentials. \
+                        Works with any Subsonic-compatible server. \
+                        Use "Test Connection" to verify before signing in.
+                        """)
+                        .font(.caption)
+                    } icon: {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.accentColor)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
                 Section("Server Details") {
+                    TextField("Name", text: $name, prompt: Text("My Navidrome"))
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("serverNameField")
+
                     TextField("URL", text: $url, prompt: Text("https://..."))
                         .textContentType(.URL)
                         #if os(iOS)
@@ -199,7 +223,7 @@ struct ServerConfigView: View {
 
                 Section {
                     Button {
-                        appState.saveCredentials(url: url, username: username, password: password)
+                        appState.saveCredentials(url: url, username: username, password: password, name: name)
                         if appState.isConfigured {
                             dismiss()
                         } else {

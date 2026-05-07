@@ -1,25 +1,68 @@
 import SwiftUI
 import os.log
 
-struct TrackContextMenuModifier: ViewModifier {
+struct TrackContextMenuModifier: ViewModifier, Equatable {
     let song: Song
     var queue: [Song]?
     var index: Int?
+    var onRemove: (() -> Void)?
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @State private var showAddToPlaylist = false
+    @State private var showGetInfo = false
+
+    nonisolated static func == (lhs: TrackContextMenuModifier, rhs: TrackContextMenuModifier) -> Bool {
+        lhs.song == rhs.song && lhs.index == rhs.index
+    }
 
     func body(content: Content) -> some View {
         content
-            .contextMenu { contextMenuItems }
+            #if os(iOS)
+            .background(Color(.systemBackground))
+            #endif
+            .contextMenu {
+                TrackContextMenuContent(
+                    song: song, queue: queue, index: index,
+                    onRemove: onRemove,
+                    showAddToPlaylist: $showAddToPlaylist,
+                    showGetInfo: $showGetInfo
+                )
+            }
             .sheet(isPresented: $showAddToPlaylist) {
                 AddToPlaylistView(songIds: [song.id])
-                    .environment(appState)
             }
+            #if os(iOS)
+            .sheet(isPresented: $showGetInfo) {
+                NavigationStack {
+                    GetInfoView(target: GetInfoTarget(type: .song, id: song.id))
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showGetInfo = false }
+                            }
+                        }
+                }
+                .environment(appState)
+            }
+            #endif
     }
+}
 
-    @ViewBuilder
-    private var contextMenuItems: some View {
+/// Lazy inner view — `@Environment(AppState.self)` is only resolved when the context menu opens.
+private struct TrackContextMenuContent: View {
+    let song: Song
+    var queue: [Song]?
+    var index: Int?
+    var onRemove: (() -> Void)?
+    @Binding var showAddToPlaylist: Bool
+    @Binding var showGetInfo: Bool
+
+    @Environment(AppState.self) private var appState
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
+
+    var body: some View {
         playbackActions
         Divider()
         libraryActions
@@ -27,6 +70,14 @@ struct TrackContextMenuModifier: ViewModifier {
         jukeboxActions
         Divider()
         navigationActions
+        if let onRemove {
+            Divider()
+            Button(role: .destructive) {
+                onRemove()
+            } label: {
+                Label("Remove from Queue", systemImage: "minus.circle")
+            }
+        }
     }
 
     @ViewBuilder
@@ -117,6 +168,22 @@ struct TrackContextMenuModifier: ViewModifier {
 
     @ViewBuilder
     private var navigationActions: some View {
+        Button {
+            appState.pendingNavigation = .song(id: song.id)
+        } label: {
+            Label("Song Info", systemImage: "info.circle")
+        }
+
+        Button {
+            #if os(macOS)
+            openWindow(id: "get-info", value: GetInfoTarget(type: .song, id: song.id))
+            #else
+            showGetInfo = true
+            #endif
+        } label: {
+            Label("Get Info", systemImage: "doc.text.magnifyingglass")
+        }
+
         if let albumId = song.albumId {
             Button {
                 appState.pendingNavigation = .album(id: albumId)
@@ -152,5 +219,12 @@ struct TrackContextMenuModifier: ViewModifier {
 extension View {
     func trackContextMenu(song: Song, queue: [Song]? = nil, index: Int? = nil) -> some View {
         modifier(TrackContextMenuModifier(song: song, queue: queue, index: index))
+    }
+
+    func trackContextMenu(
+        song: Song, queue: [Song]? = nil, index: Int? = nil,
+        onRemove: @escaping () -> Void
+    ) -> some View {
+        modifier(TrackContextMenuModifier(song: song, queue: queue, index: index, onRemove: onRemove))
     }
 }
