@@ -156,6 +156,7 @@ struct SidebarContentView: View {
             #if os(macOS)
             NavigationStack(path: $detailPath) {
                 detailView
+                    .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                     .navigationDestination(for: SidebarNavRoute.self) { route in
                         switch route {
                         case .album(let id):
@@ -167,13 +168,14 @@ struct SidebarContentView: View {
                         case .genre(let name):
                             AlbumsView(listType: .alphabeticalByName,
                                        title: name.cleanedGenreDisplay, initialGenreFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         case .label(let name):
                             AlbumsView(listType: .alphabeticalByName,
                                        title: name, initialLabelFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         }
                     }
             }
-            .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
             #else
             NavigationStack(path: $detailPath) {
                 detailView
