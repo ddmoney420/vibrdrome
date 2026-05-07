@@ -164,7 +164,8 @@ extension SearchView {
         }
 
         let filteredAlbums = results.album?.filter { album in
-            if let genre = selectedGenre, album.genre?.caseInsensitiveCompare(genre) != .orderedSame {
+            if let genre = selectedGenre,
+               !album.allGenres.contains(where: { $0.caseInsensitiveCompare(genre) == .orderedSame }) {
                 return false
             }
             if let year = selectedYear, album.year != year {

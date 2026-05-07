@@ -330,20 +330,22 @@ struct LibraryFilterSidebarView: View {
         } else {
             let descriptor = FetchDescriptor<CachedAlbum>()
             let albums = (try? modelContext.fetch(descriptor)) ?? []
-            // Collect all genres from the multi-genre array on each album
             var mutableGenreSet = Set(albums.flatMap(\.genres)).subtracting([""])
 
-            if context == .album {
-                // Union in song genres so albums not yet backfilled still appear in the list
+            // Fallback: if backfillAlbumGenresOffMain hasn't run yet, album.genres may be
+            // empty. Union in song genres so the sidebar isn't blank during that window.
+            if mutableGenreSet.isEmpty {
                 let songDescriptor = FetchDescriptor<CachedSong>()
                 let songs = (try? modelContext.fetch(songDescriptor)) ?? []
-                mutableGenreSet.formUnion(Set(songs.compactMap(\.genre)).subtracting([""]))
+                mutableGenreSet.formUnion(songs.compactMap(\.genre))
+                mutableGenreSet.subtract([""])
+            }
+            genreSet = mutableGenreSet
 
+            if context == .album {
                 let labelSet = Set(albums.compactMap(\.label)).subtracting([""])
                 labels = labelSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             }
-
-            genreSet = mutableGenreSet
         }
         genres = genreSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }

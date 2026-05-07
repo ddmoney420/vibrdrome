@@ -76,7 +76,7 @@ struct LibrarySyncTests {
         let album = makeAlbum(genre: "Alternative Rock")
         let cached = CachedAlbum(from: album)
         let restored = cached.toAlbum()
-        #expect(restored.genre == "Alternative Rock")
+        #expect(restored.allGenres == ["Alternative Rock"])
     }
 
     @Test func cachedAlbumStarredConversion() {
@@ -217,10 +217,11 @@ struct LibrarySyncTests {
         Album(
             id: id, name: name, artist: artist, artistId: artistId,
             coverArt: nil, songCount: songCount, duration: duration,
-            year: year, genre: genre, genres: nil, starred: starred, created: nil,
+            year: year, genre: genre, starred: starred, created: nil,
             userRating: userRating, song: nil, replayGain: nil,
             musicBrainzId: nil,
-            recordLabels: label.map { [RecordLabel(name: $0)] }
+            recordLabels: label.map { [RecordLabel(name: $0)] },
+            genres: nil
         )
     }
 

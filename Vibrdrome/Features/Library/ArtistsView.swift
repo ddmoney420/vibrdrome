@@ -437,8 +437,7 @@ struct ArtistsView: View {
                 }
                 var ids = Set<String>()
                 for album in allAlbums {
-                    let albumGenres = Set(album.allGenres)
-                    if !albumGenres.isDisjoint(with: filter.selectedGenres),
+                    if !filter.selectedGenres.isDisjoint(with: album.allGenres),
                        let artistId = album.artistId {
                         ids.insert(artistId)
                     }

@@ -181,8 +181,10 @@ struct AlbumDetailView: View {
                         }
                     }
 
-                    albumMetadataRow(album)
+                    albumMetadataRow(album, showGenre: false)
                         .foregroundStyle(.white.opacity(0.7))
+
+                    macOSExtendedMetadata(album)
 
                     Spacer(minLength: 12)
 
@@ -192,6 +194,102 @@ struct AlbumDetailView: View {
                 .padding(.vertical, 4)
             }
             .padding(28)
+        }
+    }
+
+    @ViewBuilder
+    private func macOSExtendedMetadata(_ album: Album) -> some View {
+        let allGenres = album.allGenres
+        let hasLabels = album.recordLabels?.isEmpty == false
+        let hasGrid = hasLabels || album.created != nil
+            || album.replayGain?.albumGain != nil || album.musicBrainzId != nil
+
+        if !allGenres.isEmpty || hasGrid {
+            VStack(alignment: .leading, spacing: 10) {
+                if !allGenres.isEmpty {
+                    macOSGenrePills(allGenres)
+                }
+
+                if hasGrid {
+                    HStack(spacing: 20) {
+                        if let labels = album.recordLabels, !labels.isEmpty {
+                            macOSLabelPills(labels)
+                        }
+                        if let created = album.created {
+                            macOSHeaderMetaCell("Added", value: formatAddedDate(created))
+                        }
+                        if let gain = album.replayGain?.albumGain {
+                            macOSHeaderMetaCell("Album Gain",
+                                                value: String(format: "%.2f dB", gain))
+                        }
+                        if let mbid = album.musicBrainzId {
+                            macOSHeaderMetaCell("MusicBrainz ID", value: mbid)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderPill(text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.18), in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSGenrePills(_ genres: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(genres, id: \.self) { genre in
+                    macOSHeaderPill(text: genre.cleanedGenreDisplay) {
+                        appState.pendingNavigation = .genre(name: genre)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSLabelPills(_ labels: [RecordLabel]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Label")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            HStack(spacing: 6) {
+                ForEach(labels, id: \.name) { recordLabel in
+                    macOSHeaderPill(text: recordLabel.name) {
+                        appState.pendingNavigation = .label(name: recordLabel.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderMetaCell(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .textSelection(.enabled)
         }
     }
 
@@ -240,6 +338,25 @@ struct AlbumDetailView: View {
                     .foregroundStyle(.white)
             }
         }
+    }
+
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let dateDisplayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    private func formatAddedDate(_ iso: String) -> String {
+        let date = Self.isoFormatterFractional.date(from: iso)
+            ?? Self.isoFormatterBasic.date(from: iso)
+        return date.map { Self.dateDisplayFormatter.string(from: $0) } ?? iso
     }
 
     @ViewBuilder
@@ -329,12 +446,12 @@ struct AlbumDetailView: View {
     #endif
 
     @ViewBuilder
-    private func albumMetadataRow(_ album: Album) -> some View {
+    private func albumMetadataRow(_ album: Album, showGenre: Bool = true) -> some View {
         HStack(spacing: 8) {
             if let year = album.year {
                 Text(verbatim: "\(year)")
             }
-            if let genre = album.genre {
+            if showGenre, let genre = album.genre {
                 Text("·")
                 Text(genre.cleanedGenreDisplay)
             }
@@ -634,10 +751,10 @@ struct AlbumDetailView: View {
                         id: preview.id, name: preview.name, artist: preview.artist,
                         artistId: preview.artistId, coverArt: preview.coverArt,
                         songCount: preview.songCount, duration: preview.duration,
-                        year: preview.year, genre: preview.genre, genres: preview.genres,
-                        starred: preview.starred, created: preview.created,
-                        userRating: preview.userRating, song: songs,
-                        replayGain: nil, musicBrainzId: nil, recordLabels: nil
+                        year: preview.year, genre: preview.genre, starred: preview.starred,
+                        created: preview.created, userRating: preview.userRating,
+                        song: songs, replayGain: nil, musicBrainzId: nil,
+                        recordLabels: nil, genres: nil
                     )
                 }
                 album = preview

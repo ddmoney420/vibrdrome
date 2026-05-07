@@ -63,6 +63,8 @@ struct SidebarContentView: View {
         case album(String)
         case artist(String)
         case song(String)
+        case genre(String)
+        case label(String)
     }
 
     private var splitView: some View {
@@ -163,6 +165,12 @@ struct SidebarContentView: View {
                                 ArtistDetailView(artistId: id)
                             case .song(let id):
                                 SongDetailView(songId: id)
+                            case .genre(let name):
+                                AlbumsView(listType: .alphabeticalByName,
+                                           title: name.cleanedGenreDisplay, initialGenreFilter: name)
+                            case .label(let name):
+                                AlbumsView(listType: .alphabeticalByName,
+                                           title: name, initialLabelFilter: name)
                             }
                         }
                 }
@@ -188,6 +196,12 @@ struct SidebarContentView: View {
                             ArtistDetailView(artistId: id)
                         case .song(let id):
                             SongDetailView(songId: id)
+                        case .genre(let name):
+                            AlbumsView(listType: .byGenre,
+                                       title: name.cleanedGenreDisplay, genre: name)
+                        case .label(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name, initialLabelFilter: name)
                         }
                     }
             }
@@ -224,7 +238,11 @@ struct SidebarContentView: View {
                 detailPath.append(SidebarNavRoute.artist(id))
             case .song(let id):
                 detailPath.append(SidebarNavRoute.song(id))
-            case .genre, .playlist:
+            case .genre(let name):
+                detailPath.append(SidebarNavRoute.genre(name))
+            case .label(let name):
+                detailPath.append(SidebarNavRoute.label(name))
+            case .playlist:
                 break
             }
         }
