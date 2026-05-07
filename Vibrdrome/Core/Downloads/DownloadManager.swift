@@ -551,7 +551,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if taskId != nil { taskStartTimes.removeValue(forKey: taskId!) }
         lock.unlock()
     }
-    
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,

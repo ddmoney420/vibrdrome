@@ -619,7 +619,7 @@ extension AudioEngine {
         }
 
         let song = queue[index]
-        
+
         let isNewTrack = currentSong?.id != song.id
         if shuffleEnabled, let outgoing = currentSong, isNewTrack {
             shufflePlayHistory.append(outgoing)

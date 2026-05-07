@@ -22,12 +22,12 @@ extension AudioEngine {
         guard currentIndex > 0 else { return [] }
         return Array(queue[0..<currentIndex].reversed().prefix(20))
     }
-    
+
     /// Upcoming tracks (queue[currentIndex+1...]) with absolute queue indices
     /// so callers can pass them back to skipToIndex / removeFromQueue.
     var upNextEntries: [(index: Int, song: Song)] {
         guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
-        
+
         if shuffleEnabled {
             let entries = nextSongIndices(count: 5)
             return (0 ..< entries.count).map { idx in

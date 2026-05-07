@@ -11,7 +11,7 @@ final class DownloadProgress {
 
     var progressBySongId: [String: Double] = [:]
     var speedBySongId: [String: Double] = [:]  // kBs
-    
+
     func update(songId: String, progress: Double, speed: Double? = nil) {
         progressBySongId[songId] = progress
         if let speed { speedBySongId[songId] = speed }

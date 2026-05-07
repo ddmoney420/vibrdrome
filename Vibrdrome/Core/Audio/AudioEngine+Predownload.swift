@@ -247,7 +247,7 @@ actor PredownloadManager {
             await MainActor.run { AudioEngine.shared.predownloadSpeed = finalAvg }
         }
     }
-    
+
     /// Check if a song is already downloaded
     private func isSongAlreadyDownloaded(_ song: Song) async -> Bool {
         await MainActor.run {
