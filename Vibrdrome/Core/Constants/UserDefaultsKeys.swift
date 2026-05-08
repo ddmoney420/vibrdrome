@@ -154,6 +154,10 @@ enum UserDefaultsKeys {
     /// Key prefix for per-view column config. Full key = prefix + viewKey (e.g. "songs", "album").
     static let trackTableColumnsPrefix = "trackTableColumns_"
 
+    // MARK: - macOS Artist Links
+
+    static let artistExternalLinks = "artistExternalLinks"
+
     // MARK: - macOS Layout
 
     static let macNowPlayingPlacement = "macNowPlayingPlacement"

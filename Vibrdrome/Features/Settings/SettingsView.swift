@@ -93,6 +93,13 @@ struct SettingsView: View {
                 Label("Layout", systemImage: "rectangle.3.group")
             }
             .accessibilityIdentifier("layoutSettingsLink")
+
+            NavigationLink {
+                ArtistExternalLinksSettingsView()
+            } label: {
+                Label("Artist Links", systemImage: "link")
+            }
+            .accessibilityIdentifier("artistLinksSettingsLink")
             #endif
 
             downloadsSection
