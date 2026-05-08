@@ -573,8 +573,8 @@ struct AudioEngineTests {
         let songs = makeSongs(5)
         engine.play(song: songs[0], from: songs, at: 0)
 
-        // upNext[0] is queue[1]; remove at upNext index 0
-        engine.removeFromQueue(at: 0)
+        // queue[1] is upNext[0] (currentIndex is 0); remove that absolute index
+        engine.removeFromQueue(atAbsolute: 1)
 
         #expect(engine.queue.count == 4)
         #expect(!engine.queue.contains(where: { $0.id == "song1" }))
