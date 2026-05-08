@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import SwiftData
 import os.log
@@ -61,6 +62,7 @@ extension AudioEngine {
                     currentTime = Double(position) / 1000.0
                 }
                 NowPlayingManager.shared.update(song: songs[index], isPlaying: false)
+                preloadCurrentSong()
             }
         }
     }
@@ -207,8 +209,45 @@ extension AudioEngine {
         }
 
         NowPlayingManager.shared.update(song: songs[currentIndex], isPlaying: false)
+        preloadCurrentSong()
         queueLog.info("Restored queue locally (\(songs.count) songs, radio=\(saved.isRadioMode))")
         return true
+    }
+
+    /// Load the restored song's `AVPlayerItem` into the player (paused, seeked
+    /// to `currentTime`) without starting playback. Required so the system
+    /// surfaces the app as a now-playing app on cold launch: setting
+    /// `MPNowPlayingInfoCenter.nowPlayingInfo` alone is not enough -- both the
+    /// CarPlay Now Playing button and the iOS lock-screen widget only appear
+    /// when iOS sees an active audio app with a queued AVPlayerItem.
+    /// Issue #45.
+    func preloadCurrentSong() {
+        guard !isUITesting else { return }
+        guard let song = currentSong else { return }
+
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+
+        if activeMode != .gapless {
+            tearDownCurrentMode()
+            activeMode = .gapless
+        }
+
+        let url = resolveURL(for: song)
+        replacePlayerItem(with: url)
+        applyEffectiveVolume()
+
+        // Resume from the saved position. The seek runs asynchronously inside
+        // AVPlayer; the rate stays at 0 (paused) since we never call play().
+        if currentTime > 0 {
+            let target = CMTime(seconds: currentTime, preferredTimescale: 1000)
+            gaplessPlayer?.seek(to: target)
+        }
+
+        // Make sure NowPlayingInfoCenter advertises us as paused with the
+        // correct elapsed time -- the lock-screen widget reads this directly.
+        NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
     }
 
     /// Save radio station info when the queue is empty (internet radio mode).
