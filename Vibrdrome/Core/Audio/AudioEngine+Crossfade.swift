@@ -51,6 +51,7 @@ extension AudioEngine {
                 self.currentTime = time.seconds
                 self.autoScrobbleIfNeeded()
                 self.checkCrossfadeTrigger()
+                self.checkPredownloadedSongNearEnd()
             }
         }
         setTimeObserver(observer: observer)
@@ -78,6 +79,24 @@ extension AudioEngine {
 
         isCrossfading = true
         crossfadeEngineLog.info("Starting crossfade to: \(nextSong.title)")
+
+        // Advance logical playback state immediately so that NowPlaying, the
+        // predownload window, the shuffle cache, and radio refill all see the
+        // incoming track for the full duration of the fade — not just after it
+        // completes.
+        if shuffleEnabled, let outgoing = currentSong {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
+        currentIndex = nextIdx
+        currentSong = nextSong
+        setReplayGainFactor(nextRGFactor)
+        NowPlayingManager.shared.update(song: nextSong, isPlaying: true)
+        scrobbleNowPlaying(songId: nextSong.id)
+        startPredownloadIfNeeded(startIndex: nextIdx, queue: queue)
+        refillRadioIfNeeded()
 
         crossfadeController.beginCrossfade(
             nextURL: nextURL,
@@ -115,7 +134,8 @@ extension AudioEngine {
         }
     }
 
-    /// Called when crossfade ramp completes
+    /// Called when crossfade ramp completes — logical state was already advanced
+    /// at fade start; this only handles the audio observer handoff and time reset.
     func handleCrossfadeComplete(
         nextSong: Song,
         nextIndex: Int,
@@ -124,12 +144,9 @@ extension AudioEngine {
         submitScrobbleIfNeeded()
         isCrossfading = false
 
-        currentIndex = nextIndex
-        currentSong = nextSong
         resetScrobbleState()
         currentTime = 0
         duration = 0
-        setReplayGainFactor(replayGainFactor)
 
         tearDownObservers()
         incrementGeneration()
@@ -140,10 +157,6 @@ extension AudioEngine {
         }
 
         applyEffectiveVolume()
-        NowPlayingManager.shared.update(song: nextSong, isPlaying: true)
-
-        scrobbleNowPlaying(songId: nextSong.id)
-        refillRadioIfNeeded()
     }
 
     /// Track-end observer for crossfade mode (when track ends without crossfade trigger)

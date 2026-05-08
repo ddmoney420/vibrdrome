@@ -24,6 +24,14 @@ private let playbackLog = Logger(subsystem: "com.vibrdrome.app", category: "Audi
 
 extension AudioEngine {
 
+    func hashSongs(_ newQueue: [Song]) -> Int {
+        var hasher = Hasher()
+        for song in newQueue {
+            hasher.combine(song.title)
+        }
+        return hasher.finalize()
+    }
+
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
@@ -52,6 +60,12 @@ extension AudioEngine {
         updateQueue(for: song, newQueue: newQueue, index: index)
 
         let isNewTrack = currentSong?.id != song.id
+        if shuffleEnabled, let outgoing = currentSong, isNewTrack {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
         currentSong = song
         currentRadioStation = nil
         // Only clear playingFromContext when a NEW queue is loaded,
@@ -84,6 +98,12 @@ extension AudioEngine {
         NowPlayingManager.shared.update(song: song, isPlaying: true)
         scrobbleNowPlaying(songId: song.id)
 
+        if newQueue == nil {
+            startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
+        } else {
+            startPredownloadIfNeeded(startIndex: index, queue: newQueue!)
+        }
+
         scheduleDebouncedPlayerSwap(url: url, mode: activeMode)
     }
 
@@ -109,6 +129,7 @@ extension AudioEngine {
             queue = newQueue
             currentIndex = newQueue.isEmpty ? 0 : min(index, newQueue.count - 1)
             shufflePlayCount = 0
+            shufflePlayHistory.removeAll()
         } else if queue.isEmpty {
             queue = [song]
             currentIndex = 0
@@ -117,6 +138,25 @@ extension AudioEngine {
         } else {
             queue = [song]
             currentIndex = 0
+        }
+    }
+
+    func insertSongNext(for song: Song, at atSong: Int) {
+        guard atSong >= 0 && atSong <= queue.count else {
+            return
+        }
+
+        // Insert song at specified index
+        queue.insert(song, at: atSong)
+
+        // If shuffle is active, prepend to the smart shuffle cache so this song
+        // is returned first by getNextSmartShuffleSongs / smartShuffleNextIndex.
+        // The cache is an ordered upcoming sequence; inserting at position 0 makes
+        // the fallback the immediate next pick without disturbing the rest of the
+        // planned shuffle order.
+        if shuffleEnabled {
+            cachedSmartShuffleSongs.insert(song, at: 0)
+            playbackLog.debug("Inserted \(song.title) to next song in smart shuffle song")
         }
     }
 
@@ -524,6 +564,12 @@ extension AudioEngine {
 
         currentIndex = nextIndex
         let nextSong = queue[currentIndex]
+        if shuffleEnabled, let outgoing = currentSong {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
         currentSong = nextSong
         scrobbleSubmitted = false
         trackStartTime = Date()
@@ -551,6 +597,7 @@ extension AudioEngine {
         scrobbleNowPlaying(songId: nextSong.id)
         refillRadioIfNeeded()
         playbackLog.info("Gapless auto-advance to: \(nextSong.title) (index \(nextIndex))")
+        startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
     }
 
     /// Jump to a specific index in the existing queue without replacing it.
@@ -572,6 +619,15 @@ extension AudioEngine {
         }
 
         let song = queue[index]
+
+        let isNewTrack = currentSong?.id != song.id
+        if shuffleEnabled, let outgoing = currentSong, isNewTrack {
+            shufflePlayHistory.append(outgoing)
+            if shufflePlayHistory.count > Self.maxShufflePlayHistory {
+                shufflePlayHistory.removeFirst()
+            }
+        }
+
         currentIndex = index
         currentSong = song
         currentRadioStation = nil

@@ -16,7 +16,7 @@ struct QueueView: View {
                 let history = engine.recentlyPlayed
                 if !history.isEmpty {
                     Section("Recently Played") {
-                        ForEach(Array(history.enumerated()), id: \.element.id) { _, song in
+                        ForEach(Array(history.enumerated()), id: \.offset) { _, song in
                             HStack(spacing: 12) {
                                 AlbumArtView(coverArtId: song.coverArt, size: 36)
 

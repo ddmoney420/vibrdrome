@@ -42,6 +42,31 @@ final class AudioEngine {
     var isBuffering = false
     var isSeeking = false
 
+    /// Current predownload status from PredownloadManager
+    var predownloadStatus: PredownloadStatus = .idle
+    var predownloadSpeed: Double = 0.0
+    var predownloadsPending: Int = 0
+
+    /// Track last N random songs played to avoid duplicates
+    var randomSongsPlayedIds: [String] = []
+    static let maxRandomSongsPlayed = 50 // Maximum songs to track for duplicate avoidance
+    static let predownloadedCategory = "pre-downloaded"
+    static let predownloadedCacheTimeMins = 30.0
+
+    /// Cache for smart shuffle next index
+    var cachedSmartShuffleNextIndex: Int?
+    var cachedSmartShuffleSongId: String?
+
+    /// Cache for next up to 5 smart shuffle songs
+    var cachedSmartShuffleSongs: [Song] = []
+    var cachedSmartShuffleSongsId: String?
+
+    /// Actual playback order under shuffle — most recent last, capped at 50.
+    /// Used by recentlyPlayed when shuffle is enabled so history reflects
+    /// what was genuinely heard rather than linear queue position.
+    var shufflePlayHistory: [Song] = []
+    static let maxShufflePlayHistory = 50
+
     // MARK: - Playback Mode
 
     /// The currently active playback topology
@@ -137,6 +162,9 @@ final class AudioEngine {
     var lookaheadSongId: String?
     var lookaheadIndex: Int?
 
+    /// Predownload manager for long-running download operations
+    internal let predownloadManager = PredownloadManager()
+
     /// Observer tokens — accessed by +Observers and +Crossfade extensions
     private var timeObserver: Any?
     private weak var timeObserverPlayer: AVPlayer?
@@ -151,6 +179,10 @@ final class AudioEngine {
     var trackStartTime: Date?
     var lastScrobbleTime: Date?
     var generation: Int = 0
+
+    // Near-end download check — tracks the song ID for which we've already
+    // inserted a fallback, so we don't insert multiple times per track.
+    var nearEndCheckSongId: String?
 
     /// Debounce token for rapid play() calls. Spam-tapping different tracks or
     /// play/pause would otherwise swap AVPlayer items faster than the audio
@@ -374,7 +406,10 @@ final class AudioEngine {
     func toggleShuffle() {
         shuffleEnabled.toggle()
         shufflePlayCount = 0
+        cachedSmartShuffleSongs.removeAll()   // flush stale cache so next songs reflect new shuffle state
+        cachedSmartShuffleSongId = nil
         if activeMode == .gapless { prepareLookahead() }
+        startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
     }
 
     func cycleRepeatMode() {
@@ -480,11 +515,22 @@ final class AudioEngine {
         }
 
         let nextSong = queue[nextIdx]
-        if lookaheadSongId == nextSong.id { return }
+
+        let url = resolveURL(for: nextSong)
+
+        // Check if this URL is already in use by current player items
+        if lookaheadItem != nil {
+           let oldLookaheadAsset = lookaheadItem!.asset as? AVURLAsset
+            if oldLookaheadAsset?.url == url {
+                audioLog.debug("prepareLookahead - SAME look ahead item url")
+                return
+            } else {
+                audioLog.debug("prepareLookahead - CHANGING look ahead item url")
+            }
+        }
 
         clearLookahead()
 
-        let url = resolveURL(for: nextSong)
         let item = Self.makePlayerItem(url: url)
         lookaheadItem = item
         lookaheadSongId = nextSong.id

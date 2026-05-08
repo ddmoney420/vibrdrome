@@ -58,8 +58,19 @@ extension AudioEngine {
                 )
             }
         }
+
         return AppState.shared.subsonicClient.streamURL(
             id: song.id, maxBitRate: currentMaxBitRate
         )
+    }
+
+    static func isSongDownloaded(_ song: Song) -> Bool {
+        let modelContext = PersistenceController.shared.container.mainContext
+        let songId = song.id
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+        )
+        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
+        return count > 0
     }
 }

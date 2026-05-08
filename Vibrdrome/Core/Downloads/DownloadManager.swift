@@ -7,6 +7,9 @@ private let downloadLog = Logger(subsystem: "com.vibrdrome.app", category: "Down
 
 final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     static let shared = DownloadManager()
+    // Move the observer storage here. NSHashTable.weakObjects()
+    // prevents retain cycles automatically.
+    internal var observers = NSHashTable<AnyObject>.weakObjects()
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(
@@ -24,6 +27,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }()
 
     private let lock = NSLock()
+    private var taskStartTimes: [Int: Date] = [:]
     private var activeDownloads: [String: URLSessionDownloadTask] = [:]
     private let networkMonitor = NWPathMonitor()
     private var _isOnCellular = false
@@ -117,7 +121,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     // MARK: - Public API
 
     @MainActor
-    func download(song: Song, client: SubsonicClient) {
+    func download(song: Song, client: SubsonicClient, category: String = "") {
         // Block downloads over cellular if setting is off
         if isOnCellular && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.downloadOverCellular) {
             return
@@ -142,7 +146,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if (try? modelContext.fetch(descriptor).first) != nil {
             return
         }
-        let download = DownloadedSong(from: song, localFilePath: localPath)
+        let download = DownloadedSong(from: song, localFilePath: localPath, category: category)
         modelContext.insert(download)
         try? modelContext.save()
     }
@@ -316,10 +320,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func cancelDownload(songId: String) {
-        lock.withLock {
-            activeDownloads[songId]?.cancel()
-            activeDownloads.removeValue(forKey: songId)
-        }
+        cleanupTaskInfo(songId)
         Task { @MainActor in
             DownloadProgress.shared.remove(songId: songId)
             // Clean up the incomplete SwiftData record
@@ -439,11 +440,13 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     ) {
         guard let songId = downloadTask.taskDescription else { return }
 
+        Task { @MainActor in
+            DownloadProgress.shared.update(songId: songId, progress: 1.0)
+        }
+
         // D3: Always clean up activeDownloads, even on failure
         defer {
-            lock.lock()
-            activeDownloads.removeValue(forKey: songId)
-            lock.unlock()
+            cleanupTaskInfo(songId)
         }
 
         // CRITICAL: Move file synchronously before delegate returns,
@@ -491,7 +494,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
             }
 
             try? modelContext.save()
-            DownloadProgress.shared.remove(songId: songId)
+            Task { @MainActor in await DownloadProgress.shared.removeAsync(songId: songId) }
 
             // Evict old cache if over limit
             CacheManager.shared.evictIfNeeded()
@@ -508,9 +511,45 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription,
               totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        Task { @MainActor in
-            DownloadProgress.shared.update(songId: songId, progress: progress)
+
+        let taskId = downloadTask.taskIdentifier
+
+        lock.lock()
+        // If this is the first chunk of data, record the start time
+        if taskStartTimes[taskId] == nil {
+            taskStartTimes[taskId] = Date()
         }
+        let startTime = taskStartTimes[taskId]
+        lock.unlock()
+
+        var kbs = 0.0
+        guard let start = startTime else {
+            Task { @MainActor in
+                DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
+            }
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(start)
+        if elapsed > 0 && totalBytesWritten > 500000 {
+            let bytesPerSecond = Double(totalBytesWritten) / elapsed
+            kbs = bytesPerSecond / 1024
+        }
+
+        Task { @MainActor in
+            DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
+        }
+
+    }
+
+    fileprivate func cleanupTaskInfo(_ songId: String) {
+        lock.lock()
+        let downloadTask = activeDownloads[songId]
+        let taskId = downloadTask?.taskIdentifier
+        downloadTask?.cancel()
+        activeDownloads.removeValue(forKey: songId)
+        if taskId != nil { taskStartTimes.removeValue(forKey: taskId!) }
+        lock.unlock()
     }
 
     func urlSession(
@@ -521,9 +560,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let error else { return }
         guard let songId = task.taskDescription else { return }
 
-        lock.lock()
-        activeDownloads.removeValue(forKey: songId)
-        lock.unlock()
+        cleanupTaskInfo(songId)
 
         let isCancelled = (error as NSError).code == NSURLErrorCancelled
         if !isCancelled {
@@ -548,6 +585,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+
         let handler = self.completionHandler
         self.completionHandler = nil
         DispatchQueue.main.async {
