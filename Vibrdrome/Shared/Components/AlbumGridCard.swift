@@ -10,7 +10,7 @@ struct AlbumGridCard: View {
     @State private var isHovered = false
     #endif
 
-    init(album: Album, cellWidth: CGFloat) {
+    init(album: Album, cellWidth: CGFloat = 180) {
         self.album = album
         self.cellWidth = cellWidth
         self._isStarred = State(initialValue: album.starred != nil)
