@@ -434,7 +434,7 @@ struct ArtistDetailView: View {
                                 NavigationLink {
                                     AlbumDetailView(albumId: album.id)
                                 } label: {
-                                    AlbumGridCard(album: album)
+                                    AlbumGridCard(album: album, cellWidth: 180)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("artistAlbumCard_\(album.id)")
