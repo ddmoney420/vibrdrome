@@ -764,7 +764,7 @@ struct AlbumDetailView: View {
                 \.musicBrainzId
             ]
             albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
-            guard var albumValue = (try? context.fetch(albumDescriptor).first)?.toAlbum() else {
+            guard let albumValue = (try? context.fetch(albumDescriptor).first)?.toAlbum() else {
                 return nil
             }
 
