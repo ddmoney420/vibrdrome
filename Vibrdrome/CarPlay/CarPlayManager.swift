@@ -108,7 +108,7 @@ final class CarPlayManager: NSObject {
             let empty = CPListTemplate(title: "Up Next", sections: [
                 CPListSection(items: [CPListItem(text: "Queue is empty", detailText: nil)])
             ])
-            interfaceController.pushTemplate(empty, animated: true) { _, _ in }
+            safelyPushTemplate(empty, animated: true)
             return
         }
 
@@ -127,7 +127,7 @@ final class CarPlayManager: NSObject {
         let template = CPListTemplate(
             title: "Up Next", sections: [CPListSection(items: items)]
         )
-        interfaceController.pushTemplate(template, animated: true) { _, _ in }
+        safelyPushTemplate(template, animated: true)
     }
 
     // MARK: - Task Tracking (C1)
@@ -159,7 +159,7 @@ final class CarPlayManager: NSObject {
                 guard !Task.isCancelled else { return }
                 guard let template = try await builder() else { return }
                 guard !Task.isCancelled else { return }
-                self.interfaceController.pushTemplate(template, animated: true) { _, _ in }
+                self.safelyPushTemplate(template, animated: true)
             } catch {
                 guard !Task.isCancelled else { return }
                 let errorTemplate = CPListTemplate(
@@ -168,8 +168,28 @@ final class CarPlayManager: NSObject {
                         CPListItem(text: "Could not load", detailText: nil)
                     ])]
                 )
-                self.interfaceController.pushTemplate(errorTemplate, animated: true) { _, _ in }
+                self.safelyPushTemplate(errorTemplate, animated: true)
             }
+        }
+    }
+
+    /// Push a template while respecting CarPlay's 5-template hierarchy cap.
+    /// CarPlay throws `clientExceededHierarchyDepthLimit` if the stack ever
+    /// reaches 6, and the framework can auto-push `CPNowPlayingTemplate` when
+    /// the user taps the system Now Playing icon at the top-right. To leave
+    /// room for that auto-push, our own pushes are capped at depth 4 (root
+    /// tab bar + 3 user pushes); if a fourth user push is requested, the
+    /// topmost template is popped first so the new template replaces it.
+    /// Fix for the May 2026 CarPlay crashes.
+    private func safelyPushTemplate(_ template: CPTemplate, animated: Bool) {
+        let maxOwnDepth = 4
+        let stack = interfaceController.templates
+        if stack.count >= maxOwnDepth {
+            interfaceController.popTemplate(animated: false) { [weak self] _, _ in
+                self?.interfaceController.pushTemplate(template, animated: animated) { _, _ in }
+            }
+        } else {
+            interfaceController.pushTemplate(template, animated: animated) { _, _ in }
         }
     }
 
@@ -223,9 +243,15 @@ final class CarPlayManager: NSObject {
             image: UIImage(systemName: "play.circle.fill")
         )
         nowPlayingItem.handler = { [weak self] _, completion in
-            self?.interfaceController.pushTemplate(
-                CPNowPlayingTemplate.shared, animated: true
-            ) { _, _ in }
+            // Pop to root first so Now Playing always lands at depth 2 (root
+            // + Now Playing) regardless of how deep the user has drilled.
+            // Avoids the hierarchy-depth crash and matches the "jump to Now
+            // Playing" intent of tapping this item.
+            self?.interfaceController.popToRootTemplate(animated: false) { _, _ in
+                self?.interfaceController.pushTemplate(
+                    CPNowPlayingTemplate.shared, animated: true
+                ) { _, _ in }
+            }
             completion()
         }
         items.append(nowPlayingItem)
