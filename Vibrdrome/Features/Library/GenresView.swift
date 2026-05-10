@@ -269,11 +269,25 @@ struct GenresView: View {
     }
 
     private func loadGenreArt(client: SubsonicClient) async {
-        let existing = Set(genreArtworks.map(\.genre))
-        for genre in genres where !existing.contains(genre.value) {
+        // Initial snapshot so we can skip the network fetch for genres whose
+        // artwork is already saved. Re-checked freshly inside the loop after
+        // each await to handle concurrent invocations (split view, multi
+        // window, rapid view re-mount) that may have inserted artwork for
+        // the same genre while we were awaiting the network. Without the
+        // re-check, a concurrent insert + save on the @MainActor context
+        // leaves the @Query snapshot stale and our save then triggers
+        // CoreData's `_thereIsNoSadnessLikeTheDeathOfOptimism` assertion.
+        let initialExisting = Set(genreArtworks.map(\.genre))
+        for genre in genres where !initialExisting.contains(genre.value) {
             guard let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
                   let coverArt = albums.first?.coverArt else { continue }
-            modelContext.insert(GenreArtwork(genre: genre.value, coverArtId: coverArt))
+            // Fresh existence check via FetchDescriptor reads the current
+            // context state (including any concurrent writes that landed
+            // during our await) rather than the stale @Query snapshot.
+            let g = genre.value
+            let descriptor = FetchDescriptor<GenreArtwork>(predicate: #Predicate { $0.genre == g })
+            if (try? modelContext.fetch(descriptor).first) != nil { continue }
+            modelContext.insert(GenreArtwork(genre: g, coverArtId: coverArt))
         }
         try? modelContext.save()
     }
