@@ -154,37 +154,28 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            GeometryReader { geometry in
-                NavigationStack(path: $detailPath) {
-                    detailView
-                        .navigationDestination(for: SidebarNavRoute.self) { route in
-                            switch route {
-                            case .album(let id):
-                                AlbumDetailView(albumId: id)
-                            case .artist(let id):
-                                ArtistDetailView(artistId: id)
-                            case .song(let id):
-                                SongDetailView(songId: id)
-                            case .genre(let name):
-                                AlbumsView(listType: .alphabeticalByName,
-                                           title: name.cleanedGenreDisplay, initialGenreFilter: name)
-                            case .label(let name):
-                                AlbumsView(listType: .alphabeticalByName,
-                                           title: name, initialLabelFilter: name)
-                            }
+            NavigationStack(path: $detailPath) {
+                detailView
+                    .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
+                    .navigationDestination(for: SidebarNavRoute.self) { route in
+                        switch route {
+                        case .album(let id):
+                            AlbumDetailView(albumId: id)
+                        case .artist(let id):
+                            ArtistDetailView(artistId: id)
+                        case .song(let id):
+                            SongDetailView(songId: id)
+                        case .genre(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name.cleanedGenreDisplay, initialGenreFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
+                        case .label(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name, initialLabelFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         }
-                }
-                .environment(\.contentWidth, geometry.size.width)
+                    }
             }
-            .inspector(isPresented: Binding(
-                get: { appState.activeSidePanel != nil },
-                set: { if !$0 { appState.activeSidePanel = nil } }
-            )) {
-                if let panel = appState.activeSidePanel {
-                    sidePanelView(for: panel)
-                }
-            }
-            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
             #else
             NavigationStack(path: $detailPath) {
                 detailView
@@ -436,3 +427,26 @@ struct SidebarContentView: View {
         return result
     }
 }
+
+#if os(macOS)
+/// Isolates `.inspector` + side-panel rendering so that `activeSidePanel` changes
+/// only invalidate this modifier, not the entire `SidebarContentView` body.
+private struct SidePanelInspector<Panel: View>: ViewModifier {
+    @Environment(AppState.self) private var appState
+    let sidePanelWidth: CGFloat
+    @ViewBuilder let panelView: (AppState.SidePanel) -> Panel
+
+    func body(content: Content) -> some View {
+        content
+            .inspector(isPresented: Binding(
+                get: { appState.activeSidePanel != nil },
+                set: { if !$0 { appState.activeSidePanel = nil } }
+            )) {
+                if let panel = appState.activeSidePanel {
+                    panelView(panel)
+                }
+            }
+            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
+    }
+}
+#endif

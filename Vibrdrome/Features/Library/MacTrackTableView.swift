@@ -11,18 +11,14 @@ struct MacTrackTableView: View {
     let songs: [Song]
     let settings: TrackTableColumnSettings
     var showDiscSeparators: Bool = false
+    /// Pre-computed from a @Query in the parent so this view's first render doesn't
+    /// hit SwiftData on the main actor mid-navigation-animation.
+    var downloadedSongIds: Set<String> = []
 
     @State private var sortColumn: TrackTableColumn?
     @State private var sortAscending: Bool = true
     @State private var showCustomizer: Bool = false
     @State private var selectedSongId: String?
-
-    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
-    private var completedDownloads: [DownloadedSong]
-
-    private var downloadedSongIds: Set<String> {
-        Set(completedDownloads.map(\.songId))
-    }
 
     // MARK: - Computed sort
 

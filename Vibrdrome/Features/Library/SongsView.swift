@@ -48,12 +48,13 @@ struct SongsView: View {
         }
     }
 
-    private var availableYears: [Int] {
-        Array(Set(songs.compactMap(\.year))).sorted(by: >)
-    }
+    @State private var availableYears: [Int] = []
+    @State private var availableArtists: [String] = []
 
-    private var availableArtists: [String] {
-        Array(Set(songs.compactMap(\.artist))).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    private func recomputeFilterOptions() {
+        availableYears = Array(Set(songs.compactMap(\.year))).sorted(by: >)
+        availableArtists = Array(Set(songs.compactMap(\.artist)))
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     private var hasActiveFilters: Bool {
@@ -562,6 +563,7 @@ struct SongsView: View {
             )
             songs = result.song ?? []
             hasMore = (result.song?.count ?? 0) >= pageSize
+            recomputeFilterOptions()
             refreshTitleSongCount()
             recomputeDisplayedSongs()
         } catch {}
@@ -591,6 +593,7 @@ struct SongsView: View {
         songs = accumulated
         hasMore = stillHasMore
         isLoading = false
+        recomputeFilterOptions()
         recomputeDisplayedSongs()
         refreshTitleSongCount()
         if songs.count < pendingPageTarget, hasMore {

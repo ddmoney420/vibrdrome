@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class CachedSong {
+    #Index<CachedSong>([\.title], [\.albumId], [\.artistId], [\.genre], [\.isStarred], [\.lastPlayed])
+
     @Attribute(.unique) var id: String
     var title: String
     var artist: String?

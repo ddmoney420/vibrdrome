@@ -17,6 +17,11 @@ struct AlbumDetailView: View {
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
     @State private var isStarred = false
+    // Single query for all completed downloads — passed into track rows to avoid per-row
+    // SwiftData fetchCount calls on the main actor during the push/pop animation.
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var completedDownloads: [DownloadedSong]
+    private var downloadedSongIds: Set<String> { Set(completedDownloads.map(\.songId)) }
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "album")
     #endif
@@ -40,7 +45,8 @@ struct AlbumDetailView: View {
                     MacTrackTableView(
                         songs: songs,
                         settings: columnSettings,
-                        showDiscSeparators: hasMultipleDiscs
+                        showDiscSeparators: hasMultipleDiscs,
+                        downloadedSongIds: downloadedSongIds
                     )
                     #else
                     LazyVStack(spacing: 0) {
@@ -155,7 +161,7 @@ struct AlbumDetailView: View {
             blurredArt(coverArtId: album.coverArt)
 
             HStack(alignment: .top, spacing: 24) {
-                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14)
+                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14, requestSize: CoverArtSize.detail)
                     .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -365,7 +371,15 @@ struct AlbumDetailView: View {
             ZStack {
                 Color.black
                 if let coverArtId {
-                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 600)) { state in
+                    LazyImage(
+                        request: {
+                            var req = ImageRequest(
+                                url: appState.subsonicClient.coverArtURL(id: coverArtId, size: CoverArtSize.gridThumb))
+                            req.userInfo[.imageIdKey] = appState.subsonicClient
+                                .coverArtCacheKey(id: coverArtId, size: CoverArtSize.gridThumb)
+                            return req
+                        }()
+                    ) { state in
                         if let image = state.image {
                             image
                                 .resizable()
@@ -392,7 +406,7 @@ struct AlbumDetailView: View {
             let opacity = minY < -100 ? max(0, 1 + (minY + 100) / 150) : 1.0
 
             ZStack {
-                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0)
+                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0, requestSize: CoverArtSize.detail)
                     .frame(width: geo.size.width, height: height)
                     .clipped()
                     .scaleEffect(scale)
@@ -606,7 +620,7 @@ struct AlbumDetailView: View {
                 .padding(.trailing, 4)
             }
 
-            TrackRow(song: song, showTrackNumber: true)
+            TrackRow(song: song, showTrackNumber: true, downloadedSongIds: downloadedSongIds)
                 .padding(.horizontal, isSelecting ? 8 : 16)
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
@@ -733,31 +747,57 @@ struct AlbumDetailView: View {
         .background(.ultraThinMaterial)
     }
 
-    private func loadAlbum() async {
-        // Show cached album header instantly if available
-        if album == nil {
-            let aid = albumId
-            let descriptor = FetchDescriptor<CachedAlbum>(
-                predicate: #Predicate { $0.id == aid }
+    // Runs off the main actor so the SwiftData fetch doesn't block the push/pop animation.
+    // Returns a fully populated Album (header + cached songs) or nil if not on disk yet.
+    private func seedAlbumFromDisk() async -> Album? {
+        let aid = albumId
+        let container = PersistenceController.shared.container
+        return await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+
+            var albumDescriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
+            albumDescriptor.propertiesToFetch = [
+                \.id, \.name, \.artistName, \.artistId, \.coverArtId,
+                \.year, \.isStarred, \.userRating, \.label,
+                \.replayGainAlbumGain, \.replayGainTrackGain, \.replayGainBaseGain,
+                \.musicBrainzId
+            ]
+            albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
+            guard let albumValue = (try? context.fetch(albumDescriptor).first)?.toAlbum() else {
+                return nil
+            }
+
+            var songDescriptor = FetchDescriptor<CachedSong>(
+                predicate: #Predicate { $0.albumId == aid },
+                sortBy: [SortDescriptor(\.discNumber), SortDescriptor(\.track)]
             )
-            if let cached = try? modelContext.fetch(descriptor).first {
-                var preview = cached.toAlbum()
-                // Attach cached songs if available
-                let songs = cached.songs
-                    .sorted { ($0.discNumber ?? 0, $0.track ?? 0) < ($1.discNumber ?? 0, $1.track ?? 0) }
-                    .map { $0.toSong() }
-                if !songs.isEmpty {
-                    preview = Album(
-                        id: preview.id, name: preview.name, artist: preview.artist,
-                        artistId: preview.artistId, coverArt: preview.coverArt,
-                        songCount: preview.songCount, duration: preview.duration,
-                        year: preview.year, genre: preview.genre, starred: preview.starred,
-                        created: preview.created, userRating: preview.userRating,
-                        song: songs, replayGain: nil, musicBrainzId: nil,
-                        recordLabels: nil, genres: nil
-                    )
-                }
-                album = preview
+            songDescriptor.propertiesToFetch = [
+                \.id, \.title, \.artist, \.albumArtist, \.albumName, \.albumId, \.artistId,
+                \.coverArtId, \.track, \.discNumber, \.year, \.genre, \.duration,
+                \.bitRate, \.suffix, \.contentType, \.size, \.isStarred, \.rating
+            ]
+            let songs = (try? context.fetch(songDescriptor))?.map { $0.toSong() } ?? []
+            return Album(
+                id: albumValue.id, name: albumValue.name,
+                artist: albumValue.artist, artistId: albumValue.artistId,
+                coverArt: albumValue.coverArt, songCount: albumValue.songCount,
+                duration: albumValue.duration, year: albumValue.year,
+                genre: albumValue.genre, genres: albumValue.genres,
+                starred: albumValue.starred, created: albumValue.created,
+                userRating: albumValue.userRating,
+                song: songs.isEmpty ? nil : songs,
+                replayGain: albumValue.replayGain, musicBrainzId: albumValue.musicBrainzId,
+                recordLabels: albumValue.recordLabels
+            )
+        }.value
+    }
+
+    private func loadAlbum() async {
+        if album == nil {
+            if let seeded = await seedAlbumFromDisk() {
+                album = seeded
+                isStarred = seeded.starred != nil
             }
         }
         isLoading = album == nil
