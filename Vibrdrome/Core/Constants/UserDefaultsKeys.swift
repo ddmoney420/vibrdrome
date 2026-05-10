@@ -160,6 +160,7 @@ enum UserDefaultsKeys {
 
     // MARK: - macOS Layout
 
+    static let macHomeLayout = "macHomeLayout"
     static let macNowPlayingPlacement = "macNowPlayingPlacement"
     static let macSidePanelMechanic = "macSidePanelMechanic"
     static let macSidePanelWidth = "macSidePanelWidth"

@@ -118,6 +118,92 @@ enum LibraryCarousel: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+// MARK: - macOS Home Section Identifiers
+
+enum MacHomeSection: String, CaseIterable, Codable, Identifiable {
+    case quickActions
+    case jumpBackIn
+    case recentlyAdded
+    case topArtists
+    case rediscover
+    case mostPlayed
+    case featuredGenre
+    case randomPicks
+    case favoriteAlbums
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .quickActions: "Quick Actions"
+        case .jumpBackIn: "Jump Back In"
+        case .recentlyAdded: "Recently Added"
+        case .topArtists: "Your Top Artists"
+        case .rediscover: "Rediscover"
+        case .mostPlayed: "Most Played"
+        case .featuredGenre: "Featured Genre"
+        case .randomPicks: "Random Picks"
+        case .favoriteAlbums: "Favorite Albums"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .quickActions: "bolt.fill"
+        case .jumpBackIn: "arrow.uturn.backward.circle.fill"
+        case .recentlyAdded: "sparkles"
+        case .topArtists: "music.mic"
+        case .rediscover: "heart.fill"
+        case .mostPlayed: "star.fill"
+        case .featuredGenre: "guitars.fill"
+        case .randomPicks: "dice.fill"
+        case .favoriteAlbums: "heart.circle.fill"
+        }
+    }
+}
+
+// MARK: - macOS Home Layout Configuration
+
+struct MacHomeLayoutConfig: Codable, Equatable {
+    var visibleSections: [MacHomeSection]
+
+    static let `default` = MacHomeLayoutConfig(
+        visibleSections: [
+            .quickActions,
+            .jumpBackIn,
+            .recentlyAdded,
+            .topArtists,
+            .rediscover,
+            .mostPlayed,
+            .featuredGenre,
+            .randomPicks,
+            .favoriteAlbums
+        ]
+    )
+
+    static func load() -> MacHomeLayoutConfig {
+        guard let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.macHomeLayout),
+              let config = try? JSONDecoder().decode(MacHomeLayoutConfig.self, from: data) else {
+            return .default
+        }
+        // Forward-compat: add any new sections not in stored config
+        var loaded = config
+        let missing = MacHomeSection.allCases.filter { !loaded.visibleSections.contains($0) }
+        loaded.visibleSections.append(contentsOf: missing)
+        return loaded
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(self) {
+            UserDefaults.standard.set(data, forKey: UserDefaultsKeys.macHomeLayout)
+        }
+    }
+
+    var hiddenSections: [MacHomeSection] {
+        MacHomeSection.allCases.filter { !visibleSections.contains($0) }
+    }
+}
+
 // MARK: - Layout Configuration
 
 struct LibraryLayoutConfig: Codable, Equatable {

@@ -723,11 +723,16 @@ final class LibrarySyncManager {
     /// Whether a prefetch pass already ran this session (avoids duplicate work).
     var didPrefetchThisSession = false
 
+    /// True while the image cache warm-up pass is running.
+    var isWarmingImages = false
+
     /// Warm the in-memory image cache on startup by loading all known cover art.
     /// Images already in memory are skipped; images in disk cache load instantly.
     /// Skipped if a prefetch already ran during sync this session.
     func warmImageCache(client: SubsonicClient, container: ModelContainer) async {
         guard !didPrefetchThisSession else { return }
+        isWarmingImages = true
+        defer { isWarmingImages = false }
         let context = ModelContext(container)
         await prefetchCoverArt(client: client, context: context)
     }

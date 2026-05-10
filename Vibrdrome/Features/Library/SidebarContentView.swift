@@ -8,7 +8,7 @@ struct SidebarContentView: View {
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     #endif
-    @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.artists.rawValue
+    @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.home.rawValue
     #if os(macOS)
     @AppStorage(UserDefaultsKeys.macSidePanelWidth) private var sidePanelWidthChoice: String = "medium"
     #endif
@@ -49,6 +49,7 @@ struct SidebarContentView: View {
     private var engine: AudioEngine { AudioEngine.shared }
 
     enum SidebarItem: String, CaseIterable, Hashable {
+        case home
         case artists, albums, songs, genres, favorites, recentlyAdded, mostPlayed, recentlyPlayed
         case bookmarks, folders
         case search
@@ -70,6 +71,12 @@ struct SidebarContentView: View {
     private var splitView: some View {
         NavigationSplitView {
             List(selection: selection) {
+                #if os(macOS)
+                Section {
+                    Label("Home", systemImage: "music.note.house.fill")
+                        .tag(SidebarItem.home.rawValue)
+                }
+                #endif
                 Section("Library") {
                     Label("Artists", systemImage: "music.mic")
                         .tag(SidebarItem.artists.rawValue)
@@ -240,6 +247,13 @@ struct SidebarContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .navigateToSearch)) { _ in
             selectionRaw = SidebarItem.search.rawValue
         }
+        #if os(macOS)
+        .onChange(of: appState.pendingSidebarSelection) { _, item in
+            guard let item else { return }
+            appState.pendingSidebarSelection = nil
+            selectionRaw = item.rawValue
+        }
+        #endif
     }
 
     var body: some View {
@@ -282,6 +296,12 @@ struct SidebarContentView: View {
     @ViewBuilder
     private var staticDetailView: some View {
         switch selectedSidebarItem {
+        case .home:
+            #if os(macOS)
+            MacHomeView()
+            #else
+            EmptyView()
+            #endif
         case .artists:
             ArtistsView()
         case .albums:

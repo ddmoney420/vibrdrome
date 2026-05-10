@@ -278,6 +278,21 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
     }
 }
 
+extension Song {
+    var asAlbum: Album {
+        Album(
+            id: albumId ?? id,
+            name: album ?? title,
+            artist: artist,
+            artistId: artistId,
+            coverArt: coverArt,
+            songCount: nil, duration: nil, year: year, genre: genre, genres: nil,
+            starred: starred, created: nil, userRating: userRating, song: nil,
+            replayGain: nil, musicBrainzId: nil, recordLabels: nil
+        )
+    }
+}
+
 struct ReplayGain: Decodable, Sendable, Equatable {
     let trackGain: Double?
     let albumGain: Double?
