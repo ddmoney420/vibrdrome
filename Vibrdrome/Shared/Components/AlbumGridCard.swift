@@ -25,15 +25,16 @@ struct AlbumGridCard: View {
                 .fontWeight(.medium)
                 .foregroundColor(.primary)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: cellWidth, alignment: .leading)
             if let artist = album.artist {
                 Text(artist)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: cellWidth, alignment: .leading)
             }
         }
+        .frame(width: cellWidth)
     }
 
     private var artworkWithOverlay: some View {

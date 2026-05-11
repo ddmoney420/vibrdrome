@@ -21,6 +21,10 @@ final class LibraryDataCache {
     /// to detect changes *within* a session; cross-launch staleness is handled by `LibrarySyncManager`.
     private(set) var generation: Int = 0
 
+    /// True once the first cache build completes. Used by the loading screen to gate
+    /// the main UI — becomes true after `generation` moves from 0 → 1.
+    private(set) var isReady: Bool = false
+
     private var buildTask: Task<Void, Never>?
 
     /// Kick off a background rebuild of all cached model arrays.
@@ -38,6 +42,7 @@ final class LibraryDataCache {
             songFilterArtists = result.artistNames
             songFilterGenres = result.genres
             generation += 1
+            isReady = true
             cacheLog.info("Library cache ready — \(result.songs.count) songs, \(result.artists.count) artists, \(result.albums.count) albums")
         }
     }
@@ -51,6 +56,7 @@ final class LibraryDataCache {
         songFilterYears = nil
         songFilterArtists = nil
         songFilterGenres = nil
+        isReady = false
     }
 
     // MARK: - Background Work

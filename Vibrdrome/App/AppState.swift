@@ -45,6 +45,10 @@ final class AppState {
     }
     var pendingNavigation: PendingNavigation?
 
+    #if os(macOS)
+    var pendingSidebarSelection: SidebarContentView.SidebarItem?
+    #endif
+
     /// Single-shot trigger consumed by NowPlayingView when it appears or this changes.
     /// Used by sidebar actions (e.g., Random Mix) to surface the queue panel.
     enum NowPlayingAction: Equatable {
@@ -78,6 +82,11 @@ final class AppState {
 
     /// Pre-computed model arrays so library tabs are instant on first tap.
     let libraryCache = LibraryDataCache()
+
+    #if os(macOS)
+    /// Home page data. Prefetched during the loading screen in parallel with sync.
+    let homeViewModel = MacHomeViewModel()
+    #endif
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?

@@ -155,14 +155,25 @@ struct VibrdromeApp: App {
                                 client: appState.subsonicClient,
                                 container: persistenceController.container
                             )
+                            await appState.homeViewModel.reload(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container,
+                                libraryCache: appState.libraryCache
+                            )
                         }
                     }
                     Task {
                         appState.libraryCache.rebuild(container: persistenceController.container)
-                        await appState.librarySyncManager.syncIfStale(
+                        async let homeDataTask: Void = appState.homeViewModel.prefetch(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container,
+                            libraryCache: appState.libraryCache
+                        )
+                        async let syncTask: Void = appState.librarySyncManager.syncIfStale(
                             client: appState.subsonicClient,
                             container: persistenceController.container
                         )
+                        _ = await (homeDataTask, syncTask)
                         appState.libraryCache.rebuild(container: persistenceController.container)
                         appState.librarySyncManager.startPolling(
                             client: appState.subsonicClient,
@@ -177,7 +188,7 @@ struct VibrdromeApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
-            #else
+            #else // iOS
             ContentView()
                 .environment(appState)
                 .modelContainer(persistenceController.container)
