@@ -35,6 +35,8 @@ struct AlbumGridCard: View {
             }
         }
         .frame(width: cellWidth)
+        .onChange(of: album.starred) { isStarred = album.starred != nil }
+        .onChange(of: album.userRating) { currentRating = album.userRating ?? 0 }
     }
 
     private var artworkWithOverlay: some View {
