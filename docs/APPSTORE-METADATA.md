@@ -64,6 +64,15 @@ Vibrdrome is free, open source, and contains no ads or tracking.
 
 navidrome,subsonic,music,player,streaming,self-hosted,gapless,offline,equalizer,carplay,watch,lyrics,radio,metadata
 
+## What's New (v1.0.0 Beta Build 52)
+
+- macOS artist detail page redesigned: hero header, expandable biography, customizable external-link row (Last.fm, MusicBrainz, Wikipedia, Google).
+- macOS Home page with discovery sections (Quick Actions, Jump Back In, Recently Added, Most Played, Featured Genre, more), individually toggleable.
+- Song pre-download: the next track in the queue is fetched in advance for gapless transitions on slow connections. Smart shuffle gets a cached-lookahead redesign.
+- CarPlay: Albums alphabet directory now works for any library size and any server sort order; Now Playing button appears immediately on cold launch with a restored queue; deep-navigation crash fixed.
+- Library filter UI + adaptive grids on macOS (multi-select genre / label / artist, TriState favorites and downloaded toggles), WebP cover art, multi-genre support.
+- SwiftData `#Index` plus new AlbumGenre join table give fast filter and genre queries (requires iOS 18 / macOS 15 minimum).
+
 ## What's New (v1.0.0 Beta Build 51)
 
 - Visualizer: Spectrum, Waveform, and Aurora now react to the real frequency content of your audio. Bass shows on the left, treble on the right. Spectrum gains classic peak-hold caps.

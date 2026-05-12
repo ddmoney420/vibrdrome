@@ -4,6 +4,58 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 52 -- May 11, 2026
+
+**macOS:**
+- New artist detail page redesign (#56): hero header with blurred artist art and circular portrait, expandable biography, genre pill row, stats row (album count / top track count / year range), customizable external-links row with Last.fm / MusicBrainz / Wikipedia / Google by default. Settings → Artist External Links lets you toggle defaults or add custom URL templates.
+- New macOS Home page (#54) with discovery sections: Greeting + today/week play counts, Quick Actions (Random Mix / Random Album / Shuffle Favorites), Jump Back In, Recently Added, Most Played, Random Picks, Featured Genre. Sections are individually toggleable and reorderable via the customize sheet.
+- New loading screen (#54) shows sync/cache progress on startup, transitions to home once `libraryCache.isReady` flips true.
+- macOS album detail (#49): rich metadata layout with clickable genre / record-label pills that drill into the corresponding filter, MusicBrainz ID copy-selectable, date helpers cached for instant render. Album detail navigates without per-row SwiftData faults.
+- macOS song table (#31): 11-column reorderable table (track / title / artist / album / duration / year / genre / bitRate / format / bpm / dateAdded), toggleable, persisted across launches.
+- Hover overlay on album grid cards (#39): favorite and rating buttons appear on hover.
+
+**Audio + Library:**
+- Song pre-download (#44): the next track in the queue is fetched in advance during playback so transitions stay gapless on slow connections. Includes stall detection, speed tracking, and per-song cancellation when the queue changes.
+- Smart shuffle redesign (#44): cached lookahead with hot-cache of upcoming tracks; `skipToIndex` now appends the outgoing song to shuffle history so Recently Played stays consistent.
+- Queue management cleanup (#44): absolute-index `removeFromQueue` API, clearer separation between Up Next reorder and full-queue reorder.
+- Library filter UI + adaptive grids on macOS (#21): runtime filter panel with TriState favorites/downloaded controls and multi-select genre/label/artist, grids that adapt to window width.
+- Multi-genre support + library filter caching pipeline fix (#47).
+- WebP cover art, off-MainActor album filter, Nuke image prefetch (#36).
+
+**SwiftData / performance:**
+- iOS 17 → 18, macOS 14 → 15 minimum deployment (#37 / #53), unlocking the `#Index` macro.
+- `#Index` on `CachedSong` / `CachedAlbum` / `CachedArtist` (#53): sort/filter fetches drop from O(n) table scan to O(log n).
+- New `AlbumGenre` join table replaces the unindexable `CachedAlbum.genres: [String]` (#53).
+- Album view performance work (#53): `AlbumsViewModel` extraction, tiered prefetch, instant grid population, off-main disk seed for album detail, replayGain / musicBrainzId cached on album to eliminate per-row faults during navigation.
+
+**CarPlay:**
+- Albums alphabet directory now reads the full library from local cache rather than only the first 500 albums returned by the server (#32). Libraries with non-standard server sort order no longer collapse to one or two visible letters.
+- Cold-launch Now Playing fix (#45). After force-quit, opening CarPlay (or glancing at the iOS lock screen) now shows the saved track immediately because the player item is preloaded paused on the audio session at restore time.
+- Template-stack hierarchy crash fixed. Own pushes are now capped at depth 4 so the framework's auto-push of `CPNowPlayingTemplate` (when the user taps the system Now Playing icon at the top-right) never exceeds CarPlay's 5-template limit.
+
+**Bug fixes:**
+- Audio interruption resume now seeks back to the saved position before resuming the rate (#63), so notifications announced over CarPlay no longer cause the track to restart from 00:00 on iOS 26.x. The Build 51 fix covered "near the top of the track" only; this extends it to all mid-track interruptions where AVPlayer's internal position gets reset.
+- `GenresView.loadGenreArt` re-checks `GenreArtwork` existence after each async network await, avoiding CoreData's `_thereIsNoSadnessLikeTheDeathOfOptimism` assertion when concurrent loads insert the same genre.
+- `AlbumGridCard` star/rating sync restored (regression from #53): grid card now re-syncs local state when the incoming Album value's `starred` / `userRating` changes.
+- `FolderDetailView`: navigation loop on iPad folder browse fixed.
+- Remove Offline now deletes orphan songs; added Refresh Download (#5).
+- Cover art prefetch routed through `warmImageCache` to respect cache guards (#48).
+- Queue view: Recently Played order corrected; dedicated Up Next section.
+- PlaylistsView: mosaic scales with grid column count.
+
+Tests: 660 unit tests in 45 suites (up from 536), much of the new coverage on predownload + queue management. 12 UI rotation tests.
+
+**TestFlight Notes:**
+> Major macOS refresh: redesigned artist detail page with customizable
+> external links, new Home page with discovery sections and loading
+> screen, album detail metadata, song table columns, hover overlays.
+> Song pre-download for gapless transitions on slow connections, smart
+> shuffle improvements. SwiftData index + AlbumGenre join table for
+> fast filter and genre queries (requires iOS 18 / macOS 15 minimum).
+> CarPlay alphabet works for any library size; Now Playing button shows
+> immediately after a cold launch; tapping it deep in navigation no
+> longer crashes.
+
 ### Build 51 -- April 24, 2026
 - Visualizer: real 32-band FFT now drives Spectrum, Waveform, and Aurora presets. Bass shows on the left, treble on the right; Spectrum gains classic peak-hold caps that snap up to each bar's recent max and decay slowly. The remaining 15 presets receive the full spectrum data but continue to animate from the scalar bass/mid/treble values for now. FFT window bumped 1024 -> 2048 so every log-spaced band gets its own bin at the low end (previously bars 0-5 and 7 were always zero).
 - Visualizer diagnostic logging (#34): one `Spectrum diag` line per second during playback with pcmCalls / fftComputes / lastEnergy / sampleRate so the FFT pipeline is observable from Console.

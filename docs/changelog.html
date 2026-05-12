@@ -347,6 +347,33 @@
 
         <div class="timeline">
 
+            <!-- Build 52 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 52</span>
+                        <span class="build-date">May 11, 2026</span>
+                    </div>
+                    <ul>
+                        <li>macOS artist detail redesign: hero header, expandable biography, genre pills, customizable external links (Last.fm / MusicBrainz / Wikipedia / Google by default)</li>
+                        <li>New macOS Home page with discovery sections (Quick Actions, Jump Back In, Recently Added, Most Played, Featured Genre, more) and configurable section order</li>
+                        <li>New macOS loading screen on startup, transitions to home once sync is ready</li>
+                        <li>macOS album detail metadata view: clickable genre and label pills, copy-selectable MusicBrainz ID, faster navigation</li>
+                        <li>macOS song table: 11 reorderable columns, persisted across launches</li>
+                        <li>Hover overlay on macOS album grid cards: favorite and rating buttons</li>
+                        <li>Song pre-download: the next track fetches in advance for gapless transitions on slow connections; smart shuffle gets a cached-lookahead redesign</li>
+                        <li>Library filter UI + adaptive grids on macOS (multi-select genre / label / artist, TriState favorites and downloaded toggles)</li>
+                        <li>Multi-genre support across album list, search, and filter sidebar</li>
+                        <li>WebP cover art support, off-MainActor filter, Nuke image prefetch</li>
+                        <li>SwiftData #Index across CachedSong / CachedAlbum / CachedArtist plus a new AlbumGenre join table; substantial album view performance work (iOS 18 / macOS 15 minimum)</li>
+                        <li>CarPlay: Albums alphabet directory now reads the full library from local cache regardless of server sort order (no more "only # and T" letter buckets)</li>
+                        <li>CarPlay / lock screen: Now Playing button appears immediately on cold launch with a restored queue; template-stack overflow crash from tapping the system Now Playing icon while deep in navigation is fixed</li>
+                        <li>Audio interruption: notifications announced over CarPlay no longer restart the track at 00:00 on iOS 26.x; the resume now seeks back to the saved position before resuming playback rate</li>
+                        <li>Bug fixes: GenresView optimism crash defense, AlbumGridCard star/rating sync restored, FolderDetailView iPad navigation loop, Remove Offline orphan cleanup, cover art prefetch cache-guard, Queue view ordering, PlaylistsView mosaic scaling</li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- Build 51 -->
             <div class="timeline-item" data-animate>
                 <div class="build-card">
