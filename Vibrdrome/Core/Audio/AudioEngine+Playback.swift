@@ -303,7 +303,21 @@ extension AudioEngine {
                 // Reapply EQ tap after interruption to reset stale delay buffers
                 applyEQTapIfNeeded(to: item)
             }
-            gaplessPlayer?.rate = playbackRate
+            // iOS can reset AVPlayer's internal currentTime during long audio
+            // session interruptions (e.g. Siri reading a notification on
+            // CarPlay), leaving our model `currentTime` out of sync with the
+            // player. Force a seek to the saved position before resuming so
+            // the rate change picks up where the user paused, not from 0.
+            // Cheap no-op on platforms that preserve position. Issue #63.
+            let savedTime = currentTime
+            let targetRate = playbackRate
+            if savedTime > 0 {
+                seekInternal(to: savedTime) { [weak self] in
+                    self?.gaplessPlayer?.rate = targetRate
+                }
+            } else {
+                gaplessPlayer?.rate = targetRate
+            }
         }
     }
 
