@@ -714,11 +714,16 @@ struct SongsView: View {
 
             let recentSongIds = recentlyPlayedSongIds(for: filter)
             let ruleSet = filter.ruleSet
+
+            // Batch-load CachedSong extras once before the filter loop to avoid N+1 queries.
+            let cachedExtrasMap: [String: FilterRuleSet.CachedSongExtras] = ruleSet.needsCachedSong
+                ? buildCachedExtrasMap()
+                : [:]
+
             let filtered = allSongs.filter { song in
                 guard songMatchesFilter(song, filter: filter, recentIds: recentSongIds) else { return false }
                 if !ruleSet.isEmpty {
-                    let extras = ruleSet.needsCachedSong ? fetchCachedSongExtras(songId: song.id) : nil
-                    let meta = FilterRuleSet.SongMeta(song: song, extras: extras)
+                    let meta = FilterRuleSet.SongMeta(song: song, extras: cachedExtrasMap[song.id])
                     if !ruleSet.matches(song: meta) { return false }
                 }
                 return true
@@ -733,19 +738,22 @@ struct SongsView: View {
         }
     }
 
-    private func fetchCachedSongExtras(songId: String) -> FilterRuleSet.CachedSongExtras? {
-        let descriptor = FetchDescriptor<CachedSong>(predicate: #Predicate { $0.id == songId })
-        guard let cached = (try? modelContext.fetch(descriptor))?.first else { return nil }
-        return FilterRuleSet.CachedSongExtras(
-            playCount: cached.playCount,
-            albumRating: 0,
-            albumFavorited: false,
-            hasCoverArt: cached.hasCoverArt,
-            isCompilation: cached.isCompilation,
-            channels: cached.channels,
-            mbzRecordingId: cached.mbzRecordingId,
-            dateAdded: cached.dateAdded
-        )
+    private func buildCachedExtrasMap() -> [String: FilterRuleSet.CachedSongExtras] {
+        guard let rows = try? modelContext.fetch(FetchDescriptor<CachedSong>()) else { return [:] }
+        var map = [String: FilterRuleSet.CachedSongExtras](minimumCapacity: rows.count)
+        for cached in rows {
+            map[cached.id] = FilterRuleSet.CachedSongExtras(
+                playCount: cached.playCount,
+                albumRating: cached.album?.userRating ?? 0,
+                albumFavorited: cached.album?.isStarred ?? false,
+                hasCoverArt: cached.hasCoverArt,
+                isCompilation: cached.isCompilation,
+                channels: cached.channels,
+                mbzRecordingId: cached.mbzRecordingId,
+                dateAdded: cached.dateAdded
+            )
+        }
+        return map
     }
 
     private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {

@@ -145,7 +145,7 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    enum FieldKind { case text, numeric, days, boolean, playlist }
+    enum FieldKind: Sendable { case text, numeric, days, boolean, playlist }
 }
 
 // MARK: - Operator
@@ -585,7 +585,8 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
         init(album: Album) {
             title = album.name
             artist = album.artist
-            genre = album.allGenres.first
+            // Join all genres so text operators (contains / equals) match any genre, not just the first.
+            genre = album.allGenres.isEmpty ? nil : album.allGenres.joined(separator: ", ")
             label = album.label
             year = album.year
             duration = album.duration

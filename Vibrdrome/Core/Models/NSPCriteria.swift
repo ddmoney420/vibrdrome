@@ -454,13 +454,21 @@ private extension FilterRule {
     }
 
     private static func decodeDays(op: String, value: NSPValue) -> (op: FilterOperator, value: FilterValue)? {
-        let filterOp: FilterOperator
         switch op {
-        case "gt": filterOp = .isGreaterThan
-        case "lt": filterOp = .isLessThan
-        default:   return nil
+        case "inTheLast":
+            guard case .int(let n) = value else { return nil }
+            return (.inTheLast, .number(n))
+        case "notInTheLast":
+            guard case .int(let n) = value else { return nil }
+            return (.notInTheLast, .number(n))
+        case "before":
+            guard case .string(let date) = value else { return nil }
+            return (.before, .text(date))
+        case "after":
+            guard case .string(let date) = value else { return nil }
+            return (.after, .text(date))
+        default:
+            return nil
         }
-        guard case .int(let n) = value else { return nil }
-        return (filterOp, .number(n))
     }
 }

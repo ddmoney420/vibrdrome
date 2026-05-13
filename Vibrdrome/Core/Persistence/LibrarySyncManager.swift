@@ -4,6 +4,7 @@ import SwiftData
 import os.log
 
 private let syncLog = Logger(subsystem: "com.vibrdrome.app", category: "LibrarySync")
+private let syncISO8601 = ISO8601DateFormatter()
 
 /// Sync mode determines the depth of library synchronization.
 enum SyncMode: String, Sendable {
@@ -600,7 +601,7 @@ final class LibrarySyncManager {
         cached.contentType = song.contentType
         cached.size = song.size
         cached.bpm = song.bpm
-        cached.dateAdded = song.created.flatMap { ISO8601DateFormatter().date(from: $0) }
+        cached.dateAdded = song.created.flatMap { syncISO8601.date(from: $0) }
         cached.mbzRecordingId = song.musicBrainzId
         cached.isStarred = song.starred != nil
         cached.rating = song.userRating ?? 0

@@ -212,13 +212,16 @@ final class NavidromeNativeClient {
 
     /// Probe the server to confirm it is Navidrome, and authenticate.
     /// Safe to call repeatedly — returns quickly if already available.
-    func probe() async {
-        guard !isAvailable else { return }
+    /// Returns `true` when authentication succeeded, `false` otherwise.
+    func probe() async -> Bool {
+        guard !isAvailable else { return true }
         do {
             try await login()
+            return true
         } catch {
             isAvailable = false
             ndLog.info("Navidrome native API not available: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -254,6 +257,7 @@ final class NavidromeNativeClient {
     }
 
     /// Fetch all playlists (both smart and regular).
+    /// Hard-capped at 500; users with more playlists will see incomplete smart-playlist detection.
     func getPlaylists() async throws -> [NDSmartPlaylist] {
         let data = try await nativeRequest(method: "GET", path: "api/playlist?_end=500&_start=0", body: nil)
         do {

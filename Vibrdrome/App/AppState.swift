@@ -159,10 +159,13 @@ final class AppState {
         LibrarySyncManager.shared.client = subsonicClient
         LibrarySyncManager.shared.container = PersistenceController.shared.container
 
-        // Probe Navidrome native API in background — sets navidromeClient if available.
+        // Probe Navidrome native API in background — clears navidromeClient when not Navidrome.
         let ndClient = NavidromeNativeClient(baseURL: serverURL, username: username, password: password)
         navidromeClient = ndClient
-        Task { await ndClient.probe() }
+        Task {
+            let available = await ndClient.probe()
+            if !available { navidromeClient = nil }
+        }
     }
 
     func loadSavedCredentials() {

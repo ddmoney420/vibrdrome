@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 
+private let iso8601 = ISO8601DateFormatter()
+
 @Model
 final class CachedSong {
     #Index<CachedSong>([\.title], [\.albumId], [\.artistId], [\.genre], [\.isStarred], [\.lastPlayed])
@@ -64,7 +66,7 @@ final class CachedSong {
         self.contentType = song.contentType
         self.size = song.size
         self.bpm = song.bpm
-        self.dateAdded = song.created.flatMap { ISO8601DateFormatter().date(from: $0) }
+        self.dateAdded = song.created.flatMap { iso8601.date(from: $0) }
         self.mbzRecordingId = song.musicBrainzId
         self.isStarred = song.starred != nil
     }
@@ -90,7 +92,7 @@ final class CachedSong {
         self.mbzAlbumArtistId = ndSong.mbzAlbumArtistId
         self.playCount = ndSong.playCount ?? 0
         if let playDate = ndSong.playDate {
-            self.lastPlayed = ISO8601DateFormatter().date(from: playDate)
+            self.lastPlayed = iso8601.date(from: playDate)
         }
     }
 
@@ -116,7 +118,7 @@ final class CachedSong {
         bpm = ndSong.bpm
         hasCoverArt = ndSong.hasCoverArt ?? false
         isCompilation = ndSong.compilation ?? false
-        dateAdded = ndSong.createdAt.flatMap { ISO8601DateFormatter().date(from: $0) }
+        dateAdded = ndSong.createdAt.flatMap { iso8601.date(from: $0) }
         mbzRecordingId = ndSong.mbzReleaseTrackId
         mbzArtistId = ndSong.mbzArtistId
         mbzAlbumArtistId = ndSong.mbzAlbumArtistId
@@ -124,7 +126,7 @@ final class CachedSong {
         rating = ndSong.rating ?? 0
         playCount = ndSong.playCount ?? 0
         if let playDate = ndSong.playDate {
-            lastPlayed = ISO8601DateFormatter().date(from: playDate)
+            lastPlayed = iso8601.date(from: playDate)
         }
         cachedAt = Date()
     }
