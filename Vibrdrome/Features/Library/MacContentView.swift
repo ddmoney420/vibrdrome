@@ -46,6 +46,11 @@ struct MacContentView: View {
             case .active:
                 engine.restorePlayQueue(client: appState.subsonicClient)
                 engine.refreshPlaybackState()
+                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.exportAutoSyncOnForeground) {
+                    Task {
+                        await PlaylistExportManager.shared.syncAllActive(client: appState.subsonicClient)
+                    }
+                }
             default:
                 break
             }

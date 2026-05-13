@@ -316,6 +316,15 @@ struct SettingsView: View {
                     Label("Delete All Downloads", systemImage: "trash")
                 }
             }
+
+            #if os(macOS)
+            NavigationLink {
+                PlaylistExportSettingsView()
+            } label: {
+                Label("Playlist Export", systemImage: "square.and.arrow.up.circle")
+                    .foregroundColor(.primary)
+            }
+            #endif
         } header: {
             settingSectionHeader("Downloads", icon: "arrow.down.circle.fill", color: .cyan)
         }

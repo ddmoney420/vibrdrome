@@ -28,6 +28,11 @@ struct PlaylistDetailView: View {
     @Query private var downloadedSongs: [DownloadedSong]
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "playlist")
+    @State private var showExportConfig = false
+    @Query private var allExports: [ExportedPlaylist]
+    private var existingExport: ExportedPlaylist? {
+        allExports.first { $0.playlistId == playlistId }
+    }
     #endif
 
     private var viewMode: PlaylistViewMode { PlaylistViewMode(rawValue: viewModeRaw) ?? .songs }
@@ -191,12 +196,43 @@ struct PlaylistDetailView: View {
                                 }
                             }
                         }
+
+                        #if os(macOS)
+                        Divider()
+                        if let existing = existingExport {
+                            Button {
+                                showExportConfig = true
+                            } label: {
+                                Label("Export Settings…", systemImage: "square.and.arrow.up")
+                            }
+                            Button(role: .destructive) {
+                                PlaylistExportManager.shared.removeExport(existing)
+                            } label: {
+                                Label("Remove Export", systemImage: "square.and.arrow.up.slash")
+                            }
+                        } else {
+                            Button {
+                                showExportConfig = true
+                            } label: {
+                                Label("Export Playlist…", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                        #endif
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                 }
             }
         }
+        #if os(macOS)
+        .sheet(isPresented: $showExportConfig) {
+            PlaylistExportConfigView(
+                playlistId: playlistId,
+                playlistName: playlist?.name ?? playlistId,
+                existingExport: existingExport
+            )
+        }
+        #endif
         .sheet(isPresented: $showBatchAddToPlaylist) {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
