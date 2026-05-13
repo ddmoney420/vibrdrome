@@ -248,16 +248,10 @@ private extension FilterRule {
         switch value {
         case .number(let n):
             switch `operator` {
-            case .isEqualTo:       return ("is", field, .int(n))
-            case .isNotEqualTo:    return ("isNot", field, .int(n))
-            case .isGreaterThan:   return ("gt", field, .int(n))
-            case .isLessThan:      return ("lt", field, .int(n))
-            case .isGreaterOrEqual:
-                // NSP has no ≥; emulate with gt(n-1) for integer fields.
-                return ("gt", field, .int(n - 1))
-            case .isLessOrEqual:
-                // NSP has no ≤; emulate with lt(n+1) for integer fields.
-                return ("lt", field, .int(n + 1))
+            case .isEqualTo:     return ("is", field, .int(n))
+            case .isNotEqualTo:  return ("isNot", field, .int(n))
+            case .isGreaterThan: return ("gt", field, .int(n))
+            case .isLessThan:    return ("lt", field, .int(n))
             default: return nil
             }
         case .range(let lo, let hi):
@@ -425,13 +419,13 @@ private extension FilterRule {
 
     private static func decodeText(op: String, value: NSPValue) -> (op: FilterOperator, value: FilterValue)? {
         let filterOp: FilterOperator
-        switch op {
+        switch op.lowercased() {
         case "contains":    filterOp = .contains
-        case "notContains": filterOp = .notContains
+        case "notcontains": filterOp = .notContains
         case "is":          filterOp = .equals
-        case "isNot":       filterOp = .notEquals
-        case "startsWith":  filterOp = .startsWith
-        case "endsWith":    filterOp = .endsWith
+        case "isnot":       filterOp = .notEquals
+        case "startswith":  filterOp = .startsWith
+        case "endswith":    filterOp = .endsWith
         default:            return nil
         }
         guard case .string(let s) = value else { return nil }
@@ -439,15 +433,15 @@ private extension FilterRule {
     }
 
     private static func decodeNumeric(op: String, value: NSPValue) -> (op: FilterOperator, value: FilterValue)? {
-        if op == "inTheRange" {
+        if op.lowercased() == "intherange" {
             guard case .range(let lo, let hi) = value,
                   case .int(let loInt) = lo, case .int(let hiInt) = hi else { return nil }
             return (.isBetween, .range(loInt, hiInt))
         }
         let filterOp: FilterOperator
-        switch op {
+        switch op.lowercased() {
         case "is":    filterOp = .isEqualTo
-        case "isNot": filterOp = .isNotEqualTo
+        case "isnot": filterOp = .isNotEqualTo
         case "gt":    filterOp = .isGreaterThan
         case "lt":    filterOp = .isLessThan
         default:      return nil
@@ -462,11 +456,11 @@ private extension FilterRule {
     }
 
     private static func decodeDays(op: String, value: NSPValue) -> (op: FilterOperator, value: FilterValue)? {
-        switch op {
-        case "inTheLast":
+        switch op.lowercased() {
+        case "inthelast":
             guard case .int(let n) = value else { return nil }
             return (.inTheLast, .number(n))
-        case "notInTheLast":
+        case "notinthelast":
             guard case .int(let n) = value else { return nil }
             return (.notInTheLast, .number(n))
         case "before":

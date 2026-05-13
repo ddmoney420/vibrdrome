@@ -33,6 +33,7 @@ final class CachedSong {
     var isCompilation: Bool = false
     var dateAdded: Date?
     var mbzRecordingId: String?
+    var mbzAlbumId: String?
     var mbzArtistId: String?
     var mbzAlbumArtistId: String?
     var rgTrackGain: Double?
@@ -40,6 +41,7 @@ final class CachedSong {
     var rgAlbumGain: Double?
     var rgAlbumPeak: Double?
     var isStarred: Bool = false
+    var starredAt: Date?
     var rating: Int = 0
     var lastPlayed: Date?
     var playCount: Int = 0
@@ -97,6 +99,7 @@ final class CachedSong {
         self.channels = ndSong.channels
         self.hasCoverArt = ndSong.hasCoverArt ?? false
         self.isCompilation = ndSong.compilation ?? false
+        self.mbzAlbumId = ndSong.mbzAlbumId
         self.mbzArtistId = ndSong.mbzArtistId
         self.mbzAlbumArtistId = ndSong.mbzAlbumArtistId
         self.playCount = ndSong.playCount ?? 0
@@ -104,9 +107,8 @@ final class CachedSong {
         self.rgTrackPeak = ndSong.rgTrackPeak
         self.rgAlbumGain = ndSong.rgAlbumGain
         self.rgAlbumPeak = ndSong.rgAlbumPeak
-        if let playDate = ndSong.playDate {
-            self.lastPlayed = iso8601.date(from: playDate)
-        }
+        if let playDate = ndSong.playDate { self.lastPlayed = iso8601.date(from: playDate) }
+        if let at = ndSong.starredAt { self.starredAt = iso8601.date(from: at) }
     }
 
     func update(from ndSong: NDSong) {
@@ -136,16 +138,16 @@ final class CachedSong {
         mbzRecordingId = ndSong.mbzReleaseTrackId
         mbzArtistId = ndSong.mbzArtistId
         mbzAlbumArtistId = ndSong.mbzAlbumArtistId
+        mbzAlbumId = ndSong.mbzAlbumId
         isStarred = ndSong.starred ?? false
+        if let at = ndSong.starredAt { starredAt = iso8601.date(from: at) } else { starredAt = nil }
         rating = ndSong.rating ?? 0
         playCount = ndSong.playCount ?? 0
         rgTrackGain = ndSong.rgTrackGain
         rgTrackPeak = ndSong.rgTrackPeak
         rgAlbumGain = ndSong.rgAlbumGain
         rgAlbumPeak = ndSong.rgAlbumPeak
-        if let playDate = ndSong.playDate {
-            lastPlayed = iso8601.date(from: playDate)
-        }
+        if let playDate = ndSong.playDate { lastPlayed = iso8601.date(from: playDate) }
         cachedAt = Date()
     }
 

@@ -218,7 +218,15 @@ enum FilterOperator: String, CaseIterable, Codable, Sendable {
         case .before:          "before"
         case .after:           "after"
         case .isTrue:          "is"
-        case .isInPlaylist:    "in playlist"
+        case .isInPlaylist:    "is"
+        }
+    }
+
+    /// False for operators that have no Navidrome smart playlist equivalent and are silently dropped on save.
+    var nspSupported: Bool {
+        switch self {
+        case .matchesRegex, .isGreaterOrEqual, .isLessOrEqual: return false
+        default: return true
         }
     }
 
@@ -492,6 +500,8 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
             .artistRating, .artistPlayCount, .artistFavorited,
             .bitDepth, .sampleRate, .size, .channels, .comment,
             .hasCoverArt, .isCompilation, .dateAdded,
+            .dateLoved, .albumLastPlayed, .albumDateLoved,
+            .mbzAlbumId,
         ]
         return rules.contains { !$0.isEffectivelyEmpty && cachedFields.contains($0.field) }
     }
@@ -555,7 +565,11 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
         let size: Int?
         let channels: Int?
         let mbzRecordingId: String?
+        let mbzAlbumId: String?
         let dateAdded: Date?
+        let dateLoved: Date?
+        let albumLastPlayed: Date?
+        let albumDateLoved: Date?
 
         init(song: Song, extras: CachedSongExtras? = nil) {
             title = song.title
@@ -585,7 +599,11 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
             size = song.size
             channels = extras?.channels
             mbzRecordingId = extras?.mbzRecordingId ?? song.musicBrainzId
+            mbzAlbumId = extras?.mbzAlbumId
             dateAdded = extras?.dateAdded
+            dateLoved = extras?.dateLoved
+            albumLastPlayed = extras?.albumLastPlayed
+            albumDateLoved = extras?.albumDateLoved
         }
     }
 
@@ -660,7 +678,11 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
         let isCompilation: Bool
         let channels: Int?
         let mbzRecordingId: String?
+        let mbzAlbumId: String?
         let dateAdded: Date?
+        let dateLoved: Date?
+        let albumLastPlayed: Date?
+        let albumDateLoved: Date?
     }
 }
 
@@ -675,16 +697,17 @@ private protocol FilterTarget {
 extension FilterRuleSet.SongMeta: FilterTarget {
     func textValue(for field: FilterField) -> String? {
         switch field {
-        case .title:       return title
-        case .artist:      return artist
-        case .albumTitle:  return albumTitle
-        case .genre:       return genre
-        case .label:       return label
-        case .suffix:      return suffix
-        case .contentType: return contentType
-        case .comment:         return comment
-        case .mbzRecordingId:  return mbzRecordingId
-        default:               return nil
+        case .title:          return title
+        case .artist:         return artist
+        case .albumTitle:     return albumTitle
+        case .genre:          return genre
+        case .label:          return label
+        case .suffix:         return suffix
+        case .contentType:    return contentType
+        case .comment:        return comment
+        case .mbzRecordingId: return mbzRecordingId
+        case .mbzAlbumId:     return mbzAlbumId
+        default:              return nil
         }
     }
     func numericValue(for field: FilterField) -> Int? {

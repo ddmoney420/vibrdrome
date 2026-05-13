@@ -210,7 +210,7 @@ struct LibraryFilterSidebarView: View {
         case .song:
             FilterRuleBuilderView(
                 ruleSet: $state.songFilter.ruleSet,
-                allowedFields: FilterField.songFields,
+                allowedFields: FilterField.smartPlaylistFields,
                 expandedKey: UserDefaultsKeys.songFilterRuleBuilderExpanded
             )
         case .artist:

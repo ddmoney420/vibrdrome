@@ -97,7 +97,10 @@ struct FilterRuleBuilderView: View {
         }
         .padding(.horizontal, 2)
         .sheet(isPresented: $showSaveSheet) {
-            SaveSmartPlaylistSheet(ruleSet: ruleSet)
+            SmartPlaylistEditorView(
+                mode: .create,
+                initialRules: NSPCriteria(from: ruleSet)
+            )
         }
     }
 
@@ -163,9 +166,16 @@ private struct RuleRowView: View {
     @State private var draftNumber: Int = 0
     @State private var draftRangeLo: Int = 0
     @State private var draftRangeHi: Int = 0
+    @State private var draftDate: Date = Date()
     @State private var debounceTask: Task<Void, Never>?
     /// Non-nil means the regex pattern is currently invalid.
     @State private var regexError: String?
+
+    private static let dateFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt
+    }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -228,6 +238,11 @@ private struct RuleRowView: View {
             } else if newOp != .isBetween, case .range(let lo, _) = rule.value {
                 rule.value = .number(lo)
                 draftNumber = lo
+            }
+            if newOp == .before || newOp == .after {
+                rule.value = .text(Self.dateFormatter.string(from: draftDate))
+            } else if newOp == .inTheLast || newOp == .notInTheLast, case .text = rule.value {
+                rule.value = .number(draftNumber)
             }
             if newOp != .matchesRegex { regexError = nil }
         }
@@ -317,15 +332,26 @@ private struct RuleRowView: View {
 
     // MARK: Days Input
 
+    @ViewBuilder
     private var daysValueInput: some View {
-        HStack(spacing: 4) {
-            TextField("30", value: $draftNumber, format: .number.grouping(.never))
-                .textFieldStyle(.roundedBorder)
-                .font(.caption)
-                .frame(maxWidth: 70)
+        if rule.operator == .before || rule.operator == .after {
+            DatePicker("", selection: $draftDate, displayedComponents: .date)
+                .labelsHidden()
+                .controlSize(.mini)
                 .onAppear { syncDraftsFromRule() }
-                .onChange(of: draftNumber) { _, n in scheduleCommit { .number(n) } }
-            Text("days").font(.caption).foregroundStyle(.secondary)
+                .onChange(of: draftDate) { _, d in
+                    rule.value = .text(Self.dateFormatter.string(from: d))
+                }
+        } else {
+            HStack(spacing: 4) {
+                TextField("30", value: $draftNumber, format: .number.grouping(.never))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                    .frame(maxWidth: 70)
+                    .onAppear { syncDraftsFromRule() }
+                    .onChange(of: draftNumber) { _, n in scheduleCommit { .number(n) } }
+                Text("days").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -385,122 +411,4 @@ private struct RuleRowView: View {
     }
 }
 
-// MARK: - Save Smart Playlist Sheet
-
-private struct SaveSmartPlaylistSheet: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-
-    let ruleSet: FilterRuleSet
-
-    @State private var name = ""
-    @State private var comment = ""
-    @State private var isSaving = false
-    @State private var errorMessage: String?
-    @State private var didSave = false
-
-    private var activeRuleCount: Int { ruleSet.rules.filter { !$0.isEffectivelyEmpty }.count }
-    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !isSaving }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Save as Smart Playlist")
-                .font(.headline)
-
-            if let ndClient = appState.navidromeClient {
-                if ndClient.isAvailable {
-                    formContent
-                } else {
-                    unavailableView
-                }
-            } else {
-                unavailableView
-            }
-
-            Spacer(minLength: 0)
-
-            if let error = errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            HStack {
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                if !didSave {
-                    Button("Save") { save() }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!canSave)
-                } else {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                }
-            }
-        }
-        .padding(24)
-        .frame(minWidth: 340, minHeight: 200)
-    }
-
-    private var formContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Name").font(.caption).foregroundStyle(.secondary)
-                TextField("Smart Playlist Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Description (optional)").font(.caption).foregroundStyle(.secondary)
-                TextField("", text: $comment)
-                    .textFieldStyle(.roundedBorder)
-            }
-            Text("\(activeRuleCount) rule\(activeRuleCount == 1 ? "" : "s") will be saved")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var unavailableView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.title2)
-                .foregroundStyle(.orange)
-            Text("Navidrome Smart Playlists are not available.")
-                .font(.callout)
-            Text("Connect to a Navidrome server to use this feature.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-    }
-
-    private func save() {
-        guard let ndClient = appState.navidromeClient, canSave else { return }
-        let trimmedName = name.trimmingCharacters(in: .whitespaces)
-        let criteria = NSPCriteria(from: ruleSet)
-        isSaving = true
-        errorMessage = nil
-
-        Task {
-            do {
-                try await ndClient.createSmartPlaylist(name: trimmedName, comment: comment, rules: criteria)
-                await MainActor.run {
-                    isSaving = false
-                    didSave = true
-                }
-                try? await Task.sleep(for: .seconds(1.2))
-                await MainActor.run { dismiss() }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                    errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-}
 #endif

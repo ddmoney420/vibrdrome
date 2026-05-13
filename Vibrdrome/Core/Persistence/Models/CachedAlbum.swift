@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 
+nonisolated(unsafe) private let iso8601Album = ISO8601DateFormatter()
+
 @Model
 final class CachedAlbum {
     #Index<CachedAlbum>([\.name], [\.artistId], [\.year], [\.isStarred], [\.userRating], [\.label], [\.releaseType], [\.mood], [\.releaseCountry])
@@ -14,6 +16,8 @@ final class CachedAlbum {
     var songCount: Int?
     var duration: Int?
     var isStarred: Bool = false
+    var starredAt: Date?
+    var lastPlayed: Date?
     var created: String?
     var userRating: Int = 0
     var label: String?
@@ -84,6 +88,8 @@ final class CachedAlbum {
         self.songCount = ndAlbum.songCount
         self.duration = ndAlbum.duration.map { Int($0) }
         self.isStarred = ndAlbum.starred ?? false
+        if let at = ndAlbum.starredAt { self.starredAt = iso8601Album.date(from: at) }
+        if let pd = ndAlbum.playDate { self.lastPlayed = iso8601Album.date(from: pd) }
         self.userRating = ndAlbum.rating ?? 0
         self.label = ndAlbum.recordLabel
         self.catalogNum = ndAlbum.catalogNum
@@ -116,6 +122,8 @@ final class CachedAlbum {
         songCount = ndAlbum.songCount
         duration = ndAlbum.duration.map { Int($0) }
         isStarred = ndAlbum.starred ?? false
+        starredAt = ndAlbum.starredAt.flatMap { iso8601Album.date(from: $0) }
+        lastPlayed = ndAlbum.playDate.flatMap { iso8601Album.date(from: $0) }
         userRating = ndAlbum.rating ?? 0
         label = ndAlbum.recordLabel
         catalogNum = ndAlbum.catalogNum

@@ -750,7 +750,11 @@ struct SongsView: View {
                 isCompilation: cached.isCompilation,
                 channels: cached.channels,
                 mbzRecordingId: cached.mbzRecordingId,
-                dateAdded: cached.dateAdded
+                mbzAlbumId: cached.mbzAlbumId,
+                dateAdded: cached.dateAdded,
+                dateLoved: cached.starredAt,
+                albumLastPlayed: cached.album?.lastPlayed,
+                albumDateLoved: cached.album?.starredAt
             )
         }
         return map

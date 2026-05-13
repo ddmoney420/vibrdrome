@@ -164,6 +164,16 @@ struct PlaylistDetailView: View {
         .sheet(isPresented: $showEditSheet) {
             if let playlist {
                 if isSmartPlaylist {
+                    #if os(macOS)
+                    SmartPlaylistEditorView(
+                        mode: .edit(playlistId: playlist.id),
+                        initialName: playlist.name,
+                        initialRules: smartCriteria
+                    ) {
+                        await loadPlaylist()
+                    }
+                    .environment(appState)
+                    #else
                     PlaylistEditorView(
                         mode: .smartPlaylist(
                             playlistId: playlist.id,
@@ -174,6 +184,7 @@ struct PlaylistDetailView: View {
                         await loadPlaylist()
                     }
                     .environment(appState)
+                    #endif
                 } else {
                     PlaylistEditorView(
                         mode: .edit(playlistId: playlist.id, currentName: playlist.name)
