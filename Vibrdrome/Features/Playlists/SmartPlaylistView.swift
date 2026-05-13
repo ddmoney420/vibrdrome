@@ -279,7 +279,7 @@ struct SmartPlaylistView: View {
                         Text(song.title)
                             .font(.body)
                             .fontWeight(.medium)
-                        Text(song.artist ?? "")
+                        Text(song.displayArtist ?? "")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

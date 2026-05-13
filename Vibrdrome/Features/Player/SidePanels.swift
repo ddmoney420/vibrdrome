@@ -281,7 +281,7 @@ private struct SyncedLyricsPanelContent: View {
                                 Text(title)
                                     .font(.headline)
                                     .frame(width: contentWidth, alignment: .leading)
-                                if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
+                                if let artist = lyrics.displayArtist ?? engine.currentSong?.displayArtist {
                                     Text(artist)
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)

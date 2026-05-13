@@ -113,7 +113,7 @@ final class CarPlayManager: NSObject {
         }
 
         let items = upcoming.prefix(30).enumerated().map { offset, song in
-            let item = CPListItem(text: song.title, detailText: song.artist ?? "")
+            let item = CPListItem(text: song.title, detailText: song.displayArtist ?? "")
             if let coverArtId = song.coverArt {
                 loadImage(id: coverArtId, size: 120, into: item)
             }
@@ -437,7 +437,7 @@ final class CarPlayManager: NSObject {
 
             let trackItems = songs.map { [weak self] song in
                 let item = CPListItem(text: song.title,
-                                      detailText: song.artist ?? album.artist ?? "")
+                                      detailText: song.displayArtist ?? album.artist ?? "")
                 if let coverArtId = song.coverArt ?? album.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
@@ -775,7 +775,7 @@ final class CarPlayManager: NSObject {
 
             let trackItems = songs.map { [weak self] song in
                 let item = CPListItem(text: song.title,
-                                      detailText: song.artist ?? "")
+                                      detailText: song.displayArtist ?? "")
                 if let coverArtId = song.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
@@ -869,7 +869,7 @@ final class CarPlayManager: NSObject {
                 ])
             }
             let items = songs.prefix(30).map { song in
-                let item = CPListItem(text: song.title, detailText: song.artist ?? "")
+                let item = CPListItem(text: song.title, detailText: song.displayArtist ?? "")
                 if let coverArtId = song.coverArt {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }

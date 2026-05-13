@@ -53,7 +53,7 @@ struct SongsView: View {
 
     private func recomputeFilterOptions() {
         availableYears = Array(Set(songs.compactMap(\.year))).sorted(by: >)
-        availableArtists = Array(Set(songs.compactMap(\.artist)))
+        availableArtists = Array(Set(songs.compactMap(\.displayArtist)))
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
@@ -75,11 +75,11 @@ struct SongsView: View {
             base = base.filter { $0.genre?.localizedCaseInsensitiveCompare(filterGenre) == .orderedSame }
         }
         if let filterArtist {
-            base = base.filter { $0.artist?.localizedCaseInsensitiveCompare(filterArtist) == .orderedSame }
+            base = base.filter { $0.displayArtist?.localizedCaseInsensitiveCompare(filterArtist) == .orderedSame }
         }
         switch sortBy {
         case .title: return base.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        case .artist: return base.sorted { ($0.artist ?? "").localizedCaseInsensitiveCompare($1.artist ?? "") == .orderedAscending }
+        case .artist: return base.sorted { ($0.displayArtist ?? "").localizedCaseInsensitiveCompare($1.displayArtist ?? "") == .orderedAscending }
         case .album: return base.sorted { lhs, rhs in
             let cmp = (lhs.album ?? "").localizedCaseInsensitiveCompare(rhs.album ?? "")
             if cmp != .orderedSame { return cmp == .orderedAscending }

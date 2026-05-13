@@ -31,6 +31,7 @@ final class NowPlayingManager {
         currentInfo = [String: Any]()
         currentInfo[MPMediaItemPropertyTitle] = song.title
         currentInfo[MPMediaItemPropertyArtist] = song.displayArtist ?? "Unknown Artist"
+        currentInfo[MPMediaItemPropertyAlbumArtist] = song.albumArtist ?? song.displayArtist ?? "Unknown Artist"
         currentInfo[MPMediaItemPropertyAlbumTitle] = song.album ?? ""
         currentInfo[MPMediaItemPropertyPlaybackDuration] = song.duration ?? 0
         currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0.0

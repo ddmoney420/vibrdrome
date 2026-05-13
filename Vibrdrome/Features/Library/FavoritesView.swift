@@ -63,7 +63,7 @@ struct FavoritesView: View {
         return starredSongs
             .filter {
                 $0.title.localizedCaseInsensitiveContains(searchText) ||
-                ($0.artist ?? "").localizedCaseInsensitiveContains(searchText)
+                ($0.displayArtistOverride ?? $0.artist ?? "").localizedCaseInsensitiveContains(searchText)
             }
             .map { $0.toSong() }
     }

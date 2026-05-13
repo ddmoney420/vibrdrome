@@ -774,7 +774,8 @@ struct AlbumDetailView: View {
                 sortBy: [SortDescriptor(\.discNumber), SortDescriptor(\.track)]
             )
             songDescriptor.propertiesToFetch = [
-                \.id, \.title, \.artist, \.albumArtist, \.albumName, \.albumId, \.artistId,
+                \.id, \.title, \.artist, \.albumArtist, \.displayArtistOverride,
+                \.albumName, \.albumId, \.artistId,
                 \.coverArtId, \.track, \.discNumber, \.year, \.genre, \.duration,
                 \.bitRate, \.suffix, \.contentType, \.size, \.isStarred, \.rating
             ]

@@ -88,7 +88,7 @@ struct JukeboxView: View {
                     .fontWeight(.semibold)
                     .lineLimit(1)
 
-                Text(song.artist ?? "Unknown Artist")
+                Text(song.displayArtist ?? "Unknown Artist")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -258,7 +258,7 @@ struct JukeboxView: View {
                         .fontWeight(index == currentIndex ? .bold : .regular)
                         .foregroundStyle(index == currentIndex ? .orange : .primary)
                         .lineLimit(1)
-                    Text(song.artist ?? "Unknown Artist")
+                    Text(song.displayArtist ?? "Unknown Artist")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
