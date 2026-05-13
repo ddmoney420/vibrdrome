@@ -186,7 +186,7 @@ struct MiniPlayerView: View {
     private var displaySubtitle: String {
         if let song = engine.currentSong {
             // Show "Up Next: [title]" if there's a next track, otherwise artist
-            guard let index = engine.nextSongIndex() else {return song.artist ?? ""}
+            guard let index = engine.nextSongIndex() else {return song.displayArtist ?? ""}
             return "Next: \(engine.queue[index].title)"
         }
 
@@ -805,7 +805,7 @@ struct PopOutPlayerView: View {
             if engine.queue.indices.contains(nextIndex) {
                 return "Next: \(engine.queue[nextIndex].title)"
             }
-            return song.artist ?? ""
+            return song.displayArtist ?? ""
         }
         if engine.currentRadioStation != nil {
             return "Internet Radio"

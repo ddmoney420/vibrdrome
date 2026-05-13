@@ -511,22 +511,12 @@ struct NowPlayingView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
-            if let artistId = engine.currentSong?.artistId {
-                Button {
-                    appState.pendingNavigation = .artist(id: artistId)
+            if let song = engine.currentSong {
+                ArtistLinksView(song: song, font: .body, color: .white.opacity(0.7)) { id in
+                    appState.pendingNavigation = .artist(id: id)
                     appState.showNowPlaying = false
-                } label: {
-                    Text(engine.currentSong?.artist ?? "")
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
                 }
-                .buttonStyle(.plain)
-            } else {
-                Text(engine.currentSong?.artist ?? "")
-                    .font(.body)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
+                .lineLimit(1)
             }
 
             if let albumId = engine.currentSong?.albumId {

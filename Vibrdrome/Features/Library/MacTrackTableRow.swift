@@ -58,7 +58,7 @@ struct MacTrackTableRow: View {
             AudioEngine.shared.play(song: song, from: queue, at: index)
         }
         .trackContextMenu(song: song, queue: queue, index: index)
-        .accessibilityLabel("\(song.title), \(song.artist ?? "Unknown Artist")")
+        .accessibilityLabel("\(song.title), \(song.displayArtist ?? "Unknown Artist")")
         .accessibilityHint("Double-tap to play")
         .onAppear {
             isStarred = song.starred != nil
@@ -135,10 +135,12 @@ struct MacTrackTableRow: View {
     }
 
     @ViewBuilder private var artistCell: some View {
-        if let artistId = song.artistId, let name = song.artist {
-            NavigableCellText(text: name) { appState.pendingNavigation = .artist(id: artistId) }
+        if song.displayArtist != nil {
+            ArtistLinksView(song: song) { id in
+                appState.pendingNavigation = .artist(id: id)
+            }
         } else {
-            Text(song.artist ?? "—").foregroundStyle(song.artist != nil ? .primary : .quaternary)
+            Text("—").foregroundStyle(.quaternary)
         }
     }
 
@@ -279,7 +281,7 @@ struct MacTrackTableRow: View {
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
-                let shareText = "🎵 \(song.title) — \(song.artist ?? "Unknown Artist")"
+                let shareText = "🎵 \(song.title) — \(song.displayArtist ?? "Unknown Artist")"
                 ShareLink(item: shareText) {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }

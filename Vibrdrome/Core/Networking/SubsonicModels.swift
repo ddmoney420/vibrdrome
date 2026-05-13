@@ -196,6 +196,12 @@ struct TopSongsResponse: Decodable, Sendable {
 
 // MARK: - Song Model
 
+/// Lightweight artist reference used in the OpenSubsonic `artists` array on a song.
+struct SongArtist: Decodable, Sendable, Equatable {
+    let id: String
+    let name: String
+}
+
 struct Song: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let parent: String?
@@ -205,6 +211,11 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
     let albumArtist: String?
     let albumId: String?
     let artistId: String?
+    /// OpenSubsonic extension: per-track artists list. When present and non-empty,
+    /// prefer over `artist` for display (fixes VA albums where `artist` = "Various Artists").
+    let artists: [SongArtist]?
+    /// Pre-joined display name sourced from `artists`; set when reconstructing from cache.
+    let displayArtistOverride: String?
     let track: Int?
     let year: Int?
     let genre: String?
@@ -226,10 +237,62 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
     let replayGain: ReplayGain?
     let musicBrainzId: String?
 
+    private enum CodingKeys: String, CodingKey {
+        case id, parent, title, album, artist, albumArtist, albumId, artistId, artists
+        case track, year, genre, coverArt, size, contentType, suffix, duration, bitRate
+        case bitDepth, samplingRate, comment
+        case path, discNumber, created, starred, userRating, bpm, replayGain, musicBrainzId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        parent = try c.decodeIfPresent(String.self, forKey: .parent)
+        title = try c.decode(String.self, forKey: .title)
+        album = try c.decodeIfPresent(String.self, forKey: .album)
+        artist = try c.decodeIfPresent(String.self, forKey: .artist)
+        albumArtist = try c.decodeIfPresent(String.self, forKey: .albumArtist)
+        albumId = try c.decodeIfPresent(String.self, forKey: .albumId)
+        artistId = try c.decodeIfPresent(String.self, forKey: .artistId)
+        artists = try c.decodeIfPresent([SongArtist].self, forKey: .artists)
+        displayArtistOverride = nil
+        track = try c.decodeIfPresent(Int.self, forKey: .track)
+        year = try c.decodeIfPresent(Int.self, forKey: .year)
+        genre = try c.decodeIfPresent(String.self, forKey: .genre)
+        coverArt = try c.decodeIfPresent(String.self, forKey: .coverArt)
+        size = try c.decodeIfPresent(Int.self, forKey: .size)
+        contentType = try c.decodeIfPresent(String.self, forKey: .contentType)
+        suffix = try c.decodeIfPresent(String.self, forKey: .suffix)
+        duration = try c.decodeIfPresent(Int.self, forKey: .duration)
+        bitRate = try c.decodeIfPresent(Int.self, forKey: .bitRate)
+        bitDepth = try c.decodeIfPresent(Int.self, forKey: .bitDepth)
+        samplingRate = try c.decodeIfPresent(Int.self, forKey: .samplingRate)
+        comment = try c.decodeIfPresent(String.self, forKey: .comment)
+        path = try c.decodeIfPresent(String.self, forKey: .path)
+        discNumber = try c.decodeIfPresent(Int.self, forKey: .discNumber)
+        created = try c.decodeIfPresent(String.self, forKey: .created)
+        starred = try c.decodeIfPresent(String.self, forKey: .starred)
+        userRating = try c.decodeIfPresent(Int.self, forKey: .userRating)
+        bpm = try c.decodeIfPresent(Int.self, forKey: .bpm)
+        replayGain = try c.decodeIfPresent(ReplayGain.self, forKey: .replayGain)
+        musicBrainzId = try c.decodeIfPresent(String.self, forKey: .musicBrainzId)
+    }
+
+    /// The artist name to show in the UI. Prefers the OpenSubsonic `artists` array
+    /// (which carries per-track credits) over the legacy `artist` field.
+    var displayArtist: String? {
+        if let override = displayArtistOverride, !override.isEmpty { return override }
+        if let names = artists?.map(\.name), !names.isEmpty {
+            return names.joined(separator: ", ")
+        }
+        return artist
+    }
+
     init(
         id: String, parent: String? = nil, title: String, album: String? = nil,
         artist: String? = nil, albumArtist: String? = nil,
         albumId: String? = nil, artistId: String? = nil,
+        artists: [SongArtist]? = nil, displayArtistOverride: String? = nil,
         track: Int? = nil, year: Int? = nil, genre: String? = nil,
         coverArt: String? = nil, size: Int? = nil,
         contentType: String? = nil, suffix: String? = nil,
@@ -242,6 +305,7 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         self.id = id; self.parent = parent; self.title = title; self.album = album
         self.artist = artist; self.albumArtist = albumArtist
         self.albumId = albumId; self.artistId = artistId
+        self.artists = artists; self.displayArtistOverride = displayArtistOverride
         self.track = track; self.year = year; self.genre = genre
         self.coverArt = coverArt; self.size = size
         self.contentType = contentType; self.suffix = suffix
@@ -257,6 +321,7 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
             id: id, parent: parent, title: title, album: album,
             artist: artist, albumArtist: albumArtist,
             albumId: albumId, artistId: artistId,
+            artists: artists, displayArtistOverride: displayArtistOverride,
             track: track, year: year, genre: genre,
             coverArt: coverArt, size: size,
             contentType: contentType, suffix: suffix,
@@ -273,6 +338,7 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
             id: id, parent: parent, title: title, album: album,
             artist: artist, albumArtist: albumArtist,
             albumId: albumId, artistId: artistId,
+            artists: artists, displayArtistOverride: displayArtistOverride,
             track: track, year: year, genre: genre,
             coverArt: coverArt, size: size,
             contentType: contentType, suffix: suffix,

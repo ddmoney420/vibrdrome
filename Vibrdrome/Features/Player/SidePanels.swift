@@ -71,7 +71,7 @@ struct QueuePanelView: View {
                                     Text(song.title)
                                         .font(.subheadline)
                                         .lineLimit(1)
-                                    Text(song.artist ?? "")
+                                    Text(song.displayArtist ?? "")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -157,20 +157,10 @@ struct QueuePanelView: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                if let artist = entry.song.artist {
-                    Button {
-                        if let artistId = entry.song.artistId {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        }
-                    } label: {
-                        Text(artist)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(entry.song.artistId == nil)
+                ArtistLinksView(song: entry.song, font: .caption, color: .secondary) { id in
+                    appState.pendingNavigation = .artist(id: id)
                 }
+                .lineLimit(1)
             }
             Spacer()
             if let duration = entry.song.duration {

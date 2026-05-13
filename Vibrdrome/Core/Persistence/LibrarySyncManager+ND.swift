@@ -125,6 +125,7 @@ extension LibrarySyncManager {
         cached.isCompilation != (server.compilation ?? false) ||
         cached.hasCoverArt != (server.hasCoverArt ?? false) ||
         cached.rgTrackGain != server.rgTrackGain ||
-        cached.rgAlbumGain != server.rgAlbumGain
+        cached.rgAlbumGain != server.rgAlbumGain ||
+        cached.displayArtistOverride != server.participantArtistOverride
     }
 }

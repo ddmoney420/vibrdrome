@@ -11,6 +11,8 @@ final class CachedSong {
     var title: String
     var artist: String?
     var albumArtist: String?
+    /// Comma-joined OpenSubsonic `artists` names. When present, used instead of `artist` for display.
+    var displayArtistOverride: String?
     var albumName: String?
     var albumId: String?
     var artistId: String?
@@ -56,6 +58,9 @@ final class CachedSong {
         self.title = song.title
         self.artist = song.artist
         self.albumArtist = song.albumArtist
+        if let names = song.artists?.map(\.name), !names.isEmpty {
+            self.displayArtistOverride = names.joined(separator: ", ")
+        }
         self.albumName = song.album
         self.albumId = song.albumId
         self.artistId = song.artistId
@@ -109,6 +114,7 @@ final class CachedSong {
         self.rgTrackPeak = ndSong.rgTrackPeak
         self.rgAlbumGain = ndSong.rgAlbumGain
         self.rgAlbumPeak = ndSong.rgAlbumPeak
+        self.displayArtistOverride = ndSong.participantArtistOverride
         if let playDate = ndSong.playDate { self.lastPlayed = iso8601.date(from: playDate) }
         if let at = ndSong.starredAt { self.starredAt = iso8601.date(from: at) }
     }
@@ -150,6 +156,7 @@ final class CachedSong {
         rgTrackPeak = ndSong.rgTrackPeak
         rgAlbumGain = ndSong.rgAlbumGain
         rgAlbumPeak = ndSong.rgAlbumPeak
+        displayArtistOverride = ndSong.participantArtistOverride
         if let playDate = ndSong.playDate { lastPlayed = iso8601.date(from: playDate) }
         cachedAt = Date()
     }
@@ -165,6 +172,7 @@ final class CachedSong {
             albumArtist: albumArtist,
             albumId: albumId,
             artistId: artistId,
+            displayArtistOverride: displayArtistOverride,
             track: track,
             year: year,
             genre: genre,

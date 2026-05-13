@@ -563,7 +563,8 @@ final class LibrarySyncManager {
     }
 
     nonisolated static func hasSongChanged(_ cached: CachedSong, _ server: Song) -> Bool {
-        cached.title != server.title ||
+        let serverDisplayOverride = server.artists.flatMap { !$0.isEmpty ? $0.map(\.name).joined(separator: ", ") : nil }
+        return cached.title != server.title ||
         cached.artist != server.artist ||
         cached.albumName != server.album ||
         cached.track != server.track ||
@@ -579,7 +580,8 @@ final class LibrarySyncManager {
         cached.comment != server.comment ||
         cached.bpm != server.bpm ||
         cached.mbzRecordingId != server.musicBrainzId ||
-        cached.rgTrackGain != server.replayGain?.trackGain || cached.rgAlbumGain != server.replayGain?.albumGain
+        cached.rgTrackGain != server.replayGain?.trackGain || cached.rgAlbumGain != server.replayGain?.albumGain ||
+        cached.displayArtistOverride != serverDisplayOverride
     }
 
     nonisolated static func updateSongFields(_ cached: CachedSong, from song: Song) {
@@ -589,6 +591,11 @@ final class LibrarySyncManager {
         cached.albumName = song.album
         cached.albumId = song.albumId
         cached.artistId = song.artistId
+        if let names = song.artists?.map(\.name), !names.isEmpty {
+            cached.displayArtistOverride = names.joined(separator: ", ")
+        } else {
+            cached.displayArtistOverride = nil
+        }
         cached.coverArtId = song.coverArt
         cached.track = song.track
         cached.discNumber = song.discNumber
