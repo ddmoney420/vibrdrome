@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-private let iso8601 = ISO8601DateFormatter()
+nonisolated(unsafe) private let iso8601 = ISO8601DateFormatter()
 
 @Model
 final class CachedSong {
@@ -35,6 +35,10 @@ final class CachedSong {
     var mbzRecordingId: String?
     var mbzArtistId: String?
     var mbzAlbumArtistId: String?
+    var rgTrackGain: Double?
+    var rgTrackPeak: Double?
+    var rgAlbumGain: Double?
+    var rgAlbumPeak: Double?
     var isStarred: Bool = false
     var rating: Int = 0
     var lastPlayed: Date?
@@ -69,6 +73,10 @@ final class CachedSong {
         self.dateAdded = song.created.flatMap { iso8601.date(from: $0) }
         self.mbzRecordingId = song.musicBrainzId
         self.isStarred = song.starred != nil
+        self.rgTrackGain = song.replayGain?.trackGain
+        self.rgTrackPeak = song.replayGain?.trackPeak
+        self.rgAlbumGain = song.replayGain?.albumGain
+        self.rgAlbumPeak = song.replayGain?.albumPeak
     }
 
     convenience init(from ndSong: NDSong) {
@@ -77,6 +85,7 @@ final class CachedSong {
             artist: ndSong.artist, albumArtist: ndSong.albumArtist,
             albumId: ndSong.albumId, artistId: ndSong.artistId,
             track: ndSong.trackNumber, year: ndSong.year, genre: ndSong.allGenres.first,
+            coverArt: ndSong.id,
             size: ndSong.size, suffix: ndSong.suffix,
             duration: ndSong.duration.map { Int($0) }, bitRate: ndSong.bitRate,
             bitDepth: ndSong.bitDepth, samplingRate: ndSong.sampleRate, comment: ndSong.comment,
@@ -91,6 +100,10 @@ final class CachedSong {
         self.mbzArtistId = ndSong.mbzArtistId
         self.mbzAlbumArtistId = ndSong.mbzAlbumArtistId
         self.playCount = ndSong.playCount ?? 0
+        self.rgTrackGain = ndSong.rgTrackGain
+        self.rgTrackPeak = ndSong.rgTrackPeak
+        self.rgAlbumGain = ndSong.rgAlbumGain
+        self.rgAlbumPeak = ndSong.rgAlbumPeak
         if let playDate = ndSong.playDate {
             self.lastPlayed = iso8601.date(from: playDate)
         }
@@ -103,6 +116,7 @@ final class CachedSong {
         albumName = ndSong.album
         albumId = ndSong.albumId
         artistId = ndSong.artistId
+        coverArtId = ndSong.id
         track = ndSong.trackNumber
         discNumber = ndSong.discNumber
         year = ndSong.year
@@ -125,6 +139,10 @@ final class CachedSong {
         isStarred = ndSong.starred ?? false
         rating = ndSong.rating ?? 0
         playCount = ndSong.playCount ?? 0
+        rgTrackGain = ndSong.rgTrackGain
+        rgTrackPeak = ndSong.rgTrackPeak
+        rgAlbumGain = ndSong.rgAlbumGain
+        rgAlbumPeak = ndSong.rgAlbumPeak
         if let playDate = ndSong.playDate {
             lastPlayed = iso8601.date(from: playDate)
         }
@@ -160,7 +178,10 @@ final class CachedSong {
             starred: isStarred ? "true" : nil,
             userRating: rating,
             bpm: bpm,
-            replayGain: nil,
+            replayGain: rgTrackGain.map {
+                ReplayGain(trackGain: $0, albumGain: rgAlbumGain,
+                           trackPeak: rgTrackPeak, albumPeak: rgAlbumPeak, baseGain: nil)
+            },
             musicBrainzId: mbzRecordingId
         )
     }

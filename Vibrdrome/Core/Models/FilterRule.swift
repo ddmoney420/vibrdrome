@@ -14,6 +14,13 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
     case contentType    // codec
     case comment
     case explicitStatus // explicit content flag string
+    case releaseType    // e.g. "Album", "Single", "EP"
+    case releaseCountry
+    case releaseStatus  // e.g. "Official", "Bootleg"
+    case mood
+    case grouping
+    case mediaType      // e.g. "CD", "Vinyl", "Digital Media"
+    case catalogNum
     case mbzRecordingId // MusicBrainz Recording ID
     case mbzAlbumId     // MusicBrainz Album ID
     case mbzArtistId    // MusicBrainz Artist ID
@@ -77,6 +84,13 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
         case .contentType:     "Codec"
         case .comment:         "Comment"
         case .explicitStatus:  "Explicit Status"
+        case .releaseType:     "Release Type"
+        case .releaseCountry:  "Release Country"
+        case .releaseStatus:   "Release Status"
+        case .mood:            "Mood"
+        case .grouping:        "Grouping"
+        case .mediaType:       "Media Type"
+        case .catalogNum:      "Catalog Number"
         case .mbzRecordingId:  "MBZ Recording ID"
         case .mbzAlbumId:      "MBZ Album ID"
         case .mbzArtistId:     "MBZ Artist ID"
@@ -126,7 +140,9 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
     var kind: FieldKind {
         switch self {
         case .title, .artist, .albumTitle, .genre, .label, .suffix, .contentType, .comment,
-             .explicitStatus, .mbzRecordingId, .mbzAlbumId, .mbzArtistId, .mbzAlbumArtistId,
+             .explicitStatus, .releaseType, .releaseCountry, .releaseStatus,
+             .mood, .grouping, .mediaType, .catalogNum,
+             .mbzRecordingId, .mbzAlbumId, .mbzArtistId, .mbzAlbumArtistId,
              .mbzReleaseTrackId, .mbzReleaseGroupId:
             return .text
         case .year, .duration, .size, .channels, .bitRate, .bitDepth, .sampleRate, .bpm,
@@ -425,6 +441,7 @@ extension FilterField {
     ]
     static let albumFields: [FilterField] = [
         .albumTitle, .artist, .genre, .label,
+        .releaseType, .releaseCountry, .releaseStatus, .mood, .grouping, .mediaType, .catalogNum,
         .year, .duration, .rating, .albumRating,
         .isFavorited, .isDownloaded,
     ]
@@ -437,7 +454,8 @@ extension FilterField {
     static let smartPlaylistFields: [FilterField] = [
         // Text
         .title, .artist, .albumTitle, .genre, .label, .suffix, .contentType, .comment,
-        .explicitStatus,
+        .explicitStatus, .releaseType, .releaseCountry, .releaseStatus,
+        .mood, .grouping, .mediaType, .catalogNum,
         .mbzRecordingId, .mbzAlbumId, .mbzArtistId, .mbzAlbumArtistId,
         .mbzReleaseTrackId, .mbzReleaseGroupId,
         // Numeric
@@ -581,8 +599,16 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
         let rating: Int
         let isFavorited: Bool
         let isDownloaded: Bool = false
+        // ND-only tag fields
+        let releaseType: String?
+        let releaseCountry: String?
+        let releaseStatus: String?
+        let mood: String?
+        let grouping: String?
+        let mediaType: String?
+        let catalogNum: String?
 
-        init(album: Album) {
+        init(album: Album, extras: CachedAlbumExtras? = nil) {
             title = album.name
             artist = album.artist
             // Join all genres so text operators (contains / equals) match any genre, not just the first.
@@ -592,7 +618,24 @@ struct FilterRuleSet: Codable, Sendable, Equatable {
             duration = album.duration
             rating = album.userRating ?? 0
             isFavorited = album.starred != nil
+            releaseType = extras?.releaseType
+            releaseCountry = extras?.releaseCountry
+            releaseStatus = extras?.releaseStatus
+            mood = extras?.mood
+            grouping = extras?.grouping
+            mediaType = extras?.mediaType
+            catalogNum = extras?.catalogNum
         }
+    }
+
+    struct CachedAlbumExtras {
+        let releaseType: String?
+        let releaseCountry: String?
+        let releaseStatus: String?
+        let mood: String?
+        let grouping: String?
+        let mediaType: String?
+        let catalogNum: String?
     }
 
     struct ArtistMeta {
@@ -681,6 +724,13 @@ extension FilterRuleSet.AlbumMeta: FilterTarget {
         case .artist:             return artist
         case .genre:              return genre
         case .label:              return label
+        case .releaseType:        return releaseType
+        case .releaseCountry:     return releaseCountry
+        case .releaseStatus:      return releaseStatus
+        case .mood:               return mood
+        case .grouping:           return grouping
+        case .mediaType:          return mediaType
+        case .catalogNum:         return catalogNum
         default:                  return nil
         }
     }

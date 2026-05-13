@@ -35,17 +35,32 @@ extension LibrarySyncManager {
 
     nonisolated static func hasNDAlbumChanged(_ cached: CachedAlbum, _ server: NDAlbum) -> Bool {
         cached.name != server.name ||
-        cached.artistId != server.artistId ||
-        cached.year != server.year ||
+        cached.artistName != server.albumArtist ||
+        cached.artistId != server.albumArtistId ||
+        cached.year != (server.minYear ?? server.year) ||
+        cached.minYear != server.minYear ||
+        cached.maxYear != server.maxYear ||
         cached.songCount != server.songCount ||
         cached.duration != server.duration.map({ Int($0) }) ||
         cached.isStarred != (server.starred ?? false) ||
         cached.userRating != (server.rating ?? 0) ||
+        cached.playCount != (server.playCount ?? 0) ||
+        cached.isCompilation != (server.compilation ?? false) ||
+        cached.label != server.recordLabel ||
+        cached.catalogNum != server.catalogNum ||
+        cached.releaseType != server.releaseType ||
+        cached.releaseCountry != server.releaseCountry ||
+        cached.releaseStatus != server.releaseStatus ||
+        cached.mood != server.mood ||
+        cached.grouping != server.grouping ||
+        cached.mediaType != server.mediaType ||
+        cached.sortAlbumName != server.sortAlbumName ||
+        cached.sortAlbumArtistName != server.sortAlbumArtistName ||
         cached.musicBrainzId != server.mbzAlbumId ||
         cached.mbzAlbumArtistId != server.mbzAlbumArtistId ||
         cached.mbzReleaseGroupId != server.mbzReleaseGroupId ||
-        cached.playCount != (server.playCount ?? 0) ||
-        cached.isCompilation != (server.compilation ?? false) ||
+        cached.mbzAlbumType != server.mbzAlbumType ||
+        cached.mbzAlbumComment != server.mbzAlbumComment ||
         Set(cached.genres) != Set(server.allGenres)
     }
 
@@ -108,6 +123,8 @@ extension LibrarySyncManager {
         cached.rating != (server.rating ?? 0) ||
         cached.playCount != (server.playCount ?? 0) ||
         cached.isCompilation != (server.compilation ?? false) ||
-        cached.hasCoverArt != (server.hasCoverArt ?? false)
+        cached.hasCoverArt != (server.hasCoverArt ?? false) ||
+        cached.rgTrackGain != server.rgTrackGain ||
+        cached.rgAlbumGain != server.rgAlbumGain
     }
 }

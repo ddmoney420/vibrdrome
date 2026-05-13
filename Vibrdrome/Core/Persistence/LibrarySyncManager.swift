@@ -4,7 +4,7 @@ import SwiftData
 import os.log
 
 private let syncLog = Logger(subsystem: "com.vibrdrome.app", category: "LibrarySync")
-private let syncISO8601 = ISO8601DateFormatter()
+nonisolated(unsafe) private let syncISO8601 = ISO8601DateFormatter()
 
 /// Sync mode determines the depth of library synchronization.
 enum SyncMode: String, Sendable {
@@ -571,13 +571,15 @@ final class LibrarySyncManager {
         cached.genre != server.genre ||
         cached.duration != server.duration ||
         cached.isStarred != (server.starred != nil) ||
+        cached.rating != (server.userRating ?? 0) ||
         cached.coverArtId != server.coverArt ||
         cached.bitRate != server.bitRate ||
         cached.bitDepth != server.bitDepth ||
         cached.samplingRate != server.samplingRate ||
         cached.comment != server.comment ||
         cached.bpm != server.bpm ||
-        cached.mbzRecordingId != server.musicBrainzId
+        cached.mbzRecordingId != server.musicBrainzId ||
+        cached.rgTrackGain != server.replayGain?.trackGain || cached.rgAlbumGain != server.replayGain?.albumGain
     }
 
     nonisolated static func updateSongFields(_ cached: CachedSong, from song: Song) {
@@ -605,6 +607,8 @@ final class LibrarySyncManager {
         cached.mbzRecordingId = song.musicBrainzId
         cached.isStarred = song.starred != nil
         cached.rating = song.userRating ?? 0
+        cached.rgTrackGain = song.replayGain?.trackGain; cached.rgTrackPeak = song.replayGain?.trackPeak
+        cached.rgAlbumGain = song.replayGain?.albumGain; cached.rgAlbumPeak = song.replayGain?.albumPeak
         cached.cachedAt = Date()
     }
 

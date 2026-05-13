@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class CachedAlbum {
-    #Index<CachedAlbum>([\.name], [\.artistId], [\.year], [\.isStarred], [\.userRating], [\.label])
+    #Index<CachedAlbum>([\.name], [\.artistId], [\.year], [\.isStarred], [\.userRating], [\.label], [\.releaseType], [\.mood], [\.releaseCountry])
 
     @Attribute(.unique) var id: String
     var name: String
@@ -27,8 +27,23 @@ final class CachedAlbum {
     var musicBrainzId: String?
     var mbzAlbumArtistId: String?
     var mbzReleaseGroupId: String?
+    var mbzAlbumType: String?
+    var mbzAlbumComment: String?
     var playCount: Int = 0
     var isCompilation: Bool = false
+
+    // ND native API tag fields (album: true in mappings.yml)
+    var catalogNum: String?
+    var releaseType: String?
+    var releaseCountry: String?
+    var releaseStatus: String?
+    var mood: String?
+    var grouping: String?
+    var mediaType: String?
+    var sortAlbumName: String?
+    var sortAlbumArtistName: String?
+    var minYear: Int?
+    var maxYear: Int?
 
     var songs: [CachedSong] = []
     @Relationship(deleteRule: .cascade, inverse: \AlbumGenre.album) var genreLinks: [AlbumGenre] = []
@@ -60,17 +75,31 @@ final class CachedAlbum {
     init(from ndAlbum: NDAlbum) {
         self.id = ndAlbum.id
         self.name = ndAlbum.name
-        self.artistName = ndAlbum.artist
-        self.artistId = ndAlbum.artistId
+        self.artistName = ndAlbum.albumArtist
+        self.artistId = ndAlbum.albumArtistId
         self.coverArtId = ndAlbum.id
-        self.year = ndAlbum.year
+        self.year = ndAlbum.minYear ?? ndAlbum.year
+        self.minYear = ndAlbum.minYear
+        self.maxYear = ndAlbum.maxYear
         self.songCount = ndAlbum.songCount
         self.duration = ndAlbum.duration.map { Int($0) }
         self.isStarred = ndAlbum.starred ?? false
         self.userRating = ndAlbum.rating ?? 0
+        self.label = ndAlbum.recordLabel
+        self.catalogNum = ndAlbum.catalogNum
+        self.releaseType = ndAlbum.releaseType
+        self.releaseCountry = ndAlbum.releaseCountry
+        self.releaseStatus = ndAlbum.releaseStatus
+        self.mood = ndAlbum.mood
+        self.grouping = ndAlbum.grouping
+        self.mediaType = ndAlbum.mediaType
+        self.sortAlbumName = ndAlbum.sortAlbumName
+        self.sortAlbumArtistName = ndAlbum.sortAlbumArtistName
         self.musicBrainzId = ndAlbum.mbzAlbumId
         self.mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
         self.mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        self.mbzAlbumType = ndAlbum.mbzAlbumType
+        self.mbzAlbumComment = ndAlbum.mbzAlbumComment
         self.playCount = ndAlbum.playCount ?? 0
         self.isCompilation = ndAlbum.compilation ?? false
         self.genreLinks = ndAlbum.allGenres.map { AlbumGenre(name: $0) }
@@ -78,15 +107,31 @@ final class CachedAlbum {
 
     func update(from ndAlbum: NDAlbum) {
         name = ndAlbum.name
-        artistId = ndAlbum.artistId
-        year = ndAlbum.year
+        artistName = ndAlbum.albumArtist
+        artistId = ndAlbum.albumArtistId
+        coverArtId = ndAlbum.id
+        year = ndAlbum.minYear ?? ndAlbum.year
+        minYear = ndAlbum.minYear
+        maxYear = ndAlbum.maxYear
         songCount = ndAlbum.songCount
         duration = ndAlbum.duration.map { Int($0) }
         isStarred = ndAlbum.starred ?? false
         userRating = ndAlbum.rating ?? 0
+        label = ndAlbum.recordLabel
+        catalogNum = ndAlbum.catalogNum
+        releaseType = ndAlbum.releaseType
+        releaseCountry = ndAlbum.releaseCountry
+        releaseStatus = ndAlbum.releaseStatus
+        mood = ndAlbum.mood
+        grouping = ndAlbum.grouping
+        mediaType = ndAlbum.mediaType
+        sortAlbumName = ndAlbum.sortAlbumName
+        sortAlbumArtistName = ndAlbum.sortAlbumArtistName
         musicBrainzId = ndAlbum.mbzAlbumId
         mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
         mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        mbzAlbumType = ndAlbum.mbzAlbumType
+        mbzAlbumComment = ndAlbum.mbzAlbumComment
         playCount = ndAlbum.playCount ?? 0
         isCompilation = ndAlbum.compilation ?? false
         let incoming = Set(ndAlbum.allGenres)

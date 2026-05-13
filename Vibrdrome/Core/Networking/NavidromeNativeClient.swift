@@ -112,7 +112,8 @@ struct NDSong: Decodable, Sendable {
 struct NDAlbum: Decodable, Sendable {
     let id: String
     let name: String
-    let artist: String?
+    /// Display name of the album artist (Navidrome field: `albumArtist`).
+    let albumArtist: String?
     let artistId: String?
     let albumArtistId: String?
     let genre: String?
@@ -140,12 +141,30 @@ struct NDAlbum: Decodable, Sendable {
     let smallImageUrl: String?
     let largeImageUrl: String?
     let comment: String?
+    let catalogNum: String?
+    let mbzAlbumType: String?
+    let mbzAlbumComment: String?
+    let sortAlbumName: String?
+    let sortAlbumArtistName: String?
+    let minYear: Int?
+    let maxYear: Int?
+    /// All imported tags, e.g. `{"recordlabel": ["Warp Records"], "releasetype": ["Album"], ...}`.
+    let tags: [String: [String]]?
+
+    var recordLabel: String? { tags?["recordlabel"]?.first }
+    var releaseType: String? { tags?["releasetype"]?.first }
+    var releaseCountry: String? { tags?["releasecountry"]?.first }
+    var releaseStatus: String? { tags?["releasestatus"]?.first }
+    var mood: String? { tags?["mood"]?.first }
+    var grouping: String? { tags?["grouping"]?.first }
+    var mediaType: String? { tags?["media"]?.first }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, artist, artistId, albumArtistId, genre, genres, year, songCount, duration, size
+        case id, name, albumArtist, artistId, albumArtistId, genre, genres, year, songCount, duration, size
         case starred, starredAt, rating, playCount, playDate, createdAt, compilation
-        case mbzAlbumId, mbzAlbumArtistId, mbzReleaseGroupId
-        case smallImageUrl, largeImageUrl, comment
+        case mbzAlbumId, mbzAlbumArtistId, mbzReleaseGroupId, mbzAlbumType, mbzAlbumComment
+        case smallImageUrl, largeImageUrl, comment, catalogNum, tags
+        case sortAlbumName, sortAlbumArtistName, minYear, maxYear
     }
 }
 

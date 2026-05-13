@@ -370,6 +370,14 @@ private extension FilterField {
         case .hasCoverArt:        return "hascoverart"
         case .isCompilation:      return "compilation"
         case .isMissing:          return "missing"
+        // ND tag fields
+        case .releaseType:        return "releasetype"
+        case .releaseCountry:     return "releasecountry"
+        case .releaseStatus:      return "releasestatus"
+        case .mood:               return "mood"
+        case .grouping:           return "grouping"
+        case .mediaType:          return "media"
+        case .catalogNum:         return "catalognumber"
         // Local-only — no server mapping
         case .isDownloaded:       return nil
         // Playlist membership — handled specially in playlistNSP(), not via nspField
