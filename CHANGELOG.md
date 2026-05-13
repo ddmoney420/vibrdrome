@@ -30,7 +30,7 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 **CarPlay:**
 - Albums alphabet directory now reads the full library from local cache rather than only the first 500 albums returned by the server (#32). Libraries with non-standard server sort order no longer collapse to one or two visible letters.
-- Cold-launch Now Playing fix (#45). After force-quit, opening CarPlay (or glancing at the iOS lock screen) now shows the saved track immediately because the player item is preloaded paused on the audio session at restore time.
+- Cold-launch Now Playing partial fix (#45). The iOS lock-screen widget now shows the saved track after a cold launch (force-quit + reconnect), because the audio session now declares the `.longFormAudio` route sharing policy and the player item is preloaded paused at restore time. The CarPlay system Now Playing button at the top-right of the head unit still requires the user to start playback at least once before it appears -- iOS only promotes an app to "Now Playing app" status (which surfaces that specific button) after observing actual audio activity, and `nowPlayingInfo` alone is not sufficient. Tracked as a remaining limitation; a future build can add the brief-play-at-zero-volume workaround other audio apps use if we want to fully close it.
 - Template-stack hierarchy crash fixed. Own pushes are now capped at depth 4 so the framework's auto-push of `CPNowPlayingTemplate` (when the user taps the system Now Playing icon at the top-right) never exceeds CarPlay's 5-template limit.
 
 **Bug fixes:**

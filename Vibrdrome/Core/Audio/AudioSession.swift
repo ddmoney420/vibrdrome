@@ -20,7 +20,18 @@ final class AudioSessionManager: @unchecked Sendable {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default, options: [])
+            // `.longFormAudio` is Apple's recommended route sharing policy
+            // for music apps. It signals to iOS that this is a long-form
+            // audio app (vs game audio / VoIP / etc.), which is one of the
+            // signals iOS uses when deciding to promote an app to the
+            // system "Now Playing" app -- the status that surfaces the
+            // Now Playing button at the top right of CarPlay and the
+            // lock-screen widget. Without it, iOS treats the session as
+            // generic playback and the promotion can fail on cold launch.
+            // Issue #45.
+            try session.setCategory(
+                .playback, mode: .default, policy: .longFormAudio, options: []
+            )
             try session.setActive(true)
         } catch {
             print("Failed to configure audio session: \(error)")
