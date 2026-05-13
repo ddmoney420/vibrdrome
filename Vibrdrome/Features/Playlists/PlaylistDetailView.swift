@@ -37,154 +37,7 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
-        List {
-            if let playlist {
-                // Header section
-                Section {
-                    VStack(spacing: 12) {
-                        AlbumArtView(coverArtId: playlist.coverArt, size: 160, cornerRadius: 12)
-                            .shadow(radius: 6)
-
-                        HStack(spacing: 6) {
-                            Text(playlist.name)
-                                .font(.title3)
-                                .bold()
-                            if isSmartPlaylist {
-                                Image(systemName: "sparkles")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        HStack(spacing: 8) {
-                            Text(verbatim: "\(playlist.songCount ?? 0) songs")
-                            if let duration = playlist.duration {
-                                Text("·")
-                                Text(formatDuration(duration))
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                        // Action buttons
-                        HStack(spacing: 16) {
-                            Button {
-                                if let songs = playlist.entry, let first = songs.first {
-                                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
-                                }
-                            } label: {
-                                Label("Play", systemImage: "play.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("playlistPlayButton")
-                            .disabled(playlist.entry?.isEmpty ?? true)
-
-                            Button {
-                                if var songs = playlist.entry, !songs.isEmpty {
-                                    songs.shuffle()
-                                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
-                                }
-                            } label: {
-                                Label("Shuffle", systemImage: "shuffle")
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("playlistShuffleButton")
-                            .disabled(playlist.entry?.isEmpty ?? true)
-
-                            Menu {
-                                Button {
-                                    if let songs = playlist.entry, !songs.isEmpty {
-                                        AudioEngine.shared.addToQueueNext(songs)
-                                    }
-                                } label: {
-                                    Label("Play Next", systemImage: "text.insert")
-                                }
-                                Button {
-                                    if let songs = playlist.entry, !songs.isEmpty {
-                                        AudioEngine.shared.addToQueue(songs)
-                                    }
-                                } label: {
-                                    Label("Add to Queue", systemImage: "text.append")
-                                }
-                            } label: {
-                                Label("More", systemImage: "ellipsis.circle")
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityIdentifier("playlistMoreButton")
-                            .disabled(playlist.entry?.isEmpty ?? true)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .padding(.vertical, 12)
-                }
-
-                // Songs
-                Section {
-                    #if os(macOS)
-                    MacTrackTableView(songs: filteredSongs, settings: columnSettings)
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                    #else
-                    ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
-                        HStack(spacing: 0) {
-                            if isSelecting {
-                                Button {
-                                    toggleSelection(song.id)
-                                } label: {
-                                    Image(systemName: selectedSongs.contains(song.id)
-                                          ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(selectedSongs.contains(song.id)
-                                                         ? Color.accentColor : .secondary)
-                                        .font(.title3)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 8)
-                            }
-
-                            TrackRow(song: song, showTrackNumber: false)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if isSelecting {
-                                        toggleSelection(song.id)
-                                    } else {
-                                        playFromPlaylist(song: song, songs: filteredSongs, index: index)
-                                    }
-                                }
-                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
-                        }
-                    }
-                    .onDelete { offsets in
-                        // Map filtered indices to original playlist indices
-                        let allSongs = playlist.entry ?? []
-                        let filtered = filteredSongs
-                        let originalIndices = offsets.compactMap { offset -> Int? in
-                            guard offset < filtered.count else { return nil }
-                            let songId = filtered[offset].id
-                            return allSongs.firstIndex(where: { $0.id == songId })
-                        }
-                        removeFromPlaylist(
-                            at: IndexSet(originalIndices), songs: allSongs
-                        )
-                    }
-                    #endif
-                }
-
-                // Batch action bar
-                if isSelecting && !selectedSongs.isEmpty {
-                    Section {
-                        playlistBatchActionBar(songs: filteredSongs)
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        #if os(iOS)
-        .contentMargins(.bottom, 80)
-        #endif
+        content
         .navigationTitle(playlist?.name ?? "Playlist")
         .searchable(text: $searchText, prompt: "Search in Playlist")
         #if os(iOS)
@@ -355,6 +208,196 @@ struct PlaylistDetailView: View {
         .task { await loadPlaylist() }
         .task { await detectSmartPlaylist() }
         .refreshable { await loadPlaylist() }
+    }
+
+    // MARK: - Content containers
+
+    @ViewBuilder
+    private var content: some View {
+        #if os(macOS)
+        ScrollView {
+            if let playlist {
+                VStack(spacing: 0) {
+                    playlistHeader(playlist)
+                    MacTrackTableView(songs: filteredSongs, settings: columnSettings, embedsScrollView: false)
+                }
+            }
+        }
+        #else
+        List {
+            if let playlist {
+                Section {
+                    VStack(spacing: 12) {
+                        AlbumArtView(coverArtId: playlist.coverArt, size: 160, cornerRadius: 12)
+                            .shadow(radius: 6)
+
+                        HStack(spacing: 6) {
+                            Text(playlist.name)
+                                .font(.title3)
+                                .bold()
+                            if isSmartPlaylist {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                            if let duration = playlist.duration {
+                                Text("·")
+                                Text(formatDuration(duration))
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        playlistActionButtons(playlist)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .padding(.vertical, 12)
+                }
+
+                Section {
+                    ForEach(Array(filteredSongs.enumerated()), id: \.element.id) { index, song in
+                        HStack(spacing: 0) {
+                            if isSelecting {
+                                Button {
+                                    toggleSelection(song.id)
+                                } label: {
+                                    Image(systemName: selectedSongs.contains(song.id)
+                                          ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedSongs.contains(song.id)
+                                                         ? Color.accentColor : .secondary)
+                                        .font(.title3)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, 8)
+                            }
+
+                            TrackRow(song: song, showTrackNumber: false)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if isSelecting {
+                                        toggleSelection(song.id)
+                                    } else {
+                                        playFromPlaylist(song: song, songs: filteredSongs, index: index)
+                                    }
+                                }
+                                .trackContextMenu(song: song, queue: filteredSongs, index: index)
+                        }
+                    }
+                    .onDelete { offsets in
+                        let allSongs = playlist.entry ?? []
+                        let filtered = filteredSongs
+                        let originalIndices = offsets.compactMap { offset -> Int? in
+                            guard offset < filtered.count else { return nil }
+                            let songId = filtered[offset].id
+                            return allSongs.firstIndex(where: { $0.id == songId })
+                        }
+                        removeFromPlaylist(at: IndexSet(originalIndices), songs: allSongs)
+                    }
+                }
+
+                if isSelecting && !selectedSongs.isEmpty {
+                    Section {
+                        playlistBatchActionBar(songs: filteredSongs)
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .contentMargins(.bottom, 80)
+        #endif
+    }
+
+    #if os(macOS)
+    @ViewBuilder
+    private func playlistHeader(_ playlist: Playlist) -> some View {
+        VStack(spacing: 12) {
+            AlbumArtView(coverArtId: playlist.coverArt, size: 160, cornerRadius: 12)
+                .shadow(radius: 6)
+
+            HStack(spacing: 6) {
+                Text(playlist.name)
+                    .font(.title3)
+                    .bold()
+                if isSmartPlaylist {
+                    Image(systemName: "sparkles")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text(verbatim: "\(playlist.songCount ?? 0) songs")
+                if let duration = playlist.duration {
+                    Text("·")
+                    Text(formatDuration(duration))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            playlistActionButtons(playlist)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+    #endif
+
+    @ViewBuilder
+    private func playlistActionButtons(_ playlist: Playlist) -> some View {
+        HStack(spacing: 16) {
+            Button {
+                if let songs = playlist.entry, let first = songs.first {
+                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
+                }
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("playlistPlayButton")
+            .disabled(playlist.entry?.isEmpty ?? true)
+
+            Button {
+                if var songs = playlist.entry, !songs.isEmpty {
+                    songs.shuffle()
+                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
+                }
+            } label: {
+                Label("Shuffle", systemImage: "shuffle")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("playlistShuffleButton")
+            .disabled(playlist.entry?.isEmpty ?? true)
+
+            Menu {
+                Button {
+                    if let songs = playlist.entry, !songs.isEmpty {
+                        AudioEngine.shared.addToQueueNext(songs)
+                    }
+                } label: {
+                    Label("Play Next", systemImage: "text.insert")
+                }
+                Button {
+                    if let songs = playlist.entry, !songs.isEmpty {
+                        AudioEngine.shared.addToQueue(songs)
+                    }
+                } label: {
+                    Label("Add to Queue", systemImage: "text.append")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("playlistMoreButton")
+            .disabled(playlist.entry?.isEmpty ?? true)
+        }
     }
 
     private func detectSmartPlaylist() async {

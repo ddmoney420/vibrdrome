@@ -46,7 +46,8 @@ struct AlbumDetailView: View {
                         songs: songs,
                         settings: columnSettings,
                         showDiscSeparators: hasMultipleDiscs,
-                        downloadedSongIds: downloadedSongIds
+                        downloadedSongIds: downloadedSongIds,
+                        embedsScrollView: false
                     )
                     #else
                     LazyVStack(spacing: 0) {

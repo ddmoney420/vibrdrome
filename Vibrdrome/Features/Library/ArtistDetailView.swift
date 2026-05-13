@@ -413,7 +413,8 @@ struct ArtistDetailView: View {
 
                         MacTrackTableView(
                             songs: showAllTracks ? topSongs : Array(topSongs.prefix(3)),
-                            settings: columnSettings
+                            settings: columnSettings,
+                            embedsScrollView: false
                         )
                     }
                 }
