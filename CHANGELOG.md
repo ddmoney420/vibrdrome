@@ -13,6 +13,7 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 - macOS album detail (#49): rich metadata layout with clickable genre / record-label pills that drill into the corresponding filter, MusicBrainz ID copy-selectable, date helpers cached for instant render. Album detail navigates without per-row SwiftData faults.
 - macOS song table (#31): 11-column reorderable table (track / title / artist / album / duration / year / genre / bitRate / format / bpm / dateAdded), toggleable, persisted across launches.
 - Hover overlay on album grid cards (#39): favorite and rating buttons appear on hover.
+- Play/pause button on album grid card hover (#55, macOS): a centered play button appears alongside the favorite/rating overlay. Tap to start the album (fetches songs and plays from track 1); if the album is already the active queue, the button toggles play/pause without reloading. Repeated taps during the fetch are guarded.
 
 **Audio + Library:**
 - Song pre-download (#44): the next track in the queue is fetched in advance during playback so transitions stay gapless on slow connections. Includes stall detection, speed tracking, and per-song cancellation when the queue changes.
