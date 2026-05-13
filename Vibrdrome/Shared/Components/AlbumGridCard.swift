@@ -8,6 +8,8 @@ struct AlbumGridCard: View {
     @State private var currentRating: Int
     #if os(macOS)
     @State private var isHovered = false
+    @State private var isLoadingPlay = false
+    @Environment(AppState.self) private var appState
     #endif
 
     init(album: Album, cellWidth: CGFloat = 180) {
@@ -53,6 +55,8 @@ struct AlbumGridCard: View {
                     #if os(macOS)
                     if isHovered {
                         hoverOverlay
+                        playButton
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     #endif
                 }
@@ -134,6 +138,51 @@ struct AlbumGridCard: View {
                 .accessibilityLabel("\(star) star\(star == 1 ? "" : "s")")
             }
         }
+    }
+
+    private var isThisAlbumPlaying: Bool {
+        AudioEngine.shared.isPlaying &&
+        AudioEngine.shared.currentSong?.albumId == album.id
+    }
+
+    private var playButton: some View {
+        Button {
+            guard !isLoadingPlay else { return }
+            if isThisAlbumPlaying {
+                AudioEngine.shared.pause()
+            } else if AudioEngine.shared.currentSong?.albumId == album.id {
+                AudioEngine.shared.togglePlayPause()
+            } else {
+                isLoadingPlay = true
+                Task {
+                    defer { isLoadingPlay = false }
+                    do {
+                        let detail = try await appState.subsonicClient.getAlbum(id: album.id)
+                        let songs = detail.song ?? []
+                        guard let first = songs.first else { return }
+                        AudioEngine.shared.play(song: first, from: songs, at: 0)
+                    } catch {}
+                }
+            }
+        } label: {
+            Group {
+                if isLoadingPlay {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                } else {
+                    Image(systemName: isThisAlbumPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+            }
+            .shadow(color: .black.opacity(0.9), radius: 6, y: 2)
+            .shadow(color: .black.opacity(0.7), radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isThisAlbumPlaying ? "Pause" : "Play Album")
+        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
     #endif
 }
