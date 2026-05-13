@@ -340,6 +340,7 @@ final class AlbumsViewModel {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
+            filter.matchCount = nil
             recomputeFilteredAlbums(filterRaw: filterRaw)
             return
         }
@@ -371,6 +372,7 @@ final class AlbumsViewModel {
 
         guard !Task.isCancelled else { return }
         localFilteredAlbums = filtered
+        filter.matchCount = filtered.count
         recomputeFilteredAlbums(filterRaw: filterRaw)
     }
 
@@ -405,6 +407,7 @@ final class AlbumsViewModel {
         let selectedGenres: Set<String>
         let selectedLabels: Set<String>
         let year: Int?
+        let ruleSet: FilterRuleSet
 
         @MainActor
         init(filter: LibraryFilter) {
@@ -414,6 +417,7 @@ final class AlbumsViewModel {
             selectedGenres = filter.selectedGenres
             selectedLabels = filter.selectedLabels
             year = filter.year
+            ruleSet = filter.ruleSet
         }
     }
 
@@ -439,6 +443,10 @@ final class AlbumsViewModel {
         }
         if let yearFilter = snapshot.year {
             guard album.year == yearFilter else { return false }
+        }
+        if !snapshot.ruleSet.isEmpty {
+            let meta = FilterRuleSet.AlbumMeta(album: album)
+            guard snapshot.ruleSet.matches(album: meta) else { return false }
         }
         return true
     }

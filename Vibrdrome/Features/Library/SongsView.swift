@@ -115,6 +115,7 @@ struct SongsView: View {
         .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.ruleSet) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -532,6 +533,9 @@ struct SongsView: View {
     }
 
     private func initialLoad() async {
+        #if os(macOS)
+        appState.activeFilterWindowContext = .song
+        #endif
         await loadSongs()
         await loadGenres()
         refreshTitleSongCount()
@@ -693,6 +697,7 @@ struct SongsView: View {
         let filter = appState.songFilter
         guard filter.isActive else {
             localFilteredSongs = nil
+            filter.matchCount = nil
             recomputeDisplayedSongs()
             return
         }
@@ -708,13 +713,39 @@ struct SongsView: View {
             }
 
             let recentSongIds = recentlyPlayedSongIds(for: filter)
-            localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
+            let ruleSet = filter.ruleSet
+            let filtered = allSongs.filter { song in
+                guard songMatchesFilter(song, filter: filter, recentIds: recentSongIds) else { return false }
+                if !ruleSet.isEmpty {
+                    let extras = ruleSet.needsCachedSong ? fetchCachedSongExtras(songId: song.id) : nil
+                    let meta = FilterRuleSet.SongMeta(song: song, extras: extras)
+                    if !ruleSet.matches(song: meta) { return false }
+                }
+                return true
+            }
+            localFilteredSongs = filtered
+            filter.matchCount = filtered.count
             recomputeDisplayedSongs()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
                 .error("Failed to apply local filters: \(error)")
             localFilteredSongs = nil
         }
+    }
+
+    private func fetchCachedSongExtras(songId: String) -> FilterRuleSet.CachedSongExtras? {
+        let descriptor = FetchDescriptor<CachedSong>(predicate: #Predicate { $0.id == songId })
+        guard let cached = (try? modelContext.fetch(descriptor))?.first else { return nil }
+        return FilterRuleSet.CachedSongExtras(
+            playCount: cached.playCount,
+            albumRating: 0,
+            albumFavorited: false,
+            hasCoverArt: cached.hasCoverArt,
+            isCompilation: cached.isCompilation,
+            channels: cached.channels,
+            mbzRecordingId: cached.mbzRecordingId,
+            dateAdded: cached.dateAdded
+        )
     }
 
     private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {

@@ -18,10 +18,14 @@ struct PlaylistDetailView: View {
     @State private var isSelecting = false
     @State private var showBatchAddToPlaylist = false
     @State private var showRemoveOfflineConfirmation = false
+    @State private var smartCriteria: NSPCriteria?
+    @State private var isLoadingSmartRules = false
     @Query private var downloadedSongs: [DownloadedSong]
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "playlist")
     #endif
+
+    private var isSmartPlaylist: Bool { smartCriteria != nil }
 
     private var filteredSongs: [Song] {
         guard let songs = playlist?.entry else { return [] }
@@ -41,9 +45,16 @@ struct PlaylistDetailView: View {
                         AlbumArtView(coverArtId: playlist.coverArt, size: 160, cornerRadius: 12)
                             .shadow(radius: 6)
 
-                        Text(playlist.name)
-                            .font(.title3)
-                            .bold()
+                        HStack(spacing: 6) {
+                            Text(playlist.name)
+                                .font(.title3)
+                                .bold()
+                            if isSmartPlaylist {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         HStack(spacing: 8) {
                             Text(verbatim: "\(playlist.songCount ?? 0) songs")
@@ -198,7 +209,8 @@ struct PlaylistDetailView: View {
                         Button {
                             showEditSheet = true
                         } label: {
-                            Label("Edit Playlist", systemImage: "pencil")
+                            Label(isSmartPlaylist ? "Edit Smart Playlist" : "Edit Playlist",
+                                  systemImage: isSmartPlaylist ? "sparkles" : "pencil")
                         }
 
                         Button {
@@ -298,12 +310,25 @@ struct PlaylistDetailView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             if let playlist {
-                PlaylistEditorView(
-                    mode: .edit(playlistId: playlist.id, currentName: playlist.name)
-                ) {
-                    await loadPlaylist()
+                if isSmartPlaylist {
+                    PlaylistEditorView(
+                        mode: .smartPlaylist(
+                            playlistId: playlist.id,
+                            currentName: playlist.name,
+                            existingRules: smartCriteria
+                        )
+                    ) {
+                        await loadPlaylist()
+                    }
+                    .environment(appState)
+                } else {
+                    PlaylistEditorView(
+                        mode: .edit(playlistId: playlist.id, currentName: playlist.name)
+                    ) {
+                        await loadPlaylist()
+                    }
+                    .environment(appState)
                 }
-                .environment(appState)
             }
         }
         #if os(iOS)
@@ -328,7 +353,18 @@ struct PlaylistDetailView: View {
             }
         }
         .task { await loadPlaylist() }
+        .task { await detectSmartPlaylist() }
         .refreshable { await loadPlaylist() }
+    }
+
+    private func detectSmartPlaylist() async {
+        guard let ndClient = appState.navidromeClient, ndClient.isAvailable else { return }
+        isLoadingSmartRules = true
+        defer { isLoadingSmartRules = false }
+        guard let playlists = try? await ndClient.getPlaylists() else { return }
+        if let match = playlists.first(where: { $0.id == playlistId }) {
+            smartCriteria = match.rules
+        }
     }
 
     private func loadPlaylist() async {

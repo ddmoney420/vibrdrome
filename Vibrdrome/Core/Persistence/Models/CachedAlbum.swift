@@ -25,6 +25,10 @@ final class CachedAlbum {
     var replayGainTrackGain: Double?
     var replayGainBaseGain: Double?
     var musicBrainzId: String?
+    var mbzAlbumArtistId: String?
+    var mbzReleaseGroupId: String?
+    var playCount: Int = 0
+    var isCompilation: Bool = false
 
     var songs: [CachedSong] = []
     @Relationship(deleteRule: .cascade, inverse: \AlbumGenre.album) var genreLinks: [AlbumGenre] = []
@@ -51,6 +55,49 @@ final class CachedAlbum {
         self.replayGainBaseGain = album.replayGain?.baseGain
         self.musicBrainzId = album.musicBrainzId
         self.genreLinks = album.allGenres.map { AlbumGenre(name: $0) }
+    }
+
+    init(from ndAlbum: NDAlbum) {
+        self.id = ndAlbum.id
+        self.name = ndAlbum.name
+        self.artistName = ndAlbum.artist
+        self.artistId = ndAlbum.artistId
+        self.coverArtId = ndAlbum.id
+        self.year = ndAlbum.year
+        self.songCount = ndAlbum.songCount
+        self.duration = ndAlbum.duration.map { Int($0) }
+        self.isStarred = ndAlbum.starred ?? false
+        self.userRating = ndAlbum.rating ?? 0
+        self.musicBrainzId = ndAlbum.mbzAlbumId
+        self.mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
+        self.mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        self.playCount = ndAlbum.playCount ?? 0
+        self.isCompilation = ndAlbum.compilation ?? false
+        self.genreLinks = ndAlbum.allGenres.map { AlbumGenre(name: $0) }
+    }
+
+    func update(from ndAlbum: NDAlbum) {
+        name = ndAlbum.name
+        artistId = ndAlbum.artistId
+        year = ndAlbum.year
+        songCount = ndAlbum.songCount
+        duration = ndAlbum.duration.map { Int($0) }
+        isStarred = ndAlbum.starred ?? false
+        userRating = ndAlbum.rating ?? 0
+        musicBrainzId = ndAlbum.mbzAlbumId
+        mbzAlbumArtistId = ndAlbum.mbzAlbumArtistId
+        mbzReleaseGroupId = ndAlbum.mbzReleaseGroupId
+        playCount = ndAlbum.playCount ?? 0
+        isCompilation = ndAlbum.compilation ?? false
+        let incoming = Set(ndAlbum.allGenres)
+        let existing = Set(genreLinks.map(\.name))
+        for removed in existing.subtracting(incoming) {
+            genreLinks.removeAll { $0.name == removed }
+        }
+        for added in incoming.subtracting(existing) {
+            genreLinks.append(AlbumGenre(name: added))
+        }
+        cachedAt = Date()
     }
 
     /// Update existing record with fresh server data.
