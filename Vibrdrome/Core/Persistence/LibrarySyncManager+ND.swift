@@ -110,7 +110,7 @@ extension LibrarySyncManager {
         cached.albumName != server.album ||
         cached.track != server.trackNumber ||
         cached.year != server.year ||
-        cached.genre != server.allGenres.first ||
+        Set(cached.genres) != Set(server.allGenres) ||
         cached.duration != server.duration.map({ Int($0) }) ||
         cached.isStarred != (server.starred ?? false) ||
         cached.bitRate != server.bitRate ||

@@ -248,7 +248,7 @@ final class NavidromeNativeClient {
 
     /// Create a new smart playlist on the server. Returns the new playlist ID.
     @discardableResult
-    func createSmartPlaylist(name: String, comment: String = "", rules: NSPCriteria) async throws -> String {
+    nonisolated func createSmartPlaylist(name: String, comment: String = "", rules: NSPCriteria) async throws -> String {
         let body = buildPlaylistBody(name: name, comment: comment, rules: rules)
         let data = try await nativeRequest(method: "POST", path: "api/playlist", body: body)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -263,21 +263,21 @@ final class NavidromeNativeClient {
     }
 
     /// Update rules (and optionally name/comment) of an existing playlist.
-    func updateSmartPlaylist(id: String, name: String, comment: String = "", rules: NSPCriteria) async throws {
+    nonisolated func updateSmartPlaylist(id: String, name: String, comment: String = "", rules: NSPCriteria) async throws {
         let body = buildPlaylistBody(name: name, comment: comment, rules: rules)
         _ = try await nativeRequest(method: "PUT", path: "api/playlist/\(id)", body: body)
         ndLog.info("Updated smart playlist '\(name)' (id: \(id))")
     }
 
     /// Delete a playlist.
-    func deletePlaylist(id: String) async throws {
+    nonisolated func deletePlaylist(id: String) async throws {
         _ = try await nativeRequest(method: "DELETE", path: "api/playlist/\(id)", body: nil)
         ndLog.info("Deleted playlist id: \(id)")
     }
 
     /// Fetch all playlists (both smart and regular).
     /// Hard-capped at 500; users with more playlists will see incomplete smart-playlist detection.
-    func getPlaylists() async throws -> [NDSmartPlaylist] {
+    nonisolated func getPlaylists() async throws -> [NDSmartPlaylist] {
         let data = try await nativeRequest(method: "GET", path: "api/playlist?_end=500&_start=0", body: nil)
         do {
             return try JSONDecoder().decode([NDSmartPlaylist].self, from: data)
@@ -286,11 +286,11 @@ final class NavidromeNativeClient {
         }
     }
 
-    // MARK: - Song / Album fetch
+    // MARK: - Song / Album fetch (nonisolated — network + decode run off the main actor)
 
     /// Fetch a page of songs from the Navidrome native API.
     /// Returns `(items, totalCount)` where totalCount comes from the `x-total-count` header.
-    func getSongs(start: Int, end: Int) async throws -> (items: [NDSong], total: Int) {
+    nonisolated func getSongs(start: Int, end: Int) async throws -> (items: [NDSong], total: Int) {
         let path = "api/song?_start=\(start)&_end=\(end)&_sort=title&_order=ASC"
         let (data, response) = try await nativeRequestWithResponse(method: "GET", path: path, body: nil)
         let total = (response as? HTTPURLResponse)
@@ -305,7 +305,7 @@ final class NavidromeNativeClient {
     }
 
     /// Fetch a page of albums from the Navidrome native API.
-    func getAlbums(start: Int, end: Int) async throws -> (items: [NDAlbum], total: Int) {
+    nonisolated func getAlbums(start: Int, end: Int) async throws -> (items: [NDAlbum], total: Int) {
         let path = "api/album?_start=\(start)&_end=\(end)&_sort=name&_order=ASC"
         let (data, response) = try await nativeRequestWithResponse(method: "GET", path: path, body: nil)
         let total = (response as? HTTPURLResponse)
@@ -321,7 +321,7 @@ final class NavidromeNativeClient {
 
     // MARK: - Private helpers
 
-    private func buildPlaylistBody(name: String, comment: String, rules: NSPCriteria) -> [String: Any] {
+    nonisolated private func buildPlaylistBody(name: String, comment: String, rules: NSPCriteria) -> [String: Any] {
         var body: [String: Any] = [
             "name": name,
             "comment": comment,
@@ -333,18 +333,22 @@ final class NavidromeNativeClient {
         return body
     }
 
-    private func nativeRequest(method: String, path: String, body: [String: Any]?) async throws -> Data {
+    nonisolated private func nativeRequest(method: String, path: String, body: [String: Any]?) async throws -> Data {
         let (data, _) = try await nativeRequestWithResponse(method: method, path: path, body: body)
         return data
     }
 
-    private func nativeRequestWithResponse(method: String, path: String, body: [String: Any]?) async throws -> (Data, URLResponse) {
-        // Ensure we have a token
-        if token == nil {
+    /// Perform a request off the main actor. Token reads/writes hop to MainActor via isolated method calls;
+    /// network I/O and JSON decode run on the cooperative thread pool.
+    nonisolated private func nativeRequestWithResponse(method: String, path: String, body: [String: Any]?) async throws -> (Data, URLResponse) {
+        // Read token on MainActor; if nil, trigger login (also on MainActor) first.
+        // Calling a @MainActor method from nonisolated context automatically hops to MainActor.
+        var tok = await currentToken()
+        if tok == nil {
             try await login()
+            tok = await currentToken()
         }
-
-        guard let tok = token else {
+        guard let tok else {
             throw NavidromeNativeError.authFailed("No token after login")
         }
 
@@ -361,15 +365,15 @@ final class NavidromeNativeClient {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
+        // Network I/O runs off main actor
         let (data, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
 
         if statusCode == 401 {
-            // Token expired — clear and retry once
-            token = nil
-            isAvailable = false
+            // Token expired — clear state on MainActor, re-login, then retry
+            await invalidateToken()
             try await login()
-            guard let newTok = token else {
+            guard let newTok = await currentToken() else {
                 throw NavidromeNativeError.authFailed("Re-login failed")
             }
             request.setValue("Bearer \(newTok)", forHTTPHeaderField: "X-ND-Authorization")
@@ -387,4 +391,8 @@ final class NavidromeNativeClient {
 
         return (data, response)
     }
+
+    private func currentToken() -> String? { token }
+
+    private func invalidateToken() { token = nil; isAvailable = false }
 }

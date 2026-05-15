@@ -19,6 +19,7 @@ final class CachedSong {
     var discNumber: Int?
     var year: Int?
     var genre: String?
+    var genres: [String] = []
     var duration: Int?
     var bitRate: Int?
     var bitDepth: Int?
@@ -102,6 +103,7 @@ final class CachedSong {
         self.mbzAlbumId = ndSong.mbzAlbumId
         self.mbzArtistId = ndSong.mbzArtistId
         self.mbzAlbumArtistId = ndSong.mbzAlbumArtistId
+        self.genres = ndSong.allGenres
         self.playCount = ndSong.playCount ?? 0
         self.rgTrackGain = ndSong.rgTrackGain
         self.rgTrackPeak = ndSong.rgTrackPeak
@@ -123,6 +125,7 @@ final class CachedSong {
         discNumber = ndSong.discNumber
         year = ndSong.year
         genre = ndSong.allGenres.first
+        genres = ndSong.allGenres
         duration = ndSong.duration.map { Int($0) }
         bitRate = ndSong.bitRate
         bitDepth = ndSong.bitDepth

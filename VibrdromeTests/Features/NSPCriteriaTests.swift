@@ -252,4 +252,80 @@ struct NSPCriteriaTests {
             if case .bool(let b) = value { #expect(b == true) }
         } else { #expect(Bool(false), "Expression 2 should be a leaf") }
     }
+
+    // MARK: - Decode direction: NSPCriteria → FilterRuleSet
+
+    @Test func nspCriteriaDecodesToFilterRuleSet() throws {
+        // Represents a .nsp file / Navidrome API response
+        let json = """
+        {
+            "all": [
+                { "gt": { "rating": 3 } },
+                { "contains": { "artist": "Beatles" } },
+                { "is": { "loved": true } }
+            ],
+            "sort": "rating",
+            "order": "desc",
+            "limit": 50
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let criteria = try JSONDecoder().decode(NSPCriteria.self, from: data)
+        let ruleSet = FilterRuleSet(from: criteria)
+
+        #expect(ruleSet.combinator == .all)
+        #expect(ruleSet.rules.count == 3)
+
+        let ratingRule = ruleSet.rules[0]
+        #expect(ratingRule.field == .rating)
+        #expect(ratingRule.operator == .isGreaterThan)
+        if case .number(let n) = ratingRule.value { #expect(n == 3) } else { #expect(Bool(false), "Expected .number for rating") }
+
+        let artistRule = ruleSet.rules[1]
+        #expect(artistRule.field == .artist)
+        #expect(artistRule.operator == .contains)
+        if case .text(let s) = artistRule.value { #expect(s == "Beatles") } else { #expect(Bool(false), "Expected .text for artist") }
+
+        let lovedRule = ruleSet.rules[2]
+        #expect(lovedRule.field == .isFavorited)
+        if case .boolean(let b) = lovedRule.value { #expect(b == true) } else { #expect(Bool(false), "Expected .boolean for loved") }
+    }
+
+    @Test func nspAnyCriteriaDecodesToAnyFilterRuleSet() throws {
+        let json = """
+        {
+            "any": [
+                { "contains": { "genre": "Jazz" } },
+                { "gt": { "playcount": 10 } }
+            ]
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let criteria = try JSONDecoder().decode(NSPCriteria.self, from: data)
+        let ruleSet = FilterRuleSet(from: criteria)
+
+        #expect(ruleSet.combinator == .any)
+        #expect(ruleSet.rules.count == 2)
+        #expect(ruleSet.rules[0].field == .genre)
+        #expect(ruleSet.rules[1].field == .playCount)
+    }
+
+    @Test func unsupportedNSPOperatorsAreSkippedDuringDecode() throws {
+        // "startsWith" on a numeric field has no FilterOperator mapping — should be skipped
+        let json = """
+        {
+            "all": [
+                { "gt": { "rating": 2 } },
+                { "inplaylist": { "id": "playlist-123" } }
+            ]
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let criteria = try JSONDecoder().decode(NSPCriteria.self, from: data)
+        let ruleSet = FilterRuleSet(from: criteria)
+
+        // rating survives; inplaylist has no FilterField reverse-mapping and is skipped
+        #expect(ruleSet.rules.count == 1)
+        #expect(ruleSet.rules[0].field == .rating)
+    }
 }
