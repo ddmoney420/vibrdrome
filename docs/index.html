@@ -7,6 +7,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         @keyframes pulse {
             0%, 100% { opacity: 0.4; }
@@ -115,9 +118,9 @@
             height: 56px;
         }
         .navbar-logo {
-            font-size: 1.15rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
+            font-family: 'Press Start 2P', 'Courier New', monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0;
             background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -270,6 +273,15 @@
             color: #c4b5fd;
             font-size: 0.8rem;
             font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        a.platform-badge:hover {
+            background: rgba(139,92,246,0.2);
+            border-color: rgba(139,92,246,0.4);
+            color: #e0d4ff;
+            transform: translateY(-1px);
         }
 
         .waveform {
@@ -691,9 +703,9 @@
             <p class="tagline">Music Player for Navidrome</p>
             <p class="desc">A native music player for your self-hosted Navidrome server. Stream your library, download for offline, and enjoy audiophile features: all from a fast, intuitive interface. Multi-server support, customizable library, and Docker deployment for the web app.</p>
             <div class="platforms">
-                <span class="platform-badge">&#63743; iOS &amp; macOS</span>
-                <span class="platform-badge">🤖 Android</span>
-                <span class="platform-badge">🌐 Web</span>
+                <a href="https://testflight.apple.com/join/R6HaQkN5" class="platform-badge">&#63743; iOS &amp; macOS</a>
+                <a href="https://github.com/ddmoney420/vibrdrome-android/releases" class="platform-badge">🤖 Android</a>
+                <a href="https://web.vibrdrome.io/" class="platform-badge">🌐 Web</a>
             </div>
         </div>
 
