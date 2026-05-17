@@ -174,7 +174,9 @@ struct FavoritesView: View {
     private var songsContent: some View {
         let songs = cachedFilteredSongs
         if songs.isEmpty {
-            emptyCategory("No Favorited Songs")
+            if !isEmpty {
+                emptyCategory("No Favorited Songs")
+            }
         } else {
             #if os(macOS)
             MacTrackTableView(songs: songs, settings: columnSettings)
@@ -253,7 +255,9 @@ struct FavoritesView: View {
     private var albumsContent: some View {
         let albums = cachedFilteredAlbums
         if albums.isEmpty {
-            emptyCategory("No Favorited Albums")
+            if !isEmpty {
+                emptyCategory("No Favorited Albums")
+            }
         } else if showAsList {
             List(albums) { album in
                 NavigationLink {
@@ -306,7 +310,9 @@ struct FavoritesView: View {
     private var artistsContent: some View {
         let artists = cachedFilteredArtists
         if artists.isEmpty {
-            emptyCategory("No Favorited Artists")
+            if !isEmpty {
+                emptyCategory("No Favorited Artists")
+            }
         } else if showAsList {
             List(artists) { artist in
                 NavigationLink {
