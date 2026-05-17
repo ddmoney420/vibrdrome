@@ -343,7 +343,7 @@ extension NowPlayingView {
             .font(.title3)
             .fontWeight(.semibold)
             .buttonStyle(.plain)
-            .foregroundColor(.white)
+            .foregroundColor(nowPlayingToolbarBackground ? .primary : .white)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .modifier(ToolbarBackgroundModifier(enabled: nowPlayingToolbarBackground))
@@ -386,7 +386,7 @@ extension NowPlayingView {
             .accessibilityIdentifier("eqButton")
 
         case .airplay:
-            AirPlayButton(tintColor: .white)
+            AirPlayButton(tintColor: nowPlayingToolbarBackground ? .label : .white)
                 .frame(width: 24, height: 24)
                 .frame(minWidth: 44, minHeight: 44)
                 .accessibilityIdentifier("airPlayButton")
