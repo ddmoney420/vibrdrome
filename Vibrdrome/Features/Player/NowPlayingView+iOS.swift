@@ -344,6 +344,7 @@ extension NowPlayingView {
             .fontWeight(.semibold)
             .buttonStyle(.plain)
             .foregroundColor(nowPlayingToolbarBackground ? .primary : .white)
+            .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .modifier(ToolbarBackgroundModifier(enabled: nowPlayingToolbarBackground))
@@ -488,7 +489,7 @@ extension NowPlayingView {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
