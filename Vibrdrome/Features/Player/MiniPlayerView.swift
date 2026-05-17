@@ -249,6 +249,16 @@ private struct SpinningAlbumArt: View {
                 resumedAt = .now
             }
         }
+        .onChange(of: disableSpinningArt) { _, newValue in
+            if newValue {
+                // Explicit disable: ease the artwork back to upright rather than
+                // freezing at whatever angle it happened to be at.
+                withAnimation(.easeOut(duration: 0.4)) {
+                    accumulatedAngle = 0
+                }
+                resumedAt = .now
+            }
+        }
     }
 }
 
