@@ -233,6 +233,7 @@ struct ArtistsView: View {
         .task {
             #if os(macOS)
             filterRaw = ArtistFilter.all.rawValue
+            appState.activeFilterWindowContext = .artist
             #endif
             await loadArtists()
             await loadFavorites()
@@ -249,6 +250,7 @@ struct ArtistsView: View {
         #if os(macOS)
         .onChange(of: appState.artistFilter.isFavorited) { debouncedApplyLocalFilters() }
         .onChange(of: appState.artistFilter.selectedGenres) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.artistFilter.ruleSet) { debouncedApplyLocalFilters() }
         .onChange(of: appState.libraryCache.generation) { _, _ in debouncedApplyLocalFilters() }
         #endif
     }
@@ -415,6 +417,7 @@ struct ArtistsView: View {
         let filter = appState.artistFilter
         guard filter.isActive else {
             localFilteredArtists = nil
+            filter.matchCount = nil
             recomputeFilteredIndexes()
             return
         }
@@ -450,29 +453,38 @@ struct ArtistsView: View {
                 artistIdsWithMatchingGenres = ids
             }
 
-            let filtered = allArtists.filter { artist in
-                // Favorited filter
-                switch filter.isFavorited {
-                case .yes: if artist.starred == nil { return false }
-                case .no: if artist.starred != nil { return false }
-                case .none: break
-                }
-
-                // Genre filter (via album lookup)
-                if let matchIds = artistIdsWithMatchingGenres {
-                    if !matchIds.contains(artist.id) { return false }
-                }
-
-                return true
+            let ruleSet = filter.ruleSet
+            let filtered = allArtists.filter {
+                artistMatchesFilter($0, isFavorited: filter.isFavorited,
+                                    genreIds: artistIdsWithMatchingGenres, ruleSet: ruleSet)
             }
 
             localFilteredArtists = filtered
+            filter.matchCount = filtered.count
             recomputeFilteredIndexes()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Artists")
                 .error("Failed to apply local filters: \(error)")
             localFilteredArtists = nil
         }
+    }
+
+    private func artistMatchesFilter(
+        _ artist: Artist,
+        isFavorited: TriState,
+        genreIds: Set<String>?,
+        ruleSet: FilterRuleSet
+    ) -> Bool {
+        switch isFavorited {
+        case .yes: if artist.starred == nil { return false }
+        case .no: if artist.starred != nil { return false }
+        case .none: break
+        }
+        if let matchIds = genreIds, !matchIds.contains(artist.id) { return false }
+        if !ruleSet.isEmpty {
+            if !ruleSet.matches(artist: FilterRuleSet.ArtistMeta(artist: artist)) { return false }
+        }
+        return true
     }
     #endif
 }

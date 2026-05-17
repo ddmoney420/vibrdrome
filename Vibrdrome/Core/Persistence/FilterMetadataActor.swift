@@ -14,9 +14,9 @@ actor FilterMetadataActor {
 
         // Union in song genres for tracks not linked to an album
         var songGenreDescriptor = FetchDescriptor<CachedSong>()
-        songGenreDescriptor.propertiesToFetch = [\.genre]
+        songGenreDescriptor.propertiesToFetch = [\.genre, \.genres]
         let songs = (try? modelContext.fetch(songGenreDescriptor)) ?? []
-        genreSet.formUnion(Set(songs.compactMap(\.genre)).subtracting([""]))
+        genreSet.formUnion(songs.flatMap { $0.genres.isEmpty ? [$0.genre].compactMap { $0 } : $0.genres }.filter { !$0.isEmpty })
 
         // Labels: fetch only the label column from CachedAlbum
         var labelDescriptor = FetchDescriptor<CachedAlbum>()
@@ -40,9 +40,9 @@ actor FilterMetadataActor {
 
     func loadSongFilterMetadata() -> (genres: [String], artists: [FilterArtistItem]) {
         var descriptor = FetchDescriptor<CachedSong>()
-        descriptor.propertiesToFetch = [\.genre]
+        descriptor.propertiesToFetch = [\.genre, \.genres]
         let songs = (try? modelContext.fetch(descriptor)) ?? []
-        let genreSet = Set(songs.compactMap(\.genre)).subtracting([""])
+        let genreSet = Set(songs.flatMap { $0.genres.isEmpty ? [$0.genre].compactMap { $0 } : $0.genres }).subtracting([""])
         let genres = genreSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         return (genres, fetchArtists())
     }

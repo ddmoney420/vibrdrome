@@ -14,6 +14,10 @@ struct MacTrackTableView: View {
     /// Pre-computed from a @Query in the parent so this view's first render doesn't
     /// hit SwiftData on the main actor mid-navigation-animation.
     var downloadedSongIds: Set<String> = []
+    /// Set to false when this view is embedded inside a List or another ScrollView
+    /// that already handles scrolling — avoids nested scroll containers that break
+    /// trackpad/mouse-wheel events on macOS.
+    var embedsScrollView: Bool = true
 
     @State private var sortColumn: TrackTableColumn?
     @State private var sortAscending: Bool = true
@@ -74,44 +78,55 @@ struct MacTrackTableView: View {
                     description: Text("No songs to display.")
                 )
             } else {
-                ScrollView(.vertical) {
-                    LazyVStack(spacing: 0) {
-                        let ordered = displayedSongs
-                        // Pre-compute first-occurrence indices for disc separators — O(n) not O(n²)
-                        let discFirstIndices: Set<Int> = {
-                            guard showDiscSeparators else { return [] }
-                            var seen = Set<Int>()
-                            var result = Set<Int>()
-                            for (idx, song) in ordered.enumerated() {
-                                if let disc = song.discNumber, !seen.contains(disc) {
-                                    seen.insert(disc)
-                                    result.insert(idx)
-                                }
-                            }
-                            return result
-                        }()
+                let trackList = trackListContent
+                if embedsScrollView {
+                    ScrollView(.vertical) {
+                        trackList
+                    }
+                } else {
+                    trackList
+                }
+            }
+        }
+    }
 
-                        ForEach(Array(ordered.enumerated()), id: \.element.id) { index, song in
-                            if showDiscSeparators && discFirstIndices.contains(index),
-                               let disc = song.discNumber {
-                                discSeparator(disc)
-                            }
+    // MARK: - Track list rows
 
-                            MacTrackTableRow(
-                                song: song,
-                                settings: settings,
-                                queue: ordered,
-                                index: index,
-                                downloadedSongIds: downloadedSongIds,
-                                selectedSongId: $selectedSongId
-                            )
-                            .accessibilityIdentifier("macTrackRow_\(song.id)")
-
-                            Divider()
-                                .padding(.leading, 12)
-                        }
+    private var trackListContent: some View {
+        LazyVStack(spacing: 0) {
+            let ordered = displayedSongs
+            // Pre-compute first-occurrence indices for disc separators — O(n) not O(n²)
+            let discFirstIndices: Set<Int> = {
+                guard showDiscSeparators else { return [] }
+                var seen = Set<Int>()
+                var result = Set<Int>()
+                for (idx, song) in ordered.enumerated() {
+                    if let disc = song.discNumber, !seen.contains(disc) {
+                        seen.insert(disc)
+                        result.insert(idx)
                     }
                 }
+                return result
+            }()
+
+            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, song in
+                if showDiscSeparators && discFirstIndices.contains(index),
+                   let disc = song.discNumber {
+                    discSeparator(disc)
+                }
+
+                MacTrackTableRow(
+                    song: song,
+                    settings: settings,
+                    queue: ordered,
+                    index: index,
+                    downloadedSongIds: downloadedSongIds,
+                    selectedSongId: $selectedSongId
+                )
+                .accessibilityIdentifier("macTrackRow_\(song.id)")
+
+                Divider()
+                    .padding(.leading, 12)
             }
         }
     }

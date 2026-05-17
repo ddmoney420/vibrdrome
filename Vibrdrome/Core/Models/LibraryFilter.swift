@@ -27,6 +27,9 @@ final class LibraryFilter {
     var selectedGenres: Set<String> = []
     var selectedLabels: Set<String> = []
     var year: Int?
+    var ruleSet: FilterRuleSet = FilterRuleSet() { didSet { persistRuleSet() } }
+    var matchCount: Int?
+    var ruleSetPersistenceKey: String?
 
     var isActive: Bool {
         isFavorited != .none ||
@@ -35,7 +38,8 @@ final class LibraryFilter {
         !selectedArtistIds.isEmpty ||
         !selectedGenres.isEmpty ||
         !selectedLabels.isEmpty ||
-        year != nil
+        year != nil ||
+        !ruleSet.isEmpty
     }
 
     var activeFilterCount: Int {
@@ -47,6 +51,7 @@ final class LibraryFilter {
         if !selectedGenres.isEmpty { count += 1 }
         if !selectedLabels.isEmpty { count += 1 }
         if year != nil { count += 1 }
+        if !ruleSet.isEmpty { count += 1 }
         return count
     }
 
@@ -58,5 +63,20 @@ final class LibraryFilter {
         selectedGenres = []
         selectedLabels = []
         year = nil
+        ruleSet = FilterRuleSet()
+        matchCount = nil
+    }
+
+    func loadRuleSet(from key: String) {
+        ruleSetPersistenceKey = key
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode(FilterRuleSet.self, from: data) else { return }
+        ruleSet = decoded
+    }
+
+    private func persistRuleSet() {
+        guard let key = ruleSetPersistenceKey,
+              let data = try? JSONEncoder().encode(ruleSet) else { return }
+        UserDefaults.standard.set(data, forKey: key)
     }
 }

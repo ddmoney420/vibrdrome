@@ -94,6 +94,7 @@ struct AlbumsView: View {
             #if os(macOS)
             filterRaw = AlbumFilter.all.rawValue
             appState.albumFilter.reset()
+            appState.activeFilterWindowContext = .album
             if let lf = initialLabelFilter {
                 appState.albumFilter.selectedLabels = [lf]
             } else if let gf = initialGenreFilter {
@@ -485,6 +486,7 @@ private struct AlbumFilterWatcher: ViewModifier {
             .onChange(of: filter.selectedGenres) { onChange() }
             .onChange(of: filter.selectedLabels) { onChange() }
             .onChange(of: filter.year) { onChange() }
+            .onChange(of: filter.ruleSet) { onChange() }
             .onChange(of: cache.generation) { _, _ in onChange() }
     }
 }

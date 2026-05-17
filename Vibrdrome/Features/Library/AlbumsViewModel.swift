@@ -340,6 +340,7 @@ final class AlbumsViewModel {
         let filter = appState.albumFilter
         guard filter.isActive else {
             localFilteredAlbums = nil
+            filter.matchCount = nil
             recomputeFilteredAlbums(filterRaw: filterRaw)
             return
         }
@@ -348,29 +349,40 @@ final class AlbumsViewModel {
         let artistNames = selectedArtistNames(for: filter, appState: appState, modelContext: modelContext)
         let snapshot = FilterSnapshot(filter: filter)
         let allAlbums: [Album]
-        if let cached = appState.libraryCache.albums {
-            allAlbums = cached
-        } else {
-            do {
-                var descriptor = FetchDescriptor<CachedAlbum>()
-                descriptor.sortBy = [SortDescriptor(\.name)]
-                allAlbums = try modelContext.fetch(descriptor).map { $0.toAlbum() }
-            } catch {
-                logger.error("Failed to fetch albums for filter: \(error)")
-                localFilteredAlbums = nil
-                return
+        let extrasMap: [String: FilterRuleSet.CachedAlbumExtras]
+        do {
+            var descriptor = FetchDescriptor<CachedAlbum>()
+            descriptor.sortBy = [SortDescriptor(\.name)]
+            let rows = try modelContext.fetch(descriptor)
+            if appState.libraryCache.albums == nil {
+                allAlbums = rows.map { $0.toAlbum() }
+            } else {
+                allAlbums = appState.libraryCache.albums!
             }
+            extrasMap = Dictionary(uniqueKeysWithValues: rows.map {
+                ($0.id, FilterRuleSet.CachedAlbumExtras(
+                    releaseType: $0.releaseType, releaseCountry: $0.releaseCountry,
+                    releaseStatus: $0.releaseStatus, mood: $0.mood, grouping: $0.grouping,
+                    mediaType: $0.mediaType, catalogNum: $0.catalogNum
+                ))
+            })
+        } catch {
+            logger.error("Failed to fetch albums for filter: \(error)")
+            localFilteredAlbums = nil
+            return
         }
 
         let filtered = await Task.detached(priority: .userInitiated) {
             allAlbums.filter {
                 AlbumsViewModel.albumMatchesFilter(
-                    $0, snapshot: snapshot, recentIds: recentIds, selectedArtistNames: artistNames)
+                    $0, extras: extrasMap[$0.id],
+                    snapshot: snapshot, recentIds: recentIds, selectedArtistNames: artistNames)
             }
         }.value
 
         guard !Task.isCancelled else { return }
         localFilteredAlbums = filtered
+        filter.matchCount = filtered.count
         recomputeFilteredAlbums(filterRaw: filterRaw)
     }
 
@@ -405,6 +417,7 @@ final class AlbumsViewModel {
         let selectedGenres: Set<String>
         let selectedLabels: Set<String>
         let year: Int?
+        let ruleSet: FilterRuleSet
 
         @MainActor
         init(filter: LibraryFilter) {
@@ -414,11 +427,13 @@ final class AlbumsViewModel {
             selectedGenres = filter.selectedGenres
             selectedLabels = filter.selectedLabels
             year = filter.year
+            ruleSet = filter.ruleSet
         }
     }
 
     nonisolated static func albumMatchesFilter(
         _ album: Album,
+        extras: FilterRuleSet.CachedAlbumExtras? = nil,
         snapshot: FilterSnapshot,
         recentIds: Set<String>?,
         selectedArtistNames: Set<String>
@@ -439,6 +454,10 @@ final class AlbumsViewModel {
         }
         if let yearFilter = snapshot.year {
             guard album.year == yearFilter else { return false }
+        }
+        if !snapshot.ruleSet.isEmpty {
+            let meta = FilterRuleSet.AlbumMeta(album: album, extras: extras)
+            guard snapshot.ruleSet.matches(album: meta) else { return false }
         }
         return true
     }

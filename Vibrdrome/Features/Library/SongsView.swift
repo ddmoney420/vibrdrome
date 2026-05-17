@@ -115,6 +115,7 @@ struct SongsView: View {
         .onChange(of: appState.songFilter.selectedArtistIds) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.selectedGenres) { debouncedApplyLocalFilters() }
         .onChange(of: appState.songFilter.year) { debouncedApplyLocalFilters() }
+        .onChange(of: appState.songFilter.ruleSet) { debouncedApplyLocalFilters() }
         #endif
     }
 
@@ -532,6 +533,9 @@ struct SongsView: View {
     }
 
     private func initialLoad() async {
+        #if os(macOS)
+        appState.activeFilterWindowContext = .song
+        #endif
         await loadSongs()
         await loadGenres()
         refreshTitleSongCount()
@@ -693,6 +697,7 @@ struct SongsView: View {
         let filter = appState.songFilter
         guard filter.isActive else {
             localFilteredSongs = nil
+            filter.matchCount = nil
             recomputeDisplayedSongs()
             return
         }
@@ -708,13 +713,51 @@ struct SongsView: View {
             }
 
             let recentSongIds = recentlyPlayedSongIds(for: filter)
-            localFilteredSongs = allSongs.filter { songMatchesFilter($0, filter: filter, recentIds: recentSongIds) }
+            let ruleSet = filter.ruleSet
+
+            // Batch-load CachedSong extras once before the filter loop to avoid N+1 queries.
+            let cachedExtrasMap: [String: FilterRuleSet.CachedSongExtras] = ruleSet.needsCachedSong
+                ? buildCachedExtrasMap()
+                : [:]
+
+            let filtered = allSongs.filter { song in
+                guard songMatchesFilter(song, filter: filter, recentIds: recentSongIds) else { return false }
+                if !ruleSet.isEmpty {
+                    let meta = FilterRuleSet.SongMeta(song: song, extras: cachedExtrasMap[song.id])
+                    if !ruleSet.matches(song: meta) { return false }
+                }
+                return true
+            }
+            localFilteredSongs = filtered
+            filter.matchCount = filtered.count
             recomputeDisplayedSongs()
         } catch {
             Logger(subsystem: "com.vibrdrome.app", category: "Songs")
                 .error("Failed to apply local filters: \(error)")
             localFilteredSongs = nil
         }
+    }
+
+    private func buildCachedExtrasMap() -> [String: FilterRuleSet.CachedSongExtras] {
+        guard let rows = try? modelContext.fetch(FetchDescriptor<CachedSong>()) else { return [:] }
+        var map = [String: FilterRuleSet.CachedSongExtras](minimumCapacity: rows.count)
+        for cached in rows {
+            map[cached.id] = FilterRuleSet.CachedSongExtras(
+                playCount: cached.playCount,
+                albumRating: cached.album?.userRating ?? 0,
+                albumFavorited: cached.album?.isStarred ?? false,
+                hasCoverArt: cached.hasCoverArt,
+                isCompilation: cached.isCompilation,
+                channels: cached.channels,
+                mbzRecordingId: cached.mbzRecordingId,
+                mbzAlbumId: cached.mbzAlbumId,
+                dateAdded: cached.dateAdded,
+                dateLoved: cached.starredAt,
+                albumLastPlayed: cached.album?.lastPlayed,
+                albumDateLoved: cached.album?.starredAt
+            )
+        }
+        return map
     }
 
     private func recentlyPlayedSongIds(for filter: LibraryFilter) -> Set<String>? {

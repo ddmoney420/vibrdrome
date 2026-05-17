@@ -275,6 +275,17 @@ struct VibrdromeApp: App {
         }
         .defaultSize(width: 700, height: 500)
 
+        WindowGroup("Filters", id: "library-filter", for: FilterContext.self) { $context in
+            if let context {
+                LibraryFilterSidebarView(context: context, isWindow: true)
+                    .environment(appState)
+                    .modelContainer(persistenceController.container)
+                    .preferredColorScheme(colorScheme)
+                    .tint(accentColor)
+            }
+        }
+        .defaultSize(width: 280, height: 600)
+
         WindowGroup("Get Info", id: "get-info", for: GetInfoTarget.self) { $target in
             if let target {
                 NavigationStack {

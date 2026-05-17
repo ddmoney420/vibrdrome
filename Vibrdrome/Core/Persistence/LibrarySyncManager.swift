@@ -4,6 +4,7 @@ import SwiftData
 import os.log
 
 private let syncLog = Logger(subsystem: "com.vibrdrome.app", category: "LibrarySync")
+nonisolated(unsafe) private let syncISO8601 = ISO8601DateFormatter()
 
 /// Sync mode determines the depth of library synchronization.
 enum SyncMode: String, Sendable {
@@ -87,13 +88,13 @@ final class LibrarySyncManager {
     // MARK: - Public API
 
     /// Run a full library sync: albums, artists, songs, then playlists.
-    func sync(client: SubsonicClient, container: ModelContainer) async {
-        await performSync(mode: .full, client: client, container: container)
+    func sync(client: SubsonicClient, ndClient: NavidromeNativeClient? = nil, container: ModelContainer) async {
+        await performSync(mode: .full, client: client, ndClient: ndClient, container: container)
     }
 
     /// Run an incremental sync — only fetches changes since last sync.
-    func incrementalSync(client: SubsonicClient, container: ModelContainer) async {
-        await performSync(mode: .incremental, client: client, container: container)
+    func incrementalSync(client: SubsonicClient, ndClient: NavidromeNativeClient? = nil, container: ModelContainer) async {
+        await performSync(mode: .incremental, client: client, ndClient: ndClient, container: container)
     }
 
     /// Convenience: sync using the configured client and container.
@@ -103,9 +104,9 @@ final class LibrarySyncManager {
     }
 
     /// Check if sync is stale and trigger the appropriate sync mode.
-    func syncIfStale(client: SubsonicClient, container: ModelContainer) async {
+    func syncIfStale(client: SubsonicClient, ndClient: NavidromeNativeClient? = nil, container: ModelContainer) async {
         guard let last = lastSyncDate else {
-            await performSync(mode: .full, client: client, container: container)
+            await performSync(mode: .full, client: client, ndClient: ndClient, container: container)
             return
         }
         let elapsed = Date().timeIntervalSince(last)
@@ -119,7 +120,7 @@ final class LibrarySyncManager {
             let lastFull = UserDefaults.standard.object(forKey: UserDefaultsKeys.lastFullSyncDate) as? Date
             let needsFullSync = lastFull == nil || Date().timeIntervalSince(lastFull!) > fullSyncInterval
             let mode: SyncMode = needsFullSync ? .full : .incremental
-            await performSync(mode: mode, client: client, container: container)
+            await performSync(mode: mode, client: client, ndClient: ndClient, container: container)
         } else {
             // Server unchanged — just update the stale check timestamp
             lastSyncDate = Date()
@@ -130,7 +131,7 @@ final class LibrarySyncManager {
     // MARK: - Change Detection Polling
 
     /// Start periodic polling for server changes while the app is active.
-    func startPolling(client: SubsonicClient, container: ModelContainer) {
+    func startPolling(client: SubsonicClient, ndClient: NavidromeNativeClient? = nil, container: ModelContainer) {
         stopPolling()
         let intervalMinutes = UserDefaults.standard.integer(forKey: UserDefaultsKeys.syncPollingInterval)
         let interval = max(TimeInterval(intervalMinutes > 0 ? intervalMinutes : 15) * 60, 300)
@@ -143,7 +144,7 @@ final class LibrarySyncManager {
                 let changed = await self.hasServerChanged(client: client)
                 if changed {
                     syncLog.info("Polling detected server changes, triggering incremental sync (trigger: auto-poll)")
-                    await self.performSync(mode: .incremental, client: client, container: container)
+                    await self.performSync(mode: .incremental, client: client, ndClient: ndClient, container: container)
                 }
             }
         }
@@ -159,7 +160,7 @@ final class LibrarySyncManager {
     // MARK: - Core Sync Engine
 
     // swiftlint:disable:next function_body_length
-    private func performSync(mode: SyncMode, client: SubsonicClient, container: ModelContainer) async {
+    private func performSync(mode: SyncMode, client: SubsonicClient, ndClient: NavidromeNativeClient? = nil, container: ModelContainer) async {
         guard !isSyncing else { return }
         isSyncing = true
         syncError = nil
@@ -196,7 +197,7 @@ final class LibrarySyncManager {
                 var working = SyncStats()
 
                 try await Self.syncAlbumsOffMain(
-                    client: client, container: container,
+                    client: client, ndClient: ndClient, container: container,
                     stats: &working, incremental: incremental,
                     progress: updateProgress, publishStats: publishPartialStats
                 )
@@ -206,7 +207,7 @@ final class LibrarySyncManager {
                     progress: updateProgress, publishStats: publishPartialStats
                 )
                 try await Self.syncSongsOffMain(
-                    client: client, container: container,
+                    client: client, ndClient: ndClient, container: container,
                     stats: &working, incremental: incremental,
                     progress: updateProgress, publishStats: publishPartialStats
                 )
@@ -280,9 +281,10 @@ final class LibrarySyncManager {
 
     // MARK: - Albums
 
-    // swiftlint:disable:next function_body_length function_parameter_count
+    // swiftlint:disable:next function_parameter_count
     nonisolated static func syncAlbumsOffMain(
         client: SubsonicClient,
+        ndClient: NavidromeNativeClient?,
         container: ModelContainer,
         stats: inout SyncStats,
         incremental: Bool,
@@ -294,67 +296,26 @@ final class LibrarySyncManager {
         let context = ModelContext(container)
         context.autosaveEnabled = false
 
-        // Build lookup dictionary of existing albums for O(1) access
         let allLocal = try context.fetch(FetchDescriptor<CachedAlbum>())
         var localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
-
-        var offset = 0
         var serverAlbumIds = Set<String>()
         var totalFetched = 0
 
-        if incremental {
-            // Fetch only newest albums (added/modified recently)
-            let newestAlbums = try await client.getAlbumList(type: .newest, size: albumPageSize)
-            for album in newestAlbums {
-                serverAlbumIds.insert(album.id)
-                if let existing = localMap[album.id] {
-                    if hasAlbumChanged(existing, album) {
-                        existing.update(from: album)
-                        stats.albumsUpdated += 1
-                    }
-                } else {
-                    let cached = CachedAlbum(from: album)
-                    context.insert(cached)
-                    localMap[album.id] = cached
-                    stats.albumsAdded += 1
-                }
-            }
-            totalFetched = newestAlbums.count
+        if let ndClient, await ndClient.isAvailable {
+            totalFetched = try await LibrarySyncManager.syncAlbumsND(
+                ndClient: ndClient, context: context, allLocal: allLocal,
+                localMap: &localMap, serverIds: &serverAlbumIds, stats: &stats, progress: progress
+            )
+        } else if incremental {
+            totalFetched = try await syncAlbumsIncremental(
+                client: client, context: context,
+                localMap: &localMap, serverIds: &serverAlbumIds, stats: &stats
+            )
         } else {
-            // Full sync: fetch all albums
-            while true {
-                let page = try await client.getAlbumList(
-                    type: .alphabeticalByName, size: albumPageSize, offset: offset
-                )
-                if page.isEmpty { break }
-
-                for album in page {
-                    serverAlbumIds.insert(album.id)
-                    if let existing = localMap[album.id] {
-                        if hasAlbumChanged(existing, album) {
-                            existing.update(from: album)
-                            stats.albumsUpdated += 1
-                        }
-                    } else {
-                        let cached = CachedAlbum(from: album)
-                        context.insert(cached)
-                        localMap[album.id] = cached
-                        stats.albumsAdded += 1
-                    }
-                }
-
-                totalFetched += page.count
-                progress("Syncing albums… \(totalFetched)")
-                offset += page.count
-
-                if page.count < albumPageSize { break }
-            }
-
-            // Remove albums no longer on server
-            for local in allLocal where !serverAlbumIds.contains(local.id) {
-                context.delete(local)
-                stats.albumsRemoved += 1
-            }
+            totalFetched = try await syncAlbumsSubsonic(
+                client: client, context: context, allLocal: allLocal,
+                localMap: &localMap, serverIds: &serverAlbumIds, stats: &stats, progress: progress
+            )
         }
 
         try context.save()
@@ -363,6 +324,57 @@ final class LibrarySyncManager {
         let updated = stats.albumsUpdated
         let removed = stats.albumsRemoved
         syncLog.info("Synced \(totalFetched) albums (+\(added) ~\(updated) -\(removed))")
+    }
+
+    nonisolated private static func syncAlbumsIncremental(
+        client: SubsonicClient, context: ModelContext,
+        localMap: inout [String: CachedAlbum], serverIds: inout Set<String>,
+        stats: inout SyncStats
+    ) async throws -> Int {
+        let newestAlbums = try await client.getAlbumList(type: .newest, size: albumPageSize)
+        for album in newestAlbums {
+            serverIds.insert(album.id)
+            if let existing = localMap[album.id] {
+                if hasAlbumChanged(existing, album) { existing.update(from: album); stats.albumsUpdated += 1 }
+            } else {
+                let cached = CachedAlbum(from: album)
+                context.insert(cached); localMap[album.id] = cached; stats.albumsAdded += 1
+            }
+        }
+        return newestAlbums.count
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    nonisolated private static func syncAlbumsSubsonic(
+        client: SubsonicClient, context: ModelContext, allLocal: [CachedAlbum],
+        localMap: inout [String: CachedAlbum], serverIds: inout Set<String>,
+        stats: inout SyncStats, progress: @Sendable (String) -> Void
+    ) async throws -> Int {
+        var offset = 0
+        var totalFetched = 0
+        while true {
+            let page = try await client.getAlbumList(
+                type: .alphabeticalByName, size: albumPageSize, offset: offset
+            )
+            if page.isEmpty { break }
+            for album in page {
+                serverIds.insert(album.id)
+                if let existing = localMap[album.id] {
+                    if hasAlbumChanged(existing, album) { existing.update(from: album); stats.albumsUpdated += 1 }
+                } else {
+                    let cached = CachedAlbum(from: album)
+                    context.insert(cached); localMap[album.id] = cached; stats.albumsAdded += 1
+                }
+            }
+            totalFetched += page.count
+            progress("Syncing albums… \(totalFetched)")
+            offset += page.count
+            if page.count < albumPageSize { break }
+        }
+        for local in allLocal where !serverIds.contains(local.id) {
+            context.delete(local); stats.albumsRemoved += 1
+        }
+        return totalFetched
     }
 
     nonisolated static func hasAlbumChanged(_ cached: CachedAlbum, _ server: Album) -> Bool {
@@ -453,6 +465,7 @@ final class LibrarySyncManager {
     // swiftlint:disable:next function_parameter_count
     nonisolated static func syncSongsOffMain(
         client: SubsonicClient,
+        ndClient: NavidromeNativeClient?,
         container: ModelContainer,
         stats: inout SyncStats,
         incremental: Bool,
@@ -464,62 +477,26 @@ final class LibrarySyncManager {
         let context = ModelContext(container)
         context.autosaveEnabled = false
 
-        // Build lookup dictionary for O(1) access
         let allLocal = try context.fetch(FetchDescriptor<CachedSong>())
         var localMap = Dictionary(uniqueKeysWithValues: allLocal.map { ($0.id, $0) })
-
-        // Pre-fetch album map for linking
-        let allAlbums = try context.fetch(FetchDescriptor<CachedAlbum>())
-        let albumMap = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.id, $0) })
-
-        var offset = 0
+        let albumMap = Dictionary(
+            uniqueKeysWithValues: (try context.fetch(FetchDescriptor<CachedAlbum>())).map { ($0.id, $0) }
+        )
         var serverSongIds = Set<String>()
-        var totalFetched = 0
 
-        while true {
-            let result = try await client.search(
-                query: "", artistCount: 0, albumCount: 0,
-                songCount: songPageSize, songOffset: offset
+        let totalFetched: Int
+        if let ndClient, await ndClient.isAvailable {
+            totalFetched = try await LibrarySyncManager.syncSongsND(
+                ndClient: ndClient, context: context, allLocal: allLocal, albumMap: albumMap,
+                localMap: &localMap, serverIds: &serverSongIds, stats: &stats,
+                progress: progress, publishStats: publishStats
             )
-            let songs = result.song ?? []
-            if songs.isEmpty { break }
-
-            for song in songs {
-                serverSongIds.insert(song.id)
-                if let existing = localMap[song.id] {
-                    if hasSongChanged(existing, song) {
-                        updateSongFields(existing, from: song)
-                        stats.songsUpdated += 1
-                    }
-                } else {
-                    let cached = CachedSong(from: song)
-                    if let albumId = song.albumId {
-                        cached.album = albumMap[albumId]
-                    }
-                    context.insert(cached)
-                    localMap[song.id] = cached
-                    stats.songsAdded += 1
-                }
-            }
-
-            totalFetched += songs.count
-            progress("Syncing songs… \(totalFetched)")
-            offset += songs.count
-
-            if totalFetched % 2000 == 0 {
-                try context.save()
-                publishStats(stats)
-            }
-
-            if songs.count < songPageSize { break }
-        }
-
-        // Remove songs no longer on server (only on full sync, preserve downloads)
-        if !incremental {
-            for local in allLocal where !serverSongIds.contains(local.id) && local.download == nil {
-                context.delete(local)
-                stats.songsRemoved += 1
-            }
+        } else {
+            totalFetched = try await syncSongsSubsonic(
+                client: client, context: context, allLocal: allLocal, albumMap: albumMap,
+                localMap: &localMap, serverIds: &serverSongIds, stats: &stats,
+                incremental: incremental, progress: progress, publishStats: publishStats
+            )
         }
 
         try context.save()
@@ -529,6 +506,48 @@ final class LibrarySyncManager {
         let songUpdated = stats.songsUpdated
         let songRemoved = stats.songsRemoved
         syncLog.info("Synced \(totalFetched) songs (+\(songAdded) ~\(songUpdated) -\(songRemoved))")
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    nonisolated private static func syncSongsSubsonic(
+        client: SubsonicClient, context: ModelContext,
+        allLocal: [CachedSong], albumMap: [String: CachedAlbum],
+        localMap: inout [String: CachedSong], serverIds: inout Set<String>,
+        stats: inout SyncStats, incremental: Bool,
+        progress: @Sendable (String) -> Void,
+        publishStats: @Sendable (SyncStats) -> Void
+    ) async throws -> Int {
+        var offset = 0
+        var totalFetched = 0
+        while true {
+            let result = try await client.search(
+                query: "", artistCount: 0, albumCount: 0,
+                songCount: songPageSize, songOffset: offset
+            )
+            let songs = result.song ?? []
+            if songs.isEmpty { break }
+            for song in songs {
+                serverIds.insert(song.id)
+                if let existing = localMap[song.id] {
+                    if hasSongChanged(existing, song) { updateSongFields(existing, from: song); stats.songsUpdated += 1 }
+                } else {
+                    let cached = CachedSong(from: song)
+                    if let albumId = song.albumId { cached.album = albumMap[albumId] }
+                    context.insert(cached); localMap[song.id] = cached; stats.songsAdded += 1
+                }
+            }
+            totalFetched += songs.count
+            progress("Syncing songs… \(totalFetched)")
+            offset += songs.count
+            if totalFetched % 2000 == 0 { try context.save(); publishStats(stats) }
+            if songs.count < songPageSize { break }
+        }
+        if !incremental {
+            for local in allLocal where !serverIds.contains(local.id) && local.download == nil {
+                context.delete(local); stats.songsRemoved += 1
+            }
+        }
+        return totalFetched
     }
 
     /// Nonisolated so songs sync (off MainActor) can call it directly.
@@ -552,8 +571,15 @@ final class LibrarySyncManager {
         cached.genre != server.genre ||
         cached.duration != server.duration ||
         cached.isStarred != (server.starred != nil) ||
+        cached.rating != (server.userRating ?? 0) ||
         cached.coverArtId != server.coverArt ||
-        cached.bitRate != server.bitRate
+        cached.bitRate != server.bitRate ||
+        cached.bitDepth != server.bitDepth ||
+        cached.samplingRate != server.samplingRate ||
+        cached.comment != server.comment ||
+        cached.bpm != server.bpm ||
+        cached.mbzRecordingId != server.musicBrainzId ||
+        cached.rgTrackGain != server.replayGain?.trackGain || cached.rgAlbumGain != server.replayGain?.albumGain
     }
 
     nonisolated static func updateSongFields(_ cached: CachedSong, from song: Song) {
@@ -570,11 +596,19 @@ final class LibrarySyncManager {
         cached.genre = song.genre
         cached.duration = song.duration
         cached.bitRate = song.bitRate
+        cached.bitDepth = song.bitDepth
+        cached.samplingRate = song.samplingRate
+        cached.comment = song.comment
         cached.suffix = song.suffix
         cached.contentType = song.contentType
         cached.size = song.size
+        cached.bpm = song.bpm
+        cached.dateAdded = song.created.flatMap { syncISO8601.date(from: $0) }
+        cached.mbzRecordingId = song.musicBrainzId
         cached.isStarred = song.starred != nil
         cached.rating = song.userRating ?? 0
+        cached.rgTrackGain = song.replayGain?.trackGain; cached.rgTrackPeak = song.replayGain?.trackPeak
+        cached.rgAlbumGain = song.replayGain?.albumGain; cached.rgAlbumPeak = song.replayGain?.albumPeak
         cached.cachedAt = Date()
     }
 

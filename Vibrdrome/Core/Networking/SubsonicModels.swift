@@ -214,6 +214,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
     let suffix: String?
     let duration: Int?
     let bitRate: Int?
+    let bitDepth: Int?
+    let samplingRate: Int?
+    let comment: String?
     let path: String?
     let discNumber: Int?
     let created: String?
@@ -230,8 +233,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         track: Int? = nil, year: Int? = nil, genre: String? = nil,
         coverArt: String? = nil, size: Int? = nil,
         contentType: String? = nil, suffix: String? = nil,
-        duration: Int? = nil, bitRate: Int? = nil, path: String? = nil,
-        discNumber: Int? = nil, created: String? = nil,
+        duration: Int? = nil, bitRate: Int? = nil,
+        bitDepth: Int? = nil, samplingRate: Int? = nil, comment: String? = nil,
+        path: String? = nil, discNumber: Int? = nil, created: String? = nil,
         starred: String? = nil, userRating: Int? = nil,
         bpm: Int? = nil, replayGain: ReplayGain? = nil, musicBrainzId: String? = nil
     ) {
@@ -241,8 +245,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
         self.track = track; self.year = year; self.genre = genre
         self.coverArt = coverArt; self.size = size
         self.contentType = contentType; self.suffix = suffix
-        self.duration = duration; self.bitRate = bitRate; self.path = path
-        self.discNumber = discNumber; self.created = created
+        self.duration = duration; self.bitRate = bitRate
+        self.bitDepth = bitDepth; self.samplingRate = samplingRate; self.comment = comment
+        self.path = path; self.discNumber = discNumber; self.created = created
         self.starred = starred; self.userRating = userRating
         self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
     }
@@ -255,8 +260,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
             track: track, year: year, genre: genre,
             coverArt: coverArt, size: size,
             contentType: contentType, suffix: suffix,
-            duration: duration, bitRate: bitRate, path: path,
-            discNumber: discNumber, created: created,
+            duration: duration, bitRate: bitRate,
+            bitDepth: bitDepth, samplingRate: samplingRate, comment: comment,
+            path: path, discNumber: discNumber, created: created,
             starred: starred, userRating: userRating,
             bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
         )
@@ -270,8 +276,9 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
             track: track, year: year, genre: genre,
             coverArt: coverArt, size: size,
             contentType: contentType, suffix: suffix,
-            duration: duration, bitRate: bitRate, path: path,
-            discNumber: discNumber, created: created,
+            duration: duration, bitRate: bitRate,
+            bitDepth: bitDepth, samplingRate: samplingRate, comment: comment,
+            path: path, discNumber: discNumber, created: created,
             starred: starred, userRating: rating,
             bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
         )
