@@ -175,6 +175,15 @@ enum UserDefaultsKeys {
     static let songFilterRuleBuilderExpanded = "songFilterRuleBuilderExpanded"
     static let artistFilterRuleBuilderExpanded = "artistFilterRuleBuilderExpanded"
 
+    // MARK: - Playlist Export
+
+    static let exportDefaultFolderBookmark = "exportDefaultFolderBookmark"
+    static let exportDefaultSyncMode = "exportDefaultSyncMode"
+    static let exportDefaultTranscodeFormat = "exportDefaultTranscodeFormat"
+    static let exportDefaultTranscodeBitrate = "exportDefaultTranscodeBitrate"
+    static let exportFfmpegPath = "exportFfmpegPath"
+    static let exportAutoSyncOnForeground = "exportAutoSyncOnForeground"
+
     // MARK: - Library Sync
 
     static let lastLibrarySyncDate = "lastLibrarySyncDate"

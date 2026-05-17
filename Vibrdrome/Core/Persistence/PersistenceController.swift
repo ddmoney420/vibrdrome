@@ -34,6 +34,7 @@ final class PersistenceController {
             AlbumCollection.self,
             GenreArtwork.self,
             SyncHistory.self,
+            ExportedPlaylist.self,
         ])
 
         let config = ModelConfiguration(

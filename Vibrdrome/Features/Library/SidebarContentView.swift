@@ -57,6 +57,7 @@ struct SidebarContentView: View {
         case radio
         case nowPlaying
         case downloads
+        case export
         case settings
     }
 
@@ -119,6 +120,10 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.folders.rawValue)
                     Label("Downloads", systemImage: "arrow.down.circle")
                         .tag(SidebarItem.downloads.rawValue)
+                    #if os(macOS)
+                    Label("Playlist Export", systemImage: "square.and.arrow.up.circle")
+                        .tag(SidebarItem.export.rawValue)
+                    #endif
                 }
                 if !collections.isEmpty {
                     Section("Collections") {
@@ -324,6 +329,12 @@ struct SidebarContentView: View {
             FolderBrowserView()
         case .downloads:
             DownloadsView()
+        case .export:
+            #if os(macOS)
+            PlaylistExportView()
+            #else
+            EmptyView()
+            #endif
         case .search:
             SearchView()
         case .playlists:
