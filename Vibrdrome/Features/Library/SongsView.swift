@@ -435,6 +435,7 @@ struct SongsView: View {
                 .onAppear { triggerLoadIfNeeded(at: index) }
             }
         }
+        .listStyle(.plain)
         #endif
     }
 
