@@ -412,15 +412,15 @@ struct Song: Decodable, Identifiable, Sendable, Equatable {
 
     /// Resolved display artist for UI. Resolution order:
     /// 1. Cache override (set when reconstructing from local store)
-    /// 2. Server `displayArtist` field (OpenSubsonic)
-    /// 3. Joined `artists` array (OpenSubsonic per-track credits)
+    /// 2. Joined `artists` array (OpenSubsonic per-track credits — more specific than album-level displayArtist)
+    /// 3. Server `displayArtist` field (OpenSubsonic — album-level fallback, e.g. "Various Artists")
     /// 4. Legacy `artist` string
     var displayArtist: String? {
         if let override = displayArtistOverride, !override.isEmpty { return override }
-        if let da = _displayArtist, !da.isEmpty { return da }
         if let names = artists?.map(\.name), !names.isEmpty {
             return names.joined(separator: ", ")
         }
+        if let da = _displayArtist, !da.isEmpty { return da }
         return artist
     }
 
