@@ -20,7 +20,7 @@ struct BookmarksView: View {
                             Text(song.title)
                                 .font(.body)
                                 .lineLimit(1)
-                            Text(song.artist ?? "")
+                            Text(song.displayArtist ?? "")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)

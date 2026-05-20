@@ -24,7 +24,7 @@ struct QueueView: View {
                                     Text(song.title)
                                         .font(.subheadline)
                                         .lineLimit(1)
-                                    Text(song.artist ?? "")
+                                    Text(song.displayArtist ?? "")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -102,7 +102,7 @@ struct QueueView: View {
                                         .font(.body)
                                         .lineLimit(1)
 
-                                    if let artist = entry.song.artist {
+                                    if let artist = entry.song.displayArtist {
                                         Text(artist)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)

@@ -213,7 +213,7 @@ struct GetInfoView: View {
                 Text(song.title)
                     .font(.title2).bold()
                     .multilineTextAlignment(.center)
-                if let artist = song.artist {
+                if let artist = song.displayArtist {
                     Text(artist).font(.body).foregroundStyle(.secondary)
                 }
                 if let album = song.album {

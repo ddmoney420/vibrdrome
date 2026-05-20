@@ -105,6 +105,75 @@ struct SubsonicModelsTests {
         #expect(song.id == "unique-id-99")
     }
 
+    // MARK: - OpenSubsonic artists array + displayArtist
+
+    @Test func songDecodesOpenSubsonicArtistsArray() throws {
+        let json = """
+        {
+            "id": "99",
+            "title": "Collab",
+            "artist": "Artist A",
+            "artists": [
+                {"id": "ar-1", "name": "Artist A"},
+                {"id": "ar-2", "name": "Artist B"}
+            ]
+        }
+        """.data(using: .utf8)!
+        let song = try JSONDecoder().decode(Song.self, from: json)
+        #expect(song.artists?.count == 2)
+        #expect(song.artists?[0].id == "ar-1")
+        #expect(song.artists?[1].name == "Artist B")
+    }
+
+    @Test func displayArtistFallbackChain() throws {
+        // displayArtistOverride wins over everything
+        let overridden = Song(id: "1", title: "T",
+                              artist: "Legacy",
+                              artists: [SongArtist(id: "x", name: "FromArtistsArray")],
+                              displayArtistOverride: "FromOverride")
+        #expect(overridden.displayArtist == "FromOverride")
+
+        // artists array wins over legacy artist when no override
+        let multiArtist = Song(id: "2", title: "T",
+                               artist: "Various Artists",
+                               artists: [SongArtist(id: "a", name: "Alice"),
+                                         SongArtist(id: "b", name: "Bob")])
+        #expect(multiArtist.displayArtist == "Alice, Bob")
+
+        // legacy artist field when artists is nil
+        let legacy = Song(id: "3", title: "T", artist: "Solo Artist")
+        #expect(legacy.displayArtist == "Solo Artist")
+
+        // nil when no artist info at all
+        let empty = Song(id: "4", title: "T")
+        #expect(empty.displayArtist == nil)
+    }
+
+    @Test func participantArtistOverrideFromNDSong() throws {
+        let json = """
+        {
+            "id": "nd-1",
+            "title": "Collab Track",
+            "artist": "Various Artists",
+            "participants": {
+                "artist": [
+                    {"id": "p1", "name": "Alice"},
+                    {"id": "p2", "name": "Bob"}
+                ]
+            }
+        }
+        """.data(using: .utf8)!
+        let ndSong = try JSONDecoder().decode(NDSong.self, from: json)
+        #expect(ndSong.participantArtistOverride == "Alice, Bob")
+
+        // No participants → nil
+        let jsonNoParticipants = """
+        {"id": "nd-2", "title": "Solo"}
+        """.data(using: .utf8)!
+        let ndSolo = try JSONDecoder().decode(NDSong.self, from: jsonNoParticipants)
+        #expect(ndSolo.participantArtistOverride == nil)
+    }
+
     // MARK: - Album Decoding
 
     @Test func albumWithSongs() throws {

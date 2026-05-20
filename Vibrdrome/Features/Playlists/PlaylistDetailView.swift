@@ -675,7 +675,7 @@ struct PlaylistDetailView: View {
         var m3u = "#EXTM3U\n"
         for song in songs {
             let duration = song.duration ?? 0
-            let artist = song.artist ?? "Unknown"
+            let artist = song.displayArtist ?? "Unknown"
             m3u += "#EXTINF:\(duration),\(artist) - \(song.title)\n"
             let url = appState.subsonicClient.streamURL(id: song.id)
             m3u += "\(url.absoluteString)\n"

@@ -53,8 +53,12 @@ struct SongsView: View {
 
     private func recomputeFilterOptions() {
         availableYears = Array(Set(songs.compactMap(\.year))).sorted(by: >)
-        availableArtists = Array(Set(songs.compactMap(\.displayArtist)))
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        availableArtists = Array(Set(songs.flatMap { song -> [String] in
+            if let artists = song.artists, !artists.isEmpty {
+                return artists.map(\.name)
+            }
+            return song.displayArtist.map { [$0] } ?? []
+        })).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     private var hasActiveFilters: Bool {
@@ -75,7 +79,12 @@ struct SongsView: View {
             base = base.filter { $0.genre?.localizedCaseInsensitiveCompare(filterGenre) == .orderedSame }
         }
         if let filterArtist {
-            base = base.filter { $0.displayArtist?.localizedCaseInsensitiveCompare(filterArtist) == .orderedSame }
+            base = base.filter { song in
+                if let artists = song.artists, !artists.isEmpty {
+                    return artists.contains { $0.name.localizedCaseInsensitiveCompare(filterArtist) == .orderedSame }
+                }
+                return song.displayArtist?.localizedCaseInsensitiveCompare(filterArtist) == .orderedSame
+            }
         }
         switch sortBy {
         case .title: return base.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
@@ -355,7 +364,7 @@ struct SongsView: View {
                 .lineLimit(1)
 
             HStack(spacing: 4) {
-                if let artist = song.artist {
+                if let artist = song.displayArtist {
                     Text(artist)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -524,7 +533,7 @@ struct SongsView: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
-            if let artist = song.artist {
+            if let artist = song.displayArtist {
                 Text(artist)
                     .font(.caption)
                     .foregroundStyle(.secondary)

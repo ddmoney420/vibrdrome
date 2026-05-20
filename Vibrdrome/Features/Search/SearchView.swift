@@ -250,7 +250,7 @@ struct SearchView: View {
                 .lineLimit(1)
 
             HStack(spacing: 4) {
-                if let artist = song.artist {
+                if let artist = song.displayArtist {
                     Text(artist)
                 }
                 if let album = song.album {

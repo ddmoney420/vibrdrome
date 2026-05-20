@@ -666,7 +666,7 @@ final class CarPlayManager: NSObject {
                 let visibleSongs = Array(songs.prefix(songsBudget))
                 let songItems = visibleSongs.map { [weak self] song in
                     let item = CPListItem(text: song.title,
-                                          detailText: song.artist ?? "")
+                                          detailText: song.displayArtist ?? "")
                     if let coverArtId = song.coverArt {
                         self?.loadImage(id: coverArtId, size: 120, into: item)
                     }
