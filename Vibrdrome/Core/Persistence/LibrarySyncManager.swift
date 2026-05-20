@@ -393,7 +393,8 @@ final class LibrarySyncManager {
         cached.replayGainAlbumGain != server.replayGain?.albumGain ||
         cached.replayGainTrackGain != server.replayGain?.trackGain ||
         cached.replayGainBaseGain != server.replayGain?.baseGain ||
-        cached.musicBrainzId != server.musicBrainzId
+        cached.musicBrainzId != server.musicBrainzId ||
+        cached.edition != server.version
     }
 
     // MARK: - Artists
