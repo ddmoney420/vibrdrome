@@ -432,7 +432,7 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private func albumArtistLinks(_ album: Album, font: Font, color: Color) -> some View {
-        if let artists = album.artists, artists.count > 1 {
+        if let artists = album.artists, !artists.isEmpty {
             HStack(spacing: 0) {
                 ForEach(Array(artists.enumerated()), id: \.offset) { index, artist in
                     Button {
@@ -446,7 +446,7 @@ struct AlbumDetailView: View {
                     }
                 }
             }
-        } else if let artist = album.artist {
+        } else if let artist = album.displayArtist ?? album.artist {
             if let artistId = album.artistId {
                 Button {
                     appState.pendingNavigation = .artist(id: artistId)
@@ -783,15 +783,20 @@ struct AlbumDetailView: View {
             return Album(
                 id: albumValue.id, name: albumValue.name,
                 artist: albumValue.artist, artistId: albumValue.artistId,
-                artists: nil,
+                artists: nil, displayArtist: nil,
                 coverArt: albumValue.coverArt, songCount: albumValue.songCount,
-                duration: albumValue.duration, year: albumValue.year,
+                duration: albumValue.duration, playCount: nil,
+                year: albumValue.year,
                 genre: albumValue.genre, genres: albumValue.genres,
-                starred: albumValue.starred, created: albumValue.created,
+                starred: albumValue.starred, played: nil,
+                created: albumValue.created,
                 userRating: albumValue.userRating,
                 song: songs.isEmpty ? nil : songs,
                 replayGain: albumValue.replayGain, musicBrainzId: albumValue.musicBrainzId,
-                recordLabels: albumValue.recordLabels
+                recordLabels: albumValue.recordLabels,
+                version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+                originalReleaseDate: nil, releaseDate: nil,
+                isCompilation: nil, explicitStatus: nil, discTitles: nil
             )
         }.value
     }

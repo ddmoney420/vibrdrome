@@ -189,14 +189,14 @@ final class CachedAlbum {
             name: name,
             artist: artistName,
             artistId: artistId,
-            artists: nil,
+            artists: nil, displayArtist: nil,
             coverArt: coverArtId,
             songCount: songCount,
-            duration: duration,
+            duration: duration, playCount: nil,
             year: year,
             genre: g.first,
             genres: g.map { ItemGenre(name: $0) },
-            starred: isStarred ? "true" : nil,
+            starred: isStarred ? "true" : nil, played: nil,
             created: created,
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
@@ -205,7 +205,10 @@ final class CachedAlbum {
                            trackPeak: nil, albumPeak: nil, baseGain: replayGainBaseGain)
             },
             musicBrainzId: musicBrainzId,
-            recordLabels: label.map { [RecordLabel(name: $0)] }
+            recordLabels: label.map { [RecordLabel(name: $0)] },
+            version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+            originalReleaseDate: nil, releaseDate: nil,
+            isCompilation: nil, explicitStatus: nil, discTitles: nil
         )
         return album
     }

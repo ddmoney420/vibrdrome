@@ -52,20 +52,23 @@ struct PlaylistDetailView: View {
                 name: song.album ?? "Unknown Album",
                 artist: song.albumArtist ?? song.artist,
                 artistId: song.artistId,
-                artists: nil,
+                artists: nil, displayArtist: nil,
                 coverArt: song.coverArt,
                 songCount: count,
-                duration: nil,
+                duration: nil, playCount: nil,
                 year: song.year,
                 genre: song.genre,
                 genres: nil,
-                starred: nil,
+                starred: nil, played: nil,
                 created: nil,
                 userRating: nil,
                 song: nil,
                 replayGain: nil,
                 musicBrainzId: nil,
-                recordLabels: nil
+                recordLabels: nil,
+                version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+                originalReleaseDate: nil, releaseDate: nil,
+                isCompilation: nil, explicitStatus: nil, discTitles: nil
             ))
         }
         return albums

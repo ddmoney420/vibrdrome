@@ -146,27 +146,66 @@ struct ItemGenre: Decodable, Sendable, Equatable {
     let name: String
 }
 
+/// OpenSubsonic ArtistID3 — artist reference as returned in album and artist browse responses.
+struct ArtistID3: Decodable, Sendable, Equatable {
+    let id: String
+    let name: String
+    let coverArt: String?
+    let artistImageUrl: String?
+    let albumCount: Int?
+    let starred: String?
+    let musicBrainzId: String?
+    let sortName: String?
+    let roles: [String]?
+}
+
+/// OpenSubsonic partial date (year/month/day all optional).
+struct ItemDate: Decodable, Sendable, Equatable {
+    let year: Int?
+    let month: Int?
+    let day: Int?
+}
+
+/// OpenSubsonic disc title entry.
+struct DiscTitle: Decodable, Sendable, Equatable {
+    let disc: Int
+    let title: String
+}
+
 struct Album: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let name: String
     let artist: String?
     let artistId: String?
-    /// OpenSubsonic extension: per-album artists list. When present, use instead of
-    /// `artist`/`artistId` so each collaborator gets its own tappable link.
-    let artists: [SongArtist]?
+    /// OpenSubsonic: per-album artist list. When present (and count > 1), each entry
+    /// gets its own tappable link instead of routing everything through `artistId`.
+    let artists: [ArtistID3]?
+    /// OpenSubsonic: consolidated display string (e.g. "Varg²™ & DJ Smokey").
+    let displayArtist: String?
     let coverArt: String?
     let songCount: Int?
     let duration: Int?
+    let playCount: Int?
     let year: Int?
     let genre: String?
     let genres: [ItemGenre]?
     let starred: String?
+    let played: String?
     let created: String?
     let userRating: Int?
     let song: [Song]?
     let replayGain: ReplayGain?
     let musicBrainzId: String?
     let recordLabels: [RecordLabel]?
+    let version: String?
+    let releaseTypes: [String]?
+    let moods: [String]?
+    let sortName: String?
+    let originalReleaseDate: ItemDate?
+    let releaseDate: ItemDate?
+    let isCompilation: Bool?
+    let explicitStatus: String?
+    let discTitles: [DiscTitle]?
 
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
@@ -361,11 +400,16 @@ extension Song {
             name: album ?? title,
             artist: artist,
             artistId: artistId,
-            artists: nil,
+            artists: nil, displayArtist: nil,
             coverArt: coverArt,
-            songCount: nil, duration: nil, year: year, genre: genre, genres: nil,
-            starred: starred, created: nil, userRating: userRating, song: nil,
-            replayGain: nil, musicBrainzId: nil, recordLabels: nil
+            songCount: nil, duration: nil, playCount: nil,
+            year: year, genre: genre, genres: nil,
+            starred: starred, played: nil, created: nil,
+            userRating: userRating, song: nil,
+            replayGain: nil, musicBrainzId: nil, recordLabels: nil,
+            version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+            originalReleaseDate: nil, releaseDate: nil,
+            isCompilation: nil, explicitStatus: nil, discTitles: nil
         )
     }
 }
