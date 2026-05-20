@@ -48,6 +48,7 @@ final class CachedAlbum {
     var sortAlbumArtistName: String?
     var minYear: Int?
     var maxYear: Int?
+    var edition: String?
 
     var songs: [CachedSong] = []
     @Relationship(deleteRule: .cascade, inverse: \AlbumGenre.album) var genreLinks: [AlbumGenre] = []
@@ -73,6 +74,7 @@ final class CachedAlbum {
         self.replayGainTrackGain = album.replayGain?.trackGain
         self.replayGainBaseGain = album.replayGain?.baseGain
         self.musicBrainzId = album.musicBrainzId
+        self.edition = album.version
         self.genreLinks = album.allGenres.map { AlbumGenre(name: $0) }
     }
 
@@ -108,6 +110,7 @@ final class CachedAlbum {
         self.mbzAlbumComment = ndAlbum.mbzAlbumComment
         self.playCount = ndAlbum.playCount ?? 0
         self.isCompilation = ndAlbum.compilation ?? false
+        self.edition = ndAlbum.edition
         self.genreLinks = ndAlbum.allGenres.map { AlbumGenre(name: $0) }
     }
 
@@ -142,6 +145,7 @@ final class CachedAlbum {
         mbzAlbumComment = ndAlbum.mbzAlbumComment
         playCount = ndAlbum.playCount ?? 0
         isCompilation = ndAlbum.compilation ?? false
+        edition = ndAlbum.edition
         let incoming = Set(ndAlbum.allGenres)
         let existing = Set(genreLinks.map(\.name))
         for removed in existing.subtracting(incoming) {
@@ -170,6 +174,7 @@ final class CachedAlbum {
         replayGainTrackGain = album.replayGain?.trackGain
         replayGainBaseGain = album.replayGain?.baseGain
         musicBrainzId = album.musicBrainzId
+        edition = album.version
         cachedAt = Date()
         let incoming = Set(album.allGenres)
         let existing = Set(genreLinks.map(\.name))
@@ -206,7 +211,7 @@ final class CachedAlbum {
             },
             musicBrainzId: musicBrainzId,
             recordLabels: label.map { [RecordLabel(name: $0)] },
-            version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+            version: edition, releaseTypes: nil, moods: nil, sortName: nil,
             originalReleaseDate: nil, releaseDate: nil,
             isCompilation: nil, explicitStatus: nil, discTitles: nil
         )

@@ -97,7 +97,7 @@ struct AlbumDetailView: View {
             }
         }
         .coordinateSpace(name: "albumScroll")
-        .navigationTitle(album?.name ?? "Album")
+        .navigationTitle(album?.displayTitle ?? "Album")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -166,10 +166,16 @@ struct AlbumDetailView: View {
                     .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(album.name)
+                    Text(album.displayTitle)
                         .font(.largeTitle)
                         .bold()
                         .foregroundColor(.white)
+
+                    if let edition = album.version {
+                        Text(edition)
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
 
                     albumArtistLinks(album, font: .title3, color: .white.opacity(0.85))
 
@@ -416,10 +422,17 @@ struct AlbumDetailView: View {
 
         // Album info below art
         VStack(spacing: 6) {
-            Text(album.name)
+            Text(album.displayTitle)
                 .font(.title2)
                 .bold()
                 .multilineTextAlignment(.center)
+
+            if let edition = album.version {
+                Text(edition)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
             albumArtistLinks(album, font: .body, color: .accentColor)
 

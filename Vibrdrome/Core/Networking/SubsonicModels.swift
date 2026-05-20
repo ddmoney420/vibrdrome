@@ -207,6 +207,17 @@ struct Album: Decodable, Identifiable, Sendable, Equatable {
     let explicitStatus: String?
     let discTitles: [DiscTitle]?
 
+    /// Title without the edition suffix, for display only. Both the Subsonic and Navidrome
+    /// native APIs include the edition in `name` (e.g. `"Heroes" (West Germany)`); this
+    /// strips it so the title and edition can be shown on separate lines.
+    var displayTitle: String {
+        guard let ed = version, !ed.isEmpty else { return name }
+        for suffix in [" (\(ed))", " [\(ed)]"] {
+            if name.hasSuffix(suffix) { return String(name.dropLast(suffix.count)) }
+        }
+        return name
+    }
+
     /// First record label name, for convenience.
     var label: String? { recordLabels?.first?.name }
 

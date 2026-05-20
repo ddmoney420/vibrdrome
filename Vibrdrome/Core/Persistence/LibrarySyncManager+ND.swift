@@ -61,6 +61,7 @@ extension LibrarySyncManager {
         cached.mbzReleaseGroupId != server.mbzReleaseGroupId ||
         cached.mbzAlbumType != server.mbzAlbumType ||
         cached.mbzAlbumComment != server.mbzAlbumComment ||
+        cached.edition != server.edition ||
         Set(cached.genres) != Set(server.allGenres)
     }
 

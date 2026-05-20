@@ -177,6 +177,7 @@ struct NDAlbum: Decodable, Sendable {
     var mood: String? { tags?["mood"]?.first }
     var grouping: String? { tags?["grouping"]?.first }
     var mediaType: String? { tags?["media"]?.first }
+    var edition: String? { tags?["version"]?.first }
 
     enum CodingKeys: String, CodingKey {
         case id, name, albumArtist, artistId, albumArtistId, genre, genres, year, songCount, duration, size
