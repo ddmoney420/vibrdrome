@@ -52,6 +52,7 @@ struct PlaylistDetailView: View {
                 name: song.album ?? "Unknown Album",
                 artist: song.albumArtist ?? song.artist,
                 artistId: song.artistId,
+                artists: nil,
                 coverArt: song.coverArt,
                 songCount: count,
                 duration: nil,

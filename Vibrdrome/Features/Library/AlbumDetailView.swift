@@ -171,22 +171,7 @@ struct AlbumDetailView: View {
                         .bold()
                         .foregroundColor(.white)
 
-                    if let artist = album.artist {
-                        if let artistId = album.artistId {
-                            Button {
-                                appState.pendingNavigation = .artist(id: artistId)
-                            } label: {
-                                Text(artist)
-                                    .font(.title3)
-                                    .foregroundColor(.white.opacity(0.85))
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Text(artist)
-                                .font(.title3)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                    }
+                    albumArtistLinks(album, font: .title3, color: .white.opacity(0.85))
 
                     albumMetadataRow(album, showGenre: false)
                         .foregroundStyle(.white.opacity(0.7))
@@ -436,22 +421,7 @@ struct AlbumDetailView: View {
                 .bold()
                 .multilineTextAlignment(.center)
 
-            if let artist = album.artist {
-                if let artistId = album.artistId {
-                    Button {
-                        appState.pendingNavigation = .artist(id: artistId)
-                    } label: {
-                        Text(artist)
-                            .font(.body)
-                            .foregroundColor(.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(artist)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            albumArtistLinks(album, font: .body, color: .accentColor)
 
             albumMetadataRow(album)
         }
@@ -459,6 +429,36 @@ struct AlbumDetailView: View {
         .padding(.top, 4)
     }
     #endif
+
+    @ViewBuilder
+    private func albumArtistLinks(_ album: Album, font: Font, color: Color) -> some View {
+        if let artists = album.artists, artists.count > 1 {
+            HStack(spacing: 0) {
+                ForEach(Array(artists.enumerated()), id: \.offset) { index, artist in
+                    Button {
+                        appState.pendingNavigation = .artist(id: artist.id)
+                    } label: {
+                        Text(artist.name).font(font).foregroundStyle(color)
+                    }
+                    .buttonStyle(.plain)
+                    if index < artists.count - 1 {
+                        Text(" & ").font(font).foregroundStyle(color)
+                    }
+                }
+            }
+        } else if let artist = album.artist {
+            if let artistId = album.artistId {
+                Button {
+                    appState.pendingNavigation = .artist(id: artistId)
+                } label: {
+                    Text(artist).font(font).foregroundStyle(color)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(artist).font(font).foregroundStyle(color)
+            }
+        }
+    }
 
     @ViewBuilder
     private func albumMetadataRow(_ album: Album, showGenre: Bool = true) -> some View {
@@ -783,6 +783,7 @@ struct AlbumDetailView: View {
             return Album(
                 id: albumValue.id, name: albumValue.name,
                 artist: albumValue.artist, artistId: albumValue.artistId,
+                artists: nil,
                 coverArt: albumValue.coverArt, songCount: albumValue.songCount,
                 duration: albumValue.duration, year: albumValue.year,
                 genre: albumValue.genre, genres: albumValue.genres,

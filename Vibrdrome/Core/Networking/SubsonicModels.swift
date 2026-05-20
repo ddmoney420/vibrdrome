@@ -151,6 +151,9 @@ struct Album: Decodable, Identifiable, Sendable, Equatable {
     let name: String
     let artist: String?
     let artistId: String?
+    /// OpenSubsonic extension: per-album artists list. When present, use instead of
+    /// `artist`/`artistId` so each collaborator gets its own tappable link.
+    let artists: [SongArtist]?
     let coverArt: String?
     let songCount: Int?
     let duration: Int?
@@ -358,6 +361,7 @@ extension Song {
             name: album ?? title,
             artist: artist,
             artistId: artistId,
+            artists: nil,
             coverArt: coverArt,
             songCount: nil, duration: nil, year: year, genre: genre, genres: nil,
             starred: starred, created: nil, userRating: userRating, song: nil,

@@ -189,6 +189,7 @@ final class CachedAlbum {
             name: name,
             artist: artistName,
             artistId: artistId,
+            artists: nil,
             coverArt: coverArtId,
             songCount: songCount,
             duration: duration,
