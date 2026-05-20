@@ -69,18 +69,23 @@ final class CachedSong {
         self.discNumber = song.discNumber
         self.year = song.year
         self.genre = song.genre
+        self.genres = song.allGenres
         self.duration = song.duration
         self.bitRate = song.bitRate
         self.bitDepth = song.bitDepth
         self.samplingRate = song.samplingRate
+        self.channels = song.channelCount
         self.comment = song.comment
         self.suffix = song.suffix
         self.contentType = song.contentType
         self.size = song.size
         self.bpm = song.bpm
         self.dateAdded = song.created.flatMap { iso8601.date(from: $0) }
+        self.lastPlayed = song.played.flatMap { iso8601.date(from: $0) }
+        self.playCount = Int(song.playCount ?? 0)
         self.mbzRecordingId = song.musicBrainzId
         self.isStarred = song.starred != nil
+        self.rating = song.userRating ?? 0
         self.rgTrackGain = song.replayGain?.trackGain
         self.rgTrackPeak = song.replayGain?.trackPeak
         self.rgAlbumGain = song.replayGain?.albumGain
@@ -176,6 +181,7 @@ final class CachedSong {
             track: track,
             year: year,
             genre: genre,
+            genres: genres.isEmpty ? nil : genres.map { ItemGenre(name: $0) },
             coverArt: coverArtId,
             size: size,
             contentType: contentType,
@@ -184,12 +190,14 @@ final class CachedSong {
             bitRate: bitRate,
             bitDepth: bitDepth,
             samplingRate: samplingRate,
+            channelCount: channels,
             comment: comment,
             path: nil,
             discNumber: discNumber,
             created: nil,
             starred: isStarred ? "true" : nil,
             userRating: rating,
+            playCount: Int64(playCount),
             bpm: bpm,
             replayGain: rgTrackGain.map {
                 ReplayGain(trackGain: $0, albumGain: rgAlbumGain,

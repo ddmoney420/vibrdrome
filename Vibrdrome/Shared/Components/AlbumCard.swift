@@ -18,7 +18,7 @@ struct AlbumCard: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                if let artist = album.artist {
+                if let artist = album.displayArtist ?? album.artist {
                     Text(artist)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -53,7 +53,7 @@ struct AlbumCard: View {
         if let edition = album.version {
             parts.append(edition)
         }
-        if let artist = album.artist {
+        if let artist = album.displayArtist ?? album.artist {
             parts.append("by \(artist)")
         }
         if let year = album.year {

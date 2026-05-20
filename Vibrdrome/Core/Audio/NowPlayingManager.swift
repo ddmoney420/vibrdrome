@@ -31,13 +31,20 @@ final class NowPlayingManager {
         currentInfo = [String: Any]()
         currentInfo[MPMediaItemPropertyTitle] = song.title
         currentInfo[MPMediaItemPropertyArtist] = song.displayArtist ?? "Unknown Artist"
-        currentInfo[MPMediaItemPropertyAlbumArtist] = song.albumArtist ?? song.displayArtist ?? "Unknown Artist"
+        currentInfo[MPMediaItemPropertyAlbumArtist] = song.displayAlbumArtist
+            ?? song.albumArtist ?? song.displayArtist ?? "Unknown Artist"
         currentInfo[MPMediaItemPropertyAlbumTitle] = song.album ?? ""
         currentInfo[MPMediaItemPropertyPlaybackDuration] = song.duration ?? 0
         currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0.0
         currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         currentInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
 
+        if let composer = song.displayComposer {
+            currentInfo[MPMediaItemPropertyComposer] = composer
+        }
+        if let explicit = song.explicitStatus {
+            currentInfo[MPMediaItemPropertyIsExplicit] = explicit.lowercased() == "explicit"
+        }
         if let track = song.track {
             currentInfo[MPMediaItemPropertyAlbumTrackNumber] = track
         }

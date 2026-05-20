@@ -67,9 +67,15 @@ final class CachedAlbum {
         self.songCount = album.songCount
         self.duration = album.duration
         self.isStarred = album.starred != nil
+        self.lastPlayed = album.played.flatMap { iso8601Album.date(from: $0) }
+        self.playCount = album.playCount ?? 0
         self.created = album.created
         self.userRating = album.userRating ?? 0
         self.label = album.label
+        self.isCompilation = album.isCompilation ?? false
+        self.releaseType = album.releaseTypes?.first
+        self.mood = album.moods?.first
+        self.sortAlbumName = album.sortName
         self.replayGainAlbumGain = album.replayGain?.albumGain
         self.replayGainTrackGain = album.replayGain?.trackGain
         self.replayGainBaseGain = album.replayGain?.baseGain
@@ -167,9 +173,15 @@ final class CachedAlbum {
         songCount = album.songCount
         duration = album.duration
         isStarred = album.starred != nil
+        if let played = album.played { lastPlayed = iso8601Album.date(from: played) }
+        playCount = album.playCount ?? 0
         created = album.created
         userRating = album.userRating ?? 0
         label = album.label
+        isCompilation = album.isCompilation ?? false
+        releaseType = album.releaseTypes?.first
+        mood = album.moods?.first
+        sortAlbumName = album.sortName
         replayGainAlbumGain = album.replayGain?.albumGain
         replayGainTrackGain = album.replayGain?.trackGain
         replayGainBaseGain = album.replayGain?.baseGain
@@ -189,7 +201,8 @@ final class CachedAlbum {
     /// Convert back to an Album value type for view compatibility.
     func toAlbum() -> Album {
         let g = genres
-        let album = Album(
+        let playedISO = lastPlayed.map { iso8601Album.string(from: $0) }
+        return Album(
             id: id,
             name: name,
             artist: artistName,
@@ -197,11 +210,13 @@ final class CachedAlbum {
             artists: nil, displayArtist: nil,
             coverArt: coverArtId,
             songCount: songCount,
-            duration: duration, playCount: nil,
+            duration: duration,
+            playCount: playCount > 0 ? playCount : nil,
             year: year,
             genre: g.first,
             genres: g.map { ItemGenre(name: $0) },
-            starred: isStarred ? "true" : nil, played: nil,
+            starred: isStarred ? "true" : nil,
+            played: playedISO,
             created: created,
             userRating: userRating > 0 ? userRating : nil,
             song: nil,
@@ -211,10 +226,13 @@ final class CachedAlbum {
             },
             musicBrainzId: musicBrainzId,
             recordLabels: label.map { [RecordLabel(name: $0)] },
-            version: edition, releaseTypes: nil, moods: nil, sortName: nil,
+            version: edition,
+            releaseTypes: releaseType.map { [$0] },
+            moods: mood.map { [$0] },
+            sortName: sortAlbumName,
             originalReleaseDate: nil, releaseDate: nil,
-            isCompilation: nil, explicitStatus: nil, discTitles: nil
+            isCompilation: isCompilation,
+            explicitStatus: nil, discTitles: nil
         )
-        return album
     }
 }

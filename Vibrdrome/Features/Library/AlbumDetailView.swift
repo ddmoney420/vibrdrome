@@ -59,7 +59,8 @@ struct AlbumDetailView: View {
                                     Image(systemName: "opticaldisc")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                    Text("Disc \(disc)")
+                                    let discLabel = album.discTitles?.first(where: { $0.disc == disc })?.title
+                                    Text(discLabel ?? "Disc \(disc)")
                                         .font(.caption)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.secondary)
@@ -479,9 +480,12 @@ struct AlbumDetailView: View {
             if let year = album.year {
                 Text(verbatim: "\(year)")
             }
-            if showGenre, let genre = album.genre {
-                Text("·")
-                Text(genre.cleanedGenreDisplay)
+            if showGenre {
+                let genreList = album.allGenres
+                if !genreList.isEmpty {
+                    Text("·")
+                    Text(genreList.map(\.cleanedGenreDisplay).joined(separator: ", "))
+                }
             }
             if let count = album.songCount {
                 Text("·")
@@ -725,7 +729,7 @@ struct AlbumDetailView: View {
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
-                                    Text(similar.artist ?? "")
+                                    Text(similar.displayArtist ?? similar.artist ?? "")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
