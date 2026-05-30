@@ -78,6 +78,7 @@ struct VibrdromeApp: App {
 
     init() {
         Self.migrateCredentialsToKeychain()
+        Self.pruneLegacyWidgetCoverArtKeys()
         // BGTaskScheduler.register() MUST run synchronously during app initialization,
         // before UIApplication finishes launching. If iOS launches the app specifically to
         // handle a scheduled background task, registration has to already be in place or
@@ -87,6 +88,38 @@ struct VibrdromeApp: App {
         #if os(iOS)
         BackgroundSyncScheduler.shared.registerTasks()
         #endif
+    }
+
+    /// Recover from accumulated cover-art bloat in the App Group preferences.
+    /// Older builds wrote per-cover-art binary entries into App Group UserDefaults
+    /// (one key per coverArtId), which grew until the domain exceeded the 4 MB
+    /// platform limit, transitioning cfprefsd into direct mode and freezing the
+    /// app on subsequent writes. In that state `removeObject` can fail to
+    /// propagate to the on-disk plist, so we also delete the plist file directly
+    /// when it's oversized; iOS recreates a fresh empty one on the next write.
+    /// Cover art now lives in a file in the App Group container, not in defaults.
+    private static func pruneLegacyWidgetCoverArtKeys() {
+        guard let defaults = NowPlayingState.shared else { return }
+
+        // Best-effort key removal first.
+        let legacyKeys = defaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix("widgetCoverArt_") || $0 == "widgetCoverArt"
+        }
+        for key in legacyKeys {
+            defaults.removeObject(forKey: key)
+        }
+
+        // If the on-disk plist is still oversized (cfprefsd ignored removeObject
+        // because it had already detached), delete the file. iOS recreates it
+        // empty on the next write. nowPlayingState and widgetCommandTimestamp
+        // are written every track change so they'll be back in seconds.
+        let fm = FileManager.default
+        guard let container = fm.containerURL(forSecurityApplicationGroupIdentifier: NowPlayingState.appGroupId) else { return }
+        let plistURL = container
+            .appendingPathComponent("Library/Preferences/\(NowPlayingState.appGroupId).plist")
+        if let size = (try? fm.attributesOfItem(atPath: plistURL.path))?[.size] as? Int, size > 1_000_000 {
+            try? fm.removeItem(at: plistURL)
+        }
     }
 
     /// One-time migration: move Last.fm/ListenBrainz credentials from UserDefaults to Keychain.

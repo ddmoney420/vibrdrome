@@ -24,9 +24,9 @@ struct NowPlayingProvider: TimelineProvider {
     }
 
     private func loadCachedImageData(state: NowPlayingState?) -> Data? {
-        guard let coverArtId = state?.coverArtId,
-              let groupDefaults = NowPlayingState.shared else { return nil }
-        return groupDefaults.data(forKey: "widgetCoverArt_\(coverArtId)")
+        guard state?.coverArtId != nil,
+              let fileURL = NowPlayingState.widgetCoverArtFileURL else { return nil }
+        return try? Data(contentsOf: fileURL)
     }
 }
 

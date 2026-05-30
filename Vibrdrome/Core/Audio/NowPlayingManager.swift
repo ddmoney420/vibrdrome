@@ -231,12 +231,17 @@ final class NowPlayingManager {
         )
         state.save()
 
-        // Cache cover art for the widget
+        // Cache cover art for the widget as a file in the App Group container.
+        // Previously stored in App Group UserDefaults, which has a hard 4 MB
+        // platform limit; binary data accumulating there could freeze the app
+        // via cfprefsd direct-mode fallback.
         if let coverArtId {
             let url = AppState.shared.subsonicClient.coverArtURL(id: coverArtId, size: 200)
             Task {
                 guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
-                NowPlayingState.shared?.set(data, forKey: "widgetCoverArt_\(coverArtId)")
+                if let fileURL = NowPlayingState.widgetCoverArtFileURL {
+                    try? data.write(to: fileURL, options: .atomic)
+                }
                 WidgetCenter.shared.reloadAllTimelines()
             }
         } else {
