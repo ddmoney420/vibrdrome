@@ -27,34 +27,6 @@ final class NowPlayingManager {
     private let infoCenter = MPNowPlayingInfoCenter.default()
     private var currentInfo = [String: Any]()
 
-    /// Update the stored artwork and flush to `infoCenter`. Used by radio
-    /// artwork loading so the station's cover art isn't overwritten by the
-    /// next elapsed-time tick (which writes `currentInfo` back).
-    func setCurrentArtwork(_ artwork: MPMediaItemArtwork) {
-        currentInfo[MPMediaItemPropertyArtwork] = artwork
-        infoCenter.nowPlayingInfo = currentInfo
-    }
-
-    /// Reset `currentInfo` to station metadata so subsequent `updateElapsedTime`
-    /// / `updatePlaybackState` ticks don't overwrite with stale song info.
-    func update(station: InternetRadioStation, isPlaying: Bool) {
-        currentInfo = [String: Any]()
-        currentInfo[MPMediaItemPropertyTitle] = station.name
-        currentInfo[MPMediaItemPropertyArtist] = "Internet Radio"
-        currentInfo[MPNowPlayingInfoPropertyIsLiveStream] = true
-        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        infoCenter.nowPlayingInfo = currentInfo
-
-        #if os(iOS)
-        WatchSessionManager.shared.sendNowPlayingUpdate(
-            title: station.name,
-            artist: "Internet Radio",
-            album: "",
-            isPlaying: isPlaying
-        )
-        #endif
-    }
-
     func update(song: Song, isPlaying: Bool) {
         currentInfo = [String: Any]()
         currentInfo[MPMediaItemPropertyTitle] = song.title
@@ -104,6 +76,41 @@ final class NowPlayingManager {
         #endif
 
         Task { await loadAndApplyArtwork(for: song) }
+    }
+
+    func update(station: InternetRadioStation, isPlaying: Bool) {
+        currentInfo = [String: Any]()
+        currentInfo[MPMediaItemPropertyTitle] = station.name
+        currentInfo[MPMediaItemPropertyArtist] = "Internet Radio"
+        currentInfo[MPMediaItemPropertyAlbumTitle] = ""
+        currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0.0
+        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        currentInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        currentInfo[MPNowPlayingInfoPropertyIsLiveStream] = true
+        currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+        infoCenter.nowPlayingInfo = currentInfo
+
+        updateWidget(title: station.name, artist: "Internet Radio",
+                     album: "", isPlaying: isPlaying,
+                     coverArtId: station.radioCoverArtId)
+
+        #if os(iOS)
+        WatchSessionManager.shared.sendNowPlayingUpdate(
+            title: station.name,
+            artist: "Internet Radio",
+            album: "",
+            isPlaying: isPlaying
+        )
+        #endif
+    }
+
+    func setCurrentArtwork(_ artwork: MPMediaItemArtwork?) {
+        if let artwork {
+            currentInfo[MPMediaItemPropertyArtwork] = artwork
+        } else {
+            currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+        }
+        infoCenter.nowPlayingInfo = currentInfo
     }
 
     private func loadAndApplyArtwork(for song: Song) async {
@@ -224,12 +231,17 @@ final class NowPlayingManager {
         )
         state.save()
 
-        // Cache cover art for the widget
+        // Cache cover art for the widget as a file in the App Group container.
+        // Previously stored in App Group UserDefaults, which has a hard 4 MB
+        // platform limit; binary data accumulating there could freeze the app
+        // via cfprefsd direct-mode fallback.
         if let coverArtId {
             let url = AppState.shared.subsonicClient.coverArtURL(id: coverArtId, size: 200)
             Task {
                 guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
-                NowPlayingState.shared?.set(data, forKey: "widgetCoverArt_\(coverArtId)")
+                if let fileURL = NowPlayingState.widgetCoverArtFileURL {
+                    try? data.write(to: fileURL, options: .atomic)
+                }
                 WidgetCenter.shared.reloadAllTimelines()
             }
         } else {

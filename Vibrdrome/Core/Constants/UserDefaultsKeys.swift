@@ -7,6 +7,10 @@ extension Notification.Name {
     static let navigateToSearch = Notification.Name("com.vibrdrome.navigateToSearch")
     /// Posted to focus the search bar in the currently visible view.
     static let focusSearchBar = Notification.Name("com.vibrdrome.focusSearchBar")
+    /// Posted when a song's starred state changes. userInfo: ["id": String, "starred": Bool]
+    static let songStarredChanged = Notification.Name("com.vibrdrome.songStarredChanged")
+    /// Posted when a song's rating changes. userInfo: ["id": String, "rating": Int]
+    static let songRatingChanged = Notification.Name("com.vibrdrome.songRatingChanged")
 }
 
 /// Centralized UserDefaults key constants.
@@ -27,6 +31,8 @@ enum UserDefaultsKeys {
     static let crossfadeCurve = "crossfadeCurve"
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
+    static let preloadSongs = "preloadSongs"
+    static let keepSongsInCacheAfterPlayback = "keepSongsInCacheAfterPlayback"
     static let autoSuggestEnabled = "autoSuggestEnabled"
 
     // MARK: - Equalizer
@@ -123,7 +129,7 @@ enum UserDefaultsKeys {
     static let enableLiquidGlass = "enableLiquidGlass"
     static let enableMiniPlayerTint = "enableMiniPlayerTint"
     static let albumBackgroundStyle = "albumBackgroundStyle"
-    static let gridColumnsPerRow = "gridColumnsPerRow"
+    static let gridDensity = "gridDensity"
     static let showLosslessBadge = "showLosslessBadge"
 
     // MARK: - Tab Bar Extended
@@ -143,10 +149,47 @@ enum UserDefaultsKeys {
     static let libraryLayout = "libraryLayout"
     static let activeMusicFolderId = "activeMusicFolderId"
 
+    // MARK: - macOS Track Table Columns
+
+    /// Key prefix for per-view column config. Full key = prefix + viewKey (e.g. "songs", "album").
+    static let trackTableColumnsPrefix = "trackTableColumns_"
+
+    // MARK: - macOS Artist Links
+
+    static let artistExternalLinks = "artistExternalLinks"
+
     // MARK: - macOS Layout
 
+    static let macHomeLayout = "macHomeLayout"
     static let macNowPlayingPlacement = "macNowPlayingPlacement"
     static let macSidePanelMechanic = "macSidePanelMechanic"
     static let macSidePanelWidth = "macSidePanelWidth"
     static let macMiniPlayerPanelTrigger = "macMiniPlayerPanelTrigger"
+
+    // MARK: - Advanced Filter Rule Sets
+
+    static let albumFilterRuleSet = "albumFilterRuleSet"
+    static let songFilterRuleSet = "songFilterRuleSet"
+    static let artistFilterRuleSet = "artistFilterRuleSet"
+    static let albumFilterRuleBuilderExpanded = "albumFilterRuleBuilderExpanded"
+    static let songFilterRuleBuilderExpanded = "songFilterRuleBuilderExpanded"
+    static let artistFilterRuleBuilderExpanded = "artistFilterRuleBuilderExpanded"
+
+    // MARK: - Playlist Export
+
+    static let exportDefaultFolderBookmark = "exportDefaultFolderBookmark"
+    static let exportDefaultSyncMode = "exportDefaultSyncMode"
+    static let exportDefaultTranscodeFormat = "exportDefaultTranscodeFormat"
+    static let exportDefaultTranscodeBitrate = "exportDefaultTranscodeBitrate"
+    static let exportFfmpegPath = "exportFfmpegPath"
+    static let exportAutoSyncOnForeground = "exportAutoSyncOnForeground"
+
+    // MARK: - Library Sync
+
+    static let lastLibrarySyncDate = "lastLibrarySyncDate"
+    static let lastFullSyncDate = "lastFullSyncDate"
+    static let lastServerModified = "lastServerModified"
+    static let backgroundSyncEnabled = "backgroundSyncEnabled"
+    static let syncPollingInterval = "syncPollingInterval"
+    static let lastCoverArtPrefetchDate = "lastCoverArtPrefetchDate"
 }

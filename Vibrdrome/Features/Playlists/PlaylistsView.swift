@@ -8,8 +8,10 @@ struct PlaylistsView: View {
     @State private var error: String?
     @State private var showCreateSheet = false
     @State private var showSmartSheet = false
+    @State private var showSmartPlaylistBuilder = false
     @AppStorage("playlistViewStyle") private var showAsList = false
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
     @State private var searchText = ""
     @State private var searchIsActive = false
     @State private var sortBy: PlaylistSortOption = .name
@@ -133,6 +135,12 @@ struct PlaylistsView: View {
                 }
             }
             ToolbarItem {
+                Button { showSmartPlaylistBuilder = true } label: {
+                    Label("Smart Playlist", systemImage: "wand.and.stars")
+                }
+                .help("Create a smart playlist with custom filter rules")
+            }
+            ToolbarItem {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showAsList.toggle()
@@ -184,6 +192,14 @@ struct PlaylistsView: View {
                 Task { await loadPlaylists() }
             }
         }
+        #if os(macOS)
+        .sheet(isPresented: $showSmartPlaylistBuilder) {
+            SmartPlaylistEditorView(mode: .create) {
+                await loadPlaylists()
+            }
+            .environment(appState)
+        }
+        #endif
         .overlay {
             if isLoading && playlists.isEmpty {
                 ProgressView("Loading playlists...")
@@ -255,8 +271,9 @@ struct PlaylistsView: View {
     // MARK: - Playlist Grid
 
     private var playlistGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                 count: max(2, min(10, gridColumns))), spacing: 20) {
+        LazyVGrid(columns: [
+            GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+        ], spacing: 20) {
             ForEach(filteredPlaylists) { playlist in
                 NavigationLink {
                     PlaylistDetailView(playlistId: playlist.id)
@@ -321,9 +338,11 @@ struct PlaylistsView: View {
 
     private func playlistCard(_ playlist: Playlist) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            PlaylistMosaicView(playlist: playlist, size: Theme.playlistCardSize, cornerRadius: 12)
-                .frame(maxWidth: .infinity)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            GeometryReader { geo in
+                PlaylistMosaicView(playlist: playlist, size: geo.size.width, cornerRadius: 12)
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
 
             Text(playlist.name)
                 .font(.subheadline)

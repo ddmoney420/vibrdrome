@@ -7,6 +7,9 @@ private let downloadLog = Logger(subsystem: "com.vibrdrome.app", category: "Down
 
 final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     static let shared = DownloadManager()
+    // Move the observer storage here. NSHashTable.weakObjects()
+    // prevents retain cycles automatically.
+    internal var observers = NSHashTable<AnyObject>.weakObjects()
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(
@@ -24,6 +27,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }()
 
     private let lock = NSLock()
+    private var taskStartTimes: [Int: Date] = [:]
     private var activeDownloads: [String: URLSessionDownloadTask] = [:]
     private let networkMonitor = NWPathMonitor()
     private var _isOnCellular = false
@@ -117,7 +121,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     // MARK: - Public API
 
     @MainActor
-    func download(song: Song, client: SubsonicClient) {
+    func download(song: Song, client: SubsonicClient, category: String = "") {
         // Block downloads over cellular if setting is off
         if isOnCellular && !UserDefaults.standard.bool(forKey: UserDefaultsKeys.downloadOverCellular) {
             return
@@ -142,7 +146,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         if (try? modelContext.fetch(descriptor).first) != nil {
             return
         }
-        let download = DownloadedSong(from: song, localFilePath: localPath)
+        let download = DownloadedSong(from: song, localFilePath: localPath, category: category)
         modelContext.insert(download)
         try? modelContext.save()
     }
@@ -232,7 +236,33 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         return true
     }
 
-    /// Remove offline playlist metadata (does not delete song files — they may be in other playlists)
+    /// Pure function: given the songs in the playlist being removed and a list of all
+    /// other OfflinePlaylists' song lists, return the songIds safe to delete from disk
+    /// (i.e., those not referenced by any other downloaded playlist).
+    static func orphanedSongIds(
+        forRemovedPlaylistSongs removedSongs: [String],
+        otherPlaylistSongLists: [[String]]
+    ) -> [String] {
+        let stillReferenced = Set(otherPlaylistSongLists.flatMap { $0 })
+        return removedSongs.filter { !stillReferenced.contains($0) }
+    }
+
+    /// Pure function: given the previous snapshot, the new content, and the other
+    /// downloaded playlists, return the songIds that became orphaned by the refresh.
+    static func orphanedSongIds(
+        forRefreshOldSongs oldSongs: [String],
+        newSongs: [String],
+        otherPlaylistSongLists: [[String]]
+    ) -> [String] {
+        let newSet = Set(newSongs)
+        let stillReferenced = Set(otherPlaylistSongLists.flatMap { $0 })
+        return oldSongs.filter { !newSet.contains($0) && !stillReferenced.contains($0) }
+    }
+
+    /// Remove offline playlist metadata. Songs from the stored snapshot are deleted
+    /// from disk unless they're referenced by another OfflinePlaylist (shared songs
+    /// are preserved). Bug #5: smart playlists rotate, so we have to delete by the
+    /// stored songIds at download time, not by the playlist's current content.
     @MainActor
     func removeOfflinePlaylist(playlistId: String) {
         guard let serverId = AppState.shared.activeServerId else { return }
@@ -241,17 +271,56 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         let descriptor = FetchDescriptor<OfflinePlaylist>(
             predicate: #Predicate { $0.compositeKey == key }
         )
-        if let offline = try? modelContext.fetch(descriptor).first {
-            modelContext.delete(offline)
-            try? modelContext.save()
+        guard let offline = try? modelContext.fetch(descriptor).first else { return }
+
+        let removedSongs = offline.songIds
+        modelContext.delete(offline)
+        try? modelContext.save()
+
+        let remainingPlaylists = (try? modelContext.fetch(FetchDescriptor<OfflinePlaylist>())) ?? []
+        let orphaned = Self.orphanedSongIds(
+            forRemovedPlaylistSongs: removedSongs,
+            otherPlaylistSongLists: remainingPlaylists.map(\.songIds)
+        )
+        for songId in orphaned {
+            deleteDownload(songId: songId)
+        }
+    }
+
+    /// Re-download a playlist after its content has rotated. Deletes songs from the
+    /// previous snapshot that aren't in the new content (and aren't referenced by
+    /// other OfflinePlaylists), updates the OfflinePlaylist record, and downloads
+    /// any new songs not already on disk.
+    @MainActor
+    func refreshOfflinePlaylist(playlist: Playlist, songs: [Song], client: SubsonicClient) {
+        guard let serverId = AppState.shared.activeServerId else { return }
+        let modelContext = PersistenceController.shared.container.mainContext
+        let key = "\(serverId)_\(playlist.id)"
+        let descriptor = FetchDescriptor<OfflinePlaylist>(
+            predicate: #Predicate { $0.compositeKey == key }
+        )
+        let oldSongIds = (try? modelContext.fetch(descriptor).first?.songIds) ?? []
+
+        // downloadPlaylist upserts the OfflinePlaylist with the new songIds and
+        // dedupes per-song downloads, so reuse it.
+        downloadPlaylist(playlist: playlist, songs: songs, client: client)
+
+        // Compute orphans from the OTHER playlists (excluding the one we just refreshed,
+        // since its songIds were just overwritten with the new content).
+        let allPlaylists = (try? modelContext.fetch(FetchDescriptor<OfflinePlaylist>())) ?? []
+        let otherPlaylists = allPlaylists.filter { $0.compositeKey != key }
+        let orphaned = Self.orphanedSongIds(
+            forRefreshOldSongs: oldSongIds,
+            newSongs: songs.map(\.id),
+            otherPlaylistSongLists: otherPlaylists.map(\.songIds)
+        )
+        for songId in orphaned {
+            deleteDownload(songId: songId)
         }
     }
 
     func cancelDownload(songId: String) {
-        lock.withLock {
-            activeDownloads[songId]?.cancel()
-            activeDownloads.removeValue(forKey: songId)
-        }
+        cleanupTaskInfo(songId)
         Task { @MainActor in
             DownloadProgress.shared.remove(songId: songId)
             // Clean up the incomplete SwiftData record
@@ -371,11 +440,13 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     ) {
         guard let songId = downloadTask.taskDescription else { return }
 
+        Task { @MainActor in
+            DownloadProgress.shared.update(songId: songId, progress: 1.0)
+        }
+
         // D3: Always clean up activeDownloads, even on failure
         defer {
-            lock.lock()
-            activeDownloads.removeValue(forKey: songId)
-            lock.unlock()
+            cleanupTaskInfo(songId)
         }
 
         // CRITICAL: Move file synchronously before delegate returns,
@@ -423,7 +494,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
             }
 
             try? modelContext.save()
-            DownloadProgress.shared.remove(songId: songId)
+            Task { @MainActor in await DownloadProgress.shared.removeAsync(songId: songId) }
 
             // Evict old cache if over limit
             CacheManager.shared.evictIfNeeded()
@@ -440,9 +511,45 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let songId = downloadTask.taskDescription,
               totalBytesExpectedToWrite > 0 else { return }
         let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        Task { @MainActor in
-            DownloadProgress.shared.update(songId: songId, progress: progress)
+
+        let taskId = downloadTask.taskIdentifier
+
+        lock.lock()
+        // If this is the first chunk of data, record the start time
+        if taskStartTimes[taskId] == nil {
+            taskStartTimes[taskId] = Date()
         }
+        let startTime = taskStartTimes[taskId]
+        lock.unlock()
+
+        var kbs = 0.0
+        guard let start = startTime else {
+            Task { @MainActor in
+                DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
+            }
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(start)
+        if elapsed > 0 && totalBytesWritten > 500000 {
+            let bytesPerSecond = Double(totalBytesWritten) / elapsed
+            kbs = bytesPerSecond / 1024
+        }
+
+        Task { @MainActor in
+            DownloadProgress.shared.update(songId: songId, progress: progress, speed: kbs)
+        }
+
+    }
+
+    fileprivate func cleanupTaskInfo(_ songId: String) {
+        lock.lock()
+        let downloadTask = activeDownloads[songId]
+        let taskId = downloadTask?.taskIdentifier
+        downloadTask?.cancel()
+        activeDownloads.removeValue(forKey: songId)
+        if taskId != nil { taskStartTimes.removeValue(forKey: taskId!) }
+        lock.unlock()
     }
 
     func urlSession(
@@ -453,9 +560,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         guard let error else { return }
         guard let songId = task.taskDescription else { return }
 
-        lock.lock()
-        activeDownloads.removeValue(forKey: songId)
-        lock.unlock()
+        cleanupTaskInfo(songId)
 
         let isCancelled = (error as NSError).code == NSURLErrorCancelled
         if !isCancelled {
@@ -480,6 +585,7 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+
         let handler = self.completionHandler
         self.completionHandler = nil
         DispatchQueue.main.async {

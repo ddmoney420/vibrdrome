@@ -6,6 +6,9 @@ struct TrackRow: View {
     var showTrackNumber: Bool = true
     var queue: [Song]?
     var index: Int?
+    /// When non-nil, skips the per-row SwiftData fetchCount in onAppear. Pass from a
+    /// parent @Query so the main-actor fetch doesn't happen mid-navigation-animation.
+    var downloadedSongIds: Set<String>?
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @State private var isDownloaded = false
@@ -61,6 +64,12 @@ struct TrackRow: View {
             Button {
                 let wasStarred = isStarred
                 isStarred = !wasStarred
+                AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: !wasStarred)
+                NotificationCenter.default.post(
+                    name: .songStarredChanged,
+                    object: nil,
+                    userInfo: ["id": song.id, "starred": !wasStarred]
+                )
                 #if os(iOS)
                 Haptics.light()
                 #endif
@@ -76,6 +85,12 @@ struct TrackRow: View {
                         }
                     } catch {
                         isStarred = wasStarred
+                        AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: wasStarred)
+                        NotificationCenter.default.post(
+                            name: .songStarredChanged,
+                            object: nil,
+                            userInfo: ["id": song.id, "starred": wasStarred]
+                        )
                     }
                 }
             } label: {
@@ -168,13 +183,22 @@ struct TrackRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(trackAccessibilityLabel)
+        .onReceive(NotificationCenter.default.publisher(for: .songStarredChanged)) { note in
+            guard let id = note.userInfo?["id"] as? String, id == song.id,
+                  let starred = note.userInfo?["starred"] as? Bool else { return }
+            isStarred = starred
+        }
         .onAppear {
             isStarred = song.starred != nil
-            let songId = song.id
-            let descriptor = FetchDescriptor<DownloadedSong>(
-                predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
-            )
-            isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+            if let ids = downloadedSongIds {
+                isDownloaded = ids.contains(song.id)
+            } else {
+                let songId = song.id
+                let descriptor = FetchDescriptor<DownloadedSong>(
+                    predicate: #Predicate { $0.songId == songId && $0.isComplete == true }
+                )
+                isDownloaded = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+            }
         }
     }
 

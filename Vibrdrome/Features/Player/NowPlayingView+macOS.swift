@@ -28,10 +28,7 @@ extension NowPlayingView {
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
                     .foregroundColor(
-                        engine.eqEnabled
-                            ? .white
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .white.opacity(0.7) : .white.opacity(0.5)
+                        engine.eqEnabled ? .accentColor : .white.opacity(0.5)
                     )
             }
             .accessibilityLabel("Equalizer")
@@ -186,6 +183,12 @@ extension NowPlayingView {
             let songId = song.id
             let wasStarred = isStarred
             isStarred = !wasStarred
+            engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
+            NotificationCenter.default.post(
+                name: .songStarredChanged,
+                object: nil,
+                userInfo: ["id": songId, "starred": !wasStarred]
+            )
             Task {
                 do {
                     if wasStarred {
@@ -200,6 +203,12 @@ extension NowPlayingView {
                 } catch {
                     if engine.currentSong?.id == songId {
                         isStarred = wasStarred
+                        engine.updateQueueSongStarred(id: songId, starred: wasStarred)
+                        NotificationCenter.default.post(
+                            name: .songStarredChanged,
+                            object: nil,
+                            userInfo: ["id": songId, "starred": wasStarred]
+                        )
                     }
                 }
             }

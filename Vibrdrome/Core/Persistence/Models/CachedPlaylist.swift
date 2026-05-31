@@ -10,7 +10,10 @@ final class CachedPlaylist {
     var coverArtId: String?
     var owner: String?
     var isPublic: Bool = false
+    var changed: String?
     var cachedAt: Date = Date()
+
+    @Relationship(deleteRule: .cascade) var entries: [CachedPlaylistEntry] = []
 
     init(from playlist: Playlist) {
         self.id = playlist.id
@@ -20,5 +23,22 @@ final class CachedPlaylist {
         self.coverArtId = playlist.coverArt
         self.owner = playlist.owner
         self.isPublic = playlist.isPublic ?? false
+        self.changed = playlist.changed
+    }
+
+    /// Converts to a lightweight Playlist with `entry: nil`; songs are loaded separately in PlaylistDetailView.
+    func toPlaylist() -> Playlist {
+        Playlist(
+            id: id,
+            name: name,
+            songCount: songCount,
+            duration: duration,
+            created: nil,
+            changed: changed,
+            coverArt: coverArtId,
+            owner: owner,
+            isPublic: isPublic,
+            entry: nil
+        )
     }
 }

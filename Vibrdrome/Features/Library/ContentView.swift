@@ -338,6 +338,8 @@ struct ContentView: View {
                 libraryNavPath.append(SongNavItem(id: id))
             case .genre(let name):
                 libraryNavPath.append(GenreNavItem(name: name))
+            case .label(let name):
+                libraryNavPath.append(LabelNavItem(name: name))
             case .playlist(let id):
                 libraryNavPath.append(PlaylistNavItem(id: id))
             }
@@ -404,6 +406,10 @@ struct PlaylistNavItem: Hashable {
 
 struct SongNavItem: Hashable {
     let id: String
+}
+
+struct LabelNavItem: Hashable {
+    let name: String
 }
 
 struct OfflineNavItem: Hashable {

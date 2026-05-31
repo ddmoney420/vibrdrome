@@ -347,6 +347,61 @@
 
         <div class="timeline">
 
+            <!-- Build 53 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 53</span>
+                        <span class="build-date">May 31, 2026</span>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Stability</h3>
+                        <ul class="build-list">
+                            <li>Crash &amp; hang diagnostics via MetricKit: the app captures crash, hang, CPU-exception, and disk-write-exception reports from the system, stores the newest 25 locally, and shows them in Settings &rarr; Diagnostics with a one-tap Copy. No remote crash backend &mdash; nothing leaves the device unless you send it.</li>
+                            <li>The Diagnostics screen is now reachable from Settings (previously unlinked).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Bug fixes</h3>
+                        <ul class="build-list">
+                            <li>Now Playing toolbar icons were invisible in light mode over light album art; contrast restored (#79).</li>
+                            <li>Favorites empty state no longer shows two overlapping messages (#67).</li>
+                            <li>Mini-player artwork resets to 0&deg; when Spinning Art is disabled instead of freezing at the last angle (#71).</li>
+                            <li>Now Playing toolbar: sheet detents and icon shadow refinements (#72, #68).</li>
+                            <li>Widget cover-art storage moved from App Group UserDefaults to a file, fixing stale/oversized widget artwork.</li>
+                            <li>Songs view restored the inset-grouped card look.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Build 52 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 52</span>
+                        <span class="build-date">May 11, 2026</span>
+                    </div>
+                    <ul>
+                        <li>macOS artist detail redesign: hero header, expandable biography, genre pills, customizable external links (Last.fm / MusicBrainz / Wikipedia / Google by default)</li>
+                        <li>New macOS Home page with discovery sections (Quick Actions, Jump Back In, Recently Added, Most Played, Featured Genre, more) and configurable section order</li>
+                        <li>New macOS loading screen on startup, transitions to home once sync is ready</li>
+                        <li>macOS album detail metadata view: clickable genre and label pills, copy-selectable MusicBrainz ID, faster navigation</li>
+                        <li>macOS song table: 11 reorderable columns, persisted across launches</li>
+                        <li>Hover overlay on macOS album grid cards: favorite, rating, and a centered play/pause button that starts the album or toggles playback if it is already the active queue</li>
+                        <li>Song pre-download: the next track fetches in advance for gapless transitions on slow connections; smart shuffle gets a cached-lookahead redesign</li>
+                        <li>Library filter UI + adaptive grids on macOS (multi-select genre / label / artist, TriState favorites and downloaded toggles)</li>
+                        <li>Multi-genre support across album list, search, and filter sidebar</li>
+                        <li>WebP cover art support, off-MainActor filter, Nuke image prefetch</li>
+                        <li>SwiftData #Index across CachedSong / CachedAlbum / CachedArtist plus a new AlbumGenre join table; substantial album view performance work (iOS 18 / macOS 15 minimum)</li>
+                        <li>CarPlay: Albums alphabet directory now reads the full library from local cache regardless of server sort order (no more "only # and T" letter buckets)</li>
+                        <li>Cold launch: iOS lock-screen widget now shows the saved track after force-quit + reconnect (audio session uses longFormAudio policy). CarPlay's top-right Now Playing button still needs the user to start playback once -- iOS reserves that status for apps with observed audio activity. Template-stack overflow crash from tapping the system Now Playing icon while deep in navigation is fixed.</li>
+                        <li>Audio interruption: notifications announced over CarPlay no longer restart the track at 00:00 on iOS 26.x; the resume now seeks back to the saved position before resuming playback rate</li>
+                        <li>Bug fixes: GenresView optimism crash defense, AlbumGridCard star/rating sync restored, FolderDetailView iPad navigation loop, Remove Offline orphan cleanup, cover art prefetch cache-guard, Queue view ordering, PlaylistsView mosaic scaling</li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- Build 51 -->
             <div class="timeline-item" data-animate>
                 <div class="build-card">

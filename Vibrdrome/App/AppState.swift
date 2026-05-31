@@ -25,6 +25,8 @@ final class AppState {
     static let shared = AppState()
 
     var subsonicClient: SubsonicClient
+    /// Non-nil when the active server is Navidrome and native API auth succeeded.
+    var navidromeClient: NavidromeNativeClient?
     var isConfigured: Bool = false
     var requiresReAuth: Bool = false
 
@@ -40,9 +42,14 @@ final class AppState {
         case album(id: String)
         case song(id: String)
         case genre(name: String)
+        case label(name: String)
         case playlist(id: String)
     }
     var pendingNavigation: PendingNavigation?
+
+    #if os(macOS)
+    var pendingSidebarSelection: SidebarContentView.SidebarItem?
+    #endif
 
     /// Single-shot trigger consumed by NowPlayingView when it appears or this changes.
     /// Used by sidebar actions (e.g., Random Mix) to surface the queue panel.
@@ -52,12 +59,39 @@ final class AppState {
     }
     var pendingNowPlayingAction: NowPlayingAction?
 
-    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info).
+    /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info / Album Filters).
     /// Mutually exclusive: setting one closes the others.
     enum SidePanel: String, Equatable {
-        case queue, lyrics, artistInfo
+        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters
     }
     var activeSidePanel: SidePanel?
+
+    /// Context currently shown in the popped-out filter window.
+    var activeFilterWindowContext: FilterContext?
+
+    /// Filter state for the macOS filter sidebars.
+    var albumFilter = LibraryFilter()
+    var artistFilter = LibraryFilter()
+    var songFilter = LibraryFilter()
+
+    /// Cached albums state for back-navigation, keyed by view configuration.
+    struct AlbumsViewSnapshot {
+        var albums: [Album]
+        var hasMore: Bool
+        var scrollIndex: Int?
+    }
+    var albumsViewSnapshots: [String: AlbumsViewSnapshot] = [:]
+
+    /// Library sync manager.
+    let librarySyncManager = LibrarySyncManager.shared
+
+    /// Pre-computed model arrays so library tabs are instant on first tap.
+    let libraryCache = LibraryDataCache()
+
+    #if os(macOS)
+    /// Home page data. Prefetched during the loading screen in parallel with sync.
+    let homeViewModel = MacHomeViewModel()
+    #endif
     var serverURL: String = ""
     var username: String = ""
     var errorMessage: String?
@@ -86,6 +120,7 @@ final class AppState {
         )
         loadServers()
         loadSavedCredentials()
+        configureFilterPersistence()
 
         // UI testing: auto-login with credentials from environment variables
         // so XCUITest doesn't have to type them (avoids idle-wait SIGKILL).
@@ -97,6 +132,12 @@ final class AppState {
            !url.isEmpty {
             saveCredentials(url: url, username: user, password: pass)
         }
+    }
+
+    private func configureFilterPersistence() {
+        albumFilter.loadRuleSet(from: UserDefaultsKeys.albumFilterRuleSet)
+        artistFilter.loadRuleSet(from: UserDefaultsKeys.artistFilterRuleSet)
+        songFilter.loadRuleSet(from: UserDefaultsKeys.songFilterRuleSet)
     }
 
     func configure(url: String, username: String, password: String) {
@@ -115,6 +156,16 @@ final class AppState {
         #if os(iOS)
         SubsonicClientProvider.shared.client = subsonicClient
         #endif
+        LibrarySyncManager.shared.client = subsonicClient
+        LibrarySyncManager.shared.container = PersistenceController.shared.container
+
+        // Probe Navidrome native API in background — clears navidromeClient when not Navidrome.
+        let ndClient = NavidromeNativeClient(baseURL: serverURL, username: username, password: password)
+        navidromeClient = ndClient
+        Task {
+            let available = await ndClient.probe()
+            if !available { navidromeClient = nil }
+        }
     }
 
     func loadSavedCredentials() {
@@ -203,6 +254,14 @@ final class AppState {
         requiresReAuth = false
     }
 
+    func resetLibraryFilterState() {
+        albumFilter = LibraryFilter()
+        artistFilter = LibraryFilter()
+        songFilter = LibraryFilter()
+        albumsViewSnapshots = [:]
+        configureFilterPersistence()
+    }
+
     func clearCredentials() {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.serverURL)
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.username)
@@ -211,6 +270,8 @@ final class AppState {
         requiresReAuth = false
         serverURL = ""
         username = ""
+        navidromeClient = nil
+        resetLibraryFilterState()
         // Reset the client so stale creds aren't used
         subsonicClient.updateCredentials(
             baseURL: URL(string: "https://localhost")!,
@@ -235,6 +296,7 @@ final class AppState {
               let password = keychain["server_\(id)"] else { return }
         activeServerId = id
         UserDefaults.standard.set(id, forKey: Self.activeServerKey)
+        resetLibraryFilterState()
         configure(url: server.url, username: server.username, password: password)
 
         // Update legacy keys

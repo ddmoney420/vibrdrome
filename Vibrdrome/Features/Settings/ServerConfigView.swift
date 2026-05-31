@@ -269,7 +269,7 @@ struct ServerConfigView: View {
         Image("AppIconImage")
     }
 
-    private func testConnection() {
+    func testConnection() {
         isTesting = true
         testResult = nil
         Task {

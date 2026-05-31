@@ -8,6 +8,7 @@ import os.log
 struct SidePanelContainer<Content: View>: View {
     let title: String
     let onClose: () -> Void
+    var onPopOut: (() -> Void)?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -16,6 +17,17 @@ struct SidePanelContainer<Content: View>: View {
                 Text(title)
                     .font(.headline)
                 Spacer()
+                if let onPopOut {
+                    Button {
+                        onPopOut()
+                    } label: {
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open \(title) in separate window")
+                }
                 Button {
                     onClose()
                 } label: {
@@ -49,15 +61,36 @@ struct QueuePanelView: View {
             appState.activeSidePanel = nil
         }) {
             List {
+                let history = engine.recentlyPlayed
+                if !history.isEmpty {
+                    Section("Recently Played") {
+                        ForEach(history, id: \.id) { song in
+                            HStack(spacing: 12) {
+                                AlbumArtView(coverArtId: song.coverArt, size: 36)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(song.title)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                    Text(song.artist ?? "")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .opacity(0.6)
+                        }
+                    }
+                }
+
                 if let current = engine.currentSong {
                     Section("Now Playing") {
                         nowPlayingRow(current)
                     }
                 }
 
-                let entries = engine.queueEntries
+                let entries = engine.upNextEntries
                 if !entries.isEmpty {
-                    Section("Queue -- \(entries.count) songs") {
+                    Section("Up Next -- \(entries.count) songs") {
                         ForEach(Array(entries.enumerated()), id: \.element.song.id) { _, entry in
                             queueRow(entry)
                         }
@@ -147,7 +180,6 @@ struct QueuePanelView: View {
                     .monospacedDigit()
             }
         }
-        .opacity(entry.index < engine.currentIndex ? 0.5 : 1.0)
         .contentShape(Rectangle())
         .onTapGesture {
             engine.skipToIndex(entry.index)

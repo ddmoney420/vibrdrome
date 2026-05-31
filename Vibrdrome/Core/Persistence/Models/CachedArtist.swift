@@ -3,6 +3,8 @@ import SwiftData
 
 @Model
 final class CachedArtist {
+    #Index<CachedArtist>([\.name], [\.isStarred])
+
     @Attribute(.unique) var id: String
     var name: String
     var coverArtId: String?
@@ -16,5 +18,16 @@ final class CachedArtist {
         self.coverArtId = artist.coverArt
         self.albumCount = artist.albumCount
         self.isStarred = artist.starred != nil
+    }
+
+    func toArtist() -> Artist {
+        Artist(
+            id: id,
+            name: name,
+            coverArt: coverArtId,
+            albumCount: albumCount,
+            starred: isStarred ? "true" : nil,
+            album: nil
+        )
     }
 }

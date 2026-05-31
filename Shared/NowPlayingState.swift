@@ -21,6 +21,15 @@ struct NowPlayingState: Codable {
         UserDefaults(suiteName: appGroupId)
     }
 
+    /// Path for the widget cover-art file inside the App Group container.
+    /// Stored as a file (not in UserDefaults) because UserDefaults caps a
+    /// domain at 4 MB on iOS and binary image data quickly exceeds that.
+    static var widgetCoverArtFileURL: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+            .appendingPathComponent("widgetCoverArt.jpg")
+    }
+
     func save() {
         guard let defaults = Self.shared else {
             widgetLog.error("App Group UserDefaults is nil — group not configured?")

@@ -108,7 +108,7 @@ final class CarPlayManager: NSObject {
             let empty = CPListTemplate(title: "Up Next", sections: [
                 CPListSection(items: [CPListItem(text: "Queue is empty", detailText: nil)])
             ])
-            interfaceController.pushTemplate(empty, animated: true) { _, _ in }
+            safelyPushTemplate(empty, animated: true)
             return
         }
 
@@ -127,7 +127,7 @@ final class CarPlayManager: NSObject {
         let template = CPListTemplate(
             title: "Up Next", sections: [CPListSection(items: items)]
         )
-        interfaceController.pushTemplate(template, animated: true) { _, _ in }
+        safelyPushTemplate(template, animated: true)
     }
 
     // MARK: - Task Tracking (C1)
@@ -159,7 +159,7 @@ final class CarPlayManager: NSObject {
                 guard !Task.isCancelled else { return }
                 guard let template = try await builder() else { return }
                 guard !Task.isCancelled else { return }
-                self.interfaceController.pushTemplate(template, animated: true) { _, _ in }
+                self.safelyPushTemplate(template, animated: true)
             } catch {
                 guard !Task.isCancelled else { return }
                 let errorTemplate = CPListTemplate(
@@ -168,8 +168,28 @@ final class CarPlayManager: NSObject {
                         CPListItem(text: "Could not load", detailText: nil)
                     ])]
                 )
-                self.interfaceController.pushTemplate(errorTemplate, animated: true) { _, _ in }
+                self.safelyPushTemplate(errorTemplate, animated: true)
             }
+        }
+    }
+
+    /// Push a template while respecting CarPlay's 5-template hierarchy cap.
+    /// CarPlay throws `clientExceededHierarchyDepthLimit` if the stack ever
+    /// reaches 6, and the framework can auto-push `CPNowPlayingTemplate` when
+    /// the user taps the system Now Playing icon at the top-right. To leave
+    /// room for that auto-push, our own pushes are capped at depth 4 (root
+    /// tab bar + 3 user pushes); if a fourth user push is requested, the
+    /// topmost template is popped first so the new template replaces it.
+    /// Fix for the May 2026 CarPlay crashes.
+    private func safelyPushTemplate(_ template: CPTemplate, animated: Bool) {
+        let maxOwnDepth = 4
+        let stack = interfaceController.templates
+        if stack.count >= maxOwnDepth {
+            interfaceController.popTemplate(animated: false) { [weak self] _, _ in
+                self?.interfaceController.pushTemplate(template, animated: animated) { _, _ in }
+            }
+        } else {
+            interfaceController.pushTemplate(template, animated: animated) { _, _ in }
         }
     }
 
@@ -223,9 +243,15 @@ final class CarPlayManager: NSObject {
             image: UIImage(systemName: "play.circle.fill")
         )
         nowPlayingItem.handler = { [weak self] _, completion in
-            self?.interfaceController.pushTemplate(
-                CPNowPlayingTemplate.shared, animated: true
-            ) { _, _ in }
+            // Pop to root first so Now Playing always lands at depth 2 (root
+            // + Now Playing) regardless of how deep the user has drilled.
+            // Avoids the hierarchy-depth crash and matches the "jump to Now
+            // Playing" intent of tapping this item.
+            self?.interfaceController.popToRootTemplate(animated: false) { _, _ in
+                self?.interfaceController.pushTemplate(
+                    CPNowPlayingTemplate.shared, animated: true
+                ) { _, _ in }
+            }
             completion()
         }
         items.append(nowPlayingItem)
@@ -459,70 +485,114 @@ final class CarPlayManager: NSObject {
             let maxItems = max(1, Int(CPListTemplate.maximumItemCount))
 
             if type == .newest {
-                let recent = max(10, UserDefaults.standard.integer(forKey: UserDefaultsKeys.carPlayRecentCount))
-                let size = min(recent == 0 ? 25 : recent, maxItems)
-                let albums = try await client.getAlbumList(type: type, size: size)
-                let items = albums.map { album -> CPListItem in
-                    let item = CPListItem(text: album.name,
-                                          detailText: album.artist ?? "")
-                    if let coverArtId = album.coverArt {
-                        self?.loadImage(id: coverArtId, size: 120, into: item)
-                    }
-                    item.handler = { [weak self] _, completion in
-                        self?.showAlbumDetail(id: album.id)
-                        completion()
-                    }
-                    return item
-                }
-                return CPListTemplate(title: "Recently Added",
-                                      sections: [CPListSection(items: items)])
+                return try await self?.makeRecentlyAddedTemplate(
+                    client: client, maxItems: maxItems
+                ) ?? CPListTemplate(title: "Recently Added", sections: [])
             }
 
-            // Alphabetical albums: paginate Subsonic's 500-per-call limit up to
-            // CarPlay's maximumItemCount, then show a letter directory at the
-            // root. Tapping a letter drills into the filtered album list with
-            // second-letter sectionIndexTitle for further narrowing. Two-step
-            // navigation stays within the 5-template depth cap once the
-            // redundant auto-push of Now Playing was removed.
-            var albums: [Album] = []
-            let pageSize = 500
-            var offset = 0
-            while albums.count < maxItems {
-                let page = try await client.getAlbumList(type: type,
-                                                         size: pageSize,
-                                                         offset: offset)
-                if page.isEmpty { break }
-                albums.append(contentsOf: page)
-                if page.count < pageSize { break }
-                offset += pageSize
-            }
-            albums = Array(albums.prefix(maxItems))
-
-            var letterOrder: [String] = []
-            var byLetter: [String: [Album]] = [:]
-            for album in albums {
-                let letter = Self.bucketLetter(for: album.name)
-                if byLetter[letter] == nil {
-                    byLetter[letter] = []
-                    letterOrder.append(letter)
-                }
-                byLetter[letter]?.append(album)
-            }
-            let letterItems: [CPListItem] = letterOrder.map { letter in
-                let count = byLetter[letter]?.count ?? 0
-                let item = CPListItem(text: letter,
-                                      detailText: "\(count) album\(count == 1 ? "" : "s")")
-                item.accessoryType = .disclosureIndicator
-                item.handler = { [weak self] _, completion in
-                    self?.showAlbumsInLetter(letter: letter,
-                                             albums: byLetter[letter] ?? [])
-                    completion()
-                }
-                return item
-            }
-            return CPListTemplate(title: "Albums",
-                                  sections: [CPListSection(items: letterItems)])
+            return try await self?.makeAlphabetDirectoryTemplate(
+                client: client, type: type, maxItems: maxItems
+            ) ?? CPListTemplate(title: "Albums", sections: [])
         }
+    }
+
+    /// Recently Added: flat list of newest albums up to the user-configured
+    /// recent count, capped by CarPlay's maximumItemCount.
+    private func makeRecentlyAddedTemplate(
+        client: SubsonicClient, maxItems: Int
+    ) async throws -> CPListTemplate {
+        let recent = max(10, UserDefaults.standard.integer(forKey: UserDefaultsKeys.carPlayRecentCount))
+        let size = min(recent == 0 ? 25 : recent, maxItems)
+        let albums = try await client.getAlbumList(type: .newest, size: size)
+        let items = albums.map { album -> CPListItem in
+            let item = CPListItem(text: album.name,
+                                  detailText: album.artist ?? "")
+            if let coverArtId = album.coverArt {
+                self.loadImage(id: coverArtId, size: 120, into: item)
+            }
+            item.handler = { [weak self] _, completion in
+                self?.showAlbumDetail(id: album.id)
+                completion()
+            }
+            return item
+        }
+        return CPListTemplate(title: "Recently Added",
+                              sections: [CPListSection(items: items)])
+    }
+
+    /// Alphabetical letter directory. Reads the full album list from the
+    /// local SwiftData cache to build a complete letter directory.
+    /// Subsonic's getAlbumList caps at 500 results per request and
+    /// pagination ordering is server-specific (some servers put non-letter
+    /// albums first then jump to a single letter, leaving the directory
+    /// missing most of the alphabet for libraries larger than the page
+    /// size). Reading from CachedAlbum covers the entire synced library
+    /// regardless of server sort order. Falls back to the paginated
+    /// network fetch if the cache is empty (fresh install / pre-sync).
+    /// Issue #32.
+    private func makeAlphabetDirectoryTemplate(
+        client: SubsonicClient, type: AlbumListType, maxItems: Int
+    ) async throws -> CPListTemplate {
+        let albums = try await loadAlphabetAlbums(client: client, type: type, maxItems: maxItems)
+
+        var letterOrder: [String] = []
+        var byLetter: [String: [Album]] = [:]
+        for album in albums {
+            let letter = Self.bucketLetter(for: album.name)
+            if byLetter[letter] == nil {
+                byLetter[letter] = []
+                letterOrder.append(letter)
+            }
+            byLetter[letter]?.append(album)
+        }
+        // Sort letters: "#" first, then A-Z. Cache-derived order is
+        // undefined; this gives a stable user-facing alphabet.
+        letterOrder.sort { lhs, rhs in
+            if lhs == "#" { return rhs != "#" }
+            if rhs == "#" { return false }
+            return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+        }
+        let letterItems: [CPListItem] = letterOrder.map { letter in
+            let count = byLetter[letter]?.count ?? 0
+            let item = CPListItem(text: letter,
+                                  detailText: "\(count) album\(count == 1 ? "" : "s")")
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, completion in
+                self?.showAlbumsInLetter(letter: letter,
+                                         albums: byLetter[letter] ?? [])
+                completion()
+            }
+            return item
+        }
+        return CPListTemplate(title: "Albums",
+                              sections: [CPListSection(items: letterItems)])
+    }
+
+    /// Cache-first album loader for the alphabet directory. Falls back to
+    /// paginated network fetch when the local cache is empty.
+    private func loadAlphabetAlbums(
+        client: SubsonicClient, type: AlbumListType, maxItems: Int
+    ) async throws -> [Album] {
+        let context = PersistenceController.shared.container.mainContext
+        let cachedAlbums = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        if !cachedAlbums.isEmpty {
+            return cachedAlbums
+                .map { $0.toAlbum() }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+        var fetched: [Album] = []
+        let pageSize = 500
+        var offset = 0
+        while fetched.count < maxItems {
+            let page = try await client.getAlbumList(type: type,
+                                                     size: pageSize,
+                                                     offset: offset)
+            if page.isEmpty { break }
+            fetched.append(contentsOf: page)
+            if page.count < pageSize { break }
+            offset += pageSize
+        }
+        return Array(fetched.prefix(maxItems))
     }
 
     /// Drill target for the alphabet-first Albums root. Groups the passed

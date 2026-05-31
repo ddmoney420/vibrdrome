@@ -4,6 +4,7 @@ struct PlaylistEditorView: View {
     enum Mode {
         case create
         case edit(playlistId: String, currentName: String)
+        case smartPlaylist(playlistId: String, currentName: String, existingRules: NSPCriteria?)
     }
 
     let mode: Mode
@@ -16,7 +17,9 @@ struct PlaylistEditorView: View {
     @State private var searchResults: [Song] = []
     @State private var selectedSongs: [Song] = []
     @State private var isSaving = false
+    @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
+    @State private var ruleSet: FilterRuleSet = FilterRuleSet()
 
     init(mode: Mode, onSave: (() async -> Void)? = nil) {
         self.mode = mode
@@ -26,6 +29,11 @@ struct PlaylistEditorView: View {
             self._name = State(initialValue: "")
         case .edit(_, let currentName):
             self._name = State(initialValue: currentName)
+        case .smartPlaylist(_, let currentName, let existingRules):
+            self._name = State(initialValue: currentName)
+            if let criteria = existingRules {
+                self._ruleSet = State(initialValue: FilterRuleSet(from: criteria))
+            }
         }
     }
 
@@ -35,6 +43,25 @@ struct PlaylistEditorView: View {
                 Section("Playlist Name") {
                     TextField("Name", text: $name, prompt: Text("My Playlist"))
                 }
+
+                #if os(macOS)
+                if case .smartPlaylist = mode {
+                    Section("Rules") {
+                        FilterRuleBuilderView(
+                            ruleSet: $ruleSet,
+                            allowedFields: FilterField.smartPlaylistFields,
+                            expandedKey: "smartPlaylistEditorExpanded"
+                        )
+                    }
+                    if let msg = errorMessage {
+                        Section {
+                            Text(msg)
+                                .foregroundStyle(.red)
+                                .font(.caption)
+                        }
+                    }
+                }
+                #endif
 
                 if case .create = mode {
                     Section("Add Songs") {
@@ -113,7 +140,7 @@ struct PlaylistEditorView: View {
                     }
                 }
             }
-            .navigationTitle(isCreating ? "New Playlist" : "Edit Playlist")
+            .navigationTitle(navigationTitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -139,8 +166,17 @@ struct PlaylistEditorView: View {
         return false
     }
 
+    private var navigationTitle: String {
+        switch mode {
+        case .create: return "New Playlist"
+        case .edit: return "Edit Playlist"
+        case .smartPlaylist: return "Edit Smart Playlist"
+        }
+    }
+
     private func save() {
         isSaving = true
+        errorMessage = nil
         Task {
             defer { isSaving = false }
             do {
@@ -156,12 +192,22 @@ struct PlaylistEditorView: View {
                         id: playlistId,
                         name: name.trimmingCharacters(in: .whitespaces)
                     )
+                case .smartPlaylist(let playlistId, _, _):
+                    guard let ndClient = appState.navidromeClient else {
+                        errorMessage = "Navidrome connection not available"
+                        return
+                    }
+                    let criteria = NSPCriteria(from: ruleSet)
+                    try await ndClient.updateSmartPlaylist(
+                        id: playlistId,
+                        name: name.trimmingCharacters(in: .whitespaces),
+                        rules: criteria
+                    )
                 }
                 await onSave?()
                 dismiss()
             } catch {
-                // Show error - for now just print
-                print("Failed to save playlist: \(error)")
+                errorMessage = ErrorPresenter.userMessage(for: error)
             }
         }
     }

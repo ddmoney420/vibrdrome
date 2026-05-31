@@ -24,7 +24,9 @@ struct GenresView: View {
     @State private var searchIsActive = false
     @State private var sortBy: GenreSortOption = .name
     @AppStorage("genresViewStyle") private var showAsList = true
-    @AppStorage(UserDefaultsKeys.gridColumnsPerRow) private var gridColumns = 2
+    @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
+    private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
+    @State private var cachedFilteredGenres: [Genre] = []
 
     enum GenreSortOption: String, CaseIterable {
         case name, songCount
@@ -36,7 +38,7 @@ struct GenresView: View {
         }
     }
 
-    private var filteredGenres: [Genre] {
+    private func computeFilteredGenres() -> [Genre] {
         let base: [Genre]
         if searchText.isEmpty {
             base = genres
@@ -135,13 +137,15 @@ struct GenresView: View {
             }
         }
         .task { await loadGenres() }
+        .onChange(of: searchText) { recomputeFilteredGenres() }
+        .onChange(of: sortBy) { recomputeFilteredGenres() }
         .refreshable { await loadGenres() }
     }
 
     // MARK: - List view
 
     private var genreList: some View {
-        List(filteredGenres) { genre in
+        List(cachedFilteredGenres) { genre in
             NavigationLink {
                 AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
             } label: {
@@ -169,9 +173,10 @@ struct GenresView: View {
 
     private var genreGrid: some View {
         ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16),
-                                     count: max(2, min(10, gridColumns))), spacing: 20) {
-                ForEach(filteredGenres) { genre in
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
+            ], spacing: 20) {
+                ForEach(cachedFilteredGenres) { genre in
                     NavigationLink {
                         AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
                     } label: {
@@ -205,13 +210,28 @@ struct GenresView: View {
         }
     }
 
+    private func recomputeFilteredGenres() {
+        cachedFilteredGenres = computeFilteredGenres()
+    }
+
     private func loadGenres() async {
         let client = appState.subsonicClient
-        // Show cached data instantly
+
+        // Try local SwiftData first — derive genres from cached songs
+        if genres.isEmpty {
+            let localGenres = deriveGenresFromCache()
+            if !localGenres.isEmpty {
+                genres = localGenres
+                recomputeFilteredGenres()
+            }
+        }
+
+        // Show cached API response if no local data
         if genres.isEmpty,
            let cached = await client.cachedResponse(for: .getGenres, ttl: 3600) {
             genres = (cached.genres?.genre ?? [])
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
         }
         isLoading = genres.isEmpty
         error = nil
@@ -219,20 +239,55 @@ struct GenresView: View {
         do {
             genres = try await client.getGenres()
                 .sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+            recomputeFilteredGenres()
             await loadGenreArt(client: client)
         } catch {
-            if genres.isEmpty {
+            // If network fails but we have local data, load art from cache
+            if !genres.isEmpty {
+                await loadGenreArt(client: client)
+            } else {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
         }
     }
 
+    private func deriveGenresFromCache() -> [Genre] {
+        // Prefetch songCounts into a dictionary to avoid faulting album rows inside the loop.
+        let albums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+        let songCountById = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0.songCount ?? 0) })
+
+        let genreLinks = (try? modelContext.fetch(FetchDescriptor<AlbumGenre>())) ?? []
+        var genreAlbumCount: [String: Int] = [:]
+        var genreSongCount: [String: Int] = [:]
+        for link in genreLinks where !link.name.isEmpty {
+            genreAlbumCount[link.name, default: 0] += 1
+            genreSongCount[link.name, default: 0] += songCountById[link.album?.id ?? ""] ?? 0
+        }
+        return genreAlbumCount.map { key, albumCount in
+            Genre(songCount: genreSongCount[key] ?? 0, albumCount: albumCount, value: key)
+        }.sorted { $0.value.localizedCaseInsensitiveCompare($1.value) == .orderedAscending }
+    }
+
     private func loadGenreArt(client: SubsonicClient) async {
-        let existing = Set(genreArtworks.map(\.genre))
-        for genre in genres where !existing.contains(genre.value) {
+        // Initial snapshot so we can skip the network fetch for genres whose
+        // artwork is already saved. Re-checked freshly inside the loop after
+        // each await to handle concurrent invocations (split view, multi
+        // window, rapid view re-mount) that may have inserted artwork for
+        // the same genre while we were awaiting the network. Without the
+        // re-check, a concurrent insert + save on the @MainActor context
+        // leaves the @Query snapshot stale and our save then triggers
+        // CoreData's `_thereIsNoSadnessLikeTheDeathOfOptimism` assertion.
+        let initialExisting = Set(genreArtworks.map(\.genre))
+        for genre in genres where !initialExisting.contains(genre.value) {
             guard let albums = try? await client.getAlbumList(type: .byGenre, size: 1, genre: genre.value),
                   let coverArt = albums.first?.coverArt else { continue }
-            modelContext.insert(GenreArtwork(genre: genre.value, coverArtId: coverArt))
+            // Fresh existence check via FetchDescriptor reads the current
+            // context state (including any concurrent writes that landed
+            // during our await) rather than the stale @Query snapshot.
+            let g = genre.value
+            let descriptor = FetchDescriptor<GenreArtwork>(predicate: #Predicate { $0.genre == g })
+            if (try? modelContext.fetch(descriptor).first) != nil { continue }
+            modelContext.insert(GenreArtwork(genre: g, coverArtId: coverArt))
         }
         try? modelContext.save()
     }

@@ -21,13 +21,20 @@ struct MacContentView: View {
     var body: some View {
         Group {
             if appState.isConfigured {
-                SidebarContentView()
+                if appState.libraryCache.isReady {
+                    SidebarContentView()
+                        .transition(.opacity)
+                } else {
+                    MacLoadingView()
+                        .transition(.opacity)
+                }
             } else {
                 ServerConfigView()
                     .environment(appState)
             }
         }
-        .navigationTitle(windowTitle)
+        .animation(.easeInOut(duration: 0.4), value: appState.libraryCache.isReady)
+        .navigationTitle(appState.libraryCache.isReady ? windowTitle : "Vibrdrome")
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
             switch newPhase {
@@ -39,6 +46,11 @@ struct MacContentView: View {
             case .active:
                 engine.restorePlayQueue(client: appState.subsonicClient)
                 engine.refreshPlaybackState()
+                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.exportAutoSyncOnForeground) {
+                    Task {
+                        await PlaylistExportManager.shared.syncAllActive(client: appState.subsonicClient)
+                    }
+                }
             default:
                 break
             }

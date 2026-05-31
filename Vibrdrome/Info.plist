@@ -71,6 +71,13 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.vibrdrome.app.libraryRefresh</string>
+        <string>com.vibrdrome.app.librarySync</string>
     </array>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Save album artwork to your photo library</string>

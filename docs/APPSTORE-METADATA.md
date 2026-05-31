@@ -1,5 +1,14 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 53)
+
+Build 53 focuses on stability and TestFlight fixes:
+
+- Crash & hang diagnostics (MetricKit): the app records crash, hang, CPU, and disk-write reports from the system and shows them under Settings → Diagnostics, where you can copy a report to send it. Nothing is uploaded automatically.
+- The Diagnostics screen is now reachable from Settings.
+- Now Playing toolbar icons are visible in light mode over light album art.
+- Fixed the Favorites empty-state overlap, mini-player rotation reset when Spinning Art is off, widget cover-art storage, and the Songs view card look.
+
 ## App Information
 
 - **App Name:** Vibrdrome
@@ -63,6 +72,15 @@ Vibrdrome is free, open source, and contains no ads or tracking.
 ## Keywords
 
 navidrome,subsonic,music,player,streaming,self-hosted,gapless,offline,equalizer,carplay,watch,lyrics,radio,metadata
+
+## What's New (v1.0.0 Beta Build 52)
+
+- macOS artist detail page redesigned: hero header, expandable biography, customizable external-link row (Last.fm, MusicBrainz, Wikipedia, Google).
+- macOS Home page with discovery sections (Quick Actions, Jump Back In, Recently Added, Most Played, Featured Genre, more), individually toggleable.
+- Song pre-download: the next track in the queue is fetched in advance for gapless transitions on slow connections. Smart shuffle gets a cached-lookahead redesign.
+- CarPlay: Albums alphabet directory now works for any library size and any server sort order; Now Playing button appears immediately on cold launch with a restored queue; deep-navigation crash fixed.
+- Library filter UI + adaptive grids on macOS (multi-select genre / label / artist, TriState favorites and downloaded toggles), WebP cover art, multi-genre support.
+- SwiftData `#Index` plus new AlbumGenre join table give fast filter and genre queries (requires iOS 18 / macOS 15 minimum).
 
 ## What's New (v1.0.0 Beta Build 51)
 

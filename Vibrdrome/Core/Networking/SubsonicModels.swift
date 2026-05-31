@@ -137,7 +137,16 @@ struct AlbumInfo2: Decodable, Sendable {
 
 // MARK: - Album Models
 
-struct Album: Decodable, Identifiable, Sendable {
+struct RecordLabel: Decodable, Sendable, Equatable {
+    let name: String
+}
+
+/// OpenSubsonic genre tag on an album or song (name-keyed, distinct from the library Genre type).
+struct ItemGenre: Decodable, Sendable, Equatable {
+    let name: String
+}
+
+struct Album: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let name: String
     let artist: String?
@@ -147,10 +156,26 @@ struct Album: Decodable, Identifiable, Sendable {
     let duration: Int?
     let year: Int?
     let genre: String?
+    let genres: [ItemGenre]?
     let starred: String?
     let created: String?
+    let userRating: Int?
     let song: [Song]?
     let replayGain: ReplayGain?
+    let musicBrainzId: String?
+    let recordLabels: [RecordLabel]?
+
+    /// First record label name, for convenience.
+    var label: String? { recordLabels?.first?.name }
+
+    /// All genres for this album. Prefers the OpenSubsonic `genres` array when present;
+    /// falls back to the legacy single `genre` string.
+    var allGenres: [String] {
+        if let items = genres, !items.isEmpty {
+            return items.map(\.name)
+        }
+        return genre.map { [$0] } ?? []
+    }
 }
 
 struct AlbumList2Response: Decodable, Sendable {
@@ -171,7 +196,7 @@ struct TopSongsResponse: Decodable, Sendable {
 
 // MARK: - Song Model
 
-struct Song: Decodable, Identifiable, Sendable {
+struct Song: Decodable, Identifiable, Sendable, Equatable {
     let id: String
     let parent: String?
     let title: String
@@ -189,6 +214,9 @@ struct Song: Decodable, Identifiable, Sendable {
     let suffix: String?
     let duration: Int?
     let bitRate: Int?
+    let bitDepth: Int?
+    let samplingRate: Int?
+    let comment: String?
     let path: String?
     let discNumber: Int?
     let created: String?
@@ -205,8 +233,9 @@ struct Song: Decodable, Identifiable, Sendable {
         track: Int? = nil, year: Int? = nil, genre: String? = nil,
         coverArt: String? = nil, size: Int? = nil,
         contentType: String? = nil, suffix: String? = nil,
-        duration: Int? = nil, bitRate: Int? = nil, path: String? = nil,
-        discNumber: Int? = nil, created: String? = nil,
+        duration: Int? = nil, bitRate: Int? = nil,
+        bitDepth: Int? = nil, samplingRate: Int? = nil, comment: String? = nil,
+        path: String? = nil, discNumber: Int? = nil, created: String? = nil,
         starred: String? = nil, userRating: Int? = nil,
         bpm: Int? = nil, replayGain: ReplayGain? = nil, musicBrainzId: String? = nil
     ) {
@@ -216,14 +245,62 @@ struct Song: Decodable, Identifiable, Sendable {
         self.track = track; self.year = year; self.genre = genre
         self.coverArt = coverArt; self.size = size
         self.contentType = contentType; self.suffix = suffix
-        self.duration = duration; self.bitRate = bitRate; self.path = path
-        self.discNumber = discNumber; self.created = created
+        self.duration = duration; self.bitRate = bitRate
+        self.bitDepth = bitDepth; self.samplingRate = samplingRate; self.comment = comment
+        self.path = path; self.discNumber = discNumber; self.created = created
         self.starred = starred; self.userRating = userRating
         self.bpm = bpm; self.replayGain = replayGain; self.musicBrainzId = musicBrainzId
     }
+
+    func withStarred(_ starred: String?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate,
+            bitDepth: bitDepth, samplingRate: samplingRate, comment: comment,
+            path: path, discNumber: discNumber, created: created,
+            starred: starred, userRating: userRating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
+
+    func withUserRating(_ rating: Int?) -> Song {
+        Song(
+            id: id, parent: parent, title: title, album: album,
+            artist: artist, albumArtist: albumArtist,
+            albumId: albumId, artistId: artistId,
+            track: track, year: year, genre: genre,
+            coverArt: coverArt, size: size,
+            contentType: contentType, suffix: suffix,
+            duration: duration, bitRate: bitRate,
+            bitDepth: bitDepth, samplingRate: samplingRate, comment: comment,
+            path: path, discNumber: discNumber, created: created,
+            starred: starred, userRating: rating,
+            bpm: bpm, replayGain: replayGain, musicBrainzId: musicBrainzId
+        )
+    }
 }
 
-struct ReplayGain: Decodable, Sendable {
+extension Song {
+    var asAlbum: Album {
+        Album(
+            id: albumId ?? id,
+            name: album ?? title,
+            artist: artist,
+            artistId: artistId,
+            coverArt: coverArt,
+            songCount: nil, duration: nil, year: year, genre: genre, genres: nil,
+            starred: starred, created: nil, userRating: userRating, song: nil,
+            replayGain: nil, musicBrainzId: nil, recordLabels: nil
+        )
+    }
+}
+
+struct ReplayGain: Decodable, Sendable, Equatable {
     let trackGain: Double?
     let albumGain: Double?
     let trackPeak: Double?

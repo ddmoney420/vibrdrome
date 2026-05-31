@@ -1,10 +1,12 @@
 import SwiftUI
+import SwiftData
 import NukeUI
 
 struct AlbumDetailView: View {
     let albumId: String
 
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @State private var album: Album?
     @State private var albumNotes: String?
     @State private var showFullNotes = false
@@ -15,6 +17,14 @@ struct AlbumDetailView: View {
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
     @State private var isStarred = false
+    // Single query for all completed downloads — passed into track rows to avoid per-row
+    // SwiftData fetchCount calls on the main actor during the push/pop animation.
+    @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
+    private var completedDownloads: [DownloadedSong]
+    private var downloadedSongIds: Set<String> { Set(completedDownloads.map(\.songId)) }
+    #if os(macOS)
+    @State private var columnSettings = TrackTableColumnSettings(viewKey: "album")
+    #endif
 
     var body: some View {
         ScrollView {
@@ -31,6 +41,15 @@ struct AlbumDetailView: View {
                     let discs = Set(songs.compactMap(\.discNumber)).sorted()
                     let hasMultipleDiscs = discs.count > 1
 
+                    #if os(macOS)
+                    MacTrackTableView(
+                        songs: songs,
+                        settings: columnSettings,
+                        showDiscSeparators: hasMultipleDiscs,
+                        downloadedSongIds: downloadedSongIds,
+                        embedsScrollView: false
+                    )
+                    #else
                     LazyVStack(spacing: 0) {
                         ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                             // Disc separator
@@ -56,6 +75,7 @@ struct AlbumDetailView: View {
                                 .padding(.leading, isSelecting ? 72 : 56)
                         }
                     }
+                    #endif
 
                     // Batch action bar
                     if isSelecting && !selectedSongs.isEmpty {
@@ -142,7 +162,7 @@ struct AlbumDetailView: View {
             blurredArt(coverArtId: album.coverArt)
 
             HStack(alignment: .top, spacing: 24) {
-                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14)
+                AlbumArtView(coverArtId: album.coverArt, size: 280, cornerRadius: 14, requestSize: CoverArtSize.detail)
                     .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -168,8 +188,10 @@ struct AlbumDetailView: View {
                         }
                     }
 
-                    albumMetadataRow(album)
+                    albumMetadataRow(album, showGenre: false)
                         .foregroundStyle(.white.opacity(0.7))
+
+                    macOSExtendedMetadata(album)
 
                     Spacer(minLength: 12)
 
@@ -179,6 +201,102 @@ struct AlbumDetailView: View {
                 .padding(.vertical, 4)
             }
             .padding(28)
+        }
+    }
+
+    @ViewBuilder
+    private func macOSExtendedMetadata(_ album: Album) -> some View {
+        let allGenres = album.allGenres
+        let hasLabels = album.recordLabels?.isEmpty == false
+        let hasGrid = hasLabels || album.created != nil
+            || album.replayGain?.albumGain != nil || album.musicBrainzId != nil
+
+        if !allGenres.isEmpty || hasGrid {
+            VStack(alignment: .leading, spacing: 10) {
+                if !allGenres.isEmpty {
+                    macOSGenrePills(allGenres)
+                }
+
+                if hasGrid {
+                    HStack(spacing: 20) {
+                        if let labels = album.recordLabels, !labels.isEmpty {
+                            macOSLabelPills(labels)
+                        }
+                        if let created = album.created {
+                            macOSHeaderMetaCell("Added", value: formatAddedDate(created))
+                        }
+                        if let gain = album.replayGain?.albumGain {
+                            macOSHeaderMetaCell("Album Gain",
+                                                value: String(format: "%.2f dB", gain))
+                        }
+                        if let mbid = album.musicBrainzId {
+                            macOSHeaderMetaCell("MusicBrainz ID", value: mbid)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderPill(text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.white.opacity(0.18), in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSGenrePills(_ genres: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(genres, id: \.self) { genre in
+                    macOSHeaderPill(text: genre.cleanedGenreDisplay) {
+                        appState.pendingNavigation = .genre(name: genre)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func macOSLabelPills(_ labels: [RecordLabel]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Label")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            HStack(spacing: 6) {
+                ForEach(labels, id: \.name) { recordLabel in
+                    macOSHeaderPill(text: recordLabel.name) {
+                        appState.pendingNavigation = .label(name: recordLabel.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private func macOSHeaderMetaCell(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white.opacity(0.5))
+                .textCase(.uppercase)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .textSelection(.enabled)
         }
     }
 
@@ -229,13 +347,40 @@ struct AlbumDetailView: View {
         }
     }
 
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+    private static let dateDisplayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    private func formatAddedDate(_ iso: String) -> String {
+        let date = Self.isoFormatterFractional.date(from: iso)
+            ?? Self.isoFormatterBasic.date(from: iso)
+        return date.map { Self.dateDisplayFormatter.string(from: $0) } ?? iso
+    }
+
     @ViewBuilder
     private func blurredArt(coverArtId: String?) -> some View {
         GeometryReader { geo in
             ZStack {
                 Color.black
                 if let coverArtId {
-                    LazyImage(url: appState.subsonicClient.coverArtURL(id: coverArtId, size: 600)) { state in
+                    LazyImage(
+                        request: {
+                            var req = ImageRequest(
+                                url: appState.subsonicClient.coverArtURL(id: coverArtId, size: CoverArtSize.gridThumb))
+                            req.userInfo[.imageIdKey] = appState.subsonicClient
+                                .coverArtCacheKey(id: coverArtId, size: CoverArtSize.gridThumb)
+                            return req
+                        }()
+                    ) { state in
                         if let image = state.image {
                             image
                                 .resizable()
@@ -262,7 +407,7 @@ struct AlbumDetailView: View {
             let opacity = minY < -100 ? max(0, 1 + (minY + 100) / 150) : 1.0
 
             ZStack {
-                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0)
+                AlbumArtView(coverArtId: album.coverArt, size: height, cornerRadius: 0, requestSize: CoverArtSize.detail)
                     .frame(width: geo.size.width, height: height)
                     .clipped()
                     .scaleEffect(scale)
@@ -316,12 +461,12 @@ struct AlbumDetailView: View {
     #endif
 
     @ViewBuilder
-    private func albumMetadataRow(_ album: Album) -> some View {
+    private func albumMetadataRow(_ album: Album, showGenre: Bool = true) -> some View {
         HStack(spacing: 8) {
             if let year = album.year {
                 Text(verbatim: "\(year)")
             }
-            if let genre = album.genre {
+            if showGenre, let genre = album.genre {
                 Text("·")
                 Text(genre.cleanedGenreDisplay)
             }
@@ -476,7 +621,7 @@ struct AlbumDetailView: View {
                 .padding(.trailing, 4)
             }
 
-            TrackRow(song: song, showTrackNumber: true)
+            TrackRow(song: song, showTrackNumber: true, downloadedSongIds: downloadedSongIds)
                 .padding(.horizontal, isSelecting ? 8 : 16)
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
@@ -603,8 +748,60 @@ struct AlbumDetailView: View {
         .background(.ultraThinMaterial)
     }
 
+    // Runs off the main actor so the SwiftData fetch doesn't block the push/pop animation.
+    // Returns a fully populated Album (header + cached songs) or nil if not on disk yet.
+    private func seedAlbumFromDisk() async -> Album? {
+        let aid = albumId
+        let container = PersistenceController.shared.container
+        return await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+
+            var albumDescriptor = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == aid })
+            albumDescriptor.propertiesToFetch = [
+                \.id, \.name, \.artistName, \.artistId, \.coverArtId,
+                \.year, \.isStarred, \.userRating, \.label,
+                \.replayGainAlbumGain, \.replayGainTrackGain, \.replayGainBaseGain,
+                \.musicBrainzId
+            ]
+            albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
+            guard let albumValue = (try? context.fetch(albumDescriptor).first)?.toAlbum() else {
+                return nil
+            }
+
+            var songDescriptor = FetchDescriptor<CachedSong>(
+                predicate: #Predicate { $0.albumId == aid },
+                sortBy: [SortDescriptor(\.discNumber), SortDescriptor(\.track)]
+            )
+            songDescriptor.propertiesToFetch = [
+                \.id, \.title, \.artist, \.albumArtist, \.albumName, \.albumId, \.artistId,
+                \.coverArtId, \.track, \.discNumber, \.year, \.genre, \.duration,
+                \.bitRate, \.suffix, \.contentType, \.size, \.isStarred, \.rating
+            ]
+            let songs = (try? context.fetch(songDescriptor))?.map { $0.toSong() } ?? []
+            return Album(
+                id: albumValue.id, name: albumValue.name,
+                artist: albumValue.artist, artistId: albumValue.artistId,
+                coverArt: albumValue.coverArt, songCount: albumValue.songCount,
+                duration: albumValue.duration, year: albumValue.year,
+                genre: albumValue.genre, genres: albumValue.genres,
+                starred: albumValue.starred, created: albumValue.created,
+                userRating: albumValue.userRating,
+                song: songs.isEmpty ? nil : songs,
+                replayGain: albumValue.replayGain, musicBrainzId: albumValue.musicBrainzId,
+                recordLabels: albumValue.recordLabels
+            )
+        }.value
+    }
+
     private func loadAlbum() async {
-        isLoading = true
+        if album == nil {
+            if let seeded = await seedAlbumFromDisk() {
+                album = seeded
+                isStarred = seeded.starred != nil
+            }
+        }
+        isLoading = album == nil
         error = nil
         defer { isLoading = false }
         do {

@@ -1,5 +1,15 @@
 # Vibrdrome User Guide
 
+## Diagnostics & crash reports
+
+If Vibrdrome crashes or freezes, you can help us fix it. Go to **Settings → Diagnostics**.
+
+- **Crash & Hang Reports** lists crashes, hangs, and other diagnostics the system captured. Because iOS/macOS deliver these on the launch *after* an event, a crash you just hit will appear the next time you open the app, not immediately.
+- **Recent Logs** shows logs from the current session.
+- Tap **Copy** to put the reports and logs on your clipboard so you can paste them into a bug report or TestFlight feedback.
+
+Nothing is sent anywhere automatically — diagnostics stay on your device unless you choose to copy and share them.
+
 Vibrdrome is a native iOS and macOS music player for Navidrome and other Subsonic-compatible servers. Connect to your self-hosted music server and enjoy your library on the go, including in the car via CarPlay.
 
 ## Initial Setup
@@ -19,15 +29,21 @@ Your credentials are stored securely in the iOS/macOS Keychain.
 
 The **Library** tab is the main way to explore your music:
 
-- **Artists** -- Browse all artists alphabetically.
-- **Albums** -- Browse all albums. Tap an album to see its tracks.
+- **Artists** -- Browse all artists alphabetically. On macOS, the artist detail page shows a hero header with biography, genre pills, top tracks, full discography, and customizable external links (Last.fm, MusicBrainz, Wikipedia, Google by default; configurable in **Settings > Artist External Links**).
+- **Albums** -- Browse all albums. Tap an album to see its tracks. On macOS, album detail shows a rich metadata layout with clickable genre and label pills that drill into the corresponding filter, and the song list can be displayed as a reorderable 11-column table.
 - **Recent** -- Albums you played recently.
 - **Frequent** -- Your most-played albums.
 - **Random** -- A randomized selection of albums from your library.
 
+Use the **Library Filter** sidebar on macOS to multi-select genres, labels, and artists, with TriState toggles for favorites and downloaded.
+
 Use the **Search** tab to find artists, albums, or songs by name.
 
 Use the **Playlists** tab to view and manage your server-side playlists.
+
+### macOS Home page
+
+The **Home** tab on macOS offers configurable discovery sections: Greeting + today/week play counts, Quick Actions (Random Mix / Random Album / Shuffle Favorites), Jump Back In, Recently Added, Most Played, Random Picks, Featured Genre. Open the toolbar customize sheet to toggle individual sections on/off and reorder them.
 
 ## Playback
 
@@ -38,6 +54,7 @@ Use the **Playlists** tab to view and manage your server-side playlists.
 - **Shuffle**: Tap the shuffle icon to randomize your queue.
 - **Repeat**: Tap the repeat icon to cycle through off, repeat all, and repeat one.
 - **Radio Mix**: Open the player toolbar and tap the Radio Mix button to queue up songs similar to the one currently playing. Rearrange or hide toolbar items in **Settings > Player > Now Playing Toolbar**.
+- **Song pre-download**: While a track plays, the next song in the queue is fetched in advance so transitions stay gapless on slow connections. The fetch cancels automatically if the queue changes.
 
 ## Get Info
 

@@ -8,7 +8,7 @@ struct SidebarContentView: View {
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
     #endif
-    @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.artists.rawValue
+    @SceneStorage("sidebarSelection") private var selectionRaw: String = SidebarItem.home.rawValue
     #if os(macOS)
     @AppStorage(UserDefaultsKeys.macSidePanelWidth) private var sidePanelWidthChoice: String = "medium"
     #endif
@@ -49,6 +49,7 @@ struct SidebarContentView: View {
     private var engine: AudioEngine { AudioEngine.shared }
 
     enum SidebarItem: String, CaseIterable, Hashable {
+        case home
         case artists, albums, songs, genres, favorites, recentlyAdded, mostPlayed, recentlyPlayed
         case bookmarks, folders
         case search
@@ -56,6 +57,7 @@ struct SidebarContentView: View {
         case radio
         case nowPlaying
         case downloads
+        case export
         case settings
     }
 
@@ -63,11 +65,19 @@ struct SidebarContentView: View {
         case album(String)
         case artist(String)
         case song(String)
+        case genre(String)
+        case label(String)
     }
 
     private var splitView: some View {
         NavigationSplitView {
             List(selection: selection) {
+                #if os(macOS)
+                Section {
+                    Label("Home", systemImage: "music.note.house.fill")
+                        .tag(SidebarItem.home.rawValue)
+                }
+                #endif
                 Section("Library") {
                     Label("Artists", systemImage: "music.mic")
                         .tag(SidebarItem.artists.rawValue)
@@ -110,6 +120,10 @@ struct SidebarContentView: View {
                         .tag(SidebarItem.folders.rawValue)
                     Label("Downloads", systemImage: "arrow.down.circle")
                         .tag(SidebarItem.downloads.rawValue)
+                    #if os(macOS)
+                    Label("Playlist Export", systemImage: "square.and.arrow.up.circle")
+                        .tag(SidebarItem.export.rawValue)
+                    #endif
                 }
                 if !collections.isEmpty {
                     Section("Collections") {
@@ -152,29 +166,28 @@ struct SidebarContentView: View {
             .navigationTitle("Vibrdrome")
         } detail: {
             #if os(macOS)
-            HStack(spacing: 0) {
-                NavigationStack(path: $detailPath) {
-                    detailView
-                        .navigationDestination(for: SidebarNavRoute.self) { route in
-                            switch route {
-                            case .album(let id):
-                                AlbumDetailView(albumId: id)
-                            case .artist(let id):
-                                ArtistDetailView(artistId: id)
-                            case .song(let id):
-                                SongDetailView(songId: id)
-                            }
+            NavigationStack(path: $detailPath) {
+                detailView
+                    .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
+                    .navigationDestination(for: SidebarNavRoute.self) { route in
+                        switch route {
+                        case .album(let id):
+                            AlbumDetailView(albumId: id)
+                        case .artist(let id):
+                            ArtistDetailView(artistId: id)
+                        case .song(let id):
+                            SongDetailView(songId: id)
+                        case .genre(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name.cleanedGenreDisplay, initialGenreFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
+                        case .label(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name, initialLabelFilter: name)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         }
-                }
-
-                if let panel = appState.activeSidePanel {
-                    Divider()
-                    sidePanelView(for: panel)
-                        .frame(width: sidePanelWidth)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+                    }
             }
-            .animation(.easeInOut(duration: 0.2), value: appState.activeSidePanel)
             #else
             NavigationStack(path: $detailPath) {
                 detailView
@@ -186,6 +199,12 @@ struct SidebarContentView: View {
                             ArtistDetailView(artistId: id)
                         case .song(let id):
                             SongDetailView(songId: id)
+                        case .genre(let name):
+                            AlbumsView(listType: .byGenre,
+                                       title: name.cleanedGenreDisplay, genre: name)
+                        case .label(let name):
+                            AlbumsView(listType: .alphabeticalByName,
+                                       title: name, initialLabelFilter: name)
                         }
                     }
             }
@@ -195,6 +214,22 @@ struct SidebarContentView: View {
             if !detailPath.isEmpty {
                 detailPath = NavigationPath()
             }
+            #if os(macOS)
+            // Auto-switch filter panel when a filter panel is already open
+            if let panel = appState.activeSidePanel,
+               panel == .albumFilters || panel == .artistFilters || panel == .songFilters {
+                switch SidebarItem(rawValue: selectionRaw) {
+                case .albums, .recentlyAdded, .mostPlayed, .recentlyPlayed:
+                    appState.activeSidePanel = .albumFilters
+                case .artists:
+                    appState.activeSidePanel = .artistFilters
+                case .songs:
+                    appState.activeSidePanel = .songFilters
+                default:
+                    appState.activeSidePanel = nil
+                }
+            }
+            #endif
         }
         .onChange(of: appState.pendingNavigation) { _, newValue in
             guard let nav = newValue else { return }
@@ -206,13 +241,24 @@ struct SidebarContentView: View {
                 detailPath.append(SidebarNavRoute.artist(id))
             case .song(let id):
                 detailPath.append(SidebarNavRoute.song(id))
-            case .genre, .playlist:
+            case .genre(let name):
+                detailPath.append(SidebarNavRoute.genre(name))
+            case .label(let name):
+                detailPath.append(SidebarNavRoute.label(name))
+            case .playlist:
                 break
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .navigateToSearch)) { _ in
             selectionRaw = SidebarItem.search.rawValue
         }
+        #if os(macOS)
+        .onChange(of: appState.pendingSidebarSelection) { _, item in
+            guard let item else { return }
+            appState.pendingSidebarSelection = nil
+            selectionRaw = item.rawValue
+        }
+        #endif
     }
 
     var body: some View {
@@ -255,6 +301,12 @@ struct SidebarContentView: View {
     @ViewBuilder
     private var staticDetailView: some View {
         switch selectedSidebarItem {
+        case .home:
+            #if os(macOS)
+            MacHomeView()
+            #else
+            EmptyView()
+            #endif
         case .artists:
             ArtistsView()
         case .albums:
@@ -277,6 +329,12 @@ struct SidebarContentView: View {
             FolderBrowserView()
         case .downloads:
             DownloadsView()
+        case .export:
+            #if os(macOS)
+            PlaylistExportView()
+            #else
+            EmptyView()
+            #endif
         case .search:
             SearchView()
         case .playlists:
@@ -312,6 +370,12 @@ struct SidebarContentView: View {
             LyricsPanelView()
         case .artistInfo:
             ArtistInfoPanelView()
+        case .albumFilters:
+            LibraryFilterSidebarView(context: .album)
+        case .artistFilters:
+            LibraryFilterSidebarView(context: .artist)
+        case .songFilters:
+            LibraryFilterSidebarView(context: .song)
         }
     }
     #endif
@@ -394,3 +458,26 @@ struct SidebarContentView: View {
         return result
     }
 }
+
+#if os(macOS)
+/// Isolates `.inspector` + side-panel rendering so that `activeSidePanel` changes
+/// only invalidate this modifier, not the entire `SidebarContentView` body.
+private struct SidePanelInspector<Panel: View>: ViewModifier {
+    @Environment(AppState.self) private var appState
+    let sidePanelWidth: CGFloat
+    @ViewBuilder let panelView: (AppState.SidePanel) -> Panel
+
+    func body(content: Content) -> some View {
+        content
+            .inspector(isPresented: Binding(
+                get: { appState.activeSidePanel != nil },
+                set: { if !$0 { appState.activeSidePanel = nil } }
+            )) {
+                if let panel = appState.activeSidePanel {
+                    panelView(panel)
+                }
+            }
+            .inspectorColumnWidth(min: 280, ideal: sidePanelWidth, max: 500)
+    }
+}
+#endif

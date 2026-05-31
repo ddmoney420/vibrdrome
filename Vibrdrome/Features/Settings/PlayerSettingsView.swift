@@ -30,6 +30,8 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.autoSuggestEnabled) private var autoSuggestEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
+    @AppStorage(UserDefaultsKeys.preloadSongs) private var preloadSongs: Int = 0
+    @AppStorage(UserDefaultsKeys.keepSongsInCacheAfterPlayback) private var keepSongsInCacheAfterPlayback: Bool = false
     @AppStorage(UserDefaultsKeys.replayGainMode) private var replayGainMode: String = "off"
     @AppStorage(UserDefaultsKeys.replayGainPreGainDb) private var replayGainPreGainDb: Double = 0
     @AppStorage(UserDefaultsKeys.replayGainFallbackDb) private var replayGainFallbackDb: Double = 0
@@ -179,6 +181,25 @@ struct PlayerSettingsView: View {
                         .foregroundColor(.primary)
                 }
                 .accessibilityIdentifier("crossfadeCurvePicker")
+            }
+
+            Picker(selection: $preloadSongs) {
+                Text("0").tag(0)
+                ForEach(2...5, id: \.self) { value in
+                    Text("\(value)").tag(value)
+                }
+            } label: {
+                Label("Pre-load Songs", systemImage: "arrow.down.circle")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("preloadSongsPicker")
+
+            if preloadSongs > 0 {
+                Toggle(isOn: $keepSongsInCacheAfterPlayback) {
+                    Label("Keep Songs in Cache After Playback", systemImage: "externaldrive")
+                        .foregroundColor(.primary)
+                }
+                .accessibilityIdentifier("keepSongsInCacheToggle")
             }
 
             Picker(selection: $replayGainMode) {

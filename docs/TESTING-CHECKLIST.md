@@ -1,5 +1,17 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 53 — Diagnostics (MetricKit)
+
+- [ ] Settings → Diagnostics opens (iOS + macOS)
+- [ ] Crash & Hang Reports shows empty-state text when there are no events
+- [ ] Recent Logs populate from the current session
+- [ ] Copy button puts crash reports + logs on the clipboard
+- [ ] After a forced crash + relaunch, a crash report appears in Diagnostics
+- [ ] Now Playing toolbar icons visible in light mode over light art (#79)
+- [ ] Favorites empty state shows a single message (#67)
+- [ ] Mini-player artwork resets to 0° when Spinning Art disabled (#71)
+- [ ] Widget shows correct cover art
+
 A lightweight smoke list. For the full build-by-build regression list, see [TESTING.md](../TESTING.md) in the repo root.
 
 ## Core Playback
@@ -51,6 +63,21 @@ A lightweight smoke list. For the full build-by-build regression list, see [TEST
 - [ ] Repeat for **Albums**
 - [ ] Start a new track from CarPlay; verify the browse list stays on screen (no auto-push to Now Playing)
 - [ ] While playing, trigger a short incoming call or text; resume playback and verify the track continues from where it was, not from 0
+
+## CarPlay (Build 52)
+- [ ] Open **Albums** with a library larger than 500 albums; verify the alphabet directory shows every letter the library actually has, not just `#` and one or two letters (#32)
+- [ ] Force-quit Vibrdrome on iPhone, connect CarPlay; verify the system Now Playing button at the top-right appears immediately and the iOS lock-screen widget shows the last track (#45)
+- [ ] In CarPlay, drill deep: **Library -> Artists -> letter -> Artists-in-letter -> Artist detail -> Album**, then tap the system Now Playing icon at the top right; app does not crash (template depth cap)
+
+## macOS (Build 52)
+- [ ] Cold-launch the macOS app; loading screen displays sync/cache progress, crossfades to home once cache is ready (#54)
+- [ ] Home tab shows configurable discovery sections; open the customize sheet, toggle and reorder sections, relaunch the app, choices persist (#54)
+- [ ] Open an artist; verify the new hero header layout with circular portrait, biography expand/collapse, genre pills, stats row, and external links row (#56)
+- [ ] Open **Settings > Artist External Links**; toggle defaults, add a custom URL with `{artist}` placeholder, return to an artist and confirm the custom link appears (#56)
+- [ ] Open an album; verify rich metadata layout, clickable genre and label pills that drill into the corresponding filter, copy-selectable MusicBrainz ID (#49)
+- [ ] In **Songs / Album Detail / Playlist Detail**, toggle to the column table view; reorder and hide columns; relaunch and verify the layout persists (#31)
+- [ ] On the Albums grid, hover a card; favorite and rating buttons fade in. Star or unstar the album from a different view, return to the grid, hover again -- state reflects the change (regression fix)
+- [ ] Open the **Library Filter** sidebar; multi-select genre / label / artist; TriState favorites and downloaded toggles narrow the list (#21 / #47)
 
 ## Visualizer (Build 51)
 - [ ] Open the visualizer from Now Playing; select **Spectrum** preset

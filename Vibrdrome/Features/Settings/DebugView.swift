@@ -52,11 +52,23 @@ struct DebugView: View {
             if let song = engine.currentSong {
                 row("Current Song", value: song.title)
                 row("Song ID", value: song.id)
+
             }
             row("Queue Size", value: "\(engine.queue.count)")
             row("Queue Index", value: "\(engine.currentIndex)")
             row("Shuffle", value: engine.shuffleEnabled ? "On" : "Off")
             row("Repeat", value: repeatLabel(engine.repeatMode))
+            row("Recently Played Count", value: "\(engine.recentlyPlayed.count)")
+            row("Pre-download Status", value: predownloadStatusLabel(engine.predownloadStatus))
+            if engine.predownloadSpeed < 0.0001 {
+                row("Pre-download Speed", value: "-")
+            } else if engine.predownloadSpeed < 1024.0 {
+                row("Pre-download Speed", value: String(format: "%.1f KBs", engine.predownloadSpeed))
+            } else {
+                row("Pre-download Speed", value: String(format: "%.1f Mbs", engine.predownloadSpeed/1024))
+            }
+
+            row("Pre-download Pending", value: "\(engine.predownloadsPending)")
             row("Duration", value: formatDuration(engine.duration))
             row("Position", value: formatDuration(engine.currentTime))
 
@@ -148,6 +160,15 @@ struct DebugView: View {
         case .off: "Off"
         case .all: "All"
         case .one: "One"
+        }
+    }
+
+    private func predownloadStatusLabel(_ status: PredownloadStatus) -> String {
+        switch status {
+        case .idle: "Idle"
+        case .active: "Active"
+        case .stalled: "Stalled"
+        case .waiting: "Waiting"
         }
     }
 

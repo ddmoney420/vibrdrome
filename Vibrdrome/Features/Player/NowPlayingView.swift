@@ -165,6 +165,16 @@ struct NowPlayingView: View {
                 sliderValue = 0
                 Task { await loadAlbumArt() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .songStarredChanged)) { note in
+                guard let id = note.userInfo?["id"] as? String, id == engine.currentSong?.id,
+                      let starred = note.userInfo?["starred"] as? Bool else { return }
+                isStarred = starred
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .songRatingChanged)) { note in
+                guard let id = note.userInfo?["id"] as? String, id == engine.currentSong?.id,
+                      let rating = note.userInfo?["rating"] as? Int else { return }
+                currentRating = rating
+            }
     }
 
     @ViewBuilder
@@ -801,8 +811,14 @@ struct NowPlayingView: View {
                         let newRating = star == currentRating ? 0 : star
                         currentRating = newRating
                         guard let songId = engine.currentSong?.id else { return }
+                        engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
+                        NotificationCenter.default.post(
+                            name: .songRatingChanged,
+                            object: nil,
+                            userInfo: ["id": songId, "rating": newRating]
+                        )
                         Task {
-                            try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                            try? await OfflineActionQueue.shared.setRating(id: songId, rating: newRating)
                         }
                     }
             }

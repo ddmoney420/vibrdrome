@@ -21,8 +21,10 @@ final class PersistenceController {
         let schema = Schema([
             CachedArtist.self,
             CachedAlbum.self,
+            AlbumGenre.self,
             CachedSong.self,
             CachedPlaylist.self,
+            CachedPlaylistEntry.self,
             DownloadedSong.self,
             PlayHistory.self,
             ServerConfig.self,
@@ -31,6 +33,8 @@ final class PersistenceController {
             SavedQueue.self,
             AlbumCollection.self,
             GenreArtwork.self,
+            SyncHistory.self,
+            ExportedPlaylist.self,
         ])
 
         let config = ModelConfiguration(

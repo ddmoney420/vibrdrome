@@ -103,6 +103,12 @@ extension NowPlayingView {
                     let songId = song.id
                     let wasStarred = isStarred
                     isStarred = !wasStarred
+                    engine.updateQueueSongStarred(id: songId, starred: !wasStarred)
+                    NotificationCenter.default.post(
+                        name: .songStarredChanged,
+                        object: nil,
+                        userInfo: ["id": songId, "starred": !wasStarred]
+                    )
                     Task {
                         do {
                             if wasStarred {
@@ -117,6 +123,12 @@ extension NowPlayingView {
                         } catch {
                             if engine.currentSong?.id == songId {
                                 isStarred = wasStarred
+                                engine.updateQueueSongStarred(id: songId, starred: wasStarred)
+                                NotificationCenter.default.post(
+                                    name: .songStarredChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "starred": wasStarred]
+                                )
                             }
                         }
                     }
@@ -146,8 +158,14 @@ extension NowPlayingView {
                                 let newRating = star == currentRating ? 0 : star
                                 currentRating = newRating
                                 guard let songId = engine.currentSong?.id else { return }
+                                engine.updateQueueSongRating(id: songId, rating: newRating == 0 ? nil : newRating)
+                                NotificationCenter.default.post(
+                                    name: .songRatingChanged,
+                                    object: nil,
+                                    userInfo: ["id": songId, "rating": newRating]
+                                )
                                 Task {
-                                    try? await appState.subsonicClient.setRating(id: songId, rating: newRating)
+                                    try? await OfflineActionQueue.shared.setRating(id: songId, rating: newRating)
                                 }
                             }
                     }
@@ -325,7 +343,8 @@ extension NowPlayingView {
             .font(.title3)
             .fontWeight(.semibold)
             .buttonStyle(.plain)
-            .foregroundColor(.white)
+            .foregroundColor(nowPlayingToolbarBackground ? .primary : .white)
+            .shadow(color: .black.opacity(0.4), radius: 1, x: 0, y: 1)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .modifier(ToolbarBackgroundModifier(enabled: nowPlayingToolbarBackground))
@@ -360,12 +379,7 @@ extension NowPlayingView {
         case .eq:
             Button { showEQ = true } label: {
                 Image(systemName: "slider.vertical.3")
-                    .foregroundColor(
-                        engine.eqEnabled
-                            ? .accentColor
-                            : EQEngine.shared.currentPresetId != "flat"
-                                ? .accentColor : nil
-                    )
+                    .foregroundColor(engine.eqEnabled ? .accentColor : nil)
                     .frame(minWidth: 44, minHeight: 44)
             }
             .accessibilityLabel("Equalizer")
@@ -373,7 +387,7 @@ extension NowPlayingView {
             .accessibilityIdentifier("eqButton")
 
         case .airplay:
-            AirPlayButton(tintColor: .white)
+            AirPlayButton(tintColor: nowPlayingToolbarBackground ? .label : .white)
                 .frame(width: 24, height: 24)
                 .frame(minWidth: 44, minHeight: 44)
                 .accessibilityIdentifier("airPlayButton")
@@ -475,7 +489,7 @@ extension NowPlayingView {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 

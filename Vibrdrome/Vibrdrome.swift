@@ -61,6 +61,8 @@ class VibrdromeMacDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct VibrdromeApp: App {
+    static let blurPipeline: ImagePipeline = makeBlurPipeline()
+
     #if os(iOS)
     @UIApplicationDelegateAdaptor(VibrdromeAppDelegate.self) var appDelegate
     #elseif os(macOS)
@@ -76,6 +78,48 @@ struct VibrdromeApp: App {
 
     init() {
         Self.migrateCredentialsToKeychain()
+        Self.pruneLegacyWidgetCoverArtKeys()
+        // BGTaskScheduler.register() MUST run synchronously during app initialization,
+        // before UIApplication finishes launching. If iOS launches the app specifically to
+        // handle a scheduled background task, registration has to already be in place or
+        // the system drops the task silently. `.onAppear` is too late.
+        // scheduleRefresh() / scheduleFullSync() stay in `.onAppear` below — those require
+        // the app to be configured (credentials loaded) and can be submitted at any time.
+        #if os(iOS)
+        BackgroundSyncScheduler.shared.registerTasks()
+        #endif
+    }
+
+    /// Recover from accumulated cover-art bloat in the App Group preferences.
+    /// Older builds wrote per-cover-art binary entries into App Group UserDefaults
+    /// (one key per coverArtId), which grew until the domain exceeded the 4 MB
+    /// platform limit, transitioning cfprefsd into direct mode and freezing the
+    /// app on subsequent writes. In that state `removeObject` can fail to
+    /// propagate to the on-disk plist, so we also delete the plist file directly
+    /// when it's oversized; iOS recreates a fresh empty one on the next write.
+    /// Cover art now lives in a file in the App Group container, not in defaults.
+    private static func pruneLegacyWidgetCoverArtKeys() {
+        guard let defaults = NowPlayingState.shared else { return }
+
+        // Best-effort key removal first.
+        let legacyKeys = defaults.dictionaryRepresentation().keys.filter {
+            $0.hasPrefix("widgetCoverArt_") || $0 == "widgetCoverArt"
+        }
+        for key in legacyKeys {
+            defaults.removeObject(forKey: key)
+        }
+
+        // If the on-disk plist is still oversized (cfprefsd ignored removeObject
+        // because it had already detached), delete the file. iOS recreates it
+        // empty on the next write. nowPlayingState and widgetCommandTimestamp
+        // are written every track change so they'll be back in seconds.
+        let fm = FileManager.default
+        guard let container = fm.containerURL(forSecurityApplicationGroupIdentifier: NowPlayingState.appGroupId) else { return }
+        let plistURL = container
+            .appendingPathComponent("Library/Preferences/\(NowPlayingState.appGroupId).plist")
+        if let size = (try? fm.attributesOfItem(atPath: plistURL.path))?[.size] as? Int, size > 1_000_000 {
+            try? fm.removeItem(at: plistURL)
+        }
     }
 
     /// One-time migration: move Last.fm/ListenBrainz credentials from UserDefaults to Keychain.
@@ -133,14 +177,51 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    appState.librarySyncManager.onSyncCompleted = {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                            await appState.homeViewModel.reload(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container,
+                                libraryCache: appState.libraryCache
+                            )
+                        }
+                    }
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        async let homeDataTask: Void = appState.homeViewModel.prefetch(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container,
+                            libraryCache: appState.libraryCache
+                        )
+                        async let syncTask: Void = appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        _ = await (homeDataTask, syncTask)
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
-            #else
+            #else // iOS
             ContentView()
                 .environment(appState)
                 .modelContainer(persistenceController.container)
@@ -149,9 +230,39 @@ struct VibrdromeApp: App {
                 .dynamicTypeSize(textSize)
                 .environment(\.legibilityWeight, boldText ? .bold : .regular)
                 .onAppear {
-                    ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "com.vibrdrome.images"))
+                    ImagePipeline.shared = Self.makeImagePipeline()
                     RemoteCommandManager.shared.setup()
                     DownloadManager.shared.resumeIncompleteDownloads()
+                    // registerTasks() already ran synchronously in App.init(); here we just
+                    // submit the scheduled requests once credentials are confirmed loaded.
+                    BackgroundSyncScheduler.shared.scheduleRefresh()
+                    BackgroundSyncScheduler.shared.scheduleFullSync()
+                    appState.librarySyncManager.onSyncCompleted = {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        Task {
+                            appState.librarySyncManager.didPrefetchThisSession = false
+                            await appState.librarySyncManager.warmImageCache(
+                                client: appState.subsonicClient,
+                                container: persistenceController.container
+                            )
+                        }
+                    }
+                    Task {
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        await appState.librarySyncManager.syncIfStale(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        appState.libraryCache.rebuild(container: persistenceController.container)
+                        appState.librarySyncManager.startPolling(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                        await appState.librarySyncManager.warmImageCache(
+                            client: appState.subsonicClient,
+                            container: persistenceController.container
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
@@ -196,6 +307,17 @@ struct VibrdromeApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 700, height: 500)
+
+        WindowGroup("Filters", id: "library-filter", for: FilterContext.self) { $context in
+            if let context {
+                LibraryFilterSidebarView(context: context, isWindow: true)
+                    .environment(appState)
+                    .modelContainer(persistenceController.container)
+                    .preferredColorScheme(colorScheme)
+                    .tint(accentColor)
+            }
+        }
+        .defaultSize(width: 280, height: 600)
 
         WindowGroup("Get Info", id: "get-info", for: GetInfoTarget.self) { $target in
             if let target {
@@ -269,6 +391,28 @@ struct VibrdromeApp: App {
         default:
             logger.warning("Unknown deep link host: \(host)")
         }
+    }
+
+    private static func makeImagePipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images")
+        config.imageCache = ImageCache(costLimit: 300 * 1024 * 1024, countLimit: 2000)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 1024 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
+    }
+
+    /// Separate pipeline for 32px blur placeholders — isolated disk cache so blur thumbnails
+    /// are never evicted by full-res images. 20 MB covers ~10 000 albums at ~2 KB each.
+    static func makeBlurPipeline() -> ImagePipeline {
+        var config = ImagePipeline.Configuration.withDataCache(name: "com.vibrdrome.images.blur")
+        config.imageCache = ImageCache(costLimit: 10 * 1024 * 1024, countLimit: 5000)
+        if let dataCache = config.dataCache as? DataCache {
+            dataCache.sizeLimit = 20 * 1024 * 1024
+        }
+        config.isDecompressionEnabled = true
+        return ImagePipeline(configuration: config)
     }
 }
 

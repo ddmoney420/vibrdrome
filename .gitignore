@@ -27,3 +27,6 @@ secrets.*
 .claude/
 AppIcon.trace
 *.trace
+
+# Local verification logs (scripts/verify-build.sh)
+build-logs/

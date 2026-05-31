@@ -68,6 +68,35 @@ struct ConditionalGlassModifier: ViewModifier {
 }
 #endif
 
+// MARK: - Grid Density
+
+enum CoverArtSize {
+    static let blur = 32                // tiny blur placeholder — whole library fits in memory
+    static let gridThumb = 400          // 200pt @2x — matches grid card display size
+    static let listThumb = 112          // 56pt @2x — matches list row display size
+    static let detail: Int? = nil       // omit size param — serve original resolution
+}
+
+enum GridDensity: String, CaseIterable {
+    case compact, comfortable, spacious
+
+    var minimumWidth: CGFloat {
+        switch self {
+        case .compact:     return 130
+        case .comfortable: return 170
+        case .spacious:    return 220
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .compact:     return "Compact"
+        case .comfortable: return "Comfortable"
+        case .spacious:    return "Spacious"
+        }
+    }
+}
+
 // MARK: - Theme
 
 enum Theme {

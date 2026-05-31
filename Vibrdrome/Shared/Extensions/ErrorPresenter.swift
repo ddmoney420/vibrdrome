@@ -33,6 +33,7 @@ enum ErrorPresenter {
         case 401: return "Authentication failed. Check your credentials."
         case 403: return "Access denied. Your account may not have permission."
         case 404: return "The requested item was not found on the server."
+        case 429: return "Server is rate limiting requests. Please wait a moment and try again."
         case 500...599: return "The server encountered an error. Please try again later."
         default: return "Server returned an error (HTTP \(code))."
         }

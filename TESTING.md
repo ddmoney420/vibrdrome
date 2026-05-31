@@ -1,5 +1,18 @@
 # Regression Testing Checklist
 
+## Build 53 — Diagnostics (MetricKit) & TestFlight fixes
+
+- [ ] Settings → Diagnostics opens without crashing (iOS and macOS)
+- [ ] With no recorded events, Crash & Hang Reports shows "No crashes or hangs recorded."
+- [ ] Recent Logs populate from the current session
+- [ ] Copy places crash reports + logs on the clipboard
+- [ ] Force a debug crash, relaunch, reopen Diagnostics — a crash report appears (MetricKit delivers on the launch after the event, not the same session)
+- [ ] Confirm diagnostics are stored locally and nothing is sent automatically
+- [ ] Regression #79: Now Playing toolbar icons visible over light album art
+- [ ] Regression #67: Favorites empty state shows a single message
+- [ ] Regression #71: mini-player artwork resets to 0° when Spinning Art disabled
+- [ ] Regression: widget shows correct, current cover art
+
 Run through this checklist before every TestFlight build. Each item should be verified on a real device.
 
 ## Pre-Build (Automated)
@@ -34,6 +47,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] iPad: with mini player visible, switch keyboard to floating mode; mini player stays pinned at screen bottom
 - [ ] macOS: menu bar shows Navigate menu with "Go to Search ⌘K" and "Focus Search ⌘F"; both shortcuts fire without beeping
 - [ ] Long-press any song/album/artist -> "Get Info" item; opens sheet (iOS) or window (macOS) with Overview and Raw metadata tabs
+- [ ] Song pre-download (Build 52): while a track plays, observe Console for predownload start lines on the next queue entry; rapidly skip to next and confirm the in-flight predownload cancels
+- [ ] Smart shuffle skip history (Build 52): with shuffle on, tap a track in the Queue view; previously-playing song shows up as "Recently Played" not "Up Next"
+- [ ] Queue context menu / swipe Remove (Build 52): removing a track from the queue does not bounce playback; current track index updates correctly when removing a track before it
 
 ## Library & Navigation
 
@@ -208,6 +224,9 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Alphabet index fits the screen without clipping; Albums and Starred show every entry (no hard cap) (Build 51)
 - [ ] Playing music, trigger a short incoming call or text; after the interruption ends, playback resumes from the saved position, not from 0 (Build 51)
 - [ ] State refreshes correctly on CarPlay reconnect
+- [ ] Albums alphabet directory shows every letter of the synced library, not just `#` and the first server-returned letter (Build 52, #32)
+- [ ] After force-quitting Vibrdrome on iPhone and reconnecting CarPlay, the system Now Playing button at the top-right appears immediately and the iOS lock-screen widget shows the last track (Build 52, #45)
+- [ ] Drill deep into navigation (Library -> Artists -> letter -> letter slice -> Artist detail -> Album), then tap the system Now Playing icon at top-right: app does not crash (Build 52, template depth cap)
 
 ## Radio
 
@@ -283,6 +302,15 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] Sidebar navigation works
 - [ ] Pop-out mini player
 - [ ] Volume slider in bottom bar
+- [ ] Loading screen on cold launch: shows sync/cache progress, crossfades to home once cache is ready (Build 52, #54)
+- [ ] Home page sections: Quick Actions, Jump Back In, Recently Added, Most Played, Random Picks render; customize sheet toggles + reorders sections; choice persists across relaunch (Build 52, #54)
+- [ ] Artist detail page: hero header, biography expand/collapse, genre pills navigate to filter, external links open in browser (Build 52, #56)
+- [ ] Settings > Artist External Links: toggle defaults on/off, add custom link with `{artist}` placeholder, link appears on artist detail (Build 52, #56)
+- [ ] Album detail metadata view: genre pills and label pill drill into filter; MusicBrainz ID is text-selectable; navigating between albums is smooth (Build 52, #49)
+- [ ] Song table view: reorder columns, toggle visibility, persists across launches; sort by column header (Build 52, #31)
+- [ ] Hover an album grid card: heart and rating buttons appear; star/unstar elsewhere and return to grid; hover state reflects the new value without view re-mount (Build 52, #39 + restored sync)
+- [ ] Library filter sidebar: multi-select genre / label / artist, TriState favorites and downloaded toggle, search-as-you-type narrows; filter persists when switching tabs (Build 52, #21 / #47)
+- [ ] Genres view: album-art icons load on first open; switching servers updates the icons after sync
 
 ## watchOS Companion
 
