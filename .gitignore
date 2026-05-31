@@ -30,3 +30,12 @@ AppIcon.trace
 
 # Local verification logs (scripts/verify-build.sh)
 build-logs/
+
+# Secrets & build artifacts (App Store Connect / fastlane)
+*.p8
+build/
+*.ipa
+*.xcarchive
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/

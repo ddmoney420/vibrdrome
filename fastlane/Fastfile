@@ -1,0 +1,59 @@
+default_platform(:ios)
+
+# App Store Connect API key. The .p8 lives OUTSIDE the repo
+# (~/.appstoreconnect/private_keys/AuthKey_<KeyID>.p8). Only the non-secret
+# Key ID / Issuer ID are referenced here.
+ASC_KEY_ID    = "952C23848F"
+ASC_ISSUER_ID = "b9936c7c-5a5a-46c4-a724-870a89bfe7ad"
+ASC_KEY_PATH  = File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{ASC_KEY_ID}.p8")
+
+def asc_api_key
+  app_store_connect_api_key(
+    key_id: ASC_KEY_ID,
+    issuer_id: ASC_ISSUER_ID,
+    key_filepath: ASC_KEY_PATH,
+    in_house: false
+  )
+end
+
+platform :ios do
+  desc "Regenerate the Xcode project from project.yml (restores nothing — entitlements handled separately)"
+  lane :generate do
+    sh("cd .. && xcodegen generate")
+  end
+
+  desc "Build a signed iOS archive and upload it to TestFlight"
+  desc "Usage: fastlane ios beta   (set SKIP_BUILD=1 to upload an existing .ipa at ./build/Vibrdrome.ipa)"
+  lane :beta do
+    api_key = asc_api_key
+
+    unless ENV["SKIP_BUILD"]
+      build_app(
+        project: "Vibrdrome.xcodeproj",
+        scheme: "Vibrdrome",
+        configuration: "Release",
+        output_directory: "build",
+        output_name: "Vibrdrome.ipa",
+        export_method: "app-store",
+        clean: true
+      )
+    end
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: "build/Vibrdrome.ipa",
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+
+  desc "Upload an already-built IPA to TestFlight (no build step)"
+  lane :upload_only do
+    upload_to_testflight(
+      api_key: asc_api_key,
+      ipa: "build/Vibrdrome.ipa",
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+end
