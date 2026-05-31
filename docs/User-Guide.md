@@ -1,5 +1,15 @@
 # Vibrdrome User Guide
 
+## Diagnostics & crash reports
+
+If Vibrdrome crashes or freezes, you can help us fix it. Go to **Settings → Diagnostics**.
+
+- **Crash & Hang Reports** lists crashes, hangs, and other diagnostics the system captured. Because iOS/macOS deliver these on the launch *after* an event, a crash you just hit will appear the next time you open the app, not immediately.
+- **Recent Logs** shows logs from the current session.
+- Tap **Copy** to put the reports and logs on your clipboard so you can paste them into a bug report or TestFlight feedback.
+
+Nothing is sent anywhere automatically — diagnostics stay on your device unless you choose to copy and share them.
+
 Vibrdrome is a native iOS and macOS music player for Navidrome and other Subsonic-compatible servers. Connect to your self-hosted music server and enjoy your library on the go, including in the car via CarPlay.
 
 ## Initial Setup

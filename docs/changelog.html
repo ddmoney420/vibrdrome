@@ -347,6 +347,34 @@
 
         <div class="timeline">
 
+            <!-- Build 53 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 53</span>
+                        <span class="build-date">May 31, 2026</span>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Stability</h3>
+                        <ul class="build-list">
+                            <li>Crash &amp; hang diagnostics via MetricKit: the app captures crash, hang, CPU-exception, and disk-write-exception reports from the system, stores the newest 25 locally, and shows them in Settings &rarr; Diagnostics with a one-tap Copy. No remote crash backend &mdash; nothing leaves the device unless you send it.</li>
+                            <li>The Diagnostics screen is now reachable from Settings (previously unlinked).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Bug fixes</h3>
+                        <ul class="build-list">
+                            <li>Now Playing toolbar icons were invisible in light mode over light album art; contrast restored (#79).</li>
+                            <li>Favorites empty state no longer shows two overlapping messages (#67).</li>
+                            <li>Mini-player artwork resets to 0&deg; when Spinning Art is disabled instead of freezing at the last angle (#71).</li>
+                            <li>Now Playing toolbar: sheet detents and icon shadow refinements (#72, #68).</li>
+                            <li>Widget cover-art storage moved from App Group UserDefaults to a file, fixing stale/oversized widget artwork.</li>
+                            <li>Songs view restored the inset-grouped card look.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <!-- Build 52 -->
             <div class="timeline-item" data-animate>
                 <div class="build-card">

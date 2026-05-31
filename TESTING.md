@@ -1,5 +1,18 @@
 # Regression Testing Checklist
 
+## Build 53 — Diagnostics (MetricKit) & TestFlight fixes
+
+- [ ] Settings → Diagnostics opens without crashing (iOS and macOS)
+- [ ] With no recorded events, Crash & Hang Reports shows "No crashes or hangs recorded."
+- [ ] Recent Logs populate from the current session
+- [ ] Copy places crash reports + logs on the clipboard
+- [ ] Force a debug crash, relaunch, reopen Diagnostics — a crash report appears (MetricKit delivers on the launch after the event, not the same session)
+- [ ] Confirm diagnostics are stored locally and nothing is sent automatically
+- [ ] Regression #79: Now Playing toolbar icons visible over light album art
+- [ ] Regression #67: Favorites empty state shows a single message
+- [ ] Regression #71: mini-player artwork resets to 0° when Spinning Art disabled
+- [ ] Regression: widget shows correct, current cover art
+
 Run through this checklist before every TestFlight build. Each item should be verified on a real device.
 
 ## Pre-Build (Automated)

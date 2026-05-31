@@ -1,5 +1,14 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 53)
+
+Build 53 focuses on stability and TestFlight fixes:
+
+- Crash & hang diagnostics (MetricKit): the app records crash, hang, CPU, and disk-write reports from the system and shows them under Settings → Diagnostics, where you can copy a report to send it. Nothing is uploaded automatically.
+- The Diagnostics screen is now reachable from Settings.
+- Now Playing toolbar icons are visible in light mode over light album art.
+- Fixed the Favorites empty-state overlap, mini-player rotation reset when Spinning Art is off, widget cover-art storage, and the Songs view card look.
+
 ## App Information
 
 - **App Name:** Vibrdrome

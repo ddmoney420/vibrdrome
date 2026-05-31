@@ -110,6 +110,14 @@ struct SettingsView: View {
             #endif
 
             accessibilitySection
+
+            NavigationLink {
+                DiagnosticsView()
+            } label: {
+                Label("Diagnostics", systemImage: "stethoscope")
+            }
+            .accessibilityIdentifier("diagnosticsLink")
+
             backupRestoreSection
             aboutSection
         }

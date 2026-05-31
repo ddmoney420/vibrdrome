@@ -4,6 +4,28 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 53 -- May 31, 2026
+
+**Stability:**
+- Crash & hang diagnostics via MetricKit. The app now subscribes to the system's MetricKit reporting and captures crash, hang, CPU-exception, and disk-write-exception diagnostics. Reports are delivered by the system on the launch *after* an event, persisted locally (newest 25), and viewable in Settings → Diagnostics with a one-tap Copy to share. There is no remote crash backend -- nothing leaves the device unless you choose to copy and send it.
+- The Diagnostics screen is now reachable from Settings (it was previously unlinked), showing crash/hang reports and recent logs.
+
+**Bug fixes:**
+- Now Playing toolbar icons were invisible in light mode when the album art was light-colored; contrast restored (#79).
+- Favorites empty state no longer shows two overlapping messages when there are no favorited songs (#67).
+- Mini-player artwork now resets to 0° when Spinning Art is disabled, instead of freezing at its last rotation angle (#71).
+- Now Playing toolbar: sheet detents and icon shadow refinements (#72, #68).
+- Widget cover-art storage moved from App Group UserDefaults to a file, fixing stale or oversized artwork in the lock-screen / home-screen widget.
+- Songs view restored the inset-grouped card look (TestFlight feedback).
+
+**TestFlight Notes:**
+> New: crash & hang diagnostics (MetricKit) viewable under Settings →
+> Diagnostics -- if the app has crashed for you, please open that
+> screen and tap Copy to send the report. Fixes: Now Playing
+> toolbar icons visible in light mode, Favorites empty-state overlap,
+> mini-player rotation reset when Spinning Art is off, widget cover-art
+> storage, and the Songs view card look.
+
 ### Build 52 -- May 11, 2026
 
 **macOS:**

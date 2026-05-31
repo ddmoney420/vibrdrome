@@ -1,5 +1,17 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 53 — Diagnostics (MetricKit)
+
+- [ ] Settings → Diagnostics opens (iOS + macOS)
+- [ ] Crash & Hang Reports shows empty-state text when there are no events
+- [ ] Recent Logs populate from the current session
+- [ ] Copy button puts crash reports + logs on the clipboard
+- [ ] After a forced crash + relaunch, a crash report appears in Diagnostics
+- [ ] Now Playing toolbar icons visible in light mode over light art (#79)
+- [ ] Favorites empty state shows a single message (#67)
+- [ ] Mini-player artwork resets to 0° when Spinning Art disabled (#71)
+- [ ] Widget shows correct cover art
+
 A lightweight smoke list. For the full build-by-build regression list, see [TESTING.md](../TESTING.md) in the repo root.
 
 ## Core Playback
