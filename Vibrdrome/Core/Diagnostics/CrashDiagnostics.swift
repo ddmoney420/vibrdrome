@@ -1,14 +1,21 @@
 import Foundation
 import os.log
-#if canImport(MetricKit)
+// MetricKit's diagnostic payloads (MXMetricPayload / MXDiagnosticPayload) are
+// available on iOS and Mac Catalyst only — NOT native macOS (AppKit). The
+// `VibrdromeMac` scheme builds native macOS, where `canImport(MetricKit)` is
+// still true but the types are unavailable, so we gate on `os(iOS)` (true for
+// iOS and Catalyst, false for native macOS) rather than canImport.
+#if os(iOS)
 import MetricKit
 #endif
 
 /// Subscribes to MetricKit and records crash / hang / exception diagnostics so
-/// they survive the crash and can be viewed in Settings → Advanced → Diagnostics.
+/// they survive the crash and can be viewed in Settings → Diagnostics.
 ///
 /// MetricKit has no remote backend: payloads are delivered locally on the launch
 /// following the event. We persist them via `DiagnosticsStore` and log a summary.
+/// On native macOS this is a no-op (the MetricKit diagnostic API doesn't exist
+/// there); the Diagnostics screen still shows recorded logs.
 final class CrashDiagnostics: NSObject, @unchecked Sendable {
     static let shared = CrashDiagnostics()
 
@@ -39,7 +46,7 @@ final class CrashDiagnostics: NSObject, @unchecked Sendable {
         }
         isStarted = true
         startLock.unlock()
-        #if canImport(MetricKit) && !targetEnvironment(macCatalyst)
+        #if os(iOS)
         MXMetricManager.shared.add(self)
         Self.logger.info("MetricKit subscriber registered")
         #else
@@ -48,14 +55,14 @@ final class CrashDiagnostics: NSObject, @unchecked Sendable {
     }
 }
 
-#if canImport(MetricKit) && !targetEnvironment(macCatalyst)
+#if os(iOS)
 extension CrashDiagnostics: MXMetricManagerSubscriber {
     func didReceive(_ payloads: [MXMetricPayload]) {
         // Metric payloads are large and not crash-relevant; just note arrival.
         Self.logger.debug("Received \(payloads.count) MetricKit metric payload(s)")
     }
 
-    @available(iOS 14.0, macOS 12.0, *)
+    @available(iOS 14.0, *)
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         var records: [DiagnosticRecord] = []
         for payload in payloads {
@@ -80,7 +87,7 @@ extension CrashDiagnostics: MXMetricManagerSubscriber {
         }
     }
 
-    @available(iOS 14.0, macOS 12.0, *)
+    @available(iOS 14.0, *)
     private static func record(from diagnostic: MXDiagnostic, kind: DiagnosticRecord.Kind, date: Date) -> DiagnosticRecord {
         let meta = diagnostic.metaData
         let summary = "\(kind.displayName) · app \(meta.applicationBuildVersion) · OS \(meta.osVersion) · \(meta.deviceType)"
