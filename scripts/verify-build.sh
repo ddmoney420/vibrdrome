@@ -24,8 +24,38 @@ PROJECT="Vibrdrome.xcodeproj"
 IOS_DEST='platform=iOS Simulator,name=iPhone 17 Pro'
 WATCH_DEST='platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'
 LOGDIR="build-logs"
+
+# --- Single-instance lock -------------------------------------------------
+# Two concurrent runs share build-logs/ and each wipes it at startup, so they
+# clobber each other's logs and produce a partial/garbled summary (this bit us
+# for real). `mkdir` is atomic, so it's a reliable mutex. Acquire BEFORE the
+# rm -rf below, and only ever remove a lock this process owns.
+LOCKDIR="$LOGDIR/.lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  other=$(cat "$LOCKDIR/pid" 2>/dev/null || echo "?")
+  if [ "$other" != "?" ] && kill -0 "$other" 2>/dev/null; then
+    echo "verify-build.sh is already running (pid $other). Aborting to avoid clobbering build-logs/." >&2
+    echo "If that pid is dead, remove $LOCKDIR and re-run." >&2
+    exit 3
+  fi
+  # Stale lock (owner gone): reclaim it.
+  echo "Removing stale lock from dead pid $other." >&2
+  rm -rf "$LOCKDIR"
+  mkdir "$LOCKDIR" 2>/dev/null || { echo "Could not acquire lock $LOCKDIR." >&2; exit 3; }
+fi
+echo "$$" > "$LOCKDIR/pid"
+# Release the lock on any exit, but only the dir we own (guard against the
+# rm -rf "$LOGDIR" below having already removed it).
+cleanup() { [ -f "$LOCKDIR/pid" ] && [ "$(cat "$LOCKDIR/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCKDIR"; }
+trap cleanup EXIT INT TERM
+
+# Preserve our lock across the clean-slate wipe of the log dir.
+_lockbak=$(mktemp -d)
+mv "$LOCKDIR" "$_lockbak/.lock"
 rm -rf "$LOGDIR"        # start clean so stale logs never leak into a summary
 mkdir -p "$LOGDIR"
+mv "$_lockbak/.lock" "$LOCKDIR"
+rmdir "$_lockbak" 2>/dev/null || true
 
 QUICK=0
 [ "${1:-}" = "--quick" ] && QUICK=1
