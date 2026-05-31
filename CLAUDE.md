@@ -53,6 +53,17 @@ xcodegen generate
   - Tag each release: `v1.0.0-beta.39`, etc.
 - **Never send messages to external people** without explicit user review and approval
 
+## Verification Discipline (guardrails)
+
+These rules exist because scrolled `xcodebuild`/test output is easy to misread (and some terminals render it truncated or garbled). "Verified" must mean a deterministic artifact, not an eyeballed scroll.
+
+1. **One source of truth for green:** run `scripts/verify-build.sh` (or `--quick` for SwiftLint + iOS build + unit tests). Report its **exit code / `RESULT: PASS|FAIL`** line — never claim a build or test passed from scrolled output. Per-check logs land in `build-logs/`.
+2. **Capture, then grep:** when running a build/test by hand, redirect to a file (`> /tmp/x.log 2>&1`) and grep the file for `BUILD SUCCEEDED`, `\.swift:.*: error:`, `\.swift:.*: warning:`, `TEST SUCCEEDED/FAILED`. Do not infer pass/fail from what scrolled past.
+3. **Zero warnings means zero:** a build with any `*.swift:line:col: warning:` is NOT green, even if it "succeeded". The tooling-noise lines (`appintentsmetadataprocessor`, `SSU artifacts`) are not source warnings — match on the `*.swift:line:col:` form.
+4. **Trust primary evidence, not reports:** subagent summaries, `WebFetch` answers, and prior assistant claims are leads to confirm, not facts. Before stating a finding (especially in code, a commit, or anything user-facing), confirm it directly — Read the file, grep the symbol, run the script.
+5. **Confirm tooling exists first:** this can be a fresh machine. If a CLI tool errors as "not found", check `command -v <tool>` and install via brew before proceeding — don't assume the toolchain is present.
+6. **If you reported something wrong, retract it explicitly** and re-verify from a clean artifact rather than papering over it.
+
 ## Pre-TestFlight Checklist
 
 Run in order before every TestFlight build. Every step is mandatory -- no "if applicable", no "if new features", no skipping.
