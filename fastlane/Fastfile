@@ -6,6 +6,7 @@ default_platform(:ios)
 ASC_KEY_ID    = "952C23848F"
 ASC_ISSUER_ID = "b9936c7c-5a5a-46c4-a724-870a89bfe7ad"
 ASC_KEY_PATH  = File.expand_path("~/.appstoreconnect/private_keys/AuthKey_#{ASC_KEY_ID}.p8")
+ASC_APP_ID    = "6760800593"  # numeric App Store Connect app ID
 
 def asc_api_key
   app_store_connect_api_key(
@@ -41,6 +42,7 @@ platform :ios do
 
     upload_to_testflight(
       api_key: api_key,
+      apple_id: ASC_APP_ID,
       ipa: "build/Vibrdrome.ipa",
       skip_waiting_for_build_processing: true,
       distribute_external: false
@@ -51,6 +53,7 @@ platform :ios do
   lane :upload_only do
     upload_to_testflight(
       api_key: asc_api_key,
+      apple_id: ASC_APP_ID,
       ipa: "build/Vibrdrome.ipa",
       skip_waiting_for_build_processing: true,
       distribute_external: false
