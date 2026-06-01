@@ -122,7 +122,9 @@ private struct ArtistLinkEditView: View {
     private var isValid: Bool {
         !link.label.trimmingCharacters(in: .whitespaces).isEmpty &&
         link.urlTemplate.contains("{artist}") &&
-        URL(string: link.urlTemplate.replacingOccurrences(of: "{artist}", with: "test")) != nil
+        ArtistExternalLink.hasAllowedScheme(
+            link.urlTemplate.replacingOccurrences(of: "{artist}", with: "test")
+        )
     }
 
     private var preview: ArtistExternalLink {
