@@ -263,7 +263,7 @@ No contribution is too small. Even fixing a typo helps. ¯\\\_(ツ)\_/¯
 ## (♥‿♥) Community
 
 - **Website:** [vibrdrome.io](https://vibrdrome.io)
-- **Discord:** [Join the server](https://discord.gg/9q5uw3CfN)
+- **Discord:** [Join the server](https://discord.gg/NVPPw5r8Q)
 - **Email:** [vibrdrome@gmail.com](mailto:vibrdrome@gmail.com)
 - **GitHub Issues:** [Report bugs or request features](https://github.com/ddmoney420/vibrdrome/issues)
 
