@@ -2,6 +2,9 @@ import Foundation
 import Network
 import SwiftData
 import os.log
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private let downloadLog = Logger(subsystem: "com.vibrdrome.app", category: "Downloads")
 
@@ -461,44 +464,72 @@ final class DownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Se
         }
 
         Task { @MainActor in
-            let modelContext = PersistenceController.shared.container.mainContext
-            let descriptor = FetchDescriptor<DownloadedSong>(
-                predicate: #Predicate { $0.songId == songId }
-            )
-            guard let download = try? modelContext.fetch(descriptor).first else {
-                try? FileManager.default.removeItem(at: safeCopy)
-                return
-            }
-
-            let destURL = Self.absoluteURL(for: download.localFilePath)
-
-            try? FileManager.default.createDirectory(
-                at: destURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-
-            // Remove existing file if re-downloading
-            try? FileManager.default.removeItem(at: destURL)
-
-            do {
-                try FileManager.default.moveItem(at: safeCopy, to: destURL)
-                download.isComplete = true
-                download.fileSize = Int64(
-                    (try? FileManager.default.attributesOfItem(
-                        atPath: destURL.path
-                    ))?[.size] as? Int ?? 0
-                )
-            } catch {
-                print("Failed to move download to destination for songId: \(songId)")
-                try? FileManager.default.removeItem(at: safeCopy)
-            }
-
-            try? modelContext.save()
-            Task { @MainActor in await DownloadProgress.shared.removeAsync(songId: songId) }
-
-            // Evict old cache if over limit
-            CacheManager.shared.evictIfNeeded()
+            self.persistFinishedDownload(songId: songId, safeCopy: safeCopy)
         }
+    }
+
+    /// Move the preserved download into place and commit the SwiftData record.
+    ///
+    /// When a download finishes while the app is suspended, iOS wakes us with a short
+    /// budget and kills the process if it elapses — and the `modelContext.save()` below
+    /// is mid-SQLite-write when that lands (RUNNINGBOARD 0xdead10cc, #77). The iOS
+    /// background-task assertion holds the process alive so the move + save can complete
+    /// past a normal foreground-resume budget. macOS isn't under the same watchdog.
+    @MainActor
+    private func persistFinishedDownload(songId: String, safeCopy: URL) {
+        #if os(iOS)
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "com.vibrdrome.finishDownloadSave") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        defer {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        #endif
+
+        let modelContext = PersistenceController.shared.container.mainContext
+        let descriptor = FetchDescriptor<DownloadedSong>(
+            predicate: #Predicate { $0.songId == songId }
+        )
+        guard let download = try? modelContext.fetch(descriptor).first else {
+            try? FileManager.default.removeItem(at: safeCopy)
+            return
+        }
+
+        let destURL = Self.absoluteURL(for: download.localFilePath)
+
+        try? FileManager.default.createDirectory(
+            at: destURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        // Remove existing file if re-downloading
+        try? FileManager.default.removeItem(at: destURL)
+
+        do {
+            try FileManager.default.moveItem(at: safeCopy, to: destURL)
+            download.isComplete = true
+            download.fileSize = Int64(
+                (try? FileManager.default.attributesOfItem(
+                    atPath: destURL.path
+                ))?[.size] as? Int ?? 0
+            )
+        } catch {
+            print("Failed to move download to destination for songId: \(songId)")
+            try? FileManager.default.removeItem(at: safeCopy)
+        }
+
+        try? modelContext.save()
+        Task { @MainActor in await DownloadProgress.shared.removeAsync(songId: songId) }
+
+        // Evict old cache if over limit
+        CacheManager.shared.evictIfNeeded()
     }
 
     func urlSession(
