@@ -144,7 +144,7 @@ Do NOT open public issues for security vulnerabilities. Email vibrdrome@gmail.co
 
 ## Community
 
-- **Discord:** [Join the server](https://discord.gg/9q5uw3CfN)
+- **Discord:** [Join the server](https://discord.gg/NVPPw5r8Q)
 - **Email:** vibrdrome@gmail.com
 - **Website:** [vibrdrome.io](https://vibrdrome.io)
 
