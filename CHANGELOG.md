@@ -14,7 +14,7 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 - Now Playing toolbar icons were invisible in light mode when the album art was light-colored; contrast restored (#79).
 - Favorites empty state no longer shows two overlapping messages when there are no favorited songs (#67).
 - Mini-player artwork now resets to 0° when Spinning Art is disabled, instead of freezing at its last rotation angle (#71).
-- Now Playing toolbar: sheet detents and icon shadow refinements (#72, #68).
+- Now Playing toolbar: sheet detents and icon shadow refinements (#68).
 - Widget cover-art storage moved from App Group UserDefaults to a file, fixing stale or oversized artwork in the lock-screen / home-screen widget.
 - Songs view restored the inset-grouped card look (TestFlight feedback).
 
