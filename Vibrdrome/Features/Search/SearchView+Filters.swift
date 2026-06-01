@@ -187,11 +187,17 @@ extension SearchView {
     }
 
     func loadGenres() async {
-        // Try local SwiftData first — fetch album genres (much smaller than all songs)
-        let albums = (try? modelContext.fetch(FetchDescriptor<CachedAlbum>())) ?? []
-        let localGenres = Set(albums.flatMap(\.genres).filter { !$0.isEmpty })
+        let container = PersistenceController.shared.container
+        let localGenres = await Task.detached(priority: .utility) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            let albums = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+            let genres = Set(albums.flatMap(\.genres).filter { !$0.isEmpty })
+            return genres.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }.value
+
         if !localGenres.isEmpty {
-            availableGenres = localGenres.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            availableGenres = localGenres
             return
         }
 
