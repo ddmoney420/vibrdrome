@@ -10,6 +10,9 @@ final class CachedArtist {
     var coverArtId: String?
     var albumCount: Int?
     var isStarred: Bool = false
+    var artistImageUrl: String?
+    var userRating: Int?
+    var averageRating: Double?
     var cachedAt: Date = Date()
 
     init(from artist: Artist) {
@@ -18,6 +21,9 @@ final class CachedArtist {
         self.coverArtId = artist.coverArt
         self.albumCount = artist.albumCount
         self.isStarred = artist.starred != nil
+        self.artistImageUrl = artist.artistImageUrl
+        self.userRating = artist.userRating
+        self.averageRating = artist.averageRating
     }
 
     func toArtist() -> Artist {
@@ -25,8 +31,11 @@ final class CachedArtist {
             id: id,
             name: name,
             coverArt: coverArtId,
+            artistImageUrl: artistImageUrl,
             albumCount: albumCount,
             starred: isStarred ? "true" : nil,
+            userRating: userRating,
+            averageRating: averageRating,
             album: nil
         )
     }

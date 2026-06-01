@@ -69,19 +69,11 @@ struct SongDetailView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
 
-                if let artist = song.artist {
-                    Button {
-                        if let artistId = song.artistId {
-                            appState.pendingNavigation = .artist(id: artistId)
-                        }
-                    } label: {
-                        Text(artist)
-                            .font(.title3)
-                            .foregroundColor(.accentColor)
-                            .lineLimit(1)
+                if song.displayArtist != nil {
+                    ArtistLinksView(song: song, font: .title3, color: .accentColor) { id in
+                        appState.pendingNavigation = .artist(id: id)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(song.artistId == nil)
+                    .lineLimit(1)
                 }
 
                 if let album = song.album {

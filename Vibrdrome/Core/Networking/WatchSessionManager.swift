@@ -46,7 +46,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
         // Send queue (up next, max 20)
         let upNext = engine.upNext.prefix(20)
-        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.artist ?? ""] }
+        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.displayArtist ?? ""] }
 
         try? wcSession?.updateApplicationContext(context)
 
@@ -74,7 +74,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         ]
 
         let upNext = engine.upNext.prefix(20)
-        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.artist ?? ""] }
+        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.displayArtist ?? ""] }
 
         // Include art in the same message so watch processes everything in one snapshot
         if let artData = coverArtData {
@@ -108,7 +108,7 @@ final class WatchSessionManager: NSObject, ObservableObject {
         guard let song = engine.currentSong else { return }
         sendNowPlayingUpdate(
             title: song.title,
-            artist: song.artist ?? "Unknown Artist",
+            artist: song.displayArtist ?? "Unknown Artist",
             album: song.album ?? "",
             isPlaying: engine.isPlaying
         )

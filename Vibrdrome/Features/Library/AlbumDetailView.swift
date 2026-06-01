@@ -59,7 +59,8 @@ struct AlbumDetailView: View {
                                     Image(systemName: "opticaldisc")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                    Text("Disc \(disc)")
+                                    let discLabel = album.discTitles?.first(where: { $0.disc == disc })?.title
+                                    Text(discLabel ?? "Disc \(disc)")
                                         .font(.caption)
                                         .fontWeight(.semibold)
                                         .foregroundStyle(.secondary)
@@ -97,7 +98,7 @@ struct AlbumDetailView: View {
             }
         }
         .coordinateSpace(name: "albumScroll")
-        .navigationTitle(album?.name ?? "Album")
+        .navigationTitle(album?.displayTitle ?? "Album")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -166,27 +167,18 @@ struct AlbumDetailView: View {
                     .shadow(color: .black.opacity(0.5), radius: 18, y: 8)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(album.name)
+                    Text(album.displayTitle)
                         .font(.largeTitle)
                         .bold()
                         .foregroundColor(.white)
 
-                    if let artist = album.artist {
-                        if let artistId = album.artistId {
-                            Button {
-                                appState.pendingNavigation = .artist(id: artistId)
-                            } label: {
-                                Text(artist)
-                                    .font(.title3)
-                                    .foregroundColor(.white.opacity(0.85))
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Text(artist)
-                                .font(.title3)
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
+                    if let edition = album.version {
+                        Text(edition)
+                            .font(.title3)
+                            .foregroundStyle(.white.opacity(0.7))
                     }
+
+                    albumArtistLinks(album, font: .title3, color: .white.opacity(0.85))
 
                     albumMetadataRow(album, showGenre: false)
                         .foregroundStyle(.white.opacity(0.7))
@@ -431,27 +423,19 @@ struct AlbumDetailView: View {
 
         // Album info below art
         VStack(spacing: 6) {
-            Text(album.name)
+            Text(album.displayTitle)
                 .font(.title2)
                 .bold()
                 .multilineTextAlignment(.center)
 
-            if let artist = album.artist {
-                if let artistId = album.artistId {
-                    Button {
-                        appState.pendingNavigation = .artist(id: artistId)
-                    } label: {
-                        Text(artist)
-                            .font(.body)
-                            .foregroundColor(.accentColor)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(artist)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
+            if let edition = album.version {
+                Text(edition)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
+
+            albumArtistLinks(album, font: .body, color: .accentColor)
 
             albumMetadataRow(album)
         }
@@ -461,14 +445,47 @@ struct AlbumDetailView: View {
     #endif
 
     @ViewBuilder
+    private func albumArtistLinks(_ album: Album, font: Font, color: Color) -> some View {
+        if let artists = album.artists, !artists.isEmpty {
+            HStack(spacing: 0) {
+                ForEach(Array(artists.enumerated()), id: \.offset) { index, artist in
+                    Button {
+                        appState.pendingNavigation = .artist(id: artist.id)
+                    } label: {
+                        Text(artist.name).font(font).foregroundStyle(color)
+                    }
+                    .buttonStyle(.plain)
+                    if index < artists.count - 1 {
+                        Text(" & ").font(font).foregroundStyle(color)
+                    }
+                }
+            }
+        } else if let artist = album.displayArtist ?? album.artist {
+            if let artistId = album.artistId {
+                Button {
+                    appState.pendingNavigation = .artist(id: artistId)
+                } label: {
+                    Text(artist).font(font).foregroundStyle(color)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(artist).font(font).foregroundStyle(color)
+            }
+        }
+    }
+
+    @ViewBuilder
     private func albumMetadataRow(_ album: Album, showGenre: Bool = true) -> some View {
         HStack(spacing: 8) {
             if let year = album.year {
                 Text(verbatim: "\(year)")
             }
-            if showGenre, let genre = album.genre {
-                Text("·")
-                Text(genre.cleanedGenreDisplay)
+            if showGenre {
+                let genreList = album.allGenres
+                if !genreList.isEmpty {
+                    Text("·")
+                    Text(genreList.map(\.cleanedGenreDisplay).joined(separator: ", "))
+                }
             }
             if let count = album.songCount {
                 Text("·")
@@ -712,7 +729,7 @@ struct AlbumDetailView: View {
                                         .fontWeight(.medium)
                                         .foregroundColor(.primary)
                                         .lineLimit(1)
-                                    Text(similar.artist ?? "")
+                                    Text(similar.displayArtist ?? similar.artist ?? "")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
@@ -774,7 +791,8 @@ struct AlbumDetailView: View {
                 sortBy: [SortDescriptor(\.discNumber), SortDescriptor(\.track)]
             )
             songDescriptor.propertiesToFetch = [
-                \.id, \.title, \.artist, \.albumArtist, \.albumName, \.albumId, \.artistId,
+                \.id, \.title, \.artist, \.albumArtist, \.displayArtistOverride,
+                \.albumName, \.albumId, \.artistId,
                 \.coverArtId, \.track, \.discNumber, \.year, \.genre, \.duration,
                 \.bitRate, \.suffix, \.contentType, \.size, \.isStarred, \.rating
             ]
@@ -782,14 +800,20 @@ struct AlbumDetailView: View {
             return Album(
                 id: albumValue.id, name: albumValue.name,
                 artist: albumValue.artist, artistId: albumValue.artistId,
+                artists: nil, displayArtist: nil,
                 coverArt: albumValue.coverArt, songCount: albumValue.songCount,
-                duration: albumValue.duration, year: albumValue.year,
+                duration: albumValue.duration, playCount: nil,
+                year: albumValue.year,
                 genre: albumValue.genre, genres: albumValue.genres,
-                starred: albumValue.starred, created: albumValue.created,
+                starred: albumValue.starred, played: nil,
+                created: albumValue.created,
                 userRating: albumValue.userRating,
                 song: songs.isEmpty ? nil : songs,
                 replayGain: albumValue.replayGain, musicBrainzId: albumValue.musicBrainzId,
-                recordLabels: albumValue.recordLabels
+                recordLabels: albumValue.recordLabels,
+                version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+                originalReleaseDate: nil, releaseDate: nil,
+                isCompilation: nil, explicitStatus: nil, discTitles: nil
             )
         }.value
     }

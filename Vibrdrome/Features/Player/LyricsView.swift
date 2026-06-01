@@ -87,7 +87,7 @@ private struct SyncedLyricsContent: View {
                         VStack(spacing: 4) {
                             Text(title)
                                 .font(.headline)
-                            if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
+                            if let artist = lyrics.displayArtist ?? engine.currentSong?.displayArtist {
                                 Text(artist)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)

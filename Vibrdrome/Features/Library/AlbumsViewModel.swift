@@ -413,6 +413,7 @@ final class AlbumsViewModel {
     struct FilterSnapshot: Sendable {
         let isFavorited: TriState
         let isRated: TriState
+        let isCompilation: TriState
         let selectedArtistIds: Set<String>
         let selectedGenres: Set<String>
         let selectedLabels: Set<String>
@@ -423,6 +424,7 @@ final class AlbumsViewModel {
         init(filter: LibraryFilter) {
             isFavorited = filter.isFavorited
             isRated = filter.isRated
+            isCompilation = filter.isCompilation
             selectedArtistIds = filter.selectedArtistIds
             selectedGenres = filter.selectedGenres
             selectedLabels = filter.selectedLabels
@@ -440,6 +442,7 @@ final class AlbumsViewModel {
     ) -> Bool {
         guard snapshot.isFavorited.matches(album.starred != nil) else { return false }
         guard snapshot.isRated.matches((album.userRating ?? 0) != 0) else { return false }
+        guard snapshot.isCompilation.matches(album.isCompilation == true) else { return false }
         if let recentIds, !recentIds.contains(album.id) { return false }
         if !snapshot.selectedArtistIds.isEmpty {
             let byId = album.artistId.map { snapshot.selectedArtistIds.contains($0) } ?? false

@@ -213,7 +213,7 @@ struct DebugView: View {
         lines.append("Queue: \(engine.queue.count) songs, index \(engine.currentIndex)")
         lines.append("Shuffle: \(engine.shuffleEnabled), Repeat: \(repeatLabel(engine.repeatMode))")
         if let song = engine.currentSong {
-            lines.append("Current: \(song.title) by \(song.artist ?? "Unknown")")
+            lines.append("Current: \(song.title) by \(song.displayArtist ?? "Unknown")")
         }
         lines.append("")
         let completed = downloadedSongs.filter(\.isComplete)

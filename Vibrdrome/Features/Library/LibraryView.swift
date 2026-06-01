@@ -502,7 +502,7 @@ struct LibraryView: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
-            Text(song.artist ?? "")
+            Text(song.displayArtist ?? "")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .lineLimit(1)

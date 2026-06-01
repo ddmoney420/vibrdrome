@@ -30,13 +30,21 @@ final class NowPlayingManager {
     func update(song: Song, isPlaying: Bool) {
         currentInfo = [String: Any]()
         currentInfo[MPMediaItemPropertyTitle] = song.title
-        currentInfo[MPMediaItemPropertyArtist] = song.artist ?? "Unknown Artist"
+        currentInfo[MPMediaItemPropertyArtist] = song.displayArtist ?? "Unknown Artist"
+        currentInfo[MPMediaItemPropertyAlbumArtist] = song.displayAlbumArtist
+            ?? song.albumArtist ?? song.displayArtist ?? "Unknown Artist"
         currentInfo[MPMediaItemPropertyAlbumTitle] = song.album ?? ""
         currentInfo[MPMediaItemPropertyPlaybackDuration] = song.duration ?? 0
         currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0.0
         currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
         currentInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
 
+        if let composer = song.displayComposer {
+            currentInfo[MPMediaItemPropertyComposer] = composer
+        }
+        if let explicit = song.explicitStatus {
+            currentInfo[MPMediaItemPropertyIsExplicit] = explicit.lowercased() == "explicit"
+        }
         if let track = song.track {
             currentInfo[MPMediaItemPropertyAlbumTrackNumber] = track
         }
@@ -44,7 +52,7 @@ final class NowPlayingManager {
         infoCenter.nowPlayingInfo = currentInfo
 
         // Update widget
-        updateWidget(title: song.title, artist: song.artist ?? "",
+        updateWidget(title: song.title, artist: song.displayArtist ?? "",
                      album: song.album ?? "", isPlaying: isPlaying,
                      coverArtId: song.coverArt)
 
@@ -52,7 +60,7 @@ final class NowPlayingManager {
         #if os(iOS)
         WatchSessionManager.shared.sendNowPlayingUpdate(
             title: song.title,
-            artist: song.artist ?? "Unknown Artist",
+            artist: song.displayArtist ?? "Unknown Artist",
             album: song.album ?? "",
             isPlaying: isPlaying
         )
@@ -63,7 +71,7 @@ final class NowPlayingManager {
         if UserDefaults.standard.bool(forKey: UserDefaultsKeys.discordRPCEnabled) {
             let presenceInfo = DiscordPresenceInfo(
                 title: song.title,
-                artist: song.artist ?? "Unknown Artist",
+                artist: song.displayArtist ?? "Unknown Artist",
                 album: song.album,
                 isPlaying: isPlaying,
                 elapsed: 0,
@@ -213,7 +221,7 @@ final class NowPlayingManager {
         npLog.info("Watch art ready: \(jpegData.count) bytes")
         WatchSessionManager.shared.sendNowPlayingUpdate(
             title: song.title,
-            artist: song.artist ?? "Unknown Artist",
+            artist: song.displayArtist ?? "Unknown Artist",
             album: song.album ?? "",
             isPlaying: AudioEngine.shared.isPlaying,
             coverArtData: jpegData

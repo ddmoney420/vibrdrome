@@ -288,7 +288,7 @@ struct VisualizerView: View {
                             .foregroundStyle(.white)
                             .shadow(radius: 4)
                             .lineLimit(1)
-                        Text(song.artist ?? "")
+                        Text(song.displayArtist ?? "")
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.7))
                             .shadow(radius: 4)

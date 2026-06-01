@@ -9,10 +9,16 @@ struct AlbumCard: View {
             AlbumArtView(coverArtId: album.coverArt, size: 56, requestSize: CoverArtSize.listThumb)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(album.name)
+                Text(album.displayTitle)
                     .font(.body)
                     .lineLimit(1)
-                if let artist = album.artist {
+                if let edition = album.version {
+                    Text(edition)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if let artist = album.displayArtist ?? album.artist {
                     Text(artist)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -43,8 +49,11 @@ struct AlbumCard: View {
     }
 
     private var albumAccessibilityLabel: String {
-        var parts = [album.name]
-        if let artist = album.artist {
+        var parts = [album.displayTitle]
+        if let edition = album.version {
+            parts.append(edition)
+        }
+        if let artist = album.displayArtist ?? album.artist {
             parts.append("by \(artist)")
         }
         if let year = album.year {
