@@ -30,7 +30,7 @@ Your credentials are stored securely in the iOS/macOS Keychain.
 The **Library** tab is the main way to explore your music:
 
 - **Artists** -- Browse all artists alphabetically. On macOS, the artist detail page shows a hero header with biography, genre pills, top tracks, full discography, and customizable external links (Last.fm, MusicBrainz, Wikipedia, Google by default; configurable in **Settings > Artist External Links**).
-- **Albums** -- Browse all albums. Tap an album to see its tracks. On macOS, album detail shows a rich metadata layout with clickable genre and label pills that drill into the corresponding filter, and the song list can be displayed as a reorderable 11-column table.
+- **Albums** -- Browse all albums. Tap an album to see its tracks. Tracks credited to more than one artist show each artist as a separate tappable link, and tracks on Various Artists / compilation albums show their real per-track artist. Album editions (e.g. "Deluxe Edition") are shown separately from the album title. On macOS, album detail shows a rich metadata layout with clickable genre and label pills that drill into the corresponding filter, the song list can be displayed as a reorderable 11-column table, and the filter sidebar has an "Is compilation" toggle.
 - **Recent** -- Albums you played recently.
 - **Frequent** -- Your most-played albums.
 - **Random** -- A randomized selection of albums from your library.
@@ -60,7 +60,7 @@ The **Home** tab on macOS offers configurable discovery sections: Greeting + tod
 
 Long-press any song, album, or artist and choose **Get Info** to inspect its metadata:
 
-- **Overview** tab: cover art, title, year, duration, bitrate/format, ReplayGain, MusicBrainz and Last.fm links.
+- **Overview** tab: cover art, title, year, duration, bitrate/format, ReplayGain, MusicBrainz and Last.fm links. When the server provides OpenSubsonic detail, songs also show Credits (composer, contributors, album artist) and Classical (works, movements, groupings) sections, and albums show release / original-release dates, moods, compilation flag, disc titles, ISRC, bit depth, and sampling rate.
 - **Raw Metadata** tab: the full Subsonic API response plus Navidrome file tags (rawTags) for deeper diagnostics.
 
 On iOS, Get Info opens as a sheet. On macOS it opens its own window, so you can have several open at once while you keep browsing.

@@ -1,5 +1,15 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 54)
+
+- Multi-artist tracks now show each credited artist as a tappable link to their page.
+- Tracks on Various Artists / compilation albums show their real artist instead of "Various Artists".
+- Album editions (e.g. "Deluxe Edition") are shown separately from the album title.
+- Richer Get Info: credits, classical works/movements, release dates, moods, disc titles, bit depth, and more.
+- Opening Search is smoother with no transition hitch.
+- Security: artist external links are restricted to safe http/https schemes and encode artist names strictly (macOS).
+- Fixed a crash that could occur when a download finished while the app was in the background.
+
 ## What's New (v1.0.0 Beta Build 53)
 
 Build 53 focuses on stability and TestFlight fixes:

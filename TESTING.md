@@ -1,5 +1,22 @@
 # Regression Testing Checklist
 
+## Build 54 — OpenSubsonic metadata, security, download crash
+
+- [ ] #59: a multi-artist track (OpenSubsonic `artists` array) shows each artist as a separate tappable link from TrackRow, Now Playing (iOS + macOS), the queue panel, and the macOS track table; each link opens the correct artist
+- [ ] #59: a Various Artists / compilation album shows the real per-track artist (not "Various Artists") — verify on both the Subsonic path (`artists`) and the Navidrome-native path (`participants.artist`)
+- [ ] #59: single-artist tracks and a server without the `artists` field still show one tappable artist link (graceful fallback)
+- [ ] #60: an album with an edition shows the edition separately from the title in album list, card, and detail
+- [ ] Get Info song tab shows Credits (composer / contributors / album artist) and Classical (works / movements / groupings) when populated
+- [ ] Get Info album tab shows release / original-release dates, moods, compilation flag, disc titles, ISRC, bit depth, sampling rate
+- [ ] Album detail disc separators show named disc titles when the server provides them
+- [ ] Lock screen / CarPlay show the OpenSubsonic display album artist and composer
+- [ ] macOS album filter sidebar: "Is compilation" tristate filters correctly (off / compilations-only / non-compilations-only)
+- [ ] Library sync updates artist `artistImageUrl`; macOS artist detail header uses it for the blurred background
+- [ ] #80: opening the Search tab is smooth with no navigation-transition hitch; genre picker still populates (cold cache falls back to API)
+- [ ] #73: an artist name containing `& = ? +` does not inject extra query parameters into an external link's destination (macOS)
+- [ ] #74: Settings → Artist External Links rejects a template with a non-http(s) scheme (`javascript:`, `file:`, `mailto:`, custom scheme); default http/https links still open (macOS)
+- [ ] #77: start a download, background the app, lock the screen, and let it complete while suspended — reopen and confirm the track is fully downloaded and playable offline, with no crash. Repeat with several downloads finishing in quick succession.
+
 ## Build 53 — Diagnostics (MetricKit) & TestFlight fixes
 
 - [ ] Settings → Diagnostics opens without crashing (iOS and macOS)

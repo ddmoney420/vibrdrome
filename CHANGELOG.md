@@ -4,6 +4,34 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 54 -- June 1, 2026
+
+**Library & Metadata (OpenSubsonic):**
+- Multi-artist tracks now show each credited artist as an individually tappable link to that artist's page. Single-artist tracks and older servers without the OpenSubsonic `artists` array fall back to a single link as before (#59).
+- Tracks on Various Artists / compilation albums now show their real per-track artist instead of "Various Artists", reading the OpenSubsonic `artists` array on the Subsonic path and `participants.artist` on the Navidrome native path (#59).
+- Album editions are now shown separately from the album title, matching the Navidrome web app's distinction between the release name and the edition (e.g. "Deluxe Edition") (#60).
+- Get Info gained substantial OpenSubsonic metadata: song view adds Credits (composer / contributors / album artist) and Classical (works / movements / groupings) sections, plus bit depth, sampling rate, channels, play count, ISRC, and explicit status; album view adds release and original-release dates, moods, compilation flag, disc titles, and full genre lists.
+- Named disc titles are shown as disc separators in album detail when the server provides them.
+- Lock screen and CarPlay now use the OpenSubsonic display album artist and composer.
+- New "Is compilation" tristate filter in the macOS album filter sidebar.
+
+**Performance:**
+- Opening Search no longer hitches: genre loading moved off the main actor so the navigation transition stays smooth (#80).
+
+**Security:**
+- Artist external link URLs hardened (macOS): the artist-name substitution is now strictly percent-encoded so a crafted artist name can't inject extra query parameters into the destination (#73), and links are restricted to http/https schemes so a tampered link template can't open `javascript:`, `file:`, `mailto:`, or custom app-scheme URLs (#74).
+
+**Stability:**
+- Fixed a background-download crash (RUNNINGBOARD `0xdead10cc`): when a download finished while the app was suspended, iOS could kill the process mid-SQLite-write during the SwiftData save. That save is now protected by a background-task assertion so it can complete (#77).
+
+**TestFlight Notes:**
+> New: per-artist links on multi-artist tracks, correct artists on
+> Various-Artists albums, and album editions shown separately from the
+> title. Richer track/album Get Info (credits, classical, release dates,
+> moods). Smoother Search. Security: artist-link URLs restricted to safe
+> schemes. Fix: background-download crash. Please test downloads --
+> start one, background the app, and let it finish while suspended.
+
 ### Build 53 -- May 31, 2026
 
 **Stability:**

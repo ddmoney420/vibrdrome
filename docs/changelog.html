@@ -347,6 +347,46 @@
 
         <div class="timeline">
 
+            <!-- Build 54 -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Build 54</span>
+                        <span class="build-date">June 1, 2026</span>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Library &amp; Metadata</h3>
+                        <ul class="build-list">
+                            <li>Multi-artist tracks show each credited artist as an individually tappable link to that artist's page; single-artist tracks and older servers fall back to a single link as before (#59).</li>
+                            <li>Tracks on Various Artists / compilation albums now show their real per-track artist instead of &ldquo;Various Artists&rdquo;, using the OpenSubsonic <code>artists</code> array (Subsonic) and <code>participants.artist</code> (Navidrome native) (#59).</li>
+                            <li>Album editions are shown separately from the album title, matching the Navidrome web app's distinction between release name and edition, e.g. &ldquo;Deluxe Edition&rdquo; (#60).</li>
+                            <li>Get Info gained OpenSubsonic metadata: Credits (composer / contributors / album artist) and Classical (works / movements / groupings) for songs, plus bit depth, sampling rate, channels, ISRC, and explicit status; albums add release / original-release dates, moods, compilation flag, disc titles, and full genre lists.</li>
+                            <li>Named disc titles appear as disc separators in album detail when the server provides them.</li>
+                            <li>Lock screen and CarPlay use the OpenSubsonic display album artist and composer.</li>
+                            <li>New &ldquo;Is compilation&rdquo; tristate filter in the macOS album filter sidebar.</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Performance</h3>
+                        <ul class="build-list">
+                            <li>Opening Search no longer hitches &mdash; genre loading moved off the main actor so the navigation transition stays smooth (#80).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Security</h3>
+                        <ul class="build-list">
+                            <li>Artist external link URLs hardened (macOS): the artist-name substitution is strictly percent-encoded so it can't inject extra query parameters (#73), and links are restricted to http/https schemes so a tampered template can't open <code>javascript:</code>, <code>file:</code>, <code>mailto:</code>, or custom app-scheme URLs (#74).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Stability</h3>
+                        <ul class="build-list">
+                            <li>Fixed a background-download crash (RUNNINGBOARD <code>0xdead10cc</code>): the SwiftData save that runs when a download completes while the app is suspended is now protected by a background-task assertion so it can't be killed mid-write (#77).</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <!-- Build 53 -->
             <div class="timeline-item" data-animate>
                 <div class="build-card">
