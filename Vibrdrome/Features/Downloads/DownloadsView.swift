@@ -5,13 +5,54 @@ struct DownloadsView: View {
     @Environment(AppState.self) private var appState
     @Query(sort: \DownloadedSong.downloadedAt, order: .reverse)
     private var downloads: [DownloadedSong]
+    @Query(sort: \OfflinePlaylist.cachedAt, order: .reverse)
+    private var offlinePlaylists: [OfflinePlaylist]
     @State private var showDeleteConfirmation = false
+
+    private var activeDownloads: [DownloadedSong] {
+        downloads.filter { !$0.isComplete }
+    }
+
+    private var completedDownloads: [DownloadedSong] {
+        downloads.filter { $0.isComplete }
+    }
+
+    /// Completed downloads grouped by album, preserving the most-recent-first order
+    /// of the underlying query (the first song seen for an album fixes its position).
+    private var albumGroups: [(key: String, songs: [DownloadedSong])] {
+        var order: [String] = []
+        var map: [String: [DownloadedSong]] = [:]
+        for download in completedDownloads {
+            let key = download.albumName ?? "Unknown Album"
+            if map[key] == nil { order.append(key) }
+            map[key, default: []].append(download)
+        }
+        return order.map { ($0, map[$0] ?? []) }
+    }
+
+    /// Downloaded playlists for the active server that still have at least one
+    /// downloaded track present on disk.
+    private var downloadedPlaylists: [OfflinePlaylist] {
+        let downloadedIds = Set(completedDownloads.map(\.songId))
+        return offlinePlaylists.filter { playlist in
+            if let serverId = appState.activeServerId, playlist.serverId != serverId {
+                return false
+            }
+            return playlist.songIds.contains { downloadedIds.contains($0) }
+        }
+    }
+
+    /// Resolve a playlist's downloaded tracks in playlist order.
+    private func songs(for playlist: OfflinePlaylist) -> [DownloadedSong] {
+        let byId = Dictionary(
+            completedDownloads.map { ($0.songId, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return playlist.songIds.compactMap { byId[$0] }
+    }
 
     var body: some View {
         List {
-            let activeDownloads = downloads.filter { !$0.isComplete }
-            let completedDownloads = downloads.filter { $0.isComplete }
-
             if !activeDownloads.isEmpty {
                 Section("Downloading") {
                     ForEach(activeDownloads) { download in
@@ -20,79 +61,62 @@ struct DownloadsView: View {
                 }
             }
 
-            Section("Downloaded (\(completedDownloads.count) songs)") {
-                if completedDownloads.isEmpty {
+            if completedDownloads.isEmpty {
+                Section("Downloaded") {
                     ContentUnavailableView {
                         Label("No Downloads", systemImage: "arrow.down.circle")
                     } description: {
                         Text("Downloaded songs will appear here")
                     }
-                } else {
-                    let songs = completedDownloads.map { $0.toSong() }
-                    if !songs.isEmpty {
-                        HStack(spacing: 12) {
-                            Button {
-                                AudioEngine.shared.play(
-                                    song: songs[0],
-                                    from: songs,
-                                    at: 0
-                                )
-                            } label: {
-                                Label("Play All", systemImage: "play.fill")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.accentColor)
-                            .accessibilityIdentifier("downloadsPlayAllButton")
-
-                            Button {
-                                let shuffled = songs.shuffled()
-                                AudioEngine.shared.play(
-                                    song: shuffled[0],
-                                    from: shuffled,
-                                    at: 0
-                                )
-                            } label: {
-                                Label("Shuffle", systemImage: "shuffle")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(.accentColor)
-                            .accessibilityIdentifier("downloadsShuffleButton")
-                        }
+                }
+            } else {
+                Section {
+                    playAllShuffleButtons(for: completedDownloads.map { $0.toSong() })
                         .listRowSeparator(.hidden)
-                    }
+                }
 
-                    ForEach(completedDownloads) { download in
-                        DownloadedSongRow(download: download)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                let allSongs = completedDownloads.map {
-                                    $0.toSong()
-                                }
-                                let song = download.toSong()
-                                let playIndex =
-                                    allSongs.firstIndex(where: {
-                                        $0.id == song.id
-                                    }) ?? 0
-                                AudioEngine.shared.play(
-                                    song: song,
-                                    from: allSongs,
-                                    at: playIndex
+                if !downloadedPlaylists.isEmpty {
+                    Section("Playlists") {
+                        ForEach(downloadedPlaylists) { playlist in
+                            NavigationLink {
+                                DownloadedCollectionView(
+                                    title: playlist.playlistName,
+                                    coverArtId: playlist.coverArtId,
+                                    fallbackSymbol: "music.note.list",
+                                    songs: songs(for: playlist)
+                                )
+                            } label: {
+                                DownloadCollectionRow(
+                                    title: playlist.playlistName,
+                                    subtitle: "\(songs(for: playlist).count) songs",
+                                    coverArtId: playlist.coverArtId,
+                                    fallbackSymbol: "music.note.list"
                                 )
                             }
-                    }
-                    .onDelete { offsets in
-                        deleteDownloads(completedDownloads, at: offsets)
+                        }
                     }
                 }
-            }
 
-            if !completedDownloads.isEmpty {
+                Section("Albums") {
+                    ForEach(albumGroups, id: \.key) { group in
+                        NavigationLink {
+                            DownloadedCollectionView(
+                                title: group.key,
+                                coverArtId: group.songs.first?.coverArtId,
+                                fallbackSymbol: "square.stack",
+                                songs: group.songs
+                            )
+                        } label: {
+                            DownloadCollectionRow(
+                                title: group.key,
+                                subtitle: albumSubtitle(group.songs),
+                                coverArtId: group.songs.first?.coverArtId,
+                                fallbackSymbol: "square.stack"
+                            )
+                        }
+                    }
+                }
+
                 Section {
                     HStack {
                         Text("Storage Used")
@@ -123,17 +147,131 @@ struct DownloadsView: View {
         }
     }
 
+    private func albumSubtitle(_ songs: [DownloadedSong]) -> String {
+        let artists = Set(songs.compactMap(\.artistName))
+        let count = songs.count
+        let songLabel = count == 1 ? "1 song" : "\(count) songs"
+        if artists.count == 1, let artist = artists.first {
+            return "\(artist) · \(songLabel)"
+        } else if artists.count > 1 {
+            return "Various Artists · \(songLabel)"
+        }
+        return songLabel
+    }
+
     private func totalSize(_ completed: [DownloadedSong]) -> Int64 {
         completed.reduce(0) { $0 + $1.fileSize }
     }
+}
 
-    private func deleteDownloads(
-        _ completed: [DownloadedSong],
-        at offsets: IndexSet
-    ) {
-        for offset in offsets {
-            let download = completed[offset]
-            DownloadManager.shared.deleteDownload(songId: download.songId)
+// MARK: - Play All / Shuffle
+
+@MainActor @ViewBuilder
+func playAllShuffleButtons(for songs: [Song]) -> some View {
+    HStack(spacing: 12) {
+        Button {
+            guard let first = songs.first else { return }
+            AudioEngine.shared.play(song: first, from: songs, at: 0)
+        } label: {
+            Label("Play All", systemImage: "play.fill")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(.accentColor)
+        .accessibilityIdentifier("downloadsPlayAllButton")
+
+        Button {
+            let shuffled = songs.shuffled()
+            guard let first = shuffled.first else { return }
+            AudioEngine.shared.play(song: first, from: shuffled, at: 0)
+        } label: {
+            Label("Shuffle", systemImage: "shuffle")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(.accentColor)
+        .accessibilityIdentifier("downloadsShuffleButton")
+    }
+}
+
+// MARK: - Downloaded Collection Detail (album or playlist)
+
+struct DownloadedCollectionView: View {
+    let title: String
+    let coverArtId: String?
+    let fallbackSymbol: String
+    let songs: [DownloadedSong]
+
+    var body: some View {
+        List {
+            Section {
+                playAllShuffleButtons(for: songs.map { $0.toSong() })
+                    .listRowSeparator(.hidden)
+            }
+
+            Section {
+                ForEach(songs) { download in
+                    DownloadedSongRow(download: download)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            let all = songs.map { $0.toSong() }
+                            let song = download.toSong()
+                            let index = all.firstIndex(where: { $0.id == song.id }) ?? 0
+                            AudioEngine.shared.play(song: song, from: all, at: index)
+                        }
+                }
+                .onDelete { offsets in
+                    for offset in offsets {
+                        DownloadManager.shared.deleteDownload(songId: songs[offset].songId)
+                    }
+                }
+            }
+        }
+        #if os(iOS)
+            .contentMargins(.bottom, 80)
+        #endif
+        .navigationTitle(title)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+}
+
+// MARK: - Collection Row (album / playlist)
+
+private struct DownloadCollectionRow: View {
+    let title: String
+    let subtitle: String
+    let coverArtId: String?
+    let fallbackSymbol: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let coverArtId {
+                AlbumArtView(coverArtId: coverArtId, size: 48)
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.quaternary)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: fallbackSymbol)
+                            .foregroundStyle(.secondary)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 }
