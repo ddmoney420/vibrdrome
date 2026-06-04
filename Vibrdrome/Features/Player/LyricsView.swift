@@ -2,9 +2,16 @@ import SwiftUI
 
 struct LyricsView: View {
     let songId: String
+    /// Track metadata used for the LRCLIB internet fallback (#82). Optional so older
+    /// call sites keep working; the fallback is skipped when title/artist are missing.
+    var title: String?
+    var artist: String?
+    var album: String?
+    var duration: Int?
 
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(UserDefaultsKeys.fetchInternetLyrics) private var fetchInternetLyrics = true
     @State private var lyricsList: LyricsList?
     @State private var isLoading = true
     @State private var error: String?
@@ -59,11 +66,38 @@ struct LyricsView: View {
         isLoading = true
         error = nil
         defer { isLoading = false }
+
+        // 1. Try the server first.
+        var serverError: String?
         do {
-            lyricsList = try await appState.subsonicClient.getLyrics(songId: songId)
+            let serverLyrics = try await appState.subsonicClient.getLyrics(songId: songId)
+            if hasLyrics(serverLyrics) {
+                lyricsList = serverLyrics
+                return
+            }
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            serverError = ErrorPresenter.userMessage(for: error)
         }
+
+        // 2. Fall back to LRCLIB when the server has none and the user opted in (#82).
+        if fetchInternetLyrics, let title, let artist,
+           let external = await LRCLIBClient.shared.lyrics(
+               title: title, artist: artist, album: album,
+               duration: duration, cacheKey: songId
+           ) {
+            lyricsList = LyricsList(structuredLyrics: [external])
+            return
+        }
+
+        // 3. Nothing found. Surface a server error if there was one, else "No Lyrics".
+        lyricsList = nil
+        error = serverError
+    }
+
+    /// True when a lyrics payload actually contains at least one non-empty line.
+    private func hasLyrics(_ list: LyricsList?) -> Bool {
+        guard let entries = list?.structuredLyrics else { return false }
+        return entries.contains { !($0.line ?? []).isEmpty }
     }
 }
 

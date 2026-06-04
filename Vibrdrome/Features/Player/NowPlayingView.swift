@@ -86,7 +86,13 @@ struct NowPlayingView: View {
                         .frame(minWidth: 480, idealWidth: 540, minHeight: 600, idealHeight: 720)
                 case .lyrics:
                     if let song = engine.currentSong {
-                        LyricsView(songId: song.id)
+                        LyricsView(
+                        songId: song.id,
+                        title: song.title,
+                        artist: song.artist,
+                        album: song.album,
+                        duration: song.duration
+                    )
                             .environment(appState)
                             .frame(minWidth: 480, idealWidth: 540, minHeight: 600, idealHeight: 720)
                     }
@@ -125,7 +131,13 @@ struct NowPlayingView: View {
             }
             .sheet(isPresented: Bindable(appState).showLyrics) {
                 if let song = engine.currentSong {
-                    LyricsView(songId: song.id)
+                    LyricsView(
+                        songId: song.id,
+                        title: song.title,
+                        artist: song.artist,
+                        album: song.album,
+                        duration: song.duration
+                    )
                         .environment(appState)
                 }
             }

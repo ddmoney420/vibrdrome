@@ -648,6 +648,14 @@ struct LyricLine: Decodable, Sendable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case start, value
     }
+
+    /// Explicit initializer: the synthesized memberwise init is private because of the
+    /// private `_id`, so it can't be used to build lines from outside (e.g. the LRCLIB
+    /// fallback). `start` is in milliseconds.
+    init(start: Int?, value: String) {
+        self.start = start
+        self.value = value
+    }
 }
 
 // MARK: - Play Queue

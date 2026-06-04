@@ -29,6 +29,9 @@ enum UserDefaultsKeys {
     static let gaplessPlayback = "gaplessPlayback"
     static let crossfadeDuration = "crossfadeDuration"
     static let crossfadeCurve = "crossfadeCurve"
+    /// When the server has no lyrics, look them up on LRCLIB (sends track metadata
+    /// to a third party). Default on.
+    static let fetchInternetLyrics = "fetchInternetLyrics"
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
     static let preloadSongs = "preloadSongs"

@@ -22,6 +22,7 @@ private let bitrateOptions: [(String, Int)] = [
 struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt: Bool = false
     @AppStorage(UserDefaultsKeys.enableMiniPlayerSwipe) private var enableMiniPlayerSwipe: Bool = true
+    @AppStorage(UserDefaultsKeys.fetchInternetLyrics) private var fetchInternetLyrics: Bool = true
 
     // Playback
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
@@ -110,8 +111,18 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("enableMiniPlayerSwipeToggle")
+
+            Toggle(isOn: $fetchInternetLyrics) {
+                Label("Fetch Lyrics from the Internet", systemImage: "text.quote")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("fetchInternetLyricsToggle")
         } header: {
             settingSectionHeader("Behavior", icon: "gearshape.fill", color: .gray)
+        } footer: {
+            if fetchInternetLyrics {
+                Text("When your server has no lyrics for a track, look them up on LRCLIB. This sends the track's title, artist, and album to lrclib.net.")
+            }
         }
     }
 
