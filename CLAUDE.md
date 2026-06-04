@@ -37,13 +37,15 @@ xcodegen generate
 
 ## CI / Build Policy
 
-**This is a PRIVATE repo. GitHub Actions CI costs real money (macOS runners use 10x billing multiplier).**
+**This is a PUBLIC repo, so GitHub Actions is free (no minutes cap / billing).** The reason to verify locally is *speed and reliability*, not cost: don't wait on the cloud to learn something a local run tells you in minutes.
 
-- **ALWAYS build and test locally** before pushing
-- **Do NOT rely on GitHub Actions CI** — run builds and tests on this machine
-- **Batch commits** when possible to minimize CI triggers
-- **Website-only changes** (docs/ folder) do not need CI — consider skipping CI with `[skip ci]` in commit message when only docs change
-- Before pushing, ask: "Does this need CI, or can I verify locally?"
+**Two distinct "CI"s — don't confuse them:**
+- **Local `scripts/verify-build.sh`** = our real QA loop. SwiftLint + iOS/macOS/watchOS builds + tests, one `RESULT: PASS|FAIL`. This is the source of truth for "is it green." Run it before every commit/push.
+- **Cloud GitHub Actions** (`.github/workflows/ci.yml`) = a *merge gate* `main`'s branch protection enforces. A PR to `main` cannot merge until the required **`SwiftLint`** and **`Build iOS`** check runs report success. The local run does NOT satisfy this — GitHub only accepts its own check runs.
+
+- **ALWAYS build and test locally** (`verify-build.sh`) before pushing — faster feedback than the cloud
+- **`[skip ci]` caveat:** NEVER put `[skip ci]` on a commit that will become the head of a PR to `main`. It skips the workflow, so the required `SwiftLint`/`Build iOS` checks never register and the PR is stuck BLOCKED. (Also: an *empty* commit does not reliably re-trigger Actions — push a real change to re-fire CI.) `[skip ci]` is only safe on commits that stay on `develop` and won't head a `main` PR.
+- **ALWAYS run SwiftLint before committing** — zero violations required
 - **ALWAYS run SwiftLint before committing** — zero violations required
 - **Branching**: `main` is protected. All work goes on `develop`. Merge to `main` via PR only.
   - `main` requires: PR + CI passing (SwiftLint + Build iOS). No direct pushes.
