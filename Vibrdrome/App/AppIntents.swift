@@ -91,16 +91,53 @@ struct SkipTrackIntent: AppIntent {
     }
 }
 
+// MARK: - Play Playlist
+
+struct PlayPlaylistIntent: AppIntent {
+    nonisolated static let title: LocalizedStringResource = "Play Playlist"
+    nonisolated static let description = IntentDescription("Play one of your playlists by name")
+    static let openAppWhenRun = true
+
+    @Parameter(title: "Playlist Name")
+    var playlistName: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard AppState.shared.isConfigured else {
+            throw IntentError.notConfigured
+        }
+        let target = playlistName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !target.isEmpty else { throw IntentError.playlistNotFound }
+
+        let playlists = try await AppState.shared.subsonicClient.getPlaylists()
+        // Prefer an exact (case-insensitive) name match, then fall back to a substring
+        // match so "chill" finds "Chill Vibes".
+        guard let match = playlists.first(where: { $0.name.lowercased() == target })
+            ?? playlists.first(where: { $0.name.lowercased().contains(target) }) else {
+            throw IntentError.playlistNotFound
+        }
+
+        let full = try await AppState.shared.subsonicClient.getPlaylist(id: match.id)
+        guard let songs = full.entry, !songs.isEmpty else {
+            throw IntentError.noContent
+        }
+        AudioEngine.shared.play(song: songs[0], from: songs)
+        return .result()
+    }
+}
+
 // MARK: - Errors
 
 enum IntentError: Swift.Error, CustomLocalizedStringResourceConvertible {
     case notConfigured
     case noContent
+    case playlistNotFound
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .notConfigured: "Vibrdrome is not connected to a server. Open the app to sign in."
         case .noContent: "No songs found."
+        case .playlistNotFound: "No playlist with that name was found."
         }
     }
 }
@@ -127,5 +164,10 @@ struct VibrdromeShortcuts: AppShortcutsProvider {
             shortTitle: "Random Mix",
             systemImageName: "dice.fill"
         )
+        // PlayPlaylistIntent is intentionally not given a built-in phrase: a phrase
+        // placeholder must be an AppEntity/AppEnum, not the String name parameter. The
+        // intent is still available in the Shortcuts app, where the user can supply the
+        // playlist name and assign their own Siri phrase. A PlaylistAppEntity would
+        // enable a native "Play playlist X" phrase as a future enhancement.
     }
 }
