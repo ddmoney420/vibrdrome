@@ -12,6 +12,10 @@
 - [ ] Opening Search is smooth with no transition hitch (#80)
 - [ ] Settings → Artist External Links rejects a non-http(s) template (e.g. `javascript:`); existing http/https links still open (macOS) (#73, #74)
 - [ ] **Download crash (#77):** start a download, background the app, lock the screen, let the download finish while suspended — reopen and confirm the track is downloaded with no crash. Repeat with several downloads finishing together.
+- [ ] **Downloads grouping (#76):** Downloads screen shows albums (and a Playlists section) instead of one flat list; tapping opens the collection's tracks
+- [ ] **Play Playlist (#57):** Shortcuts app → "Play Playlist" action → enter a playlist name → it plays
+- [ ] **Internet lyrics (#82):** a track your server has no lyrics for shows lyrics from the internet; toggling off Settings → Player → "Fetch Lyrics from the Internet" disables it
+- [ ] **Lyric timing (#86):** the bottom timing bar on synced lyrics nudges sync in 0.1s steps and is remembered per song
 
 ## Build 53 — Diagnostics (MetricKit)
 

@@ -21,16 +21,27 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 **Security:**
 - Artist external link URLs hardened (macOS): the artist-name substitution is now strictly percent-encoded so a crafted artist name can't inject extra query parameters into the destination (#73), and links are restricted to http/https schemes so a tampered link template can't open `javascript:`, `file:`, `mailto:`, or custom app-scheme URLs (#74).
 
+**Lyrics:**
+- Internet lyrics fallback: when your server has no lyrics for a track, Vibrdrome can look them up on LRCLIB (https://lrclib.net) and show them — synced (auto-scroll, tap-to-seek) when a timed version exists, otherwise plain. A new Settings → Player → "Fetch Lyrics from the Internet" toggle (default on) controls this; lookups send the track's title, artist, and album to lrclib.net (#82).
+- Per-song lyric timing nudge: a control bar at the bottom of the synced lyrics view lets you shift timing in 0.1s steps when a track's lyrics run a little ahead or behind. The adjustment is remembered per song (#86).
+
+**Downloads:**
+- The Downloads screen now groups your offline music by album (artwork, artist, track count → tap to open) and surfaces a Playlists section for downloaded playlists, instead of one flat list of tracks (#76).
+
+**Shortcuts:**
+- New "Play Playlist" action for the Shortcuts app and Siri: play one of your playlists by name. Add it in the Shortcuts app and assign your own phrase (#57).
+
 **Stability:**
 - Fixed a background-download crash (RUNNINGBOARD `0xdead10cc`): when a download finished while the app was suspended, iOS could kill the process mid-SQLite-write during the SwiftData save. That save is now protected by a background-task assertion so it can complete (#77).
 
 **TestFlight Notes:**
-> New: per-artist links on multi-artist tracks, correct artists on
-> Various-Artists albums, and album editions shown separately from the
-> title. Richer track/album Get Info (credits, classical, release dates,
-> moods). Smoother Search. Security: artist-link URLs restricted to safe
-> schemes. Fix: background-download crash. Please test downloads --
-> start one, background the app, and let it finish while suspended.
+> New: internet lyrics (LRCLIB) when your server has none, plus a per-song
+> lyric-timing nudge. Downloads now grouped by album + playlists. "Play
+> Playlist" Shortcuts/Siri action. Per-artist links and correct artists on
+> Various-Artists albums; album editions shown separately. Richer Get Info,
+> smoother Search, safer artist-link URLs, and a background-download crash
+> fix. Please test: lyrics on a track your server lacks, and downloads --
+> start one, background the app, let it finish while suspended.
 
 ### Build 53 -- May 31, 2026
 

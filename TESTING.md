@@ -16,6 +16,11 @@
 - [ ] #73: an artist name containing `& = ? +` does not inject extra query parameters into an external link's destination (macOS)
 - [ ] #74: Settings → Artist External Links rejects a template with a non-http(s) scheme (`javascript:`, `file:`, `mailto:`, custom scheme); default http/https links still open (macOS)
 - [ ] #77: start a download, background the app, lock the screen, and let it complete while suspended — reopen and confirm the track is fully downloaded and playable offline, with no crash. Repeat with several downloads finishing in quick succession.
+- [ ] #76: Downloads screen groups completed downloads by album (artwork, artist, count) and shows a Playlists section for downloaded playlists; tapping an album/playlist opens its tracks with its own Play All / Shuffle; swipe-to-delete and Delete All still work
+- [ ] #57: Shortcuts app → add Vibrdrome "Play Playlist" action → enter a playlist name → run it → that playlist plays; a non-existent name reports "No playlist with that name was found"
+- [ ] #82: play a track the server has NO lyrics for, open Lyrics → internet lyrics appear (synced with scroll/tap-to-seek when available, else plain); a track that DOES have server lyrics still shows those (server wins)
+- [ ] #82: Settings → Player → Behavior → toggle "Fetch Lyrics from the Internet" OFF → reopen lyrics on the no-server-lyrics track → shows "No Lyrics"
+- [ ] #86: on a synced-lyrics track, the bottom timing bar shows "In sync"; tapping +/- shifts the highlighted line and updates the readout (e.g. "+0.3s"); reset returns to "In sync"; reopening the same song remembers the nudge; a different song starts at "In sync"
 
 ## Build 53 — Diagnostics (MetricKit) & TestFlight fixes
 

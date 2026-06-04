@@ -55,6 +55,8 @@ The **Home** tab on macOS offers configurable discovery sections: Greeting + tod
 - **Repeat**: Tap the repeat icon to cycle through off, repeat all, and repeat one.
 - **Radio Mix**: Open the player toolbar and tap the Radio Mix button to queue up songs similar to the one currently playing. Rearrange or hide toolbar items in **Settings > Player > Now Playing Toolbar**.
 - **Song pre-download**: While a track plays, the next song in the queue is fetched in advance so transitions stay gapless on slow connections. The fetch cancels automatically if the queue changes.
+- **Lyrics**: Open the Lyrics view from the player toolbar. Synced lyrics scroll with playback and you can tap any line to seek. If your server has no lyrics for a track, Vibrdrome can look them up on the internet (LRCLIB) — turn this on or off with **Settings > Player > Behavior > "Fetch Lyrics from the Internet"** (it sends the track's title, artist, and album to lrclib.net). If a track's synced lyrics run slightly ahead or behind, use the timing bar at the bottom of the Lyrics view to nudge them in 0.1-second steps; the adjustment is remembered for that song.
+- **Play a playlist with Siri/Shortcuts**: In Apple's Shortcuts app, add the Vibrdrome **"Play Playlist"** action, type a playlist name, and run it — or assign it a Siri phrase to play that playlist by voice.
 
 ## Get Info
 
@@ -76,7 +78,7 @@ Both shortcuts are listed in the **Navigate** menu in the menu bar. CMD+F is int
 
 - **Download a song**: Long-press a song and select **Download**.
 - **Download an album**: Long-press an album and select **Download Album**.
-- **Manage downloads**: Open the **Downloads** tab to view downloaded content, check progress, or remove downloads.
+- **Manage downloads**: Open the **Downloads** tab to view downloaded content, check progress, or remove downloads. Completed downloads are grouped by **album** (and a **Playlists** section lists any downloaded playlists), so your offline library keeps its structure instead of showing one long list. Tap an album or playlist to open its tracks, each with its own Play All / Shuffle.
 
 Downloaded music plays without a network connection.
 

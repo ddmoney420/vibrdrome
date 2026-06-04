@@ -379,6 +379,25 @@
                         </ul>
                     </div>
                     <div class="build-section">
+                        <h3 class="build-section-title">Lyrics</h3>
+                        <ul class="build-list">
+                            <li>Internet lyrics fallback: when your server has no lyrics, Vibrdrome looks them up on LRCLIB and shows them &mdash; synced (auto-scroll, tap-to-seek) when available, otherwise plain. A Settings &rarr; Player toggle (default on) controls this; lookups send title/artist/album to lrclib.net (#82).</li>
+                            <li>Per-song lyric timing nudge: shift synced-lyric timing in 0.1s steps when a track runs a little ahead or behind. Remembered per song (#86).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Downloads</h3>
+                        <ul class="build-list">
+                            <li>The Downloads screen groups your offline music by album (artwork, artist, count &rarr; tap to open) and surfaces a Playlists section, instead of one flat list (#76).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Shortcuts</h3>
+                        <ul class="build-list">
+                            <li>New &ldquo;Play Playlist&rdquo; action for the Shortcuts app and Siri &mdash; play one of your playlists by name (#57).</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
                         <h3 class="build-section-title">Stability</h3>
                         <ul class="build-list">
                             <li>Fixed a background-download crash (RUNNINGBOARD <code>0xdead10cc</code>): the SwiftData save that runs when a download completes while the app is suspended is now protected by a background-task assertion so it can't be killed mid-write (#77).</li>
