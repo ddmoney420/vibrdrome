@@ -4,6 +4,45 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 54 -- June 1, 2026
+
+**Library & Metadata (OpenSubsonic):**
+- Multi-artist tracks now show each credited artist as an individually tappable link to that artist's page. Single-artist tracks and older servers without the OpenSubsonic `artists` array fall back to a single link as before (#59).
+- Tracks on Various Artists / compilation albums now show their real per-track artist instead of "Various Artists", reading the OpenSubsonic `artists` array on the Subsonic path and `participants.artist` on the Navidrome native path (#59).
+- Album editions are now shown separately from the album title, matching the Navidrome web app's distinction between the release name and the edition (e.g. "Deluxe Edition") (#60).
+- Get Info gained substantial OpenSubsonic metadata: song view adds Credits (composer / contributors / album artist) and Classical (works / movements / groupings) sections, plus bit depth, sampling rate, channels, play count, ISRC, and explicit status; album view adds release and original-release dates, moods, compilation flag, disc titles, and full genre lists.
+- Named disc titles are shown as disc separators in album detail when the server provides them.
+- Lock screen and CarPlay now use the OpenSubsonic display album artist and composer.
+- New "Is compilation" tristate filter in the macOS album filter sidebar.
+
+**Performance:**
+- Opening Search no longer hitches: genre loading moved off the main actor so the navigation transition stays smooth (#80).
+
+**Security:**
+- Artist external link URLs hardened (macOS): the artist-name substitution is now strictly percent-encoded so a crafted artist name can't inject extra query parameters into the destination (#73), and links are restricted to http/https schemes so a tampered link template can't open `javascript:`, `file:`, `mailto:`, or custom app-scheme URLs (#74).
+
+**Lyrics:**
+- Internet lyrics fallback: when your server has no lyrics for a track, Vibrdrome can look them up on LRCLIB (https://lrclib.net) and show them — synced (auto-scroll, tap-to-seek) when a timed version exists, otherwise plain. A new Settings → Player → "Fetch Lyrics from the Internet" toggle (default on) controls this; lookups send the track's title, artist, and album to lrclib.net (#82).
+- Per-song lyric timing nudge: a control bar at the bottom of the synced lyrics view lets you shift timing in 0.1s steps when a track's lyrics run a little ahead or behind. The adjustment is remembered per song (#86).
+
+**Downloads:**
+- The Downloads screen now groups your offline music by album (artwork, artist, track count → tap to open) and surfaces a Playlists section for downloaded playlists, instead of one flat list of tracks (#76).
+
+**Shortcuts:**
+- New "Play Playlist" action for the Shortcuts app and Siri: play one of your playlists by name. Add it in the Shortcuts app and assign your own phrase (#57).
+
+**Stability:**
+- Fixed a background-download crash (RUNNINGBOARD `0xdead10cc`): when a download finished while the app was suspended, iOS could kill the process mid-SQLite-write during the SwiftData save. That save is now protected by a background-task assertion so it can complete (#77).
+
+**TestFlight Notes:**
+> New: internet lyrics (LRCLIB) when your server has none, plus a per-song
+> lyric-timing nudge. Downloads now grouped by album + playlists. "Play
+> Playlist" Shortcuts/Siri action. Per-artist links and correct artists on
+> Various-Artists albums; album editions shown separately. Richer Get Info,
+> smoother Search, safer artist-link URLs, and a background-download crash
+> fix. Please test: lyrics on a track your server lacks, and downloads --
+> start one, background the app, let it finish while suspended.
+
 ### Build 53 -- May 31, 2026
 
 **Stability:**
@@ -14,7 +53,7 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 - Now Playing toolbar icons were invisible in light mode when the album art was light-colored; contrast restored (#79).
 - Favorites empty state no longer shows two overlapping messages when there are no favorited songs (#67).
 - Mini-player artwork now resets to 0° when Spinning Art is disabled, instead of freezing at its last rotation angle (#71).
-- Now Playing toolbar: sheet detents and icon shadow refinements (#72, #68).
+- Now Playing toolbar: sheet detents and icon shadow refinements (#68).
 - Widget cover-art storage moved from App Group UserDefaults to a file, fixing stale or oversized artwork in the lock-screen / home-screen widget.
 - Songs view restored the inset-grouped card look (TestFlight feedback).
 

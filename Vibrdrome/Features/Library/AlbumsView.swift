@@ -481,6 +481,7 @@ private struct AlbumFilterWatcher: ViewModifier {
         content
             .onChange(of: filter.isFavorited) { onChange() }
             .onChange(of: filter.isRated) { onChange() }
+            .onChange(of: filter.isCompilation) { onChange() }
             .onChange(of: filter.isRecentlyPlayed) { onChange() }
             .onChange(of: filter.selectedArtistIds) { onChange() }
             .onChange(of: filter.selectedGenres) { onChange() }

@@ -11,6 +11,8 @@ final class CachedSong {
     var title: String
     var artist: String?
     var albumArtist: String?
+    /// Comma-joined OpenSubsonic `artists` names. When present, used instead of `artist` for display.
+    var displayArtistOverride: String?
     var albumName: String?
     var albumId: String?
     var artistId: String?
@@ -56,6 +58,9 @@ final class CachedSong {
         self.title = song.title
         self.artist = song.artist
         self.albumArtist = song.albumArtist
+        if let names = song.artists?.map(\.name), !names.isEmpty {
+            self.displayArtistOverride = names.joined(separator: ", ")
+        }
         self.albumName = song.album
         self.albumId = song.albumId
         self.artistId = song.artistId
@@ -64,18 +69,23 @@ final class CachedSong {
         self.discNumber = song.discNumber
         self.year = song.year
         self.genre = song.genre
+        self.genres = song.allGenres
         self.duration = song.duration
         self.bitRate = song.bitRate
         self.bitDepth = song.bitDepth
         self.samplingRate = song.samplingRate
+        self.channels = song.channelCount
         self.comment = song.comment
         self.suffix = song.suffix
         self.contentType = song.contentType
         self.size = song.size
         self.bpm = song.bpm
         self.dateAdded = song.created.flatMap { iso8601.date(from: $0) }
+        self.lastPlayed = song.played.flatMap { iso8601.date(from: $0) }
+        self.playCount = Int(song.playCount ?? 0)
         self.mbzRecordingId = song.musicBrainzId
         self.isStarred = song.starred != nil
+        self.rating = song.userRating ?? 0
         self.rgTrackGain = song.replayGain?.trackGain
         self.rgTrackPeak = song.replayGain?.trackPeak
         self.rgAlbumGain = song.replayGain?.albumGain
@@ -109,6 +119,7 @@ final class CachedSong {
         self.rgTrackPeak = ndSong.rgTrackPeak
         self.rgAlbumGain = ndSong.rgAlbumGain
         self.rgAlbumPeak = ndSong.rgAlbumPeak
+        self.displayArtistOverride = ndSong.participantArtistOverride
         if let playDate = ndSong.playDate { self.lastPlayed = iso8601.date(from: playDate) }
         if let at = ndSong.starredAt { self.starredAt = iso8601.date(from: at) }
     }
@@ -150,6 +161,7 @@ final class CachedSong {
         rgTrackPeak = ndSong.rgTrackPeak
         rgAlbumGain = ndSong.rgAlbumGain
         rgAlbumPeak = ndSong.rgAlbumPeak
+        displayArtistOverride = ndSong.participantArtistOverride
         if let playDate = ndSong.playDate { lastPlayed = iso8601.date(from: playDate) }
         cachedAt = Date()
     }
@@ -165,9 +177,11 @@ final class CachedSong {
             albumArtist: albumArtist,
             albumId: albumId,
             artistId: artistId,
+            displayArtistOverride: displayArtistOverride,
             track: track,
             year: year,
             genre: genre,
+            genres: genres.isEmpty ? nil : genres.map { ItemGenre(name: $0) },
             coverArt: coverArtId,
             size: size,
             contentType: contentType,
@@ -176,12 +190,14 @@ final class CachedSong {
             bitRate: bitRate,
             bitDepth: bitDepth,
             samplingRate: samplingRate,
+            channelCount: channels,
             comment: comment,
             path: nil,
             discNumber: discNumber,
             created: nil,
             starred: isStarred ? "true" : nil,
             userRating: rating,
+            playCount: Int64(playCount),
             bpm: bpm,
             replayGain: rgTrackGain.map {
                 ReplayGain(trackGain: $0, albumGain: rgAlbumGain,

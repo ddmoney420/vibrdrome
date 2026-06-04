@@ -163,6 +163,11 @@ struct LibraryFilterSidebarView: View {
             ratedControl
         }
 
+        // Compilation — album only
+        if context == .album {
+            compilationControl
+        }
+
         // Recently played — album and song only
         if context == .album || context == .song {
             recentlyPlayedControl
@@ -242,6 +247,12 @@ struct LibraryFilterSidebarView: View {
         case .song: TriStateFilterControl(label: "Is rated", value: $state.songFilter.isRated)
         case .artist: EmptyView()
         }
+    }
+
+    @ViewBuilder
+    private var compilationControl: some View {
+        @Bindable var state = appState
+        TriStateFilterControl(label: "Is compilation", value: $state.albumFilter.isCompilation)
     }
 
     @ViewBuilder

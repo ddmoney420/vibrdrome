@@ -1,5 +1,19 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 54)
+
+- Internet lyrics: when your server has no lyrics for a track, look them up on LRCLIB (synced when available). Toggle in Settings → Player.
+- Lyric timing nudge: shift synced-lyric timing in 0.1s steps when a track runs a little ahead or behind; remembered per song.
+- Downloads are now grouped by album, with a Playlists section, instead of one flat list of tracks.
+- New "Play Playlist" Shortcuts/Siri action to play a playlist by name.
+- Multi-artist tracks now show each credited artist as a tappable link to their page.
+- Tracks on Various Artists / compilation albums show their real artist instead of "Various Artists".
+- Album editions (e.g. "Deluxe Edition") are shown separately from the album title.
+- Richer Get Info: credits, classical works/movements, release dates, moods, disc titles, bit depth, and more.
+- Opening Search is smoother with no transition hitch.
+- Security: artist external links are restricted to safe http/https schemes and encode artist names strictly (macOS).
+- Fixed a crash that could occur when a download finished while the app was in the background.
+
 ## What's New (v1.0.0 Beta Build 53)
 
 Build 53 focuses on stability and TestFlight fixes:
@@ -56,7 +70,7 @@ Long-press any song, album, or artist to open a Get Info view with two tabs:
 
 **And More**
 - Metal-powered audio visualizer with 18 reactive presets
-- Synced lyrics with tap-to-seek
+- Synced lyrics with tap-to-seek, an internet fallback (LRCLIB) when your server has none, and a per-song timing nudge
 - Sleep timer with volume fade-out
 - CarPlay support for hands-free listening, with genre and radio browsing
 - Apple Watch companion for playback control from your wrist

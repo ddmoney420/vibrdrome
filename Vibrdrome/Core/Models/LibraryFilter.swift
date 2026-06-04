@@ -22,6 +22,7 @@ enum TriState: String, CaseIterable, Sendable, Equatable {
 final class LibraryFilter {
     var isFavorited: TriState = .none
     var isRated: TriState = .none
+    var isCompilation: TriState = .none
     var isRecentlyPlayed: Bool = false
     var selectedArtistIds: Set<String> = []
     var selectedGenres: Set<String> = []
@@ -34,6 +35,7 @@ final class LibraryFilter {
     var isActive: Bool {
         isFavorited != .none ||
         isRated != .none ||
+        isCompilation != .none ||
         isRecentlyPlayed ||
         !selectedArtistIds.isEmpty ||
         !selectedGenres.isEmpty ||
@@ -46,6 +48,7 @@ final class LibraryFilter {
         var count = 0
         if isFavorited != .none { count += 1 }
         if isRated != .none { count += 1 }
+        if isCompilation != .none { count += 1 }
         if isRecentlyPlayed { count += 1 }
         if !selectedArtistIds.isEmpty { count += 1 }
         if !selectedGenres.isEmpty { count += 1 }
@@ -58,6 +61,7 @@ final class LibraryFilter {
     func reset() {
         isFavorited = .none
         isRated = .none
+        isCompilation = .none
         isRecentlyPlayed = false
         selectedArtistIds = []
         selectedGenres = []

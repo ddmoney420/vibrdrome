@@ -9,7 +9,7 @@ struct MacContentView: View {
 
     private var windowTitle: String {
         if let song = engine.currentSong {
-            let artist = song.artist ?? ""
+            let artist = song.displayArtist ?? ""
             return artist.isEmpty ? "\(song.title) — Vibrdrome" : "\(song.title) - \(artist) — Vibrdrome"
         }
         if let station = engine.currentRadioStation {

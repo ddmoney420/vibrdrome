@@ -28,7 +28,7 @@ struct AlbumGridCard: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .frame(width: cellWidth, alignment: .leading)
-            if let artist = album.artist {
+            if let artist = album.displayArtist ?? album.artist {
                 Text(artist)
                     .font(.caption)
                     .foregroundStyle(.secondary)

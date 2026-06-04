@@ -45,6 +45,16 @@ struct NDGenre: Decodable, Sendable {
     let name: String
 }
 
+struct NDParticipant: Decodable, Sendable {
+    let id: String
+    let name: String
+}
+
+struct NDParticipants: Decodable, Sendable {
+    let artist: [NDParticipant]?
+    let albumartist: [NDParticipant]?
+}
+
 struct NDSong: Decodable, Sendable {
     let id: String
     let title: String
@@ -95,6 +105,15 @@ struct NDSong: Decodable, Sendable {
     let rgAlbumPeak: Double?
     let smallImageUrl: String?
     let largeImageUrl: String?
+    let participants: NDParticipants?
+
+    /// Comma-joined names from `participants.artist`. Non-nil whenever the participants
+    /// array is present — covers both multi-artist tracks and VA compilations where
+    /// the per-track artist differs from the top-level `artist` field.
+    var participantArtistOverride: String? {
+        guard let artists = participants?.artist, !artists.isEmpty else { return nil }
+        return artists.map(\.name).joined(separator: ", ")
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, title, album, albumId, artist, albumArtist, artistId, albumArtistId
@@ -103,7 +122,7 @@ struct NDSong: Decodable, Sendable {
         case compilation, hasCoverArt, starred, starredAt, rating, playCount, playDate, createdAt
         case mbzReleaseTrackId, mbzAlbumId, mbzArtistId, mbzAlbumArtistId
         case rgTrackGain, rgTrackPeak, rgAlbumGain, rgAlbumPeak
-        case smallImageUrl, largeImageUrl
+        case smallImageUrl, largeImageUrl, participants
         case contentType
         case mbzRecordingId
     }
@@ -158,6 +177,7 @@ struct NDAlbum: Decodable, Sendable {
     var mood: String? { tags?["mood"]?.first }
     var grouping: String? { tags?["grouping"]?.first }
     var mediaType: String? { tags?["media"]?.first }
+    var edition: String? { tags?["albumversion"]?.first }
 
     enum CodingKeys: String, CodingKey {
         case id, name, albumArtist, artistId, albumArtistId, genre, genres, year, songCount, duration, size

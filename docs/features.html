@@ -536,7 +536,9 @@
                     <li>Apple Music style buttons: Shuffle, Play pill, Download</li>
                     <li>Lossless badge for FLAC/ALAC/WAV albums</li>
                     <li>Per-track tappable heart, download, and inline menu</li>
-                    <li>Multi-disc separators and similar albums carousel</li>
+                    <li>Multi-artist tracks show each credited artist as a separate tappable link; Various Artists albums show the real per-track artist</li>
+                    <li>Album editions (e.g. &ldquo;Deluxe Edition&rdquo;) shown separately from the album title</li>
+                    <li>Multi-disc separators with named disc titles, and a similar albums carousel</li>
                     <li>Artist biography and similar artists on artist pages</li>
                 </ul>
                 <div class="platforms">
@@ -554,6 +556,7 @@
                 <ul>
                     <li>Long-press any song, album, or artist to open Get Info</li>
                     <li>Overview tab: cover art, title, year, duration, bitrate, format, ReplayGain, MusicBrainz and Last.fm links</li>
+                    <li>OpenSubsonic detail: Credits (composer, contributors, album artist) and Classical (works, movements, groupings) for songs; release / original-release dates, moods, compilation flag, disc titles, ISRC, bit depth, and sampling rate for albums</li>
                     <li>Raw Metadata tab: full Subsonic API payload plus Navidrome file tags (rawTags)</li>
                     <li>iOS opens as a sheet; macOS opens its own window (multiple can be open at once)</li>
                     <li>Mac supports a keyboard shortcut via the Navigate menu</li>
@@ -625,6 +628,8 @@
                 <ul>
                     <li>Time-synced scrolling lyrics</li>
                     <li>Tap any line to seek to that position</li>
+                    <li>Internet fallback (LRCLIB) when your server has no lyrics &mdash; synced when available, otherwise plain; toggle in Settings</li>
+                    <li>Per-song timing nudge to shift lyrics earlier/later when a track is slightly off</li>
                 </ul>
                 <div class="platforms">
                     <span class="platform-badge">iOS &amp; macOS</span>
@@ -643,7 +648,8 @@
                 <h2>Home Screen Widget &amp; Siri</h2>
                 <ul>
                     <li>Now Playing widget with album art</li>
-                    <li>Siri Shortcuts: "Play my favorites"</li>
+                    <li>Siri Shortcuts: "Play my favorites", "Play a random mix"</li>
+                    <li>"Play Playlist" action &mdash; play any playlist by name from Shortcuts or Siri</li>
                     <li>Toggle playback, skip tracks hands-free</li>
                 </ul>
                 <div class="platforms">
@@ -704,8 +710,9 @@
                 <h2>Offline Mode</h2>
                 <ul>
                     <li>Tap the offline banner to browse your downloads instantly</li>
+                    <li>Downloads grouped by album, with a Playlists section, so your offline library keeps its structure</li>
                     <li>Search works offline against downloaded songs</li>
-                    <li>Play All / Shuffle your downloaded library</li>
+                    <li>Play All / Shuffle your downloaded library, or any downloaded album or playlist</li>
                     <li>Download status indicators on all tracks</li>
                     <li>Offline playback uses local files, no server needed</li>
                 </ul>

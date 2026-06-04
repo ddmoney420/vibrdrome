@@ -203,7 +203,7 @@ private struct TrackContextMenuContent: View {
         Divider()
 
         let shareText: String = {
-            var text = "🎵 \(song.title) — \(song.artist ?? "Unknown Artist")"
+            var text = "🎵 \(song.title) — \(song.displayArtist ?? "Unknown Artist")"
             if let album = song.album {
                 text += "\nAlbum: \(album)"
             }

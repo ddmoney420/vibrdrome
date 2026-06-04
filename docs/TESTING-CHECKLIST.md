@@ -1,5 +1,22 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 54 — OpenSubsonic metadata, security, download crash
+
+- [ ] Multi-artist track shows each credited artist as a separate tappable link; each navigates to the right artist (iOS + macOS)
+- [ ] Track on a Various Artists / compilation album shows the real per-track artist, not "Various Artists" (test both Subsonic and Navidrome-native paths)
+- [ ] Single-artist track still shows one tappable artist link
+- [ ] Album with an edition (e.g. "Deluxe Edition") shows the edition separately from the title
+- [ ] Get Info → song shows Credits / Classical sections when the server provides them
+- [ ] Get Info → album shows release dates, moods, compilation flag, disc titles
+- [ ] macOS album filter sidebar "Is compilation" tristate filters correctly
+- [ ] Opening Search is smooth with no transition hitch (#80)
+- [ ] Settings → Artist External Links rejects a non-http(s) template (e.g. `javascript:`); existing http/https links still open (macOS) (#73, #74)
+- [ ] **Download crash (#77):** start a download, background the app, lock the screen, let the download finish while suspended — reopen and confirm the track is downloaded with no crash. Repeat with several downloads finishing together.
+- [ ] **Downloads grouping (#76):** Downloads screen shows albums (and a Playlists section) instead of one flat list; tapping opens the collection's tracks
+- [ ] **Play Playlist (#57):** Shortcuts app → "Play Playlist" action → enter a playlist name → it plays
+- [ ] **Internet lyrics (#82):** a track your server has no lyrics for shows lyrics from the internet; toggling off Settings → Player → "Fetch Lyrics from the Internet" disables it
+- [ ] **Lyric timing (#86):** the bottom timing bar on synced lyrics nudges sync in 0.1s steps and is remembered per song
+
 ## Build 53 — Diagnostics (MetricKit)
 
 - [ ] Settings → Diagnostics opens (iOS + macOS)

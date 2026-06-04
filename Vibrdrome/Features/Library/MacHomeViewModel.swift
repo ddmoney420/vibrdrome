@@ -115,10 +115,16 @@ final class MacHomeViewModel {
                 name: play?.albumName ?? "Unknown Album",
                 artist: play?.artistName,
                 artistId: nil,
+                artists: nil, displayArtist: nil,
                 coverArt: play?.coverArtId,
-                songCount: nil, duration: nil, year: nil, genre: nil, genres: nil,
-                starred: nil, created: nil, userRating: nil, song: nil,
-                replayGain: nil, musicBrainzId: nil, recordLabels: nil
+                songCount: nil, duration: nil, playCount: nil,
+                year: nil, genre: nil, genres: nil,
+                starred: nil, played: nil, created: nil,
+                userRating: nil, song: nil,
+                replayGain: nil, musicBrainzId: nil, recordLabels: nil,
+                version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+                originalReleaseDate: nil, releaseDate: nil,
+                isCompilation: nil, explicitStatus: nil, discTitles: nil
             )
             result.append(album)
             if result.count == 12 { break }

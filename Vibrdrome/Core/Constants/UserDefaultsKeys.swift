@@ -29,6 +29,12 @@ enum UserDefaultsKeys {
     static let gaplessPlayback = "gaplessPlayback"
     static let crossfadeDuration = "crossfadeDuration"
     static let crossfadeCurve = "crossfadeCurve"
+    /// When the server has no lyrics, look them up on LRCLIB (sends track metadata
+    /// to a third party). Default on.
+    static let fetchInternetLyrics = "fetchInternetLyrics"
+    /// Per-song synced-lyrics timing nudge, in milliseconds (#86). Positive = lyrics
+    /// advance earlier relative to the audio.
+    static func lyricsOffset(songId: String) -> String { "lyricsOffset.\(songId)" }
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
     static let preloadSongs = "preloadSongs"

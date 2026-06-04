@@ -216,11 +216,17 @@ struct LibrarySyncTests {
     ) -> Album {
         Album(
             id: id, name: name, artist: artist, artistId: artistId,
+            artists: nil, displayArtist: nil,
             coverArt: nil, songCount: songCount, duration: duration,
-            year: year, genre: genre, genres: nil, starred: starred, created: nil,
-            userRating: userRating, song: nil, replayGain: nil,
+            playCount: nil,
+            year: year, genre: genre, genres: nil, starred: starred,
+            played: nil,
+            created: nil, userRating: userRating, song: nil, replayGain: nil,
             musicBrainzId: nil,
-            recordLabels: label.map { [RecordLabel(name: $0)] }
+            recordLabels: label.map { [RecordLabel(name: $0)] },
+            version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+            originalReleaseDate: nil, releaseDate: nil,
+            isCompilation: nil, explicitStatus: nil, discTitles: nil
         )
     }
 
@@ -233,7 +239,10 @@ struct LibrarySyncTests {
     ) -> Artist {
         Artist(
             id: id, name: name, coverArt: coverArt,
-            albumCount: albumCount, starred: starred, album: nil
+            artistImageUrl: nil,
+            albumCount: albumCount, starred: starred,
+            userRating: nil, averageRating: nil,
+            album: nil
         )
     }
 

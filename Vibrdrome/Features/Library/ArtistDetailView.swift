@@ -88,7 +88,7 @@ struct ArtistDetailView: View {
     // MARK: - Computed
 
     private var artistGenres: [String] {
-        let genres = artist?.album?.compactMap { $0.genre } ?? []
+        let genres = artist?.album?.flatMap { $0.allGenres } ?? []
         return Array(NSOrderedSet(array: genres)).compactMap { $0 as? String }
     }
 
@@ -658,13 +658,20 @@ struct ArtistDetailView: View {
                 artist = Artist(
                     id: cached.id, name: cached.name,
                     coverArt: cached.coverArtId,
+                    artistImageUrl: cached.artistImageUrl,
                     albumCount: cached.albumCount,
                     starred: cached.isStarred ? "true" : nil,
+                    userRating: cached.userRating,
+                    averageRating: cached.averageRating,
                     album: albums.isEmpty ? nil : albums
                 )
                 #if os(macOS)
-                if headerArtURL == nil, let id = cached.coverArtId {
-                    headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
+                if headerArtURL == nil {
+                    if let imgUrl = cached.artistImageUrl, let url = URL(string: imgUrl) {
+                        headerArtURL = url
+                    } else if let id = cached.coverArtId {
+                        headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
+                    }
                 }
                 #endif
             }
@@ -677,8 +684,12 @@ struct ArtistDetailView: View {
             artist = loadedArtist
             isStarred = loadedArtist.starred != nil
             #if os(macOS)
-            if headerArtURL == nil, let id = loadedArtist.coverArt {
-                headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
+            if headerArtURL == nil {
+                if let imgUrl = loadedArtist.artistImageUrl, let url = URL(string: imgUrl) {
+                    headerArtURL = url
+                } else if let id = loadedArtist.coverArt {
+                    headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
+                }
             }
             #endif
             async let topSongsResult = appState.subsonicClient.getTopSongs(

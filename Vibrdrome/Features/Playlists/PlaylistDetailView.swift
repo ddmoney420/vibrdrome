@@ -52,19 +52,23 @@ struct PlaylistDetailView: View {
                 name: song.album ?? "Unknown Album",
                 artist: song.albumArtist ?? song.artist,
                 artistId: song.artistId,
+                artists: nil, displayArtist: nil,
                 coverArt: song.coverArt,
                 songCount: count,
-                duration: nil,
+                duration: nil, playCount: nil,
                 year: song.year,
                 genre: song.genre,
                 genres: nil,
-                starred: nil,
+                starred: nil, played: nil,
                 created: nil,
                 userRating: nil,
                 song: nil,
                 replayGain: nil,
                 musicBrainzId: nil,
-                recordLabels: nil
+                recordLabels: nil,
+                version: nil, releaseTypes: nil, moods: nil, sortName: nil,
+                originalReleaseDate: nil, releaseDate: nil,
+                isCompilation: nil, explicitStatus: nil, discTitles: nil
             ))
         }
         return albums
@@ -675,7 +679,7 @@ struct PlaylistDetailView: View {
         var m3u = "#EXTM3U\n"
         for song in songs {
             let duration = song.duration ?? 0
-            let artist = song.artist ?? "Unknown"
+            let artist = song.displayArtist ?? "Unknown"
             m3u += "#EXTINF:\(duration),\(artist) - \(song.title)\n"
             let url = appState.subsonicClient.streamURL(id: song.id)
             m3u += "\(url.absoluteString)\n"

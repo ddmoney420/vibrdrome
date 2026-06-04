@@ -40,13 +40,8 @@ struct TrackRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
-                    if let artist = song.artist {
-                        if let albumArtist = song.albumArtist,
-                           albumArtist != artist {
-                            Text("\(artist) (\(albumArtist))")
-                        } else {
-                            Text(artist)
-                        }
+                    ArtistLinksView(song: song, font: .caption, color: .secondary) { id in
+                        appState.pendingNavigation = .artist(id: id)
                     }
                     if let duration = song.duration {
                         Text("·")
@@ -144,7 +139,7 @@ struct TrackRow: View {
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
-                let shareText = "🎵 \(song.title) — \(song.artist ?? "Unknown Artist")"
+                let shareText = "🎵 \(song.title) — \(song.displayArtist ?? "Unknown Artist")"
                 ShareLink(item: shareText) {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
@@ -204,7 +199,7 @@ struct TrackRow: View {
 
     private var trackAccessibilityLabel: String {
         var parts = [song.title]
-        if let artist = song.artist {
+        if let artist = song.displayArtist {
             parts.append("by \(artist)")
         }
         if let duration = song.duration {

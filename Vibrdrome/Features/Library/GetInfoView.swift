@@ -201,10 +201,9 @@ struct GetInfoView: View {
 
     // MARK: - Song Content
 
-    // swiftlint:disable cyclomatic_complexity
+    // swiftlint:disable cyclomatic_complexity function_body_length
     @ViewBuilder
     private func songContent(_ song: Song) -> some View {
-        // Art + title header
         VStack(spacing: 16) {
             AlbumArtView(coverArtId: song.coverArt, size: 220, cornerRadius: 12)
                 .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
@@ -213,7 +212,7 @@ struct GetInfoView: View {
                 Text(song.title)
                     .font(.title2).bold()
                     .multilineTextAlignment(.center)
-                if let artist = song.artist {
+                if let artist = song.displayArtist {
                     Text(artist).font(.body).foregroundStyle(.secondary)
                 }
                 if let album = song.album {
@@ -227,21 +226,67 @@ struct GetInfoView: View {
             if let track = song.track { infoCell("Track", "\(track)") }
             if let disc = song.discNumber { infoCell("Disc", "\(disc)") }
             if let year = song.year { infoCell("Year", "\(year)") }
-            if let genre = song.genre { infoCell("Genre", genre) }
+            let genres = song.allGenres
+            if !genres.isEmpty { infoCell("Genre", genres.joined(separator: ", ")) }
             if let duration = song.duration { infoCell("Duration", formatDuration(duration)) }
             if let bpm = song.bpm, bpm > 0 { infoCell("BPM", "\(bpm)") }
+            if let played = song.played { infoCell("Last Played", played) }
+            if let playCount = song.playCount, playCount > 0 { infoCell("Play Count", "\(playCount)") }
+            if let explicit = song.explicitStatus { infoCell("Explicit", explicit) }
         }
 
         sectionHeader("Audio")
         infoGrid {
             if let suffix = song.suffix { infoCell("Format", suffix.uppercased()) }
             if let bitRate = song.bitRate { infoCell("Bitrate", "\(bitRate) kbps") }
+            if let bitDepth = song.bitDepth { infoCell("Bit Depth", "\(bitDepth)-bit") }
+            if let sampleRate = song.samplingRate { infoCell("Sample Rate", "\(sampleRate) Hz") }
+            if let channels = song.channelCount { infoCell("Channels", "\(channels)") }
             if let size = song.size { infoCell("File Size", formatBytes(size)) }
             if let contentType = song.contentType { infoCell("MIME Type", contentType) }
             if let rg = song.replayGain {
                 if let tg = rg.trackGain { infoCell("Track Gain", String(format: "%.2f dB", tg)) }
                 if let ag = rg.albumGain { infoCell("Album Gain", String(format: "%.2f dB", ag)) }
                 if let tp = rg.trackPeak { infoCell("Track Peak", String(format: "%.4f", tp)) }
+            }
+        }
+
+        let hasCredits = song.displayComposer != nil || !(song.contributors?.isEmpty ?? true)
+            || song.displayAlbumArtist != nil
+        if hasCredits {
+            sectionHeader("Credits")
+            infoGrid {
+                if let composer = song.displayComposer { infoCell("Composer", composer) }
+                if let albumArtist = song.displayAlbumArtist { infoCell("Album Artist", albumArtist) }
+                if let contribs = song.contributors, !contribs.isEmpty {
+                    let grouped = Dictionary(grouping: contribs) { c in
+                        c.subRole.map { "\(c.role) (\($0))" } ?? c.role
+                    }
+                    ForEach(grouped.keys.sorted(), id: \.self) { role in
+                        let names = grouped[role]!.map(\.artist.name).joined(separator: ", ")
+                        infoCell(role, names)
+                    }
+                }
+            }
+        }
+
+        let hasClassical = !(song.works?.isEmpty ?? true) || !(song.movements?.isEmpty ?? true)
+            || !(song.groupings?.isEmpty ?? true)
+        if hasClassical {
+            sectionHeader("Classical")
+            infoGrid {
+                if let works = song.works, !works.isEmpty {
+                    infoCell("Work", works.map(\.name).joined(separator: "; "))
+                }
+                if let movements = song.movements, !movements.isEmpty {
+                    let movText = movements.map { m in
+                        m.number.map { "\($0). \(m.name)" } ?? m.name
+                    }.joined(separator: "; ")
+                    infoCell("Movement", movText)
+                }
+                if let groupings = song.groupings, !groupings.isEmpty {
+                    infoCell("Grouping", groupings.joined(separator: ", "))
+                }
             }
         }
 
@@ -252,6 +297,8 @@ struct GetInfoView: View {
             if let artistId = song.artistId { infoCell("Artist ID", artistId) }
             if let parent = song.parent { infoCell("Parent ID", parent) }
             if let mbid = song.musicBrainzId { infoCell("MusicBrainz ID", mbid) }
+            if let isrc = song.isrc, !isrc.isEmpty { infoCell("ISRC", isrc.joined(separator: ", ")) }
+            if let sortName = song.sortName { infoCell("Sort Name", sortName) }
             if let path = song.path { infoCell("Path", path) }
             if let created = song.created { infoCell("Added", created) }
         }
@@ -268,10 +315,11 @@ struct GetInfoView: View {
 
         externalLinksSection(mbid: song.musicBrainzId, lastFmUrl: vm.albumInfo?.lastFmUrl)
     }
-    // swiftlint:enable cyclomatic_complexity
+    // swiftlint:enable cyclomatic_complexity function_body_length
 
     // MARK: - Album Content
 
+    // swiftlint:disable cyclomatic_complexity function_body_length
     @ViewBuilder
     private func albumContent(_ album: Album) -> some View {
         VStack(spacing: 16) {
@@ -282,7 +330,7 @@ struct GetInfoView: View {
                 Text(album.name)
                     .font(.title2).bold()
                     .multilineTextAlignment(.center)
-                if let artist = album.artist {
+                if let artist = album.displayArtist ?? album.artist {
                     Text(artist).font(.body).foregroundStyle(.secondary)
                 }
             }
@@ -291,10 +339,28 @@ struct GetInfoView: View {
         sectionHeader("Album Details")
         infoGrid {
             if let year = album.year { infoCell("Year", "\(year)") }
-            if let genre = album.genre { infoCell("Genre", genre) }
+            let genres = album.allGenres
+            if !genres.isEmpty { infoCell("Genre", genres.joined(separator: ", ")) }
+            if let releaseDate = album.releaseDate { infoCell("Release Date", formatItemDate(releaseDate)) }
+            if let origDate = album.originalReleaseDate { infoCell("Original Release", formatItemDate(origDate)) }
             if let count = album.songCount { infoCell("Tracks", "\(count)") }
             if let dur = album.duration { infoCell("Duration", formatDuration(dur)) }
+            if let played = album.played { infoCell("Last Played", played) }
+            if let playCount = album.playCount, playCount > 0 { infoCell("Play Count", "\(playCount)") }
+            if album.isCompilation == true { infoCell("Type", "Compilation") }
+            if let types = album.releaseTypes, !types.isEmpty { infoCell("Release Type", types.joined(separator: ", ")) }
+            if let moods = album.moods, !moods.isEmpty { infoCell("Mood", moods.joined(separator: ", ")) }
+            if let explicit = album.explicitStatus { infoCell("Explicit", explicit) }
             if let created = album.created { infoCell("Added", created) }
+        }
+
+        if let discTitles = album.discTitles, !discTitles.isEmpty {
+            sectionHeader("Discs")
+            infoGrid {
+                ForEach(discTitles, id: \.disc) { disc in
+                    infoCell("Disc \(disc.disc)", disc.title)
+                }
+            }
         }
 
         sectionHeader("Identifiers")
@@ -326,6 +392,7 @@ struct GetInfoView: View {
 
         externalLinksSection(mbid: vm.albumInfo?.musicBrainzId, lastFmUrl: vm.albumInfo?.lastFmUrl)
     }
+    // swiftlint:enable cyclomatic_complexity function_body_length
 
     // MARK: - Artist Content
 
@@ -460,6 +527,14 @@ struct GetInfoView: View {
         formatter.allowedUnits = [.useMB, .useKB, .useGB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func formatItemDate(_ date: ItemDate) -> String {
+        var parts: [String] = []
+        if let y = date.year { parts.append(String(y)) }
+        if let m = date.month { parts.append(String(format: "%02d", m)) }
+        if let d = date.day { parts.append(String(format: "%02d", d)) }
+        return parts.joined(separator: "-")
     }
 
     // MARK: - Raw Metadata

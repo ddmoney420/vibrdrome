@@ -2,9 +2,16 @@ import SwiftUI
 
 struct LyricsView: View {
     let songId: String
+    /// Track metadata used for the LRCLIB internet fallback (#82). Optional so older
+    /// call sites keep working; the fallback is skipped when title/artist are missing.
+    var title: String?
+    var artist: String?
+    var album: String?
+    var duration: Int?
 
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(UserDefaultsKeys.fetchInternetLyrics) private var fetchInternetLyrics = true
     @State private var lyricsList: LyricsList?
     @State private var isLoading = true
     @State private var error: String?
@@ -15,7 +22,7 @@ struct LyricsView: View {
         NavigationStack {
             Group {
                 if let lyrics = selectedLyrics {
-                    SyncedLyricsContent(lyrics: lyrics, engine: engine)
+                    SyncedLyricsContent(lyrics: lyrics, engine: engine, songId: songId)
                 } else if isLoading {
                     ProgressView("Loading lyrics...")
                 } else if error != nil {
@@ -59,11 +66,38 @@ struct LyricsView: View {
         isLoading = true
         error = nil
         defer { isLoading = false }
+
+        // 1. Try the server first.
+        var serverError: String?
         do {
-            lyricsList = try await appState.subsonicClient.getLyrics(songId: songId)
+            let serverLyrics = try await appState.subsonicClient.getLyrics(songId: songId)
+            if hasLyrics(serverLyrics) {
+                lyricsList = serverLyrics
+                return
+            }
         } catch {
-            self.error = ErrorPresenter.userMessage(for: error)
+            serverError = ErrorPresenter.userMessage(for: error)
         }
+
+        // 2. Fall back to LRCLIB when the server has none and the user opted in (#82).
+        if fetchInternetLyrics, let title, let artist,
+           let external = await LRCLIBClient.shared.lyrics(
+               title: title, artist: artist, album: album,
+               duration: duration, cacheKey: songId
+           ) {
+            lyricsList = LyricsList(structuredLyrics: [external])
+            return
+        }
+
+        // 3. Nothing found. Surface a server error if there was one, else "No Lyrics".
+        lyricsList = nil
+        error = serverError
+    }
+
+    /// True when a lyrics payload actually contains at least one non-empty line.
+    private func hasLyrics(_ list: LyricsList?) -> Bool {
+        guard let entries = list?.structuredLyrics else { return false }
+        return entries.contains { !($0.line ?? []).isEmpty }
     }
 }
 
@@ -72,8 +106,11 @@ struct LyricsView: View {
 private struct SyncedLyricsContent: View {
     let lyrics: StructuredLyrics
     let engine: AudioEngine
+    let songId: String
 
     @State private var activeLineIndex: Int = 0
+    /// User timing nudge for this song, in ms (#86). Persisted per song.
+    @State private var userOffsetMs: Int = 0
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     // V7: Extract timer publisher so it's not recreated on every body evaluation
     private let timer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
@@ -87,7 +124,7 @@ private struct SyncedLyricsContent: View {
                         VStack(spacing: 4) {
                             Text(title)
                                 .font(.headline)
-                            if let artist = lyrics.displayArtist ?? engine.currentSong?.artist {
+                            if let artist = lyrics.displayArtist ?? engine.currentSong?.displayArtist {
                                 Text(artist)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
@@ -111,7 +148,7 @@ private struct SyncedLyricsContent: View {
                             .accessibilityIdentifier("lyricsLine_\(index)")
                             .onTapGesture {
                                 if lyrics.synced, let start = line.start {
-                                    engine.seek(to: Double(start) / 1000.0)
+                                    engine.seek(to: Double(max(0, start - userOffsetMs)) / 1000.0)
                                 }
                             }
                     }
@@ -128,14 +165,80 @@ private struct SyncedLyricsContent: View {
                 updateActiveLine()
             }
             .onAppear {
+                userOffsetMs = UserDefaults.standard.integer(
+                    forKey: UserDefaultsKeys.lyricsOffset(songId: songId)
+                )
                 updateActiveLine()
+            }
+            .safeAreaInset(edge: .bottom) {
+                if lyrics.synced {
+                    timingControlBar
+                }
             }
         }
     }
 
+    // MARK: - Timing Nudge (#86)
+
+    private var timingControlBar: some View {
+        HStack(spacing: 20) {
+            Button { adjustOffset(by: -100) } label: {
+                Image(systemName: "minus")
+                    .frame(minWidth: 28)
+            }
+            .accessibilityIdentifier("lyricsOffsetDecrease")
+            .accessibilityLabel("Lyrics later")
+
+            VStack(spacing: 1) {
+                Text(offsetLabel)
+                    .font(.footnote.weight(.semibold))
+                    .monospacedDigit()
+                Text("Lyric Timing")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 96)
+
+            Button { adjustOffset(by: 100) } label: {
+                Image(systemName: "plus")
+                    .frame(minWidth: 28)
+            }
+            .accessibilityIdentifier("lyricsOffsetIncrease")
+            .accessibilityLabel("Lyrics earlier")
+
+            if userOffsetMs != 0 {
+                Button { setOffset(0) } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .accessibilityIdentifier("lyricsOffsetReset")
+                .accessibilityLabel("Reset lyric timing")
+            }
+        }
+        .buttonStyle(.bordered)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+    }
+
+    private var offsetLabel: String {
+        guard userOffsetMs != 0 else { return "In sync" }
+        return String(format: "%+.1fs", Double(userOffsetMs) / 1000.0)
+    }
+
+    private func adjustOffset(by deltaMs: Int) {
+        // Clamp to a sane range so a stuck button can't run away.
+        setOffset(max(-5000, min(5000, userOffsetMs + deltaMs)))
+    }
+
+    private func setOffset(_ ms: Int) {
+        userOffsetMs = ms
+        UserDefaults.standard.set(ms, forKey: UserDefaultsKeys.lyricsOffset(songId: songId))
+        updateActiveLine()
+    }
+
     private func updateActiveLine() {
         guard lyrics.synced else { return }
-        let currentMs = max(0, Int(engine.currentTime * 1000) + (lyrics.offset ?? 0))
+        let currentMs = max(0, Int(engine.currentTime * 1000) + (lyrics.offset ?? 0) + userOffsetMs)
         let lines = lyrics.line ?? []
 
         var newIndex = 0
