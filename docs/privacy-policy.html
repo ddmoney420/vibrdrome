@@ -34,7 +34,7 @@
         <a href="https://vibrdrome.io" class="back">&larr; Back to Vibrdrome</a>
 
         <h1>Privacy Policy</h1>
-        <p class="updated">Last updated: April 4, 2026</p>
+        <p class="updated">Last updated: June 4, 2026</p>
 
         <h2>Overview</h2>
         <p>Vibrdrome is a music player for iOS, macOS, Android, and the web that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.</p>
@@ -50,7 +50,7 @@
             <li><strong>Playback history and preferences</strong> — stored locally using SwiftData (iOS/macOS), app storage (Android), or browser local storage (web)</li>
             <li><strong>Settings</strong> (theme, equalizer presets, bitrate preferences) — stored in UserDefaults, SharedPreferences, or browser local storage</li>
         </ul>
-        <p>This data never leaves your device except to communicate directly with your configured media server.</p>
+        <p>This data stays on your device except when communicating with your configured media server and when you use the optional internet features described under <strong>Network Communication &amp; External Services</strong> below.</p>
 
         <h2>Device Permissions</h2>
         <p>Vibrdrome may request the following device permissions:</p>
@@ -58,20 +58,26 @@
             <li><strong>Photo Library (iOS)</strong> — only when you choose to save album artwork to your photos via long-press on the Now Playing screen. No photos are read or accessed.</li>
         </ul>
 
-        <h2>Network Communication</h2>
-        <p>Vibrdrome communicates only with:</p>
+        <h2>Network Communication &amp; External Services</h2>
+        <p>Vibrdrome's core features communicate directly with the <strong>Navidrome/Subsonic server you configure</strong>. In addition, several optional features can contact the third-party services listed below. Vibrdrome has no servers of its own and never receives this data; it goes directly from your device to the service.</p>
+        <p>Your Navidrome/Subsonic credentials are used only to connect to the media server you configure. They are <strong>not</strong> sent to LRCLIB, Last.fm, ListenBrainz, Discord, DuckDuckGo, radio-browser, or external artist-link services.</p>
         <ul>
-            <li><strong>Your Navidrome/Subsonic server</strong> — to authenticate, browse your library, stream music, and sync favorites/playlists. All communication uses the server URL you configure.</li>
-            <li><strong>radio-browser.info</strong> (optional) — only when you search for internet radio stations using the "Find Stations" feature. No personal data is sent; only search queries (genre, station name).</li>
-            <li><strong>DuckDuckGo Icons</strong> (iOS/Android) — when displaying radio station icons, the app may fetch favicons from DuckDuckGo's icon service using the station's homepage domain. No personal data is sent. See <a href="https://duckduckgo.com/privacy">DuckDuckGo's Privacy Policy</a>.</li>
+            <li><strong>Your Navidrome/Subsonic server</strong> (required) — to authenticate, browse your library, stream music, and sync favorites/playlists. All communication uses the server URL you configure.</li>
+            <li><strong>Internet lyrics — LRCLIB</strong> (optional, on by default) — when your server has no lyrics for a track, the track's title, artist, album, and duration are sent to lrclib.net. Control: Settings &rarr; Player &rarr; "Fetch Lyrics from the Internet."</li>
+            <li><strong>Last.fm scrobbling</strong> (optional, off until you connect it) — if enabled, Vibrdrome sends listening activity such as track, artist, album, and playback time to Last.fm using the account credentials or API settings you provide.</li>
+            <li><strong>ListenBrainz scrobbling</strong> (optional, off until you connect it) — if you provide a ListenBrainz token, Vibrdrome sends that token and your listens to api.listenbrainz.org.</li>
+            <li><strong>Discord Rich Presence</strong> (macOS only, optional, off by default) — when enabled, Vibrdrome shares the current track, artist, album, and play state with the Discord app running on your Mac, which can display it on your Discord profile.</li>
+            <li><strong>radio-browser.info</strong> (optional) — only when you search for internet radio stations using the "Find Stations" feature. Only your search query (genre, station name) is sent.</li>
+            <li><strong>DuckDuckGo Icons</strong> (automatic while browsing radio) — when displaying radio station icons, the app fetches favicons from DuckDuckGo's icon service using the station's homepage domain. See <a href="https://duckduckgo.com/privacy">DuckDuckGo's Privacy Policy</a>.</li>
+            <li><strong>External artist links</strong> (optional, only when you tap one) — tapping an artist link opens a search for that artist's name (MusicBrainz, Last.fm, Wikipedia, and Google by default, or any custom link you add) in your browser; the artist's name is sent to that site as part of the URL.</li>
             <li><strong>Cloudflare</strong> (web version only) — the web app at web.vibrdrome.io is hosted on Cloudflare Pages. Cloudflare may collect standard web traffic data (IP address, browser type) as part of their hosting infrastructure. See <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's Privacy Policy</a> for details.</li>
         </ul>
 
         <h2>Third-Party Services</h2>
-        <p>Vibrdrome does not integrate any third-party analytics, advertising, crash reporting, or tracking services.</p>
+        <p>Vibrdrome does not integrate any third-party analytics, advertising, or tracking services, and does not send crash or diagnostic data to any third party — diagnostics, when captured, stay on your device. The optional features listed under Network Communication &amp; External Services use third-party services to provide that functionality.</p>
 
         <h2>Data Sharing</h2>
-        <p>We do not share, sell, or transfer any user data to third parties. There is no data to share because we do not collect any.</p>
+        <p>The developer does not collect, receive, share, or sell your data — Vibrdrome has no servers, analytics, or tracking. When you enable the optional features above, the app transmits the data described there directly to the third-party services you choose, at your direction; the developer is not involved in and does not receive that data.</p>
 
         <h2>Children's Privacy</h2>
         <p>Vibrdrome does not knowingly collect any information from children under 13 years of age.</p>
