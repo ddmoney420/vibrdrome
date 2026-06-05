@@ -23,6 +23,39 @@ struct ContentView: View {
 
     private var engine: AudioEngine { AudioEngine.shared }
 
+    /// Baseline gap between the mini player and a phone that has a bottom
+    /// safe-area inset (notched). These phones get their home-indicator inset
+    /// "for free" from the safe-area-respecting overlay, so 54pt on top clears
+    /// the tab bar.
+    private static let miniPlayerBaseClearance: CGFloat = 54
+
+    /// Clearance for the smallest phones, which have **no** bottom safe-area
+    /// inset (iPhone SE / mini). iOS 26's tab bar is taller, so the old fixed
+    /// 54pt overlapped the tab-bar icons there (#69). Subtracting the live
+    /// bottom inset means notched phones floor back to `miniPlayerBaseClearance`
+    /// and stay exactly as before, while zero-inset phones get the full value.
+    private static let miniPlayerTabBarClearance: CGFloat = 72
+
+    /// The mini player, hung above the tab bar. Shared by both tab-bar layouts
+    /// so the clearance stays consistent. Uses a `GeometryReader` to read the
+    /// live bottom safe-area inset (SwiftUI-native, no UIKit).
+    @ViewBuilder
+    private var miniPlayerOverlay: some View {
+        if engine.currentSong != nil || engine.currentRadioStation != nil {
+            GeometryReader { geometry in
+                let clearance = max(Self.miniPlayerBaseClearance,
+                                    Self.miniPlayerTabBarClearance - geometry.safeAreaInsets.bottom)
+                MiniPlayerView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, clearance)
+            }
+            // Pin to the screen bottom regardless of keyboard presence. Without
+            // this, iPad floating keyboards drag the mini player up to where a
+            // docked keyboard would sit.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+        }
+    }
+
     var body: some View {
         Group {
             if appState.isConfigured {
@@ -181,14 +214,7 @@ struct ContentView: View {
             #endif
         }
         .overlay(alignment: .bottom) {
-            if engine.currentSong != nil || engine.currentRadioStation != nil {
-                MiniPlayerView()
-                    .padding(.bottom, 54)
-                    // Pin to the screen bottom regardless of keyboard presence.
-                    // Without this, iPad floating keyboards drag the mini
-                    // player up to where a docked keyboard would sit.
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
+            miniPlayerOverlay
         }
     }
 
@@ -312,14 +338,7 @@ struct ContentView: View {
             #endif
         }
         .overlay(alignment: .bottom) {
-            if engine.currentSong != nil || engine.currentRadioStation != nil {
-                MiniPlayerView()
-                    .padding(.bottom, 54)
-                    // Pin to the screen bottom regardless of keyboard presence.
-                    // Without this, iPad floating keyboards drag the mini
-                    // player up to where a docked keyboard would sit.
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
+            miniPlayerOverlay
         }
     }
 
