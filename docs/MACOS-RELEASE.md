@@ -8,10 +8,36 @@ This is separate from TestFlight/App Store (see `testflight` notes). Direct
 distribution requires **Developer ID** signing and **Apple notarization**, which
 are different from the Apple Development signing used for local/TestFlight builds.
 
+## Cutting a release — what you do manually
+
+The one-time setup below is **already done on the current Mac.** To cut a new
+macOS DMG release, the only manual steps are:
+
+1. Make sure the build number is bumped/committed for the new build (if it's new).
+2. **Run the script in your own Terminal** (not a background/CI runner — it has
+   interactive keychain prompts):
+   ```bash
+   scripts/make-dmg.sh --upload v1.0.0-beta.<N>
+   ```
+   (omit `--upload …` to build locally without publishing)
+3. When a **keychain dialog** appears (codesign accessing the Developer ID key),
+   click **Always Allow**.
+4. **Wait** — notarization goes to Apple and usually takes a few minutes;
+   occasionally longer if Apple's notary queue is backed up. **Don't run it twice**
+   (a built-in lock blocks concurrent runs and prevents duplicate submissions).
+5. It finishes with `DONE: build-dmg/Vibrdrome-macOS-v1.0.0-build<N>.dmg`, a
+   passing `stapler validate`, and (with `--upload`) the DMG attached to the
+   GitHub pre-release.
+
+If it **fails in notarization**, get the exact reason with:
+`xcrun notarytool log <submission-id> --keychain-profile vibrdrome-notary`
+
+On a **new Mac**, redo the one-time setup first (below).
+
 ## One-time setup (prerequisites)
 
-These are required before `scripts/make-dmg.sh` will work. As of this writing
-**none are in place yet** — set them up once.
+These are required before `scripts/make-dmg.sh` will work. They are **already set
+up on the current Mac** — redo them only on a new machine.
 
 ### 1. Developer ID Application certificate
 - developer.apple.com → Certificates, IDs & Profiles → Certificates → **+** →
@@ -79,8 +105,9 @@ hangs on a background runner, run it in your own terminal (or via `! scripts/mak
 
 ## Status
 
-- Builds 38–50 shipped DMGs via an undocumented manual process; **builds 51–54 have
-  no macOS DMG release.**
-- `scripts/make-dmg.sh` is a **draft** encoding the correct process; it has not been
-  test-run because the prerequisites above (Developer ID cert, hardened runtime) are
-  not yet set up.
+- The prerequisites (Developer ID cert, notary profile `vibrdrome-notary`, Hardened
+  Runtime, macOS-specific entitlements) are **set up, and the pipeline is proven end
+  to end.**
+- **Build 54** shipped a signed + notarized DMG via this process (the
+  `v1.0.0-beta.54` GitHub pre-release). Builds 38–50 used an earlier undocumented
+  manual process; builds 51–53 have no macOS DMG.
