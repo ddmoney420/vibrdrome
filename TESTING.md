@@ -1,5 +1,14 @@
 # Regression Testing Checklist
 
+## Unreleased — Public HTTP server confirmation
+
+- [ ] Public (non-local) HTTP server prompts once per host on save
+- [ ] LAN/private HTTP server does not prompt
+- [ ] HTTPS server does not prompt
+- [ ] Cancel does not save the server
+- [ ] Connect Anyway saves and persists across app restart
+- [ ] Both onboarding add and Settings edit flows behave correctly
+
 ## Build 54 — OpenSubsonic metadata, security, download crash
 
 - [ ] #59: a multi-artist track (OpenSubsonic `artists` array) shows each artist as a separate tappable link from TrackRow, Now Playing (iOS + macOS), the queue panel, and the macOS track table; each link opens the correct artist
