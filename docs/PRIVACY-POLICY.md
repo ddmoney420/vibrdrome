@@ -4,7 +4,7 @@
 
 ## Overview
 
-Vibrdrome is a music player app for iOS, macOS, and Android that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.
+Vibrdrome is a music player for iOS, macOS, watchOS, Android, and the web that connects to your personal Navidrome or Subsonic-compatible media server. Your privacy is important to us. This policy explains what data Vibrdrome accesses and how it is handled.
 
 ## Data Collection
 
@@ -14,22 +14,24 @@ Vibrdrome is a music player app for iOS, macOS, and Android that connects to you
 
 Vibrdrome stores the following data locally on your device:
 
-- **Server credentials** (URL, username, password) — stored securely in the iOS/macOS Keychain or Android Keystore
-- **Music cache** — downloaded songs stored in the app's sandboxed container
-- **Playback history and preferences** — stored locally using SwiftData
-- **Settings** (theme, equalizer presets, bitrate preferences) — stored in UserDefaults
+- **Server credentials** (URL, username, password) — stored securely in the Apple Keychain (iOS/macOS/watchOS), the Android Keystore, or browser local storage (web)
+- **Music cache** — downloaded songs stored in the app's sandboxed container (not applicable to the web version)
+- **Playback history and preferences** — stored locally using SwiftData (Apple platforms), app storage (Android), or browser local storage (web)
+- **Settings** (theme, equalizer presets, bitrate preferences) — stored in UserDefaults (Apple platforms), SharedPreferences (Android), or browser local storage (web)
 
-This data stays on your device except when communicating with your configured media server and when you use the optional internet features described in **External Services and Data Flows** below.
+This data stays on your device except when communicating with your configured media server and when you use the optional internet features described under **Network Communication & External Services** below.
 
-## Network Communication
+## Device Permissions
 
-Vibrdrome's core features communicate directly with the **Navidrome/Subsonic server you configure** — to authenticate, browse your library, stream music, and sync favorites/playlists, using the server URL you set. In addition, several **optional** features can contact third-party services, listed under **External Services and Data Flows** below.
+Vibrdrome may request the following device permissions:
+
+- **Photo Library (iOS)** — only when you choose to save album artwork to your photos via long-press on the Now Playing screen. No photos are read or accessed.
+
+## Network Communication & External Services
+
+Vibrdrome's core features communicate directly with the **Navidrome/Subsonic server you configure** — to authenticate, browse your library, stream music, and sync favorites/playlists, using the server URL you set. In addition, several **optional** features can contact the third-party services listed below. Vibrdrome has no servers of its own and never receives this data; it goes directly from your device to the service.
 
 Your Navidrome/Subsonic credentials are used only to connect to the media server you configure. They are **not** sent to LRCLIB, Last.fm, ListenBrainz, Discord, DuckDuckGo, radio-browser, or external artist-link services.
-
-## External Services and Data Flows
-
-Beyond your own media server, Vibrdrome can contact the third-party services below. Each entry states what is sent, to whom, whether it is optional, and how you control it. Vibrdrome has no servers of its own and never receives this data; it goes directly from your device to the service.
 
 - **Your media server (required)** — all browsing, streaming, authentication, and favorites/playlist sync go to the Navidrome/Subsonic server URL you configure.
 - **Internet lyrics — LRCLIB (optional, on by default)** — when your server has no lyrics for a track, the track's title, artist, album, and duration are sent to lrclib.net. Control: Settings → Player → "Fetch Lyrics from the Internet."
@@ -39,6 +41,7 @@ Beyond your own media server, Vibrdrome can contact the third-party services bel
 - **Internet radio search — radio-browser.info (optional)** — when you search for internet radio stations with "Find Stations," your search query (station name or genre) is sent to radio-browser.info.
 - **Internet radio station icons — DuckDuckGo (automatic while browsing radio)** — to display a station's icon, the station's website domain is sent to DuckDuckGo's favicon service (icons.duckduckgo.com).
 - **External artist links (optional, only when you tap one)** — tapping an artist link opens a search for that artist's name (MusicBrainz, Last.fm, Wikipedia, and Google by default, or any custom link you add) in your browser; the artist's name is sent to that site as part of the URL.
+- **Cloudflare (web version only)** — the web app at web.vibrdrome.io is hosted on Cloudflare Pages, which may collect standard web traffic data (IP address, browser type) as part of their hosting infrastructure. See Cloudflare's Privacy Policy.
 
 ## Third-Party Services
 
