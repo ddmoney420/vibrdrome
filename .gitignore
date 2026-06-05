@@ -34,6 +34,8 @@ build-logs/
 # Secrets & build artifacts (App Store Connect / fastlane)
 *.p8
 build/
+build-dmg/
+.make-dmg.lock
 *.ipa
 *.xcarchive
 fastlane/report.xml
