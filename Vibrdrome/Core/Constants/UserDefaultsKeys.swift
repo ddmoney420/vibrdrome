@@ -23,6 +23,9 @@ enum UserDefaultsKeys {
     static let username = "username"
     static let savedServers = "savedServers"
     static let activeServerId = "activeServerId"
+    /// Hosts the user has explicitly confirmed connecting to over unencrypted
+    /// public HTTP (A-1 / Option 3). Stored as an array of lowercased host strings.
+    static let acknowledgedInsecureHosts = "acknowledgedInsecureHosts"
 
     // MARK: - Audio Playback
 

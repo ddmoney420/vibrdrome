@@ -4,6 +4,11 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Unreleased
+
+**Security:**
+- Added an explicit confirmation when saving a public, non-local HTTP server connection. Local/LAN HTTP servers and HTTPS connections are unchanged.
+
 ### Build 54 -- June 1, 2026
 
 **Library & Metadata (OpenSubsonic):**
