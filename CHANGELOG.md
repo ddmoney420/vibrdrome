@@ -9,6 +9,9 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 **Security:**
 - Added an explicit confirmation when saving a public, non-local HTTP server connection. Local/LAN HTTP servers and HTTPS connections are unchanged.
 
+**Bug fixes:**
+- Fixed the progress slider and time display on tracks whose duration is under-reported by the player: the elapsed time no longer counts past the end of the slider, the total reflects the longer of the player and server durations, and seeking can reach the true end of the track (#58).
+
 ### Build 54 -- June 1, 2026
 
 **Library & Metadata (OpenSubsonic):**

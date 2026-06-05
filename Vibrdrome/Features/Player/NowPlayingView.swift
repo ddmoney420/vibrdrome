@@ -595,7 +595,9 @@ struct NowPlayingView: View {
     // MARK: - Progress
 
     private var progressSlider: some View {
-        let songDuration = engine.duration > 0 ? engine.duration : Double(engine.currentSong?.duration ?? 1)
+        // Larger of the AVPlayer/server durations, floored by currentTime so the elapsed
+        // timer can never outrun the progress total on short-duration tracks (#58).
+        let songDuration = max(engine.effectiveDuration, engine.currentTime)
         return VStack(spacing: 4) {
             #if os(iOS)
             GeometryReader { geo in

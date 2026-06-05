@@ -39,6 +39,16 @@ final class AudioEngine {
     var currentRadioStation: InternetRadioStation?
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
+
+    /// Best-known total track duration: the larger of the AVPlayer item duration and
+    /// the server's reported duration. Display/seek-clamp only — it does not affect
+    /// playback and does not modify `duration` itself. Used so tracks whose AVPlayer
+    /// item under-reports duration still show a correct total and can be seeked to the
+    /// real end (#58).
+    var effectiveDuration: TimeInterval {
+        max(duration, Double(currentSong?.duration ?? 0))
+    }
+
     var isBuffering = false
     var isSeeking = false
 
