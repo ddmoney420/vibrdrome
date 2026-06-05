@@ -9,6 +9,17 @@
 - [ ] Connect Anyway saves and persists across app restart
 - [ ] Both onboarding add and Settings edit flows behave correctly
 
+## Unreleased — Seek progress on short-duration tracks (#58)
+
+- [ ] Known short-duration/VBR track no longer shows the timer counting past the slider
+- [ ] Slider reaches the true end of the track
+- [ ] Seeking reaches the final seconds
+- [ ] Normal tracks unchanged
+- [ ] iOS Now Playing verified
+- [ ] macOS Now Playing verified
+- [ ] Mini-player verified
+- [ ] Lock screen duration verified where possible
+
 ## Build 54 — OpenSubsonic metadata, security, download crash
 
 - [ ] #59: a multi-artist track (OpenSubsonic `artists` array) shows each artist as a separate tappable link from TrackRow, Now Playing (iOS + macOS), the queue panel, and the macOS track table; each link opens the correct artist
