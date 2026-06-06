@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
 # fetch-vendor.sh — download the pinned, prebuilt Vendor xcframeworks (MetalANGLE
-# + projectM) from a GitHub Release and verify each against a hard-coded SHA-256
-# before extracting into the gitignored Vendor/ directory.
+# + projectM) from a public GitHub Release asset via curl, verify each against a
+# hard-coded SHA-256, then extract into the gitignored Vendor/ directory.
+# No gh CLI or token required (fetches the public release download URL directly),
+# so it works the same for dev setup and CI.
 #
 # This is Vendor strategy B: the binaries are NOT committed to git; they are
 # fetched on demand (dev setup + CI) from a pinned Release asset, with the
@@ -48,7 +50,6 @@ verify_and_extract() {
 
 fetch() {
   local force="${1:-}"
-  command -v gh >/dev/null || fail "gh CLI not found (needed to download the Release asset)"
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   for entry in "${ASSETS[@]}"; do
     IFS='|' read -r name destrel asset want <<<"$entry"
@@ -57,8 +58,9 @@ fetch() {
       log "$name already present — skipping (use --force to re-fetch)"
       continue
     fi
-    log "Downloading $asset from $REPO@$TAG"
-    gh release download "$TAG" --repo "$REPO" --pattern "$asset" --dir "$tmp" --clobber \
+    local url="https://github.com/${REPO}/releases/download/${TAG}/${asset}"
+    log "Downloading $asset from $url"
+    curl -fL --retry 3 -o "$tmp/$asset" "$url" \
       || fail "download failed — has the Release '$TAG' been published? (scripts/package-vendor.sh upload $TAG)"
     verify_and_extract "$tmp/$asset" "$dest" "$want"
   done

@@ -717,7 +717,16 @@ Ran `scripts/make-dmg.sh` **unchanged** (archive → export Developer ID → not
   (populates the gitignored `Vendor/` from the pinned Release). Wire in
   `.github/workflows/ci.yml` at main-PR prep, alongside publishing the Release.
 
-**Phase 2E status: VERIFIED, awaiting commit approval.**
+**Phase 2E status: VERIFIED and committed.**
+
+---
+
+## Release distribution note (LGPL / iOS)
+
+projectM is LGPL-2.1 and dynamically linked. macOS DMG distribution is notarized
+and relink-friendly. iOS App Store/TestFlight distribution remains a distribution
+decision because practical user relinking on iOS is constrained. Do not submit
+this feature to App Store/TestFlight until explicitly approved.
 
 ---
 
