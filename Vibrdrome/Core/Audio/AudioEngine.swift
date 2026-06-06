@@ -453,7 +453,7 @@ final class AudioEngine {
                     audioLog.warning("EQ tap skipped: no audio tracks in asset")
                     return
                 }
-                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                if let mix = EQTapProcessor.createAudioMix(for: item, track: track) {
                     item.audioMix = mix
                     audioLog.info("EQ tap applied to item (tracks=\(tracks.count))")
                 } else {
@@ -482,7 +482,7 @@ final class AudioEngine {
             do {
                 let tracks = try await item.asset.loadTracks(withMediaType: .audio)
                 guard self.generation == gen, let track = tracks.first else { return }
-                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                if let mix = EQTapProcessor.createAudioMix(for: item, track: track) {
                     item.audioMix = mix
                 }
             } catch {
@@ -592,6 +592,9 @@ final class AudioEngine {
 
         let item = Self.makePlayerItem(url: url)
         applyEQTapIfNeeded(to: item)
+        // This item is the audible one — make it the visualizer PCM source. Records
+        // intent now; the async tap converges to it on registration.
+        EQTapProcessor.setVisualizerSource(for: item)
 
         if gaplessPlayer == nil {
             gaplessPlayer = AVQueuePlayer(items: [item])

@@ -600,6 +600,9 @@ extension AudioEngine {
         tearDownPropertyObservers()
         tearDownItemEndObserver()
         if let item = gaplessPlayer?.currentItem {
+            // Gapless advance: the promoted item is now audible — move the
+            // visualizer source token to it (clears the previous item's tap).
+            EQTapProcessor.setVisualizerSource(for: item)
             setupPropertyObservers(for: item, generation: generation)
             setupTrackEndObserver(for: item, generation: generation)
         }
