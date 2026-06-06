@@ -36,6 +36,9 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showRatingInPlayer) var showRatingInPlayer: Bool = true
     @AppStorage(UserDefaultsKeys.showQueueInPlayer) var showQueueInPlayer: Bool = true
     @State var showQuickSettings = false
+    // Open Quick Settings at the large detent so all rows (incl. Share) are
+    // reachable on small phones (#72); user can still drag down to medium.
+    @State var quickSettingsDetent: PresentationDetent = .large
     #if os(macOS)
     @Environment(\.openWindow) var openWindow
     @State var nsWindow: NSWindow?
