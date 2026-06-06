@@ -19,6 +19,7 @@ struct DebugView: View {
             audioSection
             cacheSection
             errorsSection
+            developerSection
             actionsSection
         }
         .navigationTitle("Debug")
@@ -112,6 +113,23 @@ struct DebugView: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Developer
+
+    private var developerSection: some View {
+        Section("Developer") {
+            NavigationLink {
+                MetalANGLEClearScreenView()
+            } label: {
+                Label("MetalANGLE GLES3 Test", systemImage: "cube.transparent")
+            }
+            NavigationLink {
+                ProjectMVisualizerView()
+            } label: {
+                Label("projectM MilkDrop Test", systemImage: "waveform.circle")
             }
         }
     }

@@ -221,6 +221,9 @@ struct VibrdromeApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
+                #if DEBUG
+                .debugGLTestProof()
+                #endif
             #else // iOS
             ContentView()
                 .environment(appState)
@@ -267,6 +270,9 @@ struct VibrdromeApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
+                #if DEBUG
+                .debugGLTestProof()
+                #endif
             #endif
         }
         #if os(macOS)

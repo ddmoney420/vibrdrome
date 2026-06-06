@@ -21,6 +21,8 @@ extension AudioEngine {
         crossfadeController.loadOnActive(url: url)
         if let item = crossfadeController.activePlayer?.currentItem {
             applyEQTapIfNeeded(to: item)
+            // Initial active item is the audible one → visualizer PCM source.
+            EQTapProcessor.setVisualizerSource(for: item)
         }
         crossfadeController.activePlayer?.rate = playbackRate
         isCrossfading = false
@@ -109,28 +111,35 @@ extension AudioEngine {
                 replayGainFactor: nextRGFactor
             )
         }
-        // Apply EQ to the incoming crossfade track, then start playback
+        startIncomingCrossfadeTrack()
+    }
+
+    /// Attach the EQ tap to the incoming crossfade track (always — passthrough
+    /// when EQ is off, so audio is unchanged) and start it playing. Designates the
+    /// incoming item as the single visualizer PCM source so only it feeds the
+    /// ring during the overlap (no double-feed with the outgoing track).
+    private func startIncomingCrossfadeTrack() {
         let inactivePlayer = crossfadeController.inactivePlayer
-        if eqEnabled, let item = inactivePlayer?.currentItem {
-            let gen = generation
-            Task {
-                do {
-                    let tracks = try await item.asset.loadTracks(withMediaType: .audio)
-                    guard self.generation == gen, let track = tracks.first else {
-                        inactivePlayer?.play()
-                        return
-                    }
-                    if let mix = EQTapProcessor.createAudioMix(track: track) {
-                        item.audioMix = mix
-                    }
-                    inactivePlayer?.play()
-                } catch {
-                    // Play without EQ on failure
-                    inactivePlayer?.play()
-                }
-            }
-        } else {
+        guard let item = inactivePlayer?.currentItem else {
             inactivePlayer?.play()
+            return
+        }
+        EQTapProcessor.setVisualizerSource(for: item)
+        let gen = generation
+        Task {
+            do {
+                let tracks = try await item.asset.loadTracks(withMediaType: .audio)
+                guard self.generation == gen, let track = tracks.first else {
+                    inactivePlayer?.play()
+                    return
+                }
+                if let mix = EQTapProcessor.createAudioMix(for: item, track: track) {
+                    item.audioMix = mix
+                }
+                inactivePlayer?.play()
+            } catch {
+                inactivePlayer?.play()
+            }
         }
     }
 
@@ -152,6 +161,9 @@ extension AudioEngine {
         incrementGeneration()
         setupCrossfadeTimeObserver()
         if let item = crossfadeController.activePlayer?.currentItem {
+            // After the swap the active player IS the incoming track (already the
+            // designated source); re-assert defensively to clear any stale token.
+            EQTapProcessor.setVisualizerSource(for: item)
             setupPropertyObservers(for: item, generation: generationValue)
             setupCrossfadeTrackEndObserver(for: item)
         }

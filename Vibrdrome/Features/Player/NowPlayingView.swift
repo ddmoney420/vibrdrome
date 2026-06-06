@@ -54,6 +54,9 @@ struct NowPlayingView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var appearScale: CGFloat = 0.95
     @State private var appearOpacity: Double = 0
+    #if DEBUG
+    @State private var showPCMDebug = false
+    #endif
 
     var body: some View {
         mainContent
@@ -80,6 +83,18 @@ struct NowPlayingView: View {
             .task(id: engine.currentSong?.id ?? engine.currentRadioStation?.id) {
                 await loadAlbumArt()
             }
+            #if DEBUG
+            // DEBUG-only PCM pipeline diagnostics (Phase 1D). Triple-tap to toggle.
+            // Compiled out of release. Reads/drains VisualizerPCMSource only.
+            .overlay(alignment: .top) {
+                if showPCMDebug {
+                    PCMDebugOverlay().padding(.top, 8)
+                }
+            }
+            .simultaneousGesture(
+                TapGesture(count: 3).onEnded { showPCMDebug.toggle() }
+            )
+            #endif
             #if os(macOS)
             .sheet(item: $macSheet) { sheet in
                 switch sheet {

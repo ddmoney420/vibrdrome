@@ -1,0 +1,16 @@
+Vibrdrome MilkDrop presets
+==========================
+
+The .milk preset files in this directory are ORIGINAL presets authored by the
+Vibrdrome project and distributed as part of Vibrdrome:
+
+  vibrdrome_plasma.milk        - original Vibrdrome preset
+  vibrdrome_kaleidoscope.milk  - original Vibrdrome preset
+  vibrdrome_tunnel.milk        - original Vibrdrome preset
+
+They are NOT third-party community MilkDrop presets. Community presets
+(e.g. Geiss, Rovastar, Aderrasi, Zylot, EoS, Mstress, Stahlregen) are
+intentionally NOT bundled here, pending license / redistribution clearance.
+
+The projectM engine and MetalANGLE are separately licensed; their attribution
+is handled outside this directory (see the project's licensing notes).

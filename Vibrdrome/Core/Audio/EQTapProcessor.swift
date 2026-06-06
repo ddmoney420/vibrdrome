@@ -1,5 +1,6 @@
 import AVFoundation
 import MediaToolbox
+import Synchronization
 import os.log
 
 private let tapLog = Logger(subsystem: "com.vibrdrome.app", category: "EQTap")
@@ -85,6 +86,11 @@ enum EQTapProcessor {
         var coefficients: [BiquadCoefficients] = Array(repeating: .passthrough, count: bandCount)
         /// Snapshot of gains used to compute cached coefficients (detect changes)
         var cachedGains: [Float] = []
+        /// Whether THIS tap is the single audible source feeding the visualizer
+        /// PCM ring. Set only by the @MainActor designation API; read (relaxed)
+        /// in the real-time process callback. Defaults false; at most one tap is
+        /// true at a time, so crossfade overlap never double-feeds the ring.
+        let isVisualizerSource = Atomic<Bool>(false)
 
         func prepare(channelCount: Int, sampleRate: Float) {
             self.sampleRate = sampleRate
@@ -112,8 +118,12 @@ enum EQTapProcessor {
         }
     }
 
-    /// Create an AVAudioMix with a 10-band EQ tap for the given audio track.
-    static func createAudioMix(track: AVAssetTrack) -> AVAudioMix? {
+    /// Create an AVAudioMix with a 10-band EQ tap for the given item's audio
+    /// track, and register the tap's context so the visualizer source can be
+    /// designated later. `@MainActor` because registration touches the
+    /// main-actor-confined source registry — the real-time tap callbacks never do.
+    @MainActor
+    static func createAudioMix(for item: AVPlayerItem, track: AVAssetTrack) -> AVAudioMix? {
         let context = TapContext()
 
         var callbacks = MTAudioProcessingTapCallbacks(
@@ -157,7 +167,55 @@ enum EQTapProcessor {
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = [params]
+        register(context, for: item)
         return mix
+    }
+
+    // MARK: - Visualizer Source Registry (main-actor confined)
+
+    /// Weak `AVPlayerItem → TapContext` map. Weak on both sides: the tap owns the
+    /// context (it stays alive via `Unmanaged.passRetained` until `tapFinalize`),
+    /// and entries auto-nil when the item or context deallocates — no leaks, no
+    /// stale references, no manual cleanup. ALL access is on the main actor; the
+    /// audio callback never touches this (it only reads `ctx.isVisualizerSource`).
+    @MainActor private static let sourceRegistry =
+        NSMapTable<AVPlayerItem, TapContext>.weakToWeakObjects()
+    /// The item that *should* be the source, recorded even before its (async)
+    /// tap registers, so a late registration converges to the right flag.
+    @MainActor private static weak var desiredSourceItem: AVPlayerItem?
+
+    /// Associate a freshly-created tap context with its item and converge its
+    /// source flag to the current `desiredSourceItem` (internal for testability).
+    @MainActor
+    static func register(_ context: TapContext, for item: AVPlayerItem) {
+        sourceRegistry.setObject(context, forKey: item)
+        context.isVisualizerSource.store(item === desiredSourceItem, ordering: .relaxed)
+    }
+
+    /// Make `item` the single visualizer PCM source; clears every other tap.
+    @MainActor
+    static func setVisualizerSource(for item: AVPlayerItem) {
+        desiredSourceItem = item
+        for case let key as AVPlayerItem in sourceRegistry.keyEnumerator() {
+            sourceRegistry.object(forKey: key)?
+                .isVisualizerSource.store(key === item, ordering: .relaxed)
+        }
+    }
+
+    /// Stop `item` feeding the visualizer (e.g. an outgoing crossfade track).
+    @MainActor
+    static func clearVisualizerSource(for item: AVPlayerItem) {
+        sourceRegistry.object(forKey: item)?.isVisualizerSource.store(false, ordering: .relaxed)
+        if desiredSourceItem === item { desiredSourceItem = nil }
+    }
+
+    /// Clear all visualizer sources (e.g. playback stop / visualizer closed).
+    @MainActor
+    static func clearAllVisualizerSources() {
+        desiredSourceItem = nil
+        for case let key as AVPlayerItem in sourceRegistry.keyEnumerator() {
+            sourceRegistry.object(forKey: key)?.isVisualizerSource.store(false, ordering: .relaxed)
+        }
     }
 
     // MARK: - C Callbacks
@@ -179,6 +237,12 @@ enum EQTapProcessor {
             channelCount: Int(format.mChannelsPerFrame),
             sampleRate: Float(format.mSampleRate)
         )
+        // Publish the source format to the visualizer PCM ring (diagnostics) and,
+        // importantly, touch the shared instance here — on the non-real-time
+        // prepare callback — so its lazy `static let` init never happens on the
+        // audio render thread. Set unconditionally; prepare is not the RT path.
+        VisualizerPCMSource.shared.sampleRate = format.mSampleRate
+        VisualizerPCMSource.shared.sourceChannelCount = Int(format.mChannelsPerFrame)
     }
 
     private static let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { _ in }
@@ -256,6 +320,25 @@ enum EQTapProcessor {
                 MTAudioProcessingTapGetStorage(tap)
             ).takeUnretainedValue().sampleRate
             AudioSpectrum.shared.processPCM(samples, count: frameCount, sampleRate: sampleRate)
+        }
+
+        // Feed the projectM visualizer PCM ring (post-EQ / post-effects, same as
+        // the spectrum above). DOUBLY GATED: the visualizer must be on AND this
+        // tap must be the designated single audible source (so crossfade overlap
+        // never double-feeds). Both are relaxed atomic loads — no registry access,
+        // no allocation, locks, logging, async, MainActor, ObjC, or Swift arrays
+        // on this real-time thread. When it passes, only a lock-free, alloc-free
+        // ring write of the planar channels.
+        if VisualizerPCMSource.shared.active,
+           ctx.isVisualizerSource.load(ordering: .relaxed),
+           !bufferList.isEmpty, let channel0 = bufferList[0].mData {
+            let left = channel0.assumingMemoryBound(to: Float.self)
+            if bufferList.count >= 2, let channel1 = bufferList[1].mData {
+                let right = channel1.assumingMemoryBound(to: Float.self)
+                VisualizerPCMSource.shared.ingestPlanarStereo(left: left, right: right, frameCount: frameCount)
+            } else {
+                VisualizerPCMSource.shared.ingestMono(left, frameCount: frameCount)
+            }
         }
     }
 }
