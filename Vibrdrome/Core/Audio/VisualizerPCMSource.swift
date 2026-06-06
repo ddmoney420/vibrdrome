@@ -21,10 +21,30 @@ final class VisualizerPCMSource: @unchecked Sendable {
     private let ring: FloatRingBuffer
     private let sampleRateBits = Atomic<UInt64>(0)
     private let channelCountStore = Atomic<Int>(2)
+    private let isActive = Atomic<Bool>(false)
 
     init(frameCapacity: Int = VisualizerPCMSource.defaultFrameCapacity) {
         ring = FloatRingBuffer(frameCapacity: frameCapacity, channelCount: 2)
     }
+
+    /// Whether the EQ tap should feed PCM into the ring. Defaults to `false`, so
+    /// the tap's write is a no-op (one relaxed atomic load + an untaken branch)
+    /// until the projectM visualizer turns it on (Phase 2). Real-time safe to
+    /// read from the audio callback.
+    ///
+    /// In Phase 1B nothing in shipping code sets this; it stays `false`. Tests /
+    /// dev verification flip it via `setActiveForTesting(_:)`.
+    var active: Bool {
+        isActive.load(ordering: .relaxed)
+    }
+
+    #if DEBUG
+    /// DEBUG/test-only: force the active flag (no UI, no shipping caller). Used to
+    /// prove the tap write path fills the ring during Phase 1B verification.
+    func setActiveForTesting(_ value: Bool) {
+        isActive.store(value, ordering: .relaxed)
+    }
+    #endif
 
     /// Native sample rate of the source feeding the buffer. Set during the tap's
     /// `prepare` (Phase 1B), before the producer starts; read by the consumer.

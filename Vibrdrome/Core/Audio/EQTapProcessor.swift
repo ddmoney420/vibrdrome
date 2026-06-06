@@ -179,6 +179,12 @@ enum EQTapProcessor {
             channelCount: Int(format.mChannelsPerFrame),
             sampleRate: Float(format.mSampleRate)
         )
+        // Publish the source format to the visualizer PCM ring (diagnostics) and,
+        // importantly, touch the shared instance here — on the non-real-time
+        // prepare callback — so its lazy `static let` init never happens on the
+        // audio render thread. Set unconditionally; prepare is not the RT path.
+        VisualizerPCMSource.shared.sampleRate = format.mSampleRate
+        VisualizerPCMSource.shared.sourceChannelCount = Int(format.mChannelsPerFrame)
     }
 
     private static let tapUnprepare: MTAudioProcessingTapUnprepareCallback = { _ in }
@@ -256,6 +262,23 @@ enum EQTapProcessor {
                 MTAudioProcessingTapGetStorage(tap)
             ).takeUnretainedValue().sampleRate
             AudioSpectrum.shared.processPCM(samples, count: frameCount, sampleRate: sampleRate)
+        }
+
+        // Feed the projectM visualizer PCM ring (post-EQ / post-effects, same as
+        // the spectrum above). GATED: a no-op unless the visualizer turned it on
+        // (in Phase 1B nothing sets `active`, so this stays a relaxed atomic load
+        // + an untaken branch). Real-time safe: when active it's only a lock-free,
+        // allocation-free ring write of the planar channels (no Swift arrays, no
+        // locks, no logging, no async, no MainActor/ObjC). Crossfade/gapless
+        // single-source ownership is deferred to Phase 1C.
+        if VisualizerPCMSource.shared.active, !bufferList.isEmpty, let channel0 = bufferList[0].mData {
+            let left = channel0.assumingMemoryBound(to: Float.self)
+            if bufferList.count >= 2, let channel1 = bufferList[1].mData {
+                let right = channel1.assumingMemoryBound(to: Float.self)
+                VisualizerPCMSource.shared.ingestPlanarStereo(left: left, right: right, frameCount: frameCount)
+            } else {
+                VisualizerPCMSource.shared.ingestMono(left, frameCount: frameCount)
+            }
         }
     }
 }

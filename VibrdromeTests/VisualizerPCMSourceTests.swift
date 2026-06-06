@@ -73,4 +73,24 @@ final class VisualizerPCMSourceTests: XCTestCase {
         source.reset()
         XCTAssertEqual(source.stats.fillFrames, 0)
     }
+
+    /// Phase 1B: `active` defaults false; a caller that honors it (like the EQ
+    /// tap) writes nothing while inactive and writes once enabled.
+    func testActiveFlagGatesWrites() {
+        let source = VisualizerPCMSource(frameCapacity: 64)
+        XCTAssertFalse(source.active)
+        let frames: [Float] = [1, 2, 3, 4]
+
+        if source.active {
+            frames.withUnsafeBufferPointer { source.ingestStereo($0.baseAddress!, frameCount: 2) }
+        }
+        XCTAssertEqual(source.stats.producedFrames, 0) // inactive → no writes
+
+        source.setActiveForTesting(true)
+        XCTAssertTrue(source.active)
+        if source.active {
+            frames.withUnsafeBufferPointer { source.ingestStereo($0.baseAddress!, frameCount: 2) }
+        }
+        XCTAssertEqual(source.stats.producedFrames, 2) // active → writes flow
+    }
 }
