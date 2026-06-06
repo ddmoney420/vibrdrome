@@ -30,6 +30,8 @@ targets:
     supportedDestinations: [iOS, macOS]
     sources:
       - Sources
+      - path: Resources
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vibrdrome.projectmspike
@@ -37,5 +39,8 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
     dependencies:
       - framework: ../../Vendor/MetalANGLE/MetalANGLE.xcframework
+        embed: true
+        codeSign: true
+      - framework: ../../Vendor/projectM/projectM.xcframework
         embed: true
         codeSign: true

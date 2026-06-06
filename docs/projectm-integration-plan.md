@@ -196,3 +196,33 @@ Investigation confirmed projectM **master** removed the Linux-only GLES guard (n
 **C API verified exported:** `projectm_create`, `projectm_create_with_opengl_load_proc`, `projectm_opengl_render_frame`, `projectm_pcm_add_float`, `projectm_set_window_size`, `projectm_set_preset_duration`, `projectm_set_preset_locked`, `projectm_load_preset_file/data`.
 
 **Go/no-go: ✅ GO.** projectM builds for iOS + macOS against MetalANGLE via the master pin; the v4.1.6 blocker is resolved without patching upstream. License attribution (LGPL projectM + bundled GLM/SOIL2/hlslparser/projectm-eval) to be added when the lib is wired in. **Next: wire projectM's GL loader to MetalANGLE and render a `.milk` preset in the spike.**
+
+---
+
+## Phase 0 checkpoint 3 — projectM render wiring — 🔴 BLOCKED: MetalANGLE GLES 3.0 < projectM's required GLES 3.2 (2026-06-05)
+
+Wired the spike: MetalANGLE `MGLKView` GLES3 context → `projectm_create_with_opengl_load_proc` → load `idle.milk` → synthetic stereo PCM → `projectm_opengl_render_frame_fbo`. **Build, link, dylib load all succeed; projectM instance creation returns NULL.**
+
+**What worked (so the failure is precisely bounded):**
+- `import projectM` + link + embed the xcframework. **Install-name fix needed** (re-id each dylib to its real filename in `build-projectm.sh`; otherwise dyld crashes: `Library not loaded: @rpath/libprojectM-4.4.dylib` — only the fully-versioned file is embedded, no symlink).
+- projectM dylib loads; `projectm_get_version_components` → **4.1.0**.
+- MetalANGLE **GLES 3.0** context created; the **GL loader works** via `dlsym(RTLD_DEFAULT, …)` (eglGetProcAddress alone won't resolve core symbols on ANGLE). projectM log: `user_resolver="yes"`.
+
+**Exact failure** (captured via `projectm_set_log_callback`):
+```
+[GladLoader] GLInfo api="GLES" ver="3.0" glsl="OpenGL ES GLSL ES 3.00 (ANGLE 2.1.0.850c87ba5b74)"
+             renderer="ANGLE (Metal Renderer: Apple M5 Pro)" backend="EGL" user_resolver="yes"
+[GladLoader] GL requirements check failed: Version too low: 3.0
+```
+**Root cause:** `src/libprojectM/Renderer/Platform/GladLoader.cpp:50` → `.WithMinimumVersion(3, 2).WithMinimumShaderLanguageVersion(3, 20)`. projectM master requires **GLES 3.2 / GLSL ES 3.20**; **MetalANGLE provides only GLES 3.0** (the 2022/unmaintained "GLES3 90%" ceiling — no 3.1/3.2). projectM master also *uses* ≥3.1 features (e.g. `Framebuffer.hpp:211`, per-buffer color masks).
+
+**Failure category:** **MetalANGLE GLES support** (hard 3.0 ceiling) vs projectM's GLES-3.2 requirement. Not loader, import, link, dylib, preset, shader, or PCM (those work or are never reached).
+
+**Small spike-only patch realistic?** **No clean one.** Lowering projectM's `WithMinimumVersion(3,2)` to `(3,0)` passes the gate but projectM master genuinely uses 3.1/3.2 features → failure just moves to shader-compile/render. The real fix is a **GLES 3.2-capable GL provider**.
+
+**Go/no-go: 🔴 MetalANGLE is a dead end for projectM master (GLES version ceiling).** Options:
+- **(A) Google ANGLE (full/current) Metal backend** — supports GLES 3.2; this is the prompt's **pre-approved fallback** for "blocking GLES3 gaps." Cost: heavier build (depot_tools/gn/gclient) and loses MetalANGLE's MGLKit wrapper (need EGL-on-`CAMetalLayer` surface setup). **Architecture switch → needs approval before switching.**
+- **(B) Older projectM that targets GLES 3.0** — but Apple-GLES support exists only on master, which requires 3.2; likely no single commit satisfies both. Patching projectM down to 3.0 + removing 3.1/3.2 feature use = heavy, risky upstream surgery.
+- **(C) Reconsider** the approach.
+
+**Recommendation:** This is the exact scenario the prompt named ("If MetalANGLE … has blocking GLES3 gaps, the approved fallback is upstream Google ANGLE's Metal backend — stop and report before switching"). **Evaluate (A) Google ANGLE**, pending approval. Stopped before switching architecture per the working agreement.

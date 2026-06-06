@@ -5,5 +5,6 @@
 
 #import <MetalANGLE/MGLKViewController.h>
 #import <MetalANGLE/GLES3/gl3.h>
+#import <MetalANGLE/EGL/egl.h>   // eglGetProcAddress — fed to projectM's GL loader
 
 #endif /* ProjectMSpike_Bridging_Header_h */

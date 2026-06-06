@@ -112,6 +112,13 @@ make_xcframework() {
   mac=$(echo "$SRC"/install-mac/lib/libprojectM-4.*.*.dylib)
   ios=$(echo "$SRC"/install-ios/lib/libprojectM-4.*.*.dylib)
   sim=$(echo "$SRC"/install-ios-sim/lib/libprojectM-4.*.*.dylib)
+  # The dylib's install name is @rpath/libprojectM-4.4.dylib but only the fully
+  # versioned file (libprojectM-4.4.1.0.dylib) gets embedded by -create-xcframework
+  # (no symlinks), so dyld can't find it at runtime. Re-id each to its real
+  # filename so the embedded file and the load command match.
+  for L in "$ios" "$sim" "$mac"; do
+    install_name_tool -id "@rpath/$(basename "$L")" "$L"
+  done
   rm -rf "$OUT/projectM.xcframework"
   log "Creating projectM.xcframework"
   xcodebuild -create-xcframework \
