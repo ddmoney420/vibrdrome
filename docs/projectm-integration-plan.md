@@ -226,3 +226,24 @@ Wired the spike: MetalANGLE `MGLKView` GLES3 context → `projectm_create_with_o
 - **(C) Reconsider** the approach.
 
 **Recommendation:** This is the exact scenario the prompt named ("If MetalANGLE … has blocking GLES3 gaps, the approved fallback is upstream Google ANGLE's Metal backend — stop and report before switching"). **Evaluate (A) Google ANGLE**, pending approval. Stopped before switching architecture per the working agreement.
+
+---
+
+## Phase 0 checkpoint 4 — narrow GLES-gate patch → projectM RENDERS on MetalANGLE GLES 3.0 (2026-06-05)
+
+**Google ANGLE ruled out at the source level (read-first, no build):** ANGLE `main` caps its Metal backend at GLES 3.0 — `src/libANGLE/renderer/metal/mtl_common.h:175` `constexpr gl::Version kMaxSupportedGLVersion = gl::Version(3, 0)`, and `DisplayMtl.mm:448` `getMaxConformantESVersion()` = `std::min(…, gl::Version(3, 0))`. Same ceiling as MetalANGLE (which is a fork of this backend); ANGLE's ES 3.2 conformance is **Vulkan-only**. No projectM "sweet-spot" commit exists either — the 3.2 gate, the GLAD/GLProbe version-check, and the `projectm_create_with_opengl_load_proc` API all landed in one commit (`c7754456d`).
+
+**Why the patch is defensible — projectM's GLES gate is inconsistent with its own GLES code, which is ES 3.0 / GLSL ES 3.00:**
+- All GLES shaders are `#version 300 es` — `Renderer/CopyTexture.cpp:7`, `Renderer/TransitionShaderManager.cpp:33`, `UserSprites/MilkdropSprite.cpp`; **no `#version 310/320 es` anywhere** in the GLES path.
+- The only ES-3.1 entry point, `glColorMaski`, is `#ifdef USE_GLES`-compiled **out** in favor of `glColorMask` — `Renderer/Framebuffer.cpp:319-324`.
+- **No** unconditional ES-3.1/3.2 calls (no compute, image load/store, geometry/tessellation shaders).
+- The gate is a hard create-failure: `GladLoader.cpp:50-51` → `GLProbe.cpp:765` → `GladLoader::Initialize()` returns false → `ProjectMCWrapper.cpp:89` returns `nullptr`.
+- So the `(3,2)/(3,20)` minimum is over-strict vs. the code it guards; lowering it to `(3,0)/(3,0)` realigns the gate with reality rather than forcing an unsupported config.
+
+**Patch (carried, not forked):** `scripts/build-projectm.sh` → `patch_gles_gate` applies a documented `sed` to the pinned source on every checkout: `WithMinimumVersion(3,2)→(3,0)` and `WithMinimumShaderLanguageVersion(3,20)→(3,0)` in `GladLoader.cpp`. Only the GLES gate; the desktop-GL gate (`(3,3)/(3,30)`, lines 60-61) is left untouched. (LGPL: projectM is already built from source as a dynamic lib; this 2-number source change is documented and reproducible.)
+
+**Result — macOS: ✅ projectM creates, loads the preset, and renders at 60 fps** via MetalANGLE GLES 3.0. Proof: `projectm_created=YES, version=4.1.0, preset_loaded=true, rendering=YES, fps=60`. projectM log: `GLInfo api="GLES" ver="3.0" glsl="OpenGL ES GLSL ES 3.00 (ANGLE 2.1.0.850c87ba)" renderer="ANGLE (Metal Renderer: Apple M5 Pro)"` — **no shader-compile or GL error lines** (no `pm[4]`/`pm[5]`). Preset: bundled `idle.milk` (vibrdrome_plasma). The static audit is empirically confirmed: projectM's GLES path runs on a 3.0 context.
+
+**iPhone:** pending (device was locked at test time — iOS suspends GPU work when locked; re-run when unlocked).
+
+**Bottom line:** MetalANGLE (already built + proven at GLES 3.0) is a viable GL provider for projectM after this narrow gate patch — **no Google ANGLE, no MoltenVK, no architecture switch.**

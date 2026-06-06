@@ -66,7 +66,29 @@ fetch_src() {
       && git submodule update --init --recursive )
   local have; have="$(cd "$SRC" && git rev-parse HEAD)"
   [ "$have" = "$PIN_SHA" ] || fail "pin mismatch: HEAD=$have expected=$PIN_SHA"
-  log "Source at $PIN_SHA (+ submodules)"
+  patch_gles_gate
+  log "Source at $PIN_SHA (+ submodules, GLES-gate patched)"
+}
+
+# Narrow, documented patch (NOT a fork): lower projectM's GL requirement gate
+# from GLES 3.2 / GLSL ES 3.20 to GLES 3.0 / GLSL ES 3.00. ANGLE's Metal backend
+# (the only GL provider on iOS/macOS) caps at GLES 3.0, but projectM's actual
+# GLES render path is already written for ES 3.0: shaders are "#version 300 es"
+# (Renderer/CopyTexture.cpp, TransitionShaderManager.cpp), glColorMaski is
+# #ifdef-compiled out of GLES builds in favor of glColorMask (Renderer/
+# Framebuffer.cpp), and there are no unconditional ES 3.1/3.2 calls (no compute,
+# image load/store, geometry/tessellation). The 3.2/3.20 gate in
+# GladLoader.cpp:50-51 is therefore inconsistent with the code it guards; this
+# realigns it. Re-applied on every checkout (which --force-resets the file).
+patch_gles_gate() {
+  local f="$SRC/src/libprojectM/Renderer/Platform/GladLoader.cpp"
+  [ -f "$f" ] || fail "GladLoader.cpp not found — projectM layout changed?"
+  sed -i '' \
+    -e 's/\.WithMinimumVersion(3, 2)/.WithMinimumVersion(3, 0)/' \
+    -e 's/\.WithMinimumShaderLanguageVersion(3, 20)/.WithMinimumShaderLanguageVersion(3, 0)/' \
+    "$f"
+  grep -q "WithMinimumVersion(3, 0)" "$f" && grep -q "WithMinimumShaderLanguageVersion(3, 0)" "$f" \
+    || fail "GLES-gate patch did not apply (upstream lines changed?)"
 }
 
 # $1 build-tag  $2 install-dir  $3 angle-headers  rest: extra cmake args

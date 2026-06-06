@@ -137,8 +137,16 @@ final class GLClearViewController: MGLKViewController {
         let now = CACurrentMediaTime()
         if now - lastFpsLog >= 1.0 {
             let fps = framesDisplayed - lastFrames
-            log.notice("projectM rendering fps=\(fps) env=\(env)")
-            writeProof("projectm_created=YES\nprojectm_version=\(pmVersion)\npreset_loaded=\(presetLoaded)\nrendering=YES\nframes=\(frameCount)\nfps=\(fps)\npcm_env=\(env)")
+            // Sample the rendered framebuffer center pixel: a changing value over
+            // time proves a live preset (not a static clear); logged with pcm_env
+            // so reactivity to the synthetic audio can be inspected.
+            var px: [UInt8] = [0, 0, 0, 0]
+            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), UInt32(view.defaultOpenGLFrameBufferID))
+            glReadPixels(GLint(size.width) / 2, GLint(size.height) / 2, 1, 1,
+                         GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &px)
+            spikeAppendPMLog("sample frame=\(frameCount) fps=\(fps) env=\(String(format: "%.2f", env)) center_px=(\(px[0]),\(px[1]),\(px[2]))")
+            log.notice("projectM rendering fps=\(fps) env=\(env) px=(\(px[0]),\(px[1]),\(px[2]))")
+            writeProof("projectm_created=YES\nprojectm_version=\(pmVersion)\npreset_loaded=\(presetLoaded)\nrendering=YES\nframes=\(frameCount)\nfps=\(fps)\npcm_env=\(env)\ncenter_px=(\(px[0]),\(px[1]),\(px[2]))")
             lastFrames = framesDisplayed
             lastFpsLog = now
         }
