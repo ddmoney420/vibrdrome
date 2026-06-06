@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch vendor frameworks
+        run: scripts/fetch-vendor.sh
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
@@ -61,6 +64,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch vendor frameworks
+        run: scripts/fetch-vendor.sh
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
@@ -93,6 +99,9 @@ jobs:
     needs: [build-ios]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch vendor frameworks
+        run: scripts/fetch-vendor.sh
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
