@@ -146,6 +146,9 @@ struct VisualizerView: View {
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer = false
     @AppStorage(UserDefaultsKeys.visualizerMode) private var selectedModeRaw = VisualizerMode.classic.rawValue
     @AppStorage(UserDefaultsKeys.visualizerMilkdropWarningShown) private var milkdropWarningShown = false
+    @AppStorage(UserDefaultsKeys.milkdropPresetName) private var milkdropPresetName = "vibrdrome_plasma"
+    @AppStorage(UserDefaultsKeys.milkdropShuffle) private var milkdropShuffle = true
+    @AppStorage(UserDefaultsKeys.milkdropPresetDuration) private var milkdropPresetDuration = 20
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5
@@ -159,6 +162,7 @@ struct VisualizerView: View {
     @State private var showPresetPicker = false
     @State private var showWarning = false
     @State private var showMilkdropWarning = false
+    @State private var milkdropElapsed: Double = 0
     #if os(macOS)
     @State private var nsWindow: NSWindow?
     #endif
@@ -171,6 +175,11 @@ struct VisualizerView: View {
     }
 
     private var selectedMode: VisualizerMode { VisualizerMode(rawValue: selectedModeRaw) ?? .classic }
+
+    private let milkdropLibrary = ProjectMPresetLibrary()
+    private var currentMilkdropPreset: ProjectMPreset? {
+        milkdropLibrary.preset(id: milkdropPresetName) ?? milkdropLibrary.presets.first
+    }
 
     private var isSimulatorBuild: Bool {
         #if targetEnvironment(simulator)
@@ -205,7 +214,7 @@ struct VisualizerView: View {
             ZStack {
                 // Visualizer canvas — Classic (Metal shaders) or MilkDrop (projectM).
                 if effectiveMode == .milkdrop {
-                    ProjectMVisualizerSurface()
+                    ProjectMVisualizerSurface(presetURL: currentMilkdropPreset?.url)
                         .ignoresSafeArea()
                 } else {
                     TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
@@ -236,10 +245,19 @@ struct VisualizerView: View {
         .statusBarHidden(true)
         #endif
         .onReceive(timer) { _ in
-            // MilkDrop drives its own PCM ring; only the Classic path needs the FFT/time pump.
-            guard effectiveMode == .classic, !reduceMotion else { return }
-            updateTime()
-            updateSpectrum()
+            if effectiveMode == .milkdrop {
+                // Swift-managed preset auto-advance. Only while playing; duration 0 = off.
+                guard milkdropPresetDuration > 0, engine.isPlaying else { return }
+                milkdropElapsed += 1.0 / 60.0
+                if milkdropElapsed >= Double(milkdropPresetDuration) {
+                    milkdropElapsed = 0
+                    advanceMilkdropPreset()
+                }
+            } else if !reduceMotion {
+                // MilkDrop drives its own PCM ring; only Classic needs the FFT/time pump.
+                updateTime()
+                updateSpectrum()
+            }
         }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.5)) {
@@ -257,8 +275,12 @@ struct VisualizerView: View {
                 .onEnded { value in
                     if value.translation.height > 100 {
                         dismiss()
-                    } else if abs(value.translation.width) > 50, effectiveMode == .classic {
-                        cyclePreset(forward: value.translation.width < 0)
+                    } else if abs(value.translation.width) > 50 {
+                        if effectiveMode == .classic {
+                            cyclePreset(forward: value.translation.width < 0)
+                        } else {
+                            cycleMilkdropPreset(forward: value.translation.width < 0)
+                        }
                     }
                 }
         )
@@ -453,12 +475,7 @@ struct VisualizerView: View {
                         }
                     }
                 } else {
-                    Text("MilkDrop — single preset for now")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                    milkdropControls
                 }
             }
         }
@@ -515,6 +532,87 @@ struct VisualizerView: View {
             selectedModeRaw = VisualizerMode.classic.rawValue
         }
         showPresetPicker = false
+    }
+
+    // MARK: - MilkDrop preset controls (Phase 2D)
+
+    @ViewBuilder
+    private var milkdropControls: some View {
+        Toggle("Shuffle", isOn: $milkdropShuffle)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .accessibilityIdentifier("milkdropShuffleToggle")
+
+        HStack {
+            Text("Duration")
+            Spacer()
+            Picker("Duration", selection: $milkdropPresetDuration) {
+                Text("Off").tag(0)
+                Text("10s").tag(10)
+                Text("20s").tag(20)
+                Text("30s").tag(30)
+                Text("60s").tag(60)
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("milkdropDurationPicker")
+
+        Divider().padding(.leading, 52)
+
+        VStack(spacing: 0) {
+            ForEach(milkdropLibrary.presets) { p in
+                Button {
+                    selectMilkdropPreset(p.id)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "waveform.circle")
+                            .frame(width: 24)
+                            .foregroundColor(.accentColor)
+                        Text(p.displayName)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if p.id == currentMilkdropPreset?.id {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+                if p != milkdropLibrary.presets.last {
+                    Divider().padding(.leading, 52)
+                }
+            }
+        }
+        .accessibilityIdentifier("milkdropPresetList")
+    }
+
+    private func selectMilkdropPreset(_ id: String) {
+        milkdropPresetName = id
+        milkdropElapsed = 0          // reset the auto-advance clock on manual choice
+        showPresetPicker = false
+    }
+
+    /// Auto-advance target: random (shuffle) or sequential next.
+    private func advanceMilkdropPreset() {
+        let nextPreset = milkdropShuffle
+            ? milkdropLibrary.random(excluding: milkdropPresetName)
+            : milkdropLibrary.next(after: milkdropPresetName)
+        if let nextPreset { milkdropPresetName = nextPreset.id }
+    }
+
+    /// Manual swipe cycle — always sequential (predictable direction), regardless
+    /// of shuffle. Resets the auto-advance clock.
+    private func cycleMilkdropPreset(forward: Bool) {
+        let target = forward
+            ? milkdropLibrary.next(after: milkdropPresetName)
+            : milkdropLibrary.previous(before: milkdropPresetName)
+        if let target { milkdropPresetName = target.id }
+        milkdropElapsed = 0
     }
 
     // MARK: - Animation

@@ -86,6 +86,9 @@ enum UserDefaultsKeys {
     static let visualizerPreset = "visualizerPreset"
     static let visualizerMode = "visualizerMode"
     static let visualizerMilkdropWarningShown = "visualizerMilkdropWarningShown"
+    static let milkdropPresetName = "milkdropPresetName"
+    static let milkdropShuffle = "milkdropShuffle"
+    static let milkdropPresetDuration = "milkdropPresetDuration"
 
     // MARK: - Now Playing Toolbar
 

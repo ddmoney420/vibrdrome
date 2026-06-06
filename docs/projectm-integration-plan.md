@@ -612,5 +612,61 @@ licenses screen, no CI, no Vendor commits, no Settings mirror.
   **absent**. `otool` unchanged (frameworks already shipping from 2B).
 - **Change scope:** no `project.yml`, `.github/`, or `Vendor/` changes.
 
-**Phase 2C status: VERIFIED, awaiting commit approval.** Next: 2D (preset bundle +
-switching) — design first, separate approval.
+**Phase 2C status: ✅ COMMITTED + PUSHED** (`e100b96`, `feature/projectm-spike`).
+
+---
+
+## Phase 2D — preset corpus + Swift-managed switching: ✅ VERIFIED (2026-06-06)
+
+Goal (only): bundle a **clean, Vibrdrome-owned** preset corpus and add Swift-managed
+list / next / previous / random / shuffle / duration switching. No community
+presets, no playlist library, no licenses screen, no CI/Vendor changes.
+
+### Corpus + licensing (Path A — clean only)
+- **3 Vibrdrome-authored presets** bundled: `vibrdrome_plasma.milk` (renamed from
+  `idle.milk`, identical content), `vibrdrome_kaleidoscope.milk`,
+  `vibrdrome_tunnel.milk` — copied from the Android `vibrdrome` repo; **our
+  originals** (no third-party attribution markers).
+- `Presets/NOTICE.txt` documents that these are Vibrdrome-authored and that the
+  community presets (Geiss/Rovastar/Aderrasi/Zylot/EoS/Mstress/Stahlregen) are
+  **intentionally not bundled, pending license/redistribution clearance**.
+- The ~18 community presets in the Android repo remain a **later task** (license
+  clearance required) — not shipped here.
+
+### What was built
+- `ProjectMPresetLibrary` (pure, unit-tested): enumerates bundled `.milk`,
+  sequential `next`/`previous` (wrap) + `random(excluding:)`; display names strip
+  the `vibrdrome_` prefix → Plasma / Kaleidoscope / Tunnel.
+- `ProjectMRenderer.loadPreset(url:hardCut:)` (smooth `hardCut: false`) +
+  `createIfNeeded(initialPreset:)`; projectM stays **preset-locked**, every
+  transition Swift-driven, **no `projectM-4-playlist`**.
+- `ProjectMVisualizerSurface(presetURL:)` pushes the current preset to the VC
+  (`setPreset`), which loads it (or uses it on create).
+- MilkDrop popover gains: **Shuffle** toggle, **Duration** picker
+  (Off/10/20/30/60s), and the **3-preset list**. Swipe left/right cycles
+  next/previous. a11y ids `milkdropShuffleToggle` / `milkdropDurationPicker` /
+  `milkdropPresetList`.
+- Keys `milkdropPresetName` / `milkdropShuffle` (default ON) /
+  `milkdropPresetDuration` (default 20; `0` = manual/off), all in `backupKeys`.
+- **Auto-advance runs only while `engine.isPlaying`** (paused → no advance);
+  duration `0` disables it; manual select/swipe resets the clock.
+
+### Verification results
+- **`scripts/verify-build.sh`: RESULT: PASS** (lint 0, iOS/macOS/watchOS 0-warning,
+  unit + UI rotation).
+- **`ProjectMPresetLibraryTests`** (10 cases) pass — wrap, random-excludes-current,
+  empty/single edges, display-name derivation.
+- **iOS device (you confirmed):** all 3 render; tap-select + swipe next/prev work;
+  Shuffle 20s auto-advances **only while playing**; pausing stops it; Duration Off
+  disables it; MilkDrop→Classic still tears down.
+- **macOS (you confirmed):** preset list + Shuffle/Duration + preset switch work.
+- **Bundle:** exactly **3 `.milk` + NOTICE.txt** in Debug and Release apps.
+- **otool:** only `libprojectM-4.4.1.0.dylib` — **no playlist library**.
+- **Release:** iOS + macOS build; 3 presets ship; DEBUG strings absent.
+- **Change scope:** no `project.yml`, `.github/`, or `Vendor/` changes (presets
+  auto-bundle via the existing glob).
+
+**Phase 2D status: VERIFIED, awaiting commit approval.** Next: 2E (licensing +
+macOS release: licenses/acknowledgements screen, sign+notarize the embedded LGPL
+dylibs) — design first, separate approval. Community preset corpus remains a
+separate, license-gated task.

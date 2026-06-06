@@ -33,19 +33,28 @@ final class ProjectMRenderer: @unchecked Sendable {
     var isCreated: Bool { pm != nil }
 
     /// Create lazily on the first frame that has a real drawable size (creation
-    /// before an FBO is bound returns NULL — confirmed in the spike). Loads and
-    /// locks the single Phase 2B preset.
-    func createIfNeeded(drawableSize size: CGSize) {
+    /// before an FBO is bound returns NULL — confirmed in the spike). Loads the
+    /// given preset (or the first bundled `.milk` as a fallback) and keeps projectM
+    /// preset-locked — every transition is Swift-driven (Phase 2D), no playlist lib.
+    func createIfNeeded(drawableSize size: CGSize, initialPreset: URL?) {
         guard pm == nil, !triedCreate, size.width > 0, size.height > 0 else { return }
         triedCreate = true
         guard let handle = projectm_create_with_opengl_load_proc(Self.loadProc, nil) else { return }
         pm = handle
         projectm_set_window_size(handle, Int(size.width), Int(size.height))
         lastSize = size
-        if let path = Bundle.main.path(forResource: "idle", ofType: "milk") {
-            path.withCString { projectm_load_preset_file(handle, $0, false) }
+        let preset = initialPreset
+            ?? Bundle.main.urls(forResourcesWithExtension: "milk", subdirectory: nil)?.first
+        if let preset {
+            preset.path.withCString { projectm_load_preset_file(handle, $0, false) }
         }
-        projectm_set_preset_locked(handle, true)   // 2B: one preset, no switching
+        projectm_set_preset_locked(handle, true)
+    }
+
+    /// Switch to a preset on the render thread. `hardCut: false` blends smoothly.
+    func loadPreset(url: URL, hardCut: Bool = false) {
+        guard let pm else { return }
+        url.path.withCString { projectm_load_preset_file(pm, $0, hardCut) }
     }
 
     /// Feed interleaved-stereo frames (length `frames * 2`). projectM keeps a

@@ -19,6 +19,7 @@ final class ProjectMViewController: MGLKViewController {
     private static let drainChunk = 2048
     private var scratch = [Float](repeating: 0, count: ProjectMViewController.drainChunk * 2)
     private var consuming = false
+    private var currentPresetURL: URL?
 
     #if DEBUG
     private var energyAccum: Double = 0
@@ -111,12 +112,23 @@ final class ProjectMViewController: MGLKViewController {
     override func viewWillDisappear() { super.viewWillDisappear(); stopConsuming() }
     #endif
 
+    /// Push the current preset from SwiftUI (Phase 2D). Loads it immediately if the
+    /// engine already exists; otherwise it is used as the initial preset on create.
+    /// `nil` keeps the renderer's first-bundled-preset fallback (DEBUG test entry).
+    func setPreset(_ url: URL?) {
+        guard url != currentPresetURL else { return }
+        currentPresetURL = url
+        if let url, renderer.isCreated {
+            renderer.loadPreset(url: url, hardCut: false)
+        }
+    }
+
     // MARK: - Render loop (main thread)
 
     override func mglkView(_ view: MGLKView!, drawIn rect: CGRect) {
         guard consuming else { return }
         let size = glView?.drawableSize ?? .zero
-        renderer.createIfNeeded(drawableSize: size)
+        renderer.createIfNeeded(drawableSize: size, initialPreset: currentPresetURL)
 
         // Drain the SPSC ring fully, feeding each chunk to projectM.
         scratch.withUnsafeMutableBufferPointer { buffer in
@@ -170,15 +182,17 @@ final class ProjectMViewController: MGLKViewController {
 }
 
 /// Embeddable MilkDrop surface (no test chrome). Used by the user-facing
-/// visualizer (Phase 2C) and by the DEBUG test entry below.
+/// visualizer (Phase 2C+). `presetURL` is the Swift-managed current preset
+/// (Phase 2D); `nil` uses the renderer's first-bundled-preset fallback.
 struct ProjectMVisualizerSurface: View {
-    var body: some View { ProjectMContainer() }
+    var presetURL: URL?
+    var body: some View { ProjectMContainer(presetURL: presetURL) }
 }
 
 /// DEBUG test entry host — wraps the surface with a title (Settings ▸ Debug Tools).
 struct ProjectMVisualizerView: View {
     var body: some View {
-        ProjectMVisualizerSurface()
+        ProjectMVisualizerSurface(presetURL: nil)
             .ignoresSafeArea()
             .navigationTitle("projectM MilkDrop Test")
     }
@@ -186,8 +200,15 @@ struct ProjectMVisualizerView: View {
 
 #if canImport(UIKit)
 private struct ProjectMContainer: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> ProjectMViewController { ProjectMViewController() }
-    func updateUIViewController(_ vc: ProjectMViewController, context: Context) {}
+    let presetURL: URL?
+    func makeUIViewController(context: Context) -> ProjectMViewController {
+        let vc = ProjectMViewController()
+        vc.setPreset(presetURL)
+        return vc
+    }
+    func updateUIViewController(_ vc: ProjectMViewController, context: Context) {
+        vc.setPreset(presetURL)
+    }
     // Stop the consumer immediately when the surface is removed (MilkDrop → Classic
     // toggle in the open visualizer, or full dismiss).
     static func dismantleUIViewController(_ vc: ProjectMViewController, coordinator: ()) {
@@ -196,8 +217,15 @@ private struct ProjectMContainer: UIViewControllerRepresentable {
 }
 #else
 private struct ProjectMContainer: NSViewControllerRepresentable {
-    func makeNSViewController(context: Context) -> ProjectMViewController { ProjectMViewController() }
-    func updateNSViewController(_ vc: ProjectMViewController, context: Context) {}
+    let presetURL: URL?
+    func makeNSViewController(context: Context) -> ProjectMViewController {
+        let vc = ProjectMViewController()
+        vc.setPreset(presetURL)
+        return vc
+    }
+    func updateNSViewController(_ vc: ProjectMViewController, context: Context) {
+        vc.setPreset(presetURL)
+    }
     static func dismantleNSViewController(_ vc: ProjectMViewController, coordinator: ()) {
         vc.stopConsuming()
     }
