@@ -145,3 +145,37 @@ current Xcode and renders GLES3 on a real iPhone + a Mac. **It does.**
 **Not yet exercised:** GLES3 *render* in the iOS **simulator** (sim slice builds; device is source of truth per plan — verify/gate later). And whether projectM v4's shaders hit MetalANGLE's "GLES3 90%" gap — that's the next risk.
 
 **Verdict:** **GO on MetalANGLE** — no Google ANGLE fallback needed. Next checkpoint: projectM v4.1.6 build (`scripts/build-projectm.sh`, needs `cmake` — not yet installed), wired to ANGLE's GLES3, **playlist library skipped for v1**.
+
+---
+
+## Phase 0 checkpoint 2 — projectM v4.1.6 build — 🔴 BLOCKED (2026-06-05)
+
+Branch `feature/projectm-spike`. Goal: build libprojectM **v4.1.6** (commit `3158ee615eaafd93a8912b5f6dd84a9c47b2e00a`) as a shared xcframework wired to MetalANGLE GLES3. **Blocked at CMake configure by an upstream platform gate — projectM v4.1.6 has no Apple GLES path.** `cmake` installed (4.3.3, Homebrew).
+
+**Whether projectM built:** No — fails at configure, before compiling anything.
+
+**Exact error (verified, reproducible via `scripts/build-projectm.sh configure`):**
+```
+-- Building for OpenGL Embedded Profile
+CMake Error at CMakeLists.txt:169 (message):
+  OpenGL ES 3 support is currently only available for Linux platforms.
+-- Configuring incomplete, errors occurred!
+```
+Root cause: `CMakeLists.txt` ~165–178 hard-gates `ENABLE_GLES` to `CMAKE_SYSTEM_NAME == Linux | Android` and `FATAL_ERROR`s otherwise. And `cmake/gles/FindOpenGL.cmake` only resolves `OpenGL::GLES3` on its Linux branch (`OPENGL_GLES3_INCLUDE_DIR` via `find_path GLES3/gl3.h`, `OPENGL_gles3_LIBRARY` via `find_library`); on Apple it finds only the desktop OpenGL framework.
+
+**Exact CMake flags used:** `-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DENABLE_GLES=ON -DENABLE_PLAYLIST=OFF -DENABLE_SYSTEM_PROJECTM_EVAL=OFF -DENABLE_SYSTEM_GLM=OFF -DENABLE_SDL_UI=OFF -DBUILD_TESTING=OFF`. (Validated against the v4.1.6 option set; bundled `glm`/`hlslparser`/`SOIL2` are in-tree, `projectm-eval` submodule fetched OK at `811eea5`. These flags are correct — the block is upstream's platform guard, not the flags.)
+
+**Output xcframework path / size:** none (blocked before build).
+**Headers / modulemap status:** not reached.
+**MetalANGLE / GLES linking issues:** not reached — fails inside projectM's own configure *before* any MetalANGLE wiring. The intended wiring is clear: set `OPENGL_GLES3_INCLUDE_DIR` → MetalANGLE `Headers`, `OPENGL_gles3_LIBRARY` → MetalANGLE binary, create `OpenGL::GLES3`.
+**License files added:** none (no successful build to attribute yet).
+**Can the spike import/link projectM yet:** No.
+
+**Prompt conflict:** Locked decision #1 ("its OpenGL ES 3.0 rendering path … the same path the Android builds use, so it is maintained, not legacy") is true for **Android/Linux** but **false for Apple** in v4.1.6 — GLES on iOS/macOS is explicitly unsupported and `FATAL_ERROR`s at configure.
+
+**Go/no-go: 🔴 NO-GO as-is.** Options (need your decision — patching upstream's deliberate platform support is the architecture-adjacent change to surface first):
+- **(A) Patch v4.1.6:** allow Darwin in the line-169 guard **and** patch `cmake/gles/FindOpenGL.cmake` (or pre-create the target) so `OpenGL::GLES3` resolves to MetalANGLE. Risk: upstream never validated Apple GLES — likely further Apple-specific issues beyond the guard; effort unknown.
+- **(B) Re-pin a newer projectM** (master / a later tag) if it added Apple/iOS GLES support — preferred if available, avoids carrying patches.
+- **(C) Reconsider GL strategy** — only with your direction; do not switch architecture without approval.
+
+**Recommendation:** quick-check option **B** (does a newer projectM support Apple GLES?) before committing to the **A** patch. Stopped here per the working agreement.
