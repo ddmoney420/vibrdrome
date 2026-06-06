@@ -118,3 +118,30 @@ Exactly as the prompt's Phase 0, **outside the app target**, in `spike/ProjectMS
 3. ❓ Decide: projectM **playlist library** vs. self-managed presets (Android does the latter).
 4. ❓ Commit policy for `Vendor/*.xcframework` (binary in-repo vs. reproducible fetch) — your call per the working agreement.
 5. ❓ Capture Android's exact default preset duration / shuffle / hard-cut values from `VisualizerScreen.kt` for parity.
+
+---
+
+## Phase 0 results — MetalANGLE toolchain spike — ✅ GO (2026-06-05)
+
+Branch `feature/projectm-spike`. Goal: prove MetalANGLE still builds on the
+current Xcode and renders GLES3 on a real iPhone + a Mac. **It does.**
+
+**Build** — `scripts/build-metalangle.sh` (committed; reproducible):
+- Pinned `kakashidinho/metalangle` tag **`gles3-0.0.8`** = commit **`850c87ba5b744c7c39f30c66bacdc9648d15067a`**.
+- Recipe: clone pinned → `ios/xcode/fetchDependencies.sh` (git-clones glslang / SPIRV-Cross / jsoncpp from chromium.googlesource.com — **no depot_tools/gn/gclient needed**) → `xcodebuild` the dynamic-framework schemes `MetalANGLE` (iphoneos, iphonesimulator) and `MetalANGLE_mac` (macosx) → `xcodebuild -create-xcframework`.
+- **Builds clean on Xcode 26** (only harmless warnings: deployment-target 9.0 floor; umbrella-header/module-map note).
+- Output (gitignored, NOT committed): `Vendor/MetalANGLE/MetalANGLE.xcframework`, **51 MB total** — slices `ios-arm64` (9.1 MB), `ios-arm64_x86_64-simulator` (19 MB), `macos-arm64_x86_64` (20 MB). Ships MGLKit + `GLES3/gl3.h` headers.
+
+**Runtime proof** — `spike/ProjectMSpike` (SwiftUI + `MGLKViewController` GLES3 clear-screen, ~30 lines; committed):
+| Target | GL_VERSION | fps |
+|---|---|---|
+| Physical iPhone (00008150, iOS 26.5.1) | `OpenGL ES 3.0.0 (ANGLE 2.1.0.850c87ba5b74)` | **60** |
+| Mac (Apple Silicon) | `OpenGL ES 3.0.0 (ANGLE 2.1.0.850c87ba5b74)` | **61** |
+
+(The ANGLE version string embeds the pinned commit `850c87ba`, confirming provenance. Proof captured via a file the spike writes — `screencapture`/unified-log were blocked in this environment.)
+
+**Gotcha (fixed, in spike project.yml):** the multiplatform target needed `LD_RUNPATH_SEARCH_PATHS` to include `@executable_path/../Frameworks` for the macOS bundle layout (iOS uses `@executable_path/Frameworks`); without it the Mac app dyld-crashed on the embedded framework.
+
+**Not yet exercised:** GLES3 *render* in the iOS **simulator** (sim slice builds; device is source of truth per plan — verify/gate later). And whether projectM v4's shaders hit MetalANGLE's "GLES3 90%" gap — that's the next risk.
+
+**Verdict:** **GO on MetalANGLE** — no Google ANGLE fallback needed. Next checkpoint: projectM v4.1.6 build (`scripts/build-projectm.sh`, needs `cmake` — not yet installed), wired to ANGLE's GLES3, **playlist library skipped for v1**.

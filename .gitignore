@@ -41,3 +41,11 @@ build-dmg/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output/
+
+# projectM spike — local build artifacts (not committed yet)
+Vendor/
+spike/.build/
+spike/**/*.xcodeproj
+spike/**/.dd
+spike/**/.dd-ios
+spike/**/DerivedData/
