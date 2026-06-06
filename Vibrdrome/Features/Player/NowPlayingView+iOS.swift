@@ -479,7 +479,7 @@ extension NowPlayingView {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $quickSettingsDetent)
         .presentationDragIndicator(.visible)
     }
 

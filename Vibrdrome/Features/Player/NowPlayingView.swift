@@ -36,6 +36,9 @@ struct NowPlayingView: View {
     @AppStorage(UserDefaultsKeys.showRatingInPlayer) var showRatingInPlayer: Bool = true
     @AppStorage(UserDefaultsKeys.showQueueInPlayer) var showQueueInPlayer: Bool = true
     @State var showQuickSettings = false
+    // Open Quick Settings at the large detent so all rows (incl. Share) are
+    // reachable on small phones (#72); user can still drag down to medium.
+    @State var quickSettingsDetent: PresentationDetent = .large
     #if os(macOS)
     @Environment(\.openWindow) var openWindow
     @State var nsWindow: NSWindow?
@@ -51,6 +54,9 @@ struct NowPlayingView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var appearScale: CGFloat = 0.95
     @State private var appearOpacity: Double = 0
+    #if DEBUG
+    @State private var showPCMDebug = false
+    #endif
 
     var body: some View {
         mainContent
@@ -77,6 +83,18 @@ struct NowPlayingView: View {
             .task(id: engine.currentSong?.id ?? engine.currentRadioStation?.id) {
                 await loadAlbumArt()
             }
+            #if DEBUG
+            // DEBUG-only PCM pipeline diagnostics (Phase 1D). Triple-tap to toggle.
+            // Compiled out of release. Reads/drains VisualizerPCMSource only.
+            .overlay(alignment: .top) {
+                if showPCMDebug {
+                    PCMDebugOverlay().padding(.top, 8)
+                }
+            }
+            .simultaneousGesture(
+                TapGesture(count: 3).onEnded { showPCMDebug.toggle() }
+            )
+            #endif
             #if os(macOS)
             .sheet(item: $macSheet) { sheet in
                 switch sheet {
@@ -595,7 +613,9 @@ struct NowPlayingView: View {
     // MARK: - Progress
 
     private var progressSlider: some View {
-        let songDuration = engine.duration > 0 ? engine.duration : Double(engine.currentSong?.duration ?? 1)
+        // Larger of the AVPlayer/server durations, floored by currentTime so the elapsed
+        // timer can never outrun the progress total on short-duration tracks (#58).
+        let songDuration = max(engine.effectiveDuration, engine.currentTime)
         return VStack(spacing: 4) {
             #if os(iOS)
             GeometryReader { geo in

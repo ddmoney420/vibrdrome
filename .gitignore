@@ -34,8 +34,19 @@ build-logs/
 # Secrets & build artifacts (App Store Connect / fastlane)
 *.p8
 build/
+build-dmg/
+.make-dmg.lock
 *.ipa
 *.xcarchive
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/test_output/
+
+# projectM spike — local build artifacts (not committed yet)
+Vendor/
+dist/
+spike/.build/
+spike/**/*.xcodeproj
+spike/**/.dd
+spike/**/.dd-ios
+spike/**/DerivedData/

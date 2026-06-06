@@ -1,5 +1,37 @@
 # Regression Testing Checklist
 
+## Unreleased — Public HTTP server confirmation
+
+- [ ] Public (non-local) HTTP server prompts once per host on save
+- [ ] LAN/private HTTP server does not prompt
+- [ ] HTTPS server does not prompt
+- [ ] Cancel does not save the server
+- [ ] Connect Anyway saves and persists across app restart
+- [ ] Both onboarding add and Settings edit flows behave correctly
+
+## Unreleased — Seek progress on short-duration tracks (#58)
+
+- [ ] Known short-duration/VBR track no longer shows the timer counting past the slider
+- [ ] Slider reaches the true end of the track
+- [ ] Seeking reaches the final seconds
+- [ ] Normal tracks unchanged
+- [ ] iOS Now Playing verified
+- [ ] macOS Now Playing verified
+- [ ] Mini-player verified
+- [ ] Lock screen duration verified where possible
+
+## Unreleased — Small-iPhone layout & navigation (#69, #72, #70)
+
+- [ ] #69: on a small iPhone with no home-indicator inset (SE / 13 mini), the mini player sits clear above the tab bar — tab-bar icons and labels are fully visible and tappable
+- [ ] #69: on a notched iPhone, the mini-player position is unchanged (no extra gap)
+- [ ] #72: open Now Playing → Quick Settings (gear); the sheet opens tall enough that Download and Share are visible and tappable on a small iPhone
+- [ ] #72: the Quick Settings sheet can still be dragged down to the medium size
+- [ ] #70: with overflow tabs present, the bottom-right "More" tab opens an in-app More list (Radio, Settings, etc.)
+- [ ] #70: More → Settings → Player shows a single back-chevron (no stacked double arrow, no stale header behind)
+- [ ] #70: More → Radio and any Radio sub-navigation keep a single back-chevron
+- [ ] #70: the primary tabs (Home + first three) still work; the top-right gear Settings path is unchanged
+- [ ] #70: reordering/hiding tabs (Settings → Tab Bar) still moves items between the visible tabs and the More menu correctly, and the selected tab stays valid
+
 ## Build 54 — OpenSubsonic metadata, security, download crash
 
 - [ ] #59: a multi-artist track (OpenSubsonic `artists` array) shows each artist as a separate tappable link from TrackRow, Now Playing (iOS + macOS), the queue panel, and the macOS track table; each link opens the correct artist

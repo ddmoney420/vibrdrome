@@ -581,6 +581,12 @@ struct SettingsView: View {
             infoRow("API Version", value: "1.16.1", icon: "number.circle.fill", color: .gray)
             offlineQueueStatus
 
+            NavigationLink {
+                AcknowledgementsView()
+            } label: {
+                Label("Acknowledgements", systemImage: "doc.text")
+            }
+
             #if DEBUG
             NavigationLink {
                 DebugView()
@@ -733,6 +739,10 @@ struct SettingsView: View {
         UserDefaultsKeys.disableVisualizer,
         UserDefaultsKeys.showAlbumArtInLists,
         UserDefaultsKeys.visualizerPreset,
+        UserDefaultsKeys.visualizerMode,
+        UserDefaultsKeys.milkdropPresetName,
+        UserDefaultsKeys.milkdropShuffle,
+        UserDefaultsKeys.milkdropPresetDuration,
         UserDefaultsKeys.showVisualizerInToolbar,
         UserDefaultsKeys.showEQInToolbar,
         UserDefaultsKeys.showAirPlayInToolbar,

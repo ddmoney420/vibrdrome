@@ -381,10 +381,11 @@ extension AudioEngine {
     }
 
     func seek(to time: TimeInterval) {
-        // Use song metadata duration as fallback when AVPlayer hasn't reported yet
-        let effectiveDuration = duration > 0 ? duration : Double(currentSong?.duration ?? 0)
-        guard effectiveDuration > 0 || time == 0 else { return }
-        let clampedTime = max(0, min(time, effectiveDuration))
+        // Clamp to the larger of the AVPlayer and server durations so tracks whose
+        // AVPlayer item under-reports duration can still be seeked to the real end (#58).
+        let total = effectiveDuration
+        guard total > 0 || time == 0 else { return }
+        let clampedTime = max(0, min(time, total))
 
         // Cancel any in-progress crossfade ramp on seek
         if isCrossfading {
@@ -599,6 +600,9 @@ extension AudioEngine {
         tearDownPropertyObservers()
         tearDownItemEndObserver()
         if let item = gaplessPlayer?.currentItem {
+            // Gapless advance: the promoted item is now audible — move the
+            // visualizer source token to it (clears the previous item's tap).
+            EQTapProcessor.setVisualizerSource(for: item)
             setupPropertyObservers(for: item, generation: generation)
             setupTrackEndObserver(for: item, generation: generation)
         }

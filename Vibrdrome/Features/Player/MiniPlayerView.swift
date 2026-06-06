@@ -456,8 +456,9 @@ struct MacMiniPlayerView: View {
                     .accessibilityLabel("Repeat")
                 }
 
-                // Seek bar with timestamps
-                let duration = max(engine.duration, Double(engine.currentSong?.duration ?? 1))
+                // Seek bar with timestamps. Larger of AVPlayer/server durations, floored
+                // by currentTime so the elapsed timer can't outrun the total (#58).
+                let duration = max(engine.effectiveDuration, engine.currentTime)
                 HStack(spacing: 6) {
                     Text(formatDuration(sliderValue))
                         .font(.caption2)

@@ -8,6 +8,8 @@ struct ServerConfigView: View {
     @State private var password = ""
     @State private var isTesting = false
     @State private var testResult: String?
+    @State private var showInsecureConfirm = false
+    @State private var pendingSave: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     private var isHTTP: Bool {
@@ -38,11 +40,58 @@ struct ServerConfigView: View {
     }
 
     var body: some View {
-        #if os(macOS)
-        macOSLayout
-        #else
-        iOSLayout
-        #endif
+        Group {
+            #if os(macOS)
+            macOSLayout
+            #else
+            iOSLayout
+            #endif
+        }
+        .alert("Unencrypted Connection", isPresented: $showInsecureConfirm) {
+            Button("Connect Anyway") {
+                if let host = currentHost { acknowledgeInsecure(host) }
+                pendingSave?()
+                pendingSave = nil
+            }
+            Button("Cancel", role: .cancel) { pendingSave = nil }
+        } message: {
+            Text(insecureMessage)
+        }
+    }
+
+    // MARK: - Insecure (public HTTP) save gate
+
+    /// Host of the entered URL, lowercased; nil if unparseable.
+    private var currentHost: String? { URL(string: url)?.host?.lowercased() }
+
+    private var insecureMessage: String {
+        "This server uses an unencrypted HTTP connection over the public internet. "
+            + "Your username, authentication token, library activity, and playback requests "
+            + "could be readable by others on the network path between you and the server. "
+            + "We recommend using HTTPS, such as through a reverse proxy. "
+            + "Local network/home LAN servers are not affected."
+    }
+
+    private func isAcknowledgedInsecure(_ host: String) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: UserDefaultsKeys.acknowledgedInsecureHosts) ?? []).contains(host)
+    }
+
+    private func acknowledgeInsecure(_ host: String) {
+        var acked = UserDefaults.standard.stringArray(forKey: UserDefaultsKeys.acknowledgedInsecureHosts) ?? []
+        guard !acked.contains(host) else { return }
+        acked.append(host)
+        UserDefaults.standard.set(acked, forKey: UserDefaultsKeys.acknowledgedInsecureHosts)
+    }
+
+    /// Run `save` immediately for LAN HTTP and HTTPS; for non-local public HTTP that
+    /// hasn't been acknowledged for this host, show a one-time confirmation first.
+    private func attemptSave(_ save: @escaping () -> Void) {
+        if isHTTP, let host = currentHost, !isAcknowledgedInsecure(host) {
+            pendingSave = save
+            showInsecureConfirm = true
+        } else {
+            save()
+        }
     }
 
     // MARK: - macOS Layout
@@ -102,9 +151,11 @@ struct ServerConfigView: View {
                 // Buttons
                 VStack(spacing: 10) {
                     Button {
-                        appState.saveCredentials(url: url, username: username, password: password, name: name)
-                        if !appState.isConfigured {
-                            testResult = "Invalid server URL. Please enter a valid URL."
+                        attemptSave {
+                            appState.saveCredentials(url: url, username: username, password: password, name: name)
+                            if !appState.isConfigured {
+                                testResult = "Invalid server URL. Please enter a valid URL."
+                            }
                         }
                     } label: {
                         Text("Sign In")
@@ -223,11 +274,13 @@ struct ServerConfigView: View {
 
                 Section {
                     Button {
-                        appState.saveCredentials(url: url, username: username, password: password, name: name)
-                        if appState.isConfigured {
-                            dismiss()
-                        } else {
-                            testResult = "Invalid server URL. Please enter a valid URL."
+                        attemptSave {
+                            appState.saveCredentials(url: url, username: username, password: password, name: name)
+                            if appState.isConfigured {
+                                dismiss()
+                            } else {
+                                testResult = "Invalid server URL. Please enter a valid URL."
+                            }
                         }
                     } label: {
                         Text("Sign In")

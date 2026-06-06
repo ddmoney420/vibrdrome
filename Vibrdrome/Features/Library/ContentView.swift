@@ -23,6 +23,39 @@ struct ContentView: View {
 
     private var engine: AudioEngine { AudioEngine.shared }
 
+    /// Baseline gap between the mini player and a phone that has a bottom
+    /// safe-area inset (notched). These phones get their home-indicator inset
+    /// "for free" from the safe-area-respecting overlay, so 54pt on top clears
+    /// the tab bar.
+    private static let miniPlayerBaseClearance: CGFloat = 54
+
+    /// Clearance for the smallest phones, which have **no** bottom safe-area
+    /// inset (iPhone SE / mini). iOS 26's tab bar is taller, so the old fixed
+    /// 54pt overlapped the tab-bar icons there (#69). Subtracting the live
+    /// bottom inset means notched phones floor back to `miniPlayerBaseClearance`
+    /// and stay exactly as before, while zero-inset phones get the full value.
+    private static let miniPlayerTabBarClearance: CGFloat = 72
+
+    /// The mini player, hung above the tab bar. Shared by both tab-bar layouts
+    /// so the clearance stays consistent. Uses a `GeometryReader` to read the
+    /// live bottom safe-area inset (SwiftUI-native, no UIKit).
+    @ViewBuilder
+    private var miniPlayerOverlay: some View {
+        if engine.currentSong != nil || engine.currentRadioStation != nil {
+            GeometryReader { geometry in
+                let clearance = max(Self.miniPlayerBaseClearance,
+                                    Self.miniPlayerTabBarClearance - geometry.safeAreaInsets.bottom)
+                MiniPlayerView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, clearance)
+            }
+            // Pin to the screen bottom regardless of keyboard presence. Without
+            // this, iPad floating keyboards drag the mini player up to where a
+            // docked keyboard would sit.
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+        }
+    }
+
     var body: some View {
         Group {
             if appState.isConfigured {
@@ -157,19 +190,47 @@ struct ContentView: View {
         }
     }
 
+    /// Slots the compact iPhone tab bar shows before the system would create
+    /// its own "More" overflow. We keep the declared `Tab` count at or below
+    /// this so the system never builds its overflow navigation container —
+    /// that container nesting with each tab's own NavigationStack is what
+    /// produced the stacked double back-chevron (#70). When the visible set
+    /// exceeds this, the extra tabs go into an app-owned "More" tab instead.
+    private static let compactTabSlots = 5
+
     @available(iOS 18.0, macOS 15.0, *)
     private var modernTabView: some View {
-        let order = orderedTabIds
+        // Visible tabs in the user's saved order. Home ("library") is always
+        // first and always a real tab.
+        let visible = orderedTabIds.filter { isTabVisible($0) }
+        let secondary = visible.filter { $0 != "library" }
+
+        // If everything fits, show all tabs directly. Otherwise keep the first
+        // four (Home + 3) as real tabs and route the rest into an app-owned
+        // "More" tab. `- 2` reserves a slot for Home and for the More tab.
+        let fitsDirectly = visible.count <= Self.compactTabSlots
+        let primarySecondary = fitsDirectly
+            ? secondary
+            : Array(secondary.prefix(Self.compactTabSlots - 2))
+        let overflow = fitsDirectly
+            ? []
+            : Array(secondary.dropFirst(Self.compactTabSlots - 2))
+
+        var validValues = Set(["library", "more"])
+        validValues.formUnion(primarySecondary)
+
         return TabView(selection: $selectedTab) {
-            // Tabs rendered in saved order. Each tab checks its own visibility.
-            // Home is always first regardless of saved order.
             Tab("Home", systemImage: "house", value: "library") {
                 LibraryView(navPath: $libraryNavPath)
             }
-            ForEach(order.filter { $0 != "library" && isTabVisible($0) }, id: \.self) { tabId in
-                // Use AnyView to erase types in ForEach
+            ForEach(primarySecondary, id: \.self) { tabId in
                 Tab(tabLabel(tabId), systemImage: tabIcon(tabId), value: tabId) {
                     tabView(for: tabId)
+                }
+            }
+            if !overflow.isEmpty {
+                Tab("More", systemImage: "ellipsis", value: "more") {
+                    appMoreMenu(overflow)
                 }
             }
         }
@@ -180,15 +241,19 @@ struct ContentView: View {
             Haptics.light()
             #endif
         }
+        // If a reorder/visibility change moves the selected tab into the More
+        // overflow (so it's no longer a declared Tab value), fall back to Home
+        // so the TabView always has a valid selection.
+        .onAppear { normalizeSelectedTab(valid: validValues) }
+        .onChange(of: tabBarOrderJSON) { _, _ in normalizeSelectedTab(valid: validValues) }
         .overlay(alignment: .bottom) {
-            if engine.currentSong != nil || engine.currentRadioStation != nil {
-                MiniPlayerView()
-                    .padding(.bottom, 54)
-                    // Pin to the screen bottom regardless of keyboard presence.
-                    // Without this, iPad floating keyboards drag the mini
-                    // player up to where a docked keyboard would sit.
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
+            miniPlayerOverlay
+        }
+    }
+
+    private func normalizeSelectedTab(valid: Set<String>) {
+        if !valid.contains(selectedTab) {
+            selectedTab = "library"
         }
     }
 
@@ -226,21 +291,51 @@ struct ContentView: View {
         }
     }
 
+    /// The bare root view for a tab id, WITHOUT a NavigationStack wrapper. Used
+    /// both as the content of a tab's own stack (`tabView(for:)`) and as a
+    /// pushed destination inside the app-owned More menu — pushing it bare onto
+    /// the More menu's single stack avoids nesting a second NavigationStack
+    /// (the cause of the #70 double back-chevron).
+    @ViewBuilder
+    private func tabRootContent(for id: String) -> some View {
+        switch id {
+        case "library-home": LibraryHomeView()
+        case "artists": ArtistsView()
+        case "albums": AlbumsView(listType: .alphabeticalByName, title: "Albums")
+        case "songs": SongsView()
+        case "genres": GenresView()
+        case "favorites": FavoritesView()
+        case "search": SearchView()
+        case "playlists": PlaylistsView()
+        case "radio": RadioView()
+        case "downloads": DownloadsView()
+        case "settings": SettingsView()
+        default: EmptyView()
+        }
+    }
+
+    /// A tab's content as a real tab: its root wrapped in its own NavigationStack.
     @ViewBuilder
     private func tabView(for id: String) -> some View {
-        switch id {
-        case "library-home": NavigationStack { LibraryHomeView() }
-        case "artists": NavigationStack { ArtistsView() }
-        case "albums": NavigationStack { AlbumsView(listType: .alphabeticalByName, title: "Albums") }
-        case "songs": NavigationStack { SongsView() }
-        case "genres": NavigationStack { GenresView() }
-        case "favorites": NavigationStack { FavoritesView() }
-        case "search": NavigationStack { SearchView() }
-        case "playlists": NavigationStack { PlaylistsView() }
-        case "radio": NavigationStack { RadioView() }
-        case "downloads": NavigationStack { DownloadsView() }
-        case "settings": NavigationStack { SettingsView() }
-        default: EmptyView()
+        NavigationStack { tabRootContent(for: id) }
+    }
+
+    /// App-owned "More" menu. A single NavigationStack listing the overflow
+    /// tabs; each pushes its bare root onto this one stack, so deeper pushes
+    /// (e.g. Settings -> Player) keep a single back-chevron.
+    @ViewBuilder
+    private func appMoreMenu(_ ids: [String]) -> some View {
+        NavigationStack {
+            List {
+                ForEach(ids, id: \.self) { id in
+                    NavigationLink {
+                        tabRootContent(for: id)
+                    } label: {
+                        Label(tabLabel(id), systemImage: tabIcon(id))
+                    }
+                }
+            }
+            .navigationTitle("More")
         }
     }
 
@@ -312,14 +407,7 @@ struct ContentView: View {
             #endif
         }
         .overlay(alignment: .bottom) {
-            if engine.currentSong != nil || engine.currentRadioStation != nil {
-                MiniPlayerView()
-                    .padding(.bottom, 54)
-                    // Pin to the screen bottom regardless of keyboard presence.
-                    // Without this, iPad floating keyboards drag the mini
-                    // player up to where a docked keyboard would sit.
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
+            miniPlayerOverlay
         }
     }
 

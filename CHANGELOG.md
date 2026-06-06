@@ -4,6 +4,17 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Unreleased
+
+**Security:**
+- Added an explicit confirmation when saving a public, non-local HTTP server connection. Local/LAN HTTP servers and HTTPS connections are unchanged.
+
+**Bug fixes:**
+- Fixed the progress slider and time display on tracks whose duration is under-reported by the player: the elapsed time no longer counts past the end of the slider, the total reflects the longer of the player and server durations, and seeking can reach the true end of the track (#58).
+- Fixed the mini player overlapping the tab bar on small iPhones without a home-indicator inset (iPhone SE, mini): the player now clears the taller iOS 26 tab bar, while notched phones are unchanged (#69).
+- Quick Settings (Now Playing -> gear) now opens at full height so the Download and Share rows are reachable on smaller iPhones, where they were previously clipped below the sheet; the sheet can still be dragged down to the medium size (#72).
+- Fixed a stacked double back-arrow when opening Settings -> Player through the bottom-right "More" tab on iPhone: overflow tabs (e.g. Radio, Settings) now use an app-owned More menu instead of the system overflow, so navigating deeper keeps a single back button (#70).
+
 ### Build 54 -- June 1, 2026
 
 **Library & Metadata (OpenSubsonic):**

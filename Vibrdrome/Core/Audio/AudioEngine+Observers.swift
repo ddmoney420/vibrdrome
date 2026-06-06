@@ -44,7 +44,9 @@ extension AudioEngine {
                 guard let self, self.generationValue == observerGeneration else { return }
                 if dur.isNumeric {
                     self.duration = dur.seconds
-                    NowPlayingManager.shared.updateDuration(dur.seconds)
+                    // Report the larger of AVPlayer/server durations to the lock screen
+                    // and CarPlay so they don't show a short total (#58).
+                    NowPlayingManager.shared.updateDuration(self.effectiveDuration)
                 }
             })
 

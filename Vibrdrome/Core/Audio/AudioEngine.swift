@@ -39,6 +39,16 @@ final class AudioEngine {
     var currentRadioStation: InternetRadioStation?
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
+
+    /// Best-known total track duration: the larger of the AVPlayer item duration and
+    /// the server's reported duration. Display/seek-clamp only — it does not affect
+    /// playback and does not modify `duration` itself. Used so tracks whose AVPlayer
+    /// item under-reports duration still show a correct total and can be seeked to the
+    /// real end (#58).
+    var effectiveDuration: TimeInterval {
+        max(duration, Double(currentSong?.duration ?? 0))
+    }
+
     var isBuffering = false
     var isSeeking = false
 
@@ -443,7 +453,7 @@ final class AudioEngine {
                     audioLog.warning("EQ tap skipped: no audio tracks in asset")
                     return
                 }
-                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                if let mix = EQTapProcessor.createAudioMix(for: item, track: track) {
                     item.audioMix = mix
                     audioLog.info("EQ tap applied to item (tracks=\(tracks.count))")
                 } else {
@@ -472,7 +482,7 @@ final class AudioEngine {
             do {
                 let tracks = try await item.asset.loadTracks(withMediaType: .audio)
                 guard self.generation == gen, let track = tracks.first else { return }
-                if let mix = EQTapProcessor.createAudioMix(track: track) {
+                if let mix = EQTapProcessor.createAudioMix(for: item, track: track) {
                     item.audioMix = mix
                 }
             } catch {
@@ -582,6 +592,9 @@ final class AudioEngine {
 
         let item = Self.makePlayerItem(url: url)
         applyEQTapIfNeeded(to: item)
+        // This item is the audible one — make it the visualizer PCM source. Records
+        // intent now; the async tap converges to it on registration.
+        EQTapProcessor.setVisualizerSource(for: item)
 
         if gaplessPlayer == nil {
             gaplessPlayer = AVQueuePlayer(items: [item])
