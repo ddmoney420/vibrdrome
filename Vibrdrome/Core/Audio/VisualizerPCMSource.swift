@@ -22,6 +22,7 @@ final class VisualizerPCMSource: @unchecked Sendable {
     private let sampleRateBits = Atomic<UInt64>(0)
     private let channelCountStore = Atomic<Int>(2)
     private let isActive = Atomic<Bool>(false)
+    private let consumerAttached = Atomic<Bool>(false)
 
     init(frameCapacity: Int = VisualizerPCMSource.defaultFrameCapacity) {
         ring = FloatRingBuffer(frameCapacity: frameCapacity, channelCount: 2)
@@ -57,6 +58,33 @@ final class VisualizerPCMSource: @unchecked Sendable {
     var sourceChannelCount: Int {
         get { channelCountStore.load(ordering: .relaxed) }
         set { channelCountStore.store(newValue, ordering: .relaxed) }
+    }
+
+    // MARK: - Render consumer lifecycle (shipping; Phase 2B)
+
+    /// True while a projectM renderer is the live consumer. The DEBUG PCM overlay
+    /// reads this to stay stats-only — it must not drain the SPSC ring while the
+    /// renderer drains it.
+    var hasActiveConsumer: Bool {
+        consumerAttached.load(ordering: .relaxed)
+    }
+
+    /// The projectM renderer became the consumer: turn on the EQ-tap PCM write and
+    /// mark the ring owned. Called on the main thread when the renderer appears.
+    func beginRenderConsumer() {
+        consumerAttached.store(true, ordering: .relaxed)
+        isActive.store(true, ordering: .relaxed)
+    }
+
+    /// The renderer stopped: turn the tap write off and release ownership.
+    /// Deliberately does NOT call `reset()` — the producer (audio tap) may still be
+    /// running, and `reset()` is not producer-quiesce-safe. Clearing `isActive`
+    /// makes the tap's next callback a no-op; any leftover ring data is harmless
+    /// (the next consumer drains it on its first frame, and projectM keeps only the
+    /// most recent samples from its rolling window).
+    func endRenderConsumer() {
+        isActive.store(false, ordering: .relaxed)
+        consumerAttached.store(false, ordering: .relaxed)
     }
 
     // MARK: - Producer (real-time safe) — wired to the EQ tap in Phase 1B

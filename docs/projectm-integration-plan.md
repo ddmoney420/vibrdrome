@@ -506,5 +506,64 @@ not edited yet** — `ci.yml` is the protected merge gate and this branch is not
 PR'd to `main`. Wire it during PR/main prep, alongside publishing the
 `vendor-frameworks-v1` Release so `fetch-vendor.sh` has live assets.
 
-**Phase 2A status: VERIFIED, awaiting commit approval.** Next: 2B (projectM renderer
-draining the PCM ring) — design first, separate approval.
+**Phase 2A status: ✅ COMMITTED + PUSHED** (`09eb872`, `feature/projectm-spike`).
+
+---
+
+## Phase 2B — projectM renderer + audio (the engine): ✅ VERIFIED (2026-06-06)
+
+Goal (only): the real projectM renderer running **inside the app**, fed by the live
+PCM ring (`VisualizerPCMSource`), rendering an audio-reactive `.milk` preset on
+device + Mac. Shipping engine code reached **only via the DEBUG test entry** until
+the 2C mode picker. No mode picker, no user-facing entry, no preset corpus, no
+preset switching, no licenses screen, no CI changes.
+
+### What was built
+- `ProjectMRenderer` (shipping, `@unchecked Sendable`, render-thread-confined) — owns
+  the `projectm_handle`; create-on-first-frame → `pcm_add_float` → `render_frame_fbo`
+  → `destroy`. GL loader = `dlsym(RTLD_DEFAULT)` then `eglGetProcAddress` (the
+  spike's proven pattern; `RTLD_DEFAULT` reconstructed + commented, no magic value).
+- `ProjectMVisualizerView` / `ProjectMViewController` (shipping) — main-thread
+  `MGLKView` 60 Hz loop; drains the SPSC ring fully each frame and feeds projectM.
+  Background/foreground via MGLKViewController's built-in
+  `pauseOnWillResignActive` / `resumeOnDidBecomeActive` (handle survives bg/fg).
+- `idle.milk` (custom `vibrdrome_plasma`, **we authored it** — no third-party
+  license), bundled automatically by the existing `Vibrdrome` source glob (no
+  `project.yml` change needed; verified `Bundle.main.path` resolves).
+- `VisualizerPCMSource` shipping consumer API: `beginRenderConsumer()` /
+  `endRenderConsumer()` / `hasActiveConsumer`. `endRenderConsumer` does **not**
+  `reset()` (the audio producer may still be running; `reset` is not
+  producer-quiesce-safe — clearing `isActive` no-ops the tap instead).
+- `PCMDebugMonitor` (DEBUG) is now **stats-only** when `hasActiveConsumer` — it does
+  not drain or toggle activation while the renderer is the consumer (single-consumer
+  SPSC preserved). Unit-tested.
+- DEBUG entry: Settings ▸ About ▸ Debug Tools ▸ **projectM MilkDrop Test**.
+
+### Verification results
+- **iOS device (iPhone 17 Pro Max, A19 Pro), playing a track:**
+  `projectm_created=YES`, `preset_loaded=YES`, `fps=60`, `pcm_rms` 0.099→0.214
+  (varying = live audio), `center_px` changing each sample (live render).
+  Ring: `produced=1,602,296`, `consumed=1,598,517`, **`overflow=0`**,
+  `fill=3,779` (= produced−consumed) → the renderer keeps up with **zero loss**
+  (produced≈consumed while active).
+- **macOS (Apple M5 Pro), playing a track:** same — `fps=60`, `pcm_rms`
+  0.20→0.18, `center_px` changing, `produced==consumed`, `fill=0`. `overflow`
+  non-zero but **static** (a focus-loss pause grew it once, then recovery; not
+  growing) — the documented, benign drop-oldest-on-pause behavior.
+- **Proof file path:** `FileManager.default.temporaryDirectory/projectm_proof.txt`
+  (overridable via `$VIBRDROME_MILKDROP_PROOF`); on iOS that's the app container
+  `tmp/`, pulled via `devicectl … appDataContainer`.
+- **Overlay stats-only:** confirmed by `VisualizerSourceConsumerTests` (overlay
+  defers to an attached render consumer; owns activation only when none attached).
+- **otool:** device + Release binaries load `@rpath/MetalANGLE.framework` +
+  `@rpath/libprojectM-4.4.1.0.dylib`; projectM engine symbols referenced.
+- **Release:** iOS + macOS build; DEBUG proof/test-entry strings **absent** from
+  the Release binaries (compiled out); `idle.milk` still bundled; **Release app
+  launches** in the simulator (dyld loads both frameworks, no crash).
+- **`scripts/verify-build.sh`: RESULT: PASS** (SwiftLint 0, iOS/macOS/watchOS
+  0-warning builds, unit + UI rotation tests). One earlier run flaked on
+  `testRapidRotation` (no crash report; 2B code not in that path) and passed clean
+  on re-run.
+
+**Phase 2B status: VERIFIED, awaiting commit approval.** Next: 2C (Classic/MilkDrop
+mode picker + accessibility/sim gating) — design first, separate approval.

@@ -33,13 +33,17 @@ final class PCMDebugMonitor {
 
     private var lastSample: (produced: UInt64, consumed: UInt64, time: CFTimeInterval)?
     private var lastRateTime: CFTimeInterval = 0
+    private var owningActivation = false
     private var timer: Timer?
     private var scratch = [Float](repeating: 0, count: PCMDebugMonitor.scratchFrames * 2)
     private let source = VisualizerPCMSource.shared
     private let log = Logger(subsystem: "com.vibrdrome.app", category: "PCMDebug")
 
     func start() {
-        source.setActiveForTesting(true)
+        // If a projectM renderer is already the consumer, observe only — do NOT
+        // activate or drain (single-consumer SPSC). Otherwise own activation (1D).
+        owningActivation = !source.hasActiveConsumer
+        if owningActivation { source.setActiveForTesting(true) }
         lastSample = nil
         lastRateTime = 0
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -52,8 +56,12 @@ final class PCMDebugMonitor {
     func stop() {
         timer?.invalidate()
         timer = nil
-        source.setActiveForTesting(false)
-        source.reset()
+        // Only deactivate/reset if we owned activation and no renderer took over.
+        if owningActivation && !source.hasActiveConsumer {
+            source.setActiveForTesting(false)
+            source.reset()
+        }
+        owningActivation = false
         producedRate = 0
         consumedRate = 0
         overProductionWarning = false
@@ -61,10 +69,13 @@ final class PCMDebugMonitor {
     }
 
     private func tick() {
-        // Drain the ring (sole dev consumer) so consumed rate is real.
-        scratch.withUnsafeMutableBufferPointer { buffer in
-            guard let base = buffer.baseAddress else { return }
-            while source.read(into: base, maxFrames: Self.scratchFrames) == Self.scratchFrames {}
+        // Drain ONLY when we own the ring. When a renderer is the consumer it
+        // drains; we just read stats (no second reader on the SPSC ring).
+        if owningActivation && !source.hasActiveConsumer {
+            scratch.withUnsafeMutableBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                while source.read(into: base, maxFrames: Self.scratchFrames) == Self.scratchFrames {}
+            }
         }
         let now = CACurrentMediaTime()
         guard now - lastRateTime >= Self.rateInterval else { return }

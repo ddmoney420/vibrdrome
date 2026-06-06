@@ -126,6 +126,11 @@ struct DebugView: View {
             } label: {
                 Label("MetalANGLE GLES3 Test", systemImage: "cube.transparent")
             }
+            NavigationLink {
+                ProjectMVisualizerView()
+            } label: {
+                Label("projectM MilkDrop Test", systemImage: "waveform.circle")
+            }
         }
     }
 
