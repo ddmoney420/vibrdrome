@@ -404,3 +404,34 @@ For Phase 1A approval, bring the **exact ring-buffer design** first:
 - Whether any dependency/package is required.
 
 **Do not implement Phase 1A until approved.**
+
+---
+
+## Phase 1 — PCM pipeline: ✅ SIGNED OFF (on-device, 2026-06-06)
+
+Phases 1A–1D are implemented and verified on a physical iPhone via the DEBUG-only
+`PCM DEBUG` overlay (triple-tap Now Playing), on top of the green automated gate
+(28 unit tests, `verify-build.sh` PASS, Release compile-out clean — 0 `PCMDebug`
+symbols in the release binary).
+
+**On-device overlay result** (David Byrne — "Big Blue Plymouth", 320 kbps MP3):
+- `produced` ≈ `consumed` ≈ **43,873 fps** at **44,100 Hz · 2ch** → essentially
+  exactly 1× (the ~0.5% gap is the 0.5 s rate-averaging window).
+- `fill` **0 / 16,384** — drained and stable, never pinned at capacity.
+- `overflow` **0** — no PCM ever lost (the key data-integrity / no-double-feed signal).
+- **No red `⚠︎ produced > 1.5× sample rate` warning** — produced never spiked to 2×,
+  so crossfade single-source ownership held.
+
+**Scenarios passed:** streamed, downloaded/offline, manual next/previous, gapless
+auto-advance, and **crossfade** (produced stayed ~1×, not 2×; no warning).
+
+**Note on `underrun`:** the counter climbs (e.g. ~1,372) and is **expected /
+benign** — the DEBUG dev consumer requests 4,096 frames every 60 Hz tick but only
+~735 are produced per tick, so each read returns fewer than requested and bumps
+the counter. It means "the consumer wanted more than was buffered," NOT dropped
+audio; `overflow == 0` is the real loss indicator. The Phase 2 projectM renderer
+reads only what it needs per frame, so this counter will not climb the same way.
+
+**Phase 1 status: SIGNED OFF.** Next: Phase 2 (the projectM/MetalANGLE renderer in
+the app as a new "MilkDrop" mode, draining this validated PCM ring, alongside the
+existing Classic visualizer) — planning only, on approval; not started.
