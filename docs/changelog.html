@@ -347,6 +347,31 @@
 
         <div class="timeline">
 
+            <!-- Unreleased -->
+            <div class="timeline-item" data-animate>
+                <div class="build-card">
+                    <div class="build-header">
+                        <span class="build-badge">Unreleased</span>
+                        <span class="build-date">In development</span>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Security</h3>
+                        <ul class="build-list">
+                            <li>Added an explicit confirmation when saving a public, non-local HTTP server connection. Local/LAN HTTP servers and HTTPS connections are unchanged.</li>
+                        </ul>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Bug fixes</h3>
+                        <ul class="build-list">
+                            <li>Fixed the progress slider and time display on tracks whose duration is under-reported by the player: elapsed time no longer counts past the end of the slider, the total reflects the longer of the player and server durations, and seeking can reach the true end of the track (#58).</li>
+                            <li>Fixed the mini player overlapping the tab bar on small iPhones without a home-indicator inset (iPhone SE, mini): the player now clears the taller iOS 26 tab bar, while notched phones are unchanged (#69).</li>
+                            <li>Quick Settings (Now Playing &rarr; gear) now opens at full height so the Download and Share rows are reachable on smaller iPhones, where they were previously clipped below the sheet; the sheet can still be dragged down to the medium size (#72).</li>
+                            <li>Fixed a stacked double back-arrow when opening Settings &rarr; Player through the bottom-right &ldquo;More&rdquo; tab on iPhone: overflow tabs (e.g. Radio, Settings) now use an app-owned More menu instead of the system overflow, so navigating deeper keeps a single back button (#70).</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <!-- Build 54 -->
             <div class="timeline-item" data-animate>
                 <div class="build-card">

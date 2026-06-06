@@ -1,5 +1,12 @@
 # Vibrdrome Device Testing Checklist
 
+## Unreleased — Small-iPhone layout & navigation (#69, #72, #70)
+
+- [ ] **#69:** on a small iPhone (SE / 13 mini), the mini player clears the tab bar — icons and labels fully visible and tappable; notched phones unchanged
+- [ ] **#72:** Now Playing → Quick Settings opens tall enough that Download and Share are reachable on a small iPhone; the sheet still drags down to medium
+- [ ] **#70:** the bottom-right "More" tab opens an in-app More list, and More → Settings → Player shows a single back-chevron (no double arrow); More → Radio is also single-stacked
+- [ ] **#70:** primary tabs and the top-right gear Settings path still work; reordering/hiding tabs moves items between the tab bar and More correctly
+
 ## Build 54 — OpenSubsonic metadata, security, download crash
 
 - [ ] Multi-artist track shows each credited artist as a separate tappable link; each navigates to the right artist (iOS + macOS)
