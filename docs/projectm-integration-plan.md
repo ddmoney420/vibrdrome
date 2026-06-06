@@ -247,3 +247,14 @@ Wired the spike: MetalANGLE `MGLKView` GLES3 context → `projectm_create_with_o
 **iPhone:** pending (device was locked at test time — iOS suspends GPU work when locked; re-run when unlocked).
 
 **Bottom line:** MetalANGLE (already built + proven at GLES 3.0) is a viable GL provider for projectM after this narrow gate patch — **no Google ANGLE, no MoltenVK, no architecture switch.**
+
+### Metal API Validation pass (2026-06-05) — ✅ clean on both platforms
+
+Ran the spike with **Metal API Validation + GPU Validation + Shader Validation** enabled (`MTL_DEBUG_LAYER=1`, `METAL_DEVICE_WRAPPER_TYPE=1`, `MTL_SHADER_VALIDATION=1`):
+- **macOS (M5 Pro):** rendered 485 frames @ 60fps; 10,527 lines of validation output, **all benign trace** (`End Encoding Validation` ×3156, `Set Front Facing Winding Validation` ×526) — **zero error/failure/assert/hazard lines**.
+- **iPhone (A19 Pro):** launched via `devicectl --environment-variables` with the same flags (assert mode → any validation error aborts); rendered **718 frames @ 61fps, no abort, no crash report** → clean.
+- **Result: no Metal validation errors on either platform** — the projectM→MetalANGLE GLES3 path is GPU-correct.
+
+Visual confirmation (screenshot/video) is a manual step (this environment blocks programmatic screen capture); the per-second center-pixel sample (which varies over time incl. colour shifts on both devices) stands in as objective evidence of a live, non-static render.
+
+**Phase 0 spike: COMPLETE.** Exit gate met — a moving `.milk` preset at 60fps on a physical iPhone and a Mac via MetalANGLE + patched projectM, validated clean under Metal API/GPU validation. Pinned versions: MetalANGLE `gles3-0.0.8` (`850c87ba`), projectM master `4d28493` (+ 2-line GLES-gate patch). **Phase 1 (real audio plumbing in the app) is the next phase and is NOT started — it touches the app's audio pipeline and needs explicit approval.**
