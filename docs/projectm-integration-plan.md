@@ -666,7 +666,70 @@ presets, no playlist library, no licenses screen, no CI/Vendor changes.
 - **Change scope:** no `project.yml`, `.github/`, or `Vendor/` changes (presets
   auto-bundle via the existing glob).
 
-**Phase 2D status: VERIFIED, awaiting commit approval.** Next: 2E (licensing +
-macOS release: licenses/acknowledgements screen, sign+notarize the embedded LGPL
-dylibs) — design first, separate approval. Community preset corpus remains a
-separate, license-gated task.
+**Phase 2D status: ✅ COMMITTED + PUSHED** (`e921f96`, `feature/projectm-spike`).
+
+---
+
+## Phase 2E — licensing + macOS release verification: ✅ VERIFIED (2026-06-06)
+
+Goal (only): a licenses/acknowledgements screen with verbatim attribution for the
+whole bundled third-party stack, formalized dynamic-linkage (LGPL) compliance, and
+a real macOS DMG sign+notarize verification with the embedded dylibs. No new
+presets, no community corpus, no CI edit, no vendor publish.
+
+### Acknowledgements screen
+- `Vibrdrome/Features/Settings/AcknowledgementsView.swift` — Settings ▸ About ▸
+  **Acknowledgements** → per-component verbatim license detail.
+- **Verbatim license resources** in `Features/Settings/Licenses/` (one `.txt`
+  each, exact copies — never summarized): projectM (LGPL-2.1), MetalANGLE/ANGLE
+  (BSD-3-Clause), GLM (MIT/Happy Bunny — fetched verbatim from upstream g-truc/glm
+  0.9.9 `copying.txt`, since projectM vendors only glm headers), glad
+  (verbatim in-source SPDX notice + canonical WTFPL / CC0-1.0 / Apache-2.0 from
+  SPDX, since the vendored glad ships only the SPDX identifier), stb_image
+  (MIT / Public-Domain dual), projectM-eval (MIT), hlslparser (MIT), Nuke (MIT),
+  KeychainAccess (MIT), and the Vibrdrome presets NOTICE.
+- **projectM LGPL note** shown on its entry: dynamically linked (replaceable
+  `@rpath` dylib), source `github.com/projectM-visualizer/projectm` @ `4d28493`,
+  reproducible via `scripts/build-projectm.sh` — satisfies the LGPL source/relink
+  provisions.
+
+### Dynamic-linkage verification (LGPL)
+`otool -L` on the Release app binary shows `@rpath/MetalANGLE.framework/…` and
+`@rpath/libprojectM-4.4.1.0.dylib` — both dynamically linked (relinkable),
+satisfying LGPL §6.
+
+### macOS DMG sign + notarize (embedded dylibs) — real run, unchanged pipeline
+Ran `scripts/make-dmg.sh` **unchanged** (archive → export Developer ID → notarize
+→ staple → DMG → notarize → staple):
+- **App notarization: Accepted**; **DMG notarization: Accepted**; both stapled +
+  Gatekeeper-accepted (`spctl`: `source=Notarized Developer ID`).
+- Embedded **MetalANGLE.framework** and **libprojectM-4.4.1.0.dylib** are each
+  **Developer ID-signed** (team 85JD2B827Q) with **hardened runtime**
+  (`flags=0x10000(runtime)`) and a **secure timestamp**; `codesign --verify --deep
+  --strict` passes (exit 0).
+- **No `make-dmg.sh` change needed** — the existing archive+export pipeline signs
+  the embedded binaries inside-out correctly.
+
+### Deferred (documented only — not done in 2E)
+- **Vendor publish:** `scripts/package-vendor.sh upload vendor-frameworks-v1` —
+  not run; do at release/PR prep.
+- **CI fetch step:** before the cloud `Build iOS` job, run `scripts/fetch-vendor.sh`
+  (populates the gitignored `Vendor/` from the pinned Release). Wire in
+  `.github/workflows/ci.yml` at main-PR prep, alongside publishing the Release.
+
+**Phase 2E status: VERIFIED, awaiting commit approval.**
+
+---
+
+## Future Community Presets / Imported Presets
+
+- Out of scope for Phase 2E.
+- No community presets are bundled in the app.
+- Future support should separate preset sources:
+  - bundled Vibrdrome presets
+  - user-imported presets
+  - optional user-downloaded community packs
+- Community packs must be user-initiated, not automatic.
+- The app should clearly state that community presets are not authored by Vibrdrome and may have separate licensing/redistribution terms.
+- Users should be able to remove imported/downloaded packs.
+- Per-pack attribution/license text should be shown when available.

@@ -581,6 +581,12 @@ struct SettingsView: View {
             infoRow("API Version", value: "1.16.1", icon: "number.circle.fill", color: .gray)
             offlineQueueStatus
 
+            NavigationLink {
+                AcknowledgementsView()
+            } label: {
+                Label("Acknowledgements", systemImage: "doc.text")
+            }
+
             #if DEBUG
             NavigationLink {
                 DebugView()
