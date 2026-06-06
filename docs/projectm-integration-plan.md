@@ -258,3 +258,149 @@ Ran the spike with **Metal API Validation + GPU Validation + Shader Validation**
 Visual confirmation (screenshot/video) is a manual step (this environment blocks programmatic screen capture); the per-second center-pixel sample (which varies over time incl. colour shifts on both devices) stands in as objective evidence of a live, non-static render.
 
 **Phase 0 spike: COMPLETE.** Exit gate met — a moving `.milk` preset at 60fps on a physical iPhone and a Mac via MetalANGLE + patched projectM, validated clean under Metal API/GPU validation. Pinned versions: MetalANGLE `gles3-0.0.8` (`850c87ba`), projectM master `4d28493` (+ 2-line GLES-gate patch). **Phase 1 (real audio plumbing in the app) is the next phase and is NOT started — it touches the app's audio pipeline and needs explicit approval.**
+
+---
+
+## Phase 1 plan — PCM source and audio tap integration
+
+**Planning section only. Phase 1 is NOT implemented. Phase 1A requires separate
+approval (see §8) before any code is written.**
+
+### 1. Scope
+- Phase 1 is **audio plumbing only**.
+- It adds the PCM source / ring-buffer path that projectM will eventually drain.
+- It does **not** integrate projectM/MetalANGLE into the main app UI yet.
+- It does **not** add the MilkDrop visualizer mode yet.
+- It does **not** touch the existing "Classic" Metal/`.colorEffect` visualizer behavior.
+- It does **not** commit Vendor binaries.
+
+### 2. Risk summary
+- This phase touches the **real playback/audio path**.
+- The EQ tap (`EQTapProcessor`, one `MTAudioProcessingTap` per `AVPlayerItem`,
+  `PostEffects`) is the **universal audio tap** — its process callback runs for
+  *all* playback.
+- Any mistake in the tap callback could affect **all** playback (glitches, drops,
+  or a crash on the real-time thread).
+- **Crossfade may have two active taps during overlap** (outgoing + incoming
+  items both have live taps — `AudioEngine+Crossfade.swift`).
+- **Gapless / queue advance** must hand off the PCM source cleanly.
+- The audio callback must remain **real-time safe** (see §4).
+
+### 3. Revised checkpoint plan
+Phase 1 is split into four smaller, independently-approvable checkpoints.
+
+#### Phase 1A — VisualizerPCMSource + ring buffer only
+Goal:
+- Add `VisualizerPCMSource` and a lock-free SPSC ring buffer.
+- No EQ tap wiring yet. No `CrossfadeController` changes. No gapless/queue
+  changes. No debug overlay. No projectM/MetalANGLE main-app integration.
+
+Requirements:
+- Preallocated power-of-two buffer.
+- Interleaved stereo Float32 storage.
+- Atomic head/tail indices.
+- Drop-oldest overflow policy.
+- Unit tests for write / read / overflow / underrun.
+- Documentation comments explaining the real-time constraints.
+- **No app behavior change** (the type exists but nothing feeds or drains it yet).
+
+#### Phase 1B — inactive-by-default tap write
+Goal:
+- Wire the existing EQ tap to write PCM into `VisualizerPCMSource`.
+- Keep writing **gated off** unless explicitly active — normal playback behaves
+  exactly as before when inactive.
+- No crossfade source ownership yet (unless strictly required).
+- No renderer / projectM main-app integration yet.
+
+Requirements (the audio callback must):
+- **No allocation.**
+- **No locks.**
+- **No async/await.**
+- **No logging.**
+- **No Objective-C messaging** from the callback.
+- **No temporary Swift arrays** in the callback.
+- Write planar input **directly** into the preallocated interleaved ring buffer.
+
+#### Phase 1C — crossfade/gapless source ownership
+Goal:
+- Ensure only **one** audible item feeds the visualizer PCM source.
+- Avoid double-feeding during crossfade overlap.
+- Move source ownership cleanly during gapless/queue advance.
+- Confirm manual next/previous does not leak or double-feed.
+
+Requirements:
+- Per-tap or per-item ownership flag.
+- The **incoming** track feeds during crossfade.
+- The **outgoing** track does **not** feed during overlap.
+- Produce rate stays ~1x sample rate (not 2x) during crossfade.
+
+#### Phase 1D — dev debug overlay + verification matrix
+Goal:
+- Add a **dev-only** debug overlay / diagnostics view to prove the PCM pipeline.
+- Show: ring fill %, produced samples/sec, consumed samples/sec, underrun count,
+  overflow count, sample rate, channel count, and current source item.
+- Run the full verification matrix.
+
+Verification matrix:
+- Streamed track, normal playback.
+- Downloaded/offline track, normal playback.
+- Gapless auto-advance.
+- Crossfade overlap.
+- Manual next/previous.
+- 50-track-change soak test.
+- `make lint`.
+- `make test`.
+- `make build-ios`.
+- `make build-macos`.
+- `scripts/verify-build.sh` (the repo's normal full gate).
+
+### 4. Real-time audio constraints
+The `MTAudioProcessingTap` process callback is a **real-time audio thread**. It:
+- must **not** allocate;
+- must **not** lock;
+- must **not** log;
+- must **not** call async code;
+- must **not** call UI / `@MainActor` code;
+- must **not** use temporary Swift arrays;
+- must **only** copy into preallocated memory and update atomics.
+
+### 5. Ring-buffer design note
+Intended design:
+- **SPSC** ring buffer.
+- Single producer: the audio tap callback.
+- Single consumer: the future render / debug consumer.
+- Interleaved stereo Float32.
+- Power-of-two capacity.
+- Atomic acquire/release indices.
+- Drop-oldest on overflow.
+- Counters for overflow / underrun.
+
+### 6. Crossfade/gapless risk
+- Crossfade can have **two live taps** during overlap.
+- Raw PCM **cannot** be double-fed (the waveform would be corrupted).
+- `AudioSpectrum` may tolerate the current behavior (it sums into an FFT), but
+  **projectM raw PCM will not**.
+- Phase 1C must **explicitly own** which item feeds PCM.
+
+### 7. Rollback plan
+- **Phase 1A rollback:** remove the `VisualizerPCMSource` / ring-buffer files.
+- **Phase 1B rollback:** disable the active flag, or revert the tap write.
+- **Phase 1C rollback:** revert the source-ownership logic.
+- No schema / data migration.
+- No Vendor binaries.
+- No projectM UI integration yet.
+
+### 8. Phase 1A approval gate
+**Before any Phase 1 implementation starts, Phase 1A requires separate approval.**
+
+For Phase 1A approval, bring the **exact ring-buffer design** first:
+- Files to add.
+- Storage type.
+- Atomic primitive choice.
+- Capacity.
+- API shape.
+- How planar audio buffers will eventually be written without allocation.
+- Unit test plan.
+- Whether any dependency/package is required.
+
+**Do not implement Phase 1A until approved.**
