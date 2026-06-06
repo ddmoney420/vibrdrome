@@ -179,3 +179,20 @@ Root cause: `CMakeLists.txt` ~165–178 hard-gates `ENABLE_GLES` to `CMAKE_SYSTE
 - **(C) Reconsider GL strategy** — only with your direction; do not switch architecture without approval.
 
 **Recommendation:** quick-check option **B** (does a newer projectM support Apple GLES?) before committing to the **A** patch. Stopped here per the working agreement.
+
+---
+
+## Phase 0 checkpoint 2b — projectM re-pinned to master @ `4d28493` — ✅ BUILT (2026-06-05)
+
+Investigation confirmed projectM **master** removed the Linux-only GLES guard (now `if(ENABLE_GLES) set(USE_GLES ON)`, no system-GLES `find_package`) and added macOS-framework support; the C API is identical to v4.1.6 (all needed symbols present). `scripts/build-projectm.sh` re-pinned to commit **`4d2849333b63235a6af4d1f02508a97529d96dc7`** (master @ 2026-05-08 — a fixed commit, NOT the moving branch). Chose the **newer pin over patching v4.1.6**.
+
+**Result: projectM builds for all three slices and assembles into an xcframework — no upstream patch.**
+- **CMake flags:** `-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DENABLE_GLES=ON -DENABLE_PLAYLIST=OFF -DENABLE_SYSTEM_PROJECTM_EVAL=OFF -DENABLE_SYSTEM_GLM=OFF -DENABLE_SDL_UI=OFF -DBUILD_TESTING=OFF` + per-slice `-DCMAKE_OSX_ARCHITECTURES`; iOS uses `-DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos|iphonesimulator`.
+- **GLES wiring:** MetalANGLE framework `Headers` added to projectM's compile include path so `#include <GLES3/gl3.h>` resolves; shared lib linked with `-Wl,-undefined,dynamic_lookup` (benign "deprecated on iOS" warning).
+- **GL resolution model (key finding):** master projectM resolves GL **at runtime via a GLAD loader + `eglGetProcAddress`** — strings show `@rpath/libGLESv2.dylib`/`libGLESv3.dylib`, a `GLResolver`, `[GladLoader] GLES2`. So there are **0 undefined `gl*` symbols**; instead it exposes **`projectm_create_with_opengl_load_proc`** to receive a GL loader. Runtime wiring (next step) = create projectM via that load-proc fed by MetalANGLE's EGL `getProcAddress`, or expose MetalANGLE as `libGLESv2/3.dylib` on `@rpath`. Not a build issue.
+
+**Output xcframework:** `Vendor/projectM/projectM.xcframework` (gitignored, NOT committed) — **7.2 MB**; slices `ios-arm64` (1.4M lib), `ios-arm64_x86_64-simulator` (2.8M), `macos-arm64_x86_64` (2.8M). Install name `@rpath/libprojectM-4.4.dylib`.
+**Headers/modulemap:** `module projectM { header "projectM-4/projectM.h"; export * }` + full `projectM-4/` C API headers in each slice's `Headers/`.
+**C API verified exported:** `projectm_create`, `projectm_create_with_opengl_load_proc`, `projectm_opengl_render_frame`, `projectm_pcm_add_float`, `projectm_set_window_size`, `projectm_set_preset_duration`, `projectm_set_preset_locked`, `projectm_load_preset_file/data`.
+
+**Go/no-go: ✅ GO.** projectM builds for iOS + macOS against MetalANGLE via the master pin; the v4.1.6 blocker is resolved without patching upstream. License attribution (LGPL projectM + bundled GLM/SOIL2/hlslparser/projectm-eval) to be added when the lib is wired in. **Next: wire projectM's GL loader to MetalANGLE and render a `.milk` preset in the spike.**
