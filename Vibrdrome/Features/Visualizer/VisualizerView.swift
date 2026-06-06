@@ -89,6 +89,39 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Visualizer Mode
+
+/// The two visualizer backends. Classic = SwiftUI Metal shaders (default);
+/// MilkDrop = projectM (Phase 2). Persisted via `UserDefaultsKeys.visualizerMode`.
+enum VisualizerMode: String, CaseIterable, Identifiable {
+    case classic
+    case milkdrop
+    var id: String { rawValue }
+    var title: String { self == .classic ? "Classic" : "MilkDrop" }
+    var icon: String { self == .classic ? "waveform" : "waveform.circle" }
+}
+
+/// Pure mode-gating logic, factored out of the view so it is unit-testable
+/// without UI or a GL context (see `VisualizerModeResolverTests`).
+enum VisualizerModeResolver {
+    /// Whether MilkDrop may be chosen right now. MilkDrop is hard-gated off on the
+    /// iOS simulator (ANGLE GLES-on-Metal is unreliable there) and suppressed by
+    /// Reduce Motion / Disable Visualizer.
+    static func milkdropSelectable(reduceMotion: Bool, disableVisualizer: Bool, isSimulator: Bool) -> Bool {
+        if isSimulator { return false }
+        return !reduceMotion && !disableVisualizer
+    }
+
+    /// What actually renders: MilkDrop only if selected AND currently selectable;
+    /// otherwise Classic (covers "MilkDrop was chosen earlier but is now gated").
+    static func effectiveMode(selected: VisualizerMode, reduceMotion: Bool,
+                              disableVisualizer: Bool, isSimulator: Bool) -> VisualizerMode {
+        let selectable = milkdropSelectable(
+            reduceMotion: reduceMotion, disableVisualizer: disableVisualizer, isSimulator: isSimulator)
+        return (selected == .milkdrop && selectable) ? .milkdrop : .classic
+    }
+}
+
 /// Grouped audio-reactive parameters for shader rendering
 struct ShaderInput {
     let time: Float
@@ -110,6 +143,9 @@ struct VisualizerView: View {
     @AppStorage(UserDefaultsKeys.visualizerPreset) private var presetName: String = "Plasma"
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     @AppStorage(UserDefaultsKeys.visualizerWarningShown) private var warningShown = false
+    @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer = false
+    @AppStorage(UserDefaultsKeys.visualizerMode) private var selectedModeRaw = VisualizerMode.classic.rawValue
+    @AppStorage(UserDefaultsKeys.visualizerMilkdropWarningShown) private var milkdropWarningShown = false
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5
@@ -122,6 +158,7 @@ struct VisualizerView: View {
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
     @State private var showWarning = false
+    @State private var showMilkdropWarning = false
     #if os(macOS)
     @State private var nsWindow: NSWindow?
     #endif
@@ -133,25 +170,55 @@ struct VisualizerView: View {
         VisualizerPreset(rawValue: presetName) ?? .plasma
     }
 
+    private var selectedMode: VisualizerMode { VisualizerMode(rawValue: selectedModeRaw) ?? .classic }
+
+    private var isSimulatorBuild: Bool {
+        #if targetEnvironment(simulator)
+        true
+        #else
+        false
+        #endif
+    }
+
+    private var milkdropSelectable: Bool {
+        VisualizerModeResolver.milkdropSelectable(
+            reduceMotion: reduceMotion, disableVisualizer: disableVisualizer, isSimulator: isSimulatorBuild)
+    }
+
+    private var effectiveMode: VisualizerMode {
+        VisualizerModeResolver.effectiveMode(
+            selected: selectedMode, reduceMotion: reduceMotion,
+            disableVisualizer: disableVisualizer, isSimulator: isSimulatorBuild)
+    }
+
+    private var milkdropUnavailableReason: String? {
+        if isSimulatorBuild { return "Device only (not in Simulator)" }
+        if disableVisualizer { return "Visualizer is disabled in Settings" }
+        if reduceMotion { return "Unavailable with Reduce Motion" }
+        return nil
+    }
+
     private let timer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Shader canvas
-                TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
-                    Rectangle()
-                        .colorEffect(preset.shader(
-                            size: geo.size,
-                            input: ShaderInput(
-                                time: time, energy: energy,
-                                bass: bass, mid: mid, treble: treble,
-                                bands: bands, peaks: peaks)))
+                // Visualizer canvas — Classic (Metal shaders) or MilkDrop (projectM).
+                if effectiveMode == .milkdrop {
+                    ProjectMVisualizerSurface()
+                        .ignoresSafeArea()
+                } else {
+                    TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
+                        Rectangle()
+                            .colorEffect(preset.shader(
+                                size: geo.size,
+                                input: ShaderInput(
+                                    time: time, energy: energy,
+                                    bass: bass, mid: mid, treble: treble,
+                                    bands: bands, peaks: peaks)))
+                    }
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
-                #if os(macOS)
-                .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
-                #endif
 
                 // Controls overlay
                 if showControls {
@@ -159,12 +226,18 @@ struct VisualizerView: View {
                         .transition(.opacity)
                 }
             }
+            #if os(macOS)
+            // Capture the window in both modes (Classic + MilkDrop) for the
+            // fullscreen toggle.
+            .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
+            #endif
         }
         #if os(iOS)
         .statusBarHidden(true)
         #endif
         .onReceive(timer) { _ in
-            guard !reduceMotion else { return }
+            // MilkDrop drives its own PCM ring; only the Classic path needs the FFT/time pump.
+            guard effectiveMode == .classic, !reduceMotion else { return }
             updateTime()
             updateSpectrum()
         }
@@ -184,7 +257,7 @@ struct VisualizerView: View {
                 .onEnded { value in
                     if value.translation.height > 100 {
                         dismiss()
-                    } else if abs(value.translation.width) > 50 {
+                    } else if abs(value.translation.width) > 50, effectiveMode == .classic {
                         cyclePreset(forward: value.translation.width < 0)
                     }
                 }
@@ -210,6 +283,20 @@ struct VisualizerView: View {
             that may cause discomfort or trigger seizures in people with \
             photosensitive epilepsy. You can disable the visualizer in \
             Settings > Accessibility.
+            """)
+        }
+        .alert("MilkDrop Visualizer", isPresented: $showMilkdropWarning) {
+            Button("Enable MilkDrop") {
+                milkdropWarningShown = true
+                selectedModeRaw = VisualizerMode.milkdrop.rawValue
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("""
+            MilkDrop renders intense, rapidly-changing visuals that may be more \
+            likely to trigger discomfort or seizures in people with photosensitive \
+            epilepsy. You can switch back to Classic anytime, or disable the \
+            visualizer in Settings > Accessibility.
             """)
         }
         .onChange(of: showPresetPicker) { _, isOpen in
@@ -243,8 +330,8 @@ struct VisualizerView: View {
 
                 Button { showPresetPicker.toggle() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: preset.icon)
-                        Text(preset.rawValue)
+                        Image(systemName: effectiveMode == .milkdrop ? VisualizerMode.milkdrop.icon : preset.icon)
+                        Text(effectiveMode == .milkdrop ? "MilkDrop" : preset.rawValue)
                             .fontWeight(.medium)
                     }
                     .font(.subheadline)
@@ -333,36 +420,101 @@ struct VisualizerView: View {
     private var presetPickerContent: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(VisualizerPreset.allCases) { p in
-                    Button {
-                        presetName = p.rawValue
-                        showPresetPicker = false
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: p.icon)
-                                .frame(width: 24)
-                                .foregroundColor(.accentColor)
-                            Text(p.rawValue)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if p == preset {
-                                Image(systemName: "checkmark")
+                // Mode section (Classic / MilkDrop)
+                modeRow(.classic)
+                modeRow(.milkdrop)
+                Divider().padding(.leading, 52)
+
+                // Preset list (Classic) or a MilkDrop note (single preset in 2C)
+                if effectiveMode == .classic {
+                    ForEach(VisualizerPreset.allCases) { p in
+                        Button {
+                            presetName = p.rawValue
+                            showPresetPicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: p.icon)
+                                    .frame(width: 24)
                                     .foregroundColor(.accentColor)
+                                Text(p.rawValue)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if p == preset {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.accentColor)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
+                        .buttonStyle(.plain)
+                        if p != VisualizerPreset.allCases.last {
+                            Divider().padding(.leading, 52)
+                        }
+                    }
+                } else {
+                    Text("MilkDrop — single preset for now")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.plain)
-                    if p != VisualizerPreset.allCases.last {
-                        Divider().padding(.leading, 52)
-                    }
                 }
             }
         }
         .frame(width: 220)
         .frame(maxHeight: 500)
         .presentationCompactAdaptation(.popover)
+    }
+
+    private func modeRow(_ mode: VisualizerMode) -> some View {
+        let disabled = (mode == .milkdrop) && !milkdropSelectable
+        return Button {
+            selectMode(mode)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: mode.icon)
+                    .frame(width: 24)
+                    .foregroundColor(.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.title)
+                        .foregroundColor(disabled ? .secondary : .primary)
+                    if disabled, let reason = milkdropUnavailableReason {
+                        Text(reason)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if mode == selectedMode && !disabled {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .accessibilityIdentifier(mode == .milkdrop ? "visualizerModeMilkDrop" : "visualizerModeClassic")
+    }
+
+    /// Switch visualizer mode. The first MilkDrop selection routes through the
+    /// photosensitivity re-warning; subsequent selections switch directly.
+    private func selectMode(_ mode: VisualizerMode) {
+        guard mode != selectedMode else { showPresetPicker = false; return }
+        if mode == .milkdrop {
+            guard milkdropSelectable else { return }   // disabled row can't reach here anyway
+            if !milkdropWarningShown {
+                showPresetPicker = false
+                showMilkdropWarning = true             // gate the FIRST switch
+                return
+            }
+            selectedModeRaw = VisualizerMode.milkdrop.rawValue
+        } else {
+            selectedModeRaw = VisualizerMode.classic.rawValue
+        }
+        showPresetPicker = false
     }
 
     // MARK: - Animation

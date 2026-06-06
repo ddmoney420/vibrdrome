@@ -84,6 +84,8 @@ enum UserDefaultsKeys {
     static let visualizerWarningShown = "visualizerWarningShown"
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"
+    static let visualizerMode = "visualizerMode"
+    static let visualizerMilkdropWarningShown = "visualizerMilkdropWarningShown"
 
     // MARK: - Now Playing Toolbar
 

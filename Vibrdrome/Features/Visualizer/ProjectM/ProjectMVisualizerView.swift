@@ -66,15 +66,42 @@ final class ProjectMViewController: MGLKViewController {
         consuming = true
         VisualizerPCMSource.shared.beginRenderConsumer()
         isPaused = false
+        #if DEBUG
+        logLifecycle("begin")
+        #endif
     }
 
-    private func stopConsuming() {
+    /// Internal (not private) so the representable's `dismantle…` hook can stop the
+    /// consumer immediately when the user toggles MilkDrop → Classic in the open
+    /// visualizer. Idempotent via the `consuming` guard.
+    func stopConsuming() {
         guard consuming else { return }
         consuming = false
         isPaused = true
         renderer.destroy()                              // main = render thread
         VisualizerPCMSource.shared.endRenderConsumer()  // tap write off (no reset)
+        #if DEBUG
+        logLifecycle("end")
+        #endif
     }
+
+    #if DEBUG
+    /// Appends begin/end lifecycle events to a pullable file so the teardown-on-
+    /// toggle path can be verified deterministically on-device (separate from the
+    /// per-second proof file, which is overwritten).
+    private func logLifecycle(_ event: String) {
+        log.notice("MilkDrop consumer \(event, privacy: .public)")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("milkdrop_lifecycle.txt")
+        let line = Data((event + "\n").utf8)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            handle.write(line)
+        } else {
+            try? line.write(to: url)
+        }
+    }
+    #endif
 
     #if os(iOS)
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); startConsuming() }
@@ -142,10 +169,16 @@ final class ProjectMViewController: MGLKViewController {
     #endif
 }
 
-/// SwiftUI host for the projectM renderer (Phase 2B). DEBUG entry only until 2C.
+/// Embeddable MilkDrop surface (no test chrome). Used by the user-facing
+/// visualizer (Phase 2C) and by the DEBUG test entry below.
+struct ProjectMVisualizerSurface: View {
+    var body: some View { ProjectMContainer() }
+}
+
+/// DEBUG test entry host — wraps the surface with a title (Settings ▸ Debug Tools).
 struct ProjectMVisualizerView: View {
     var body: some View {
-        ProjectMContainer()
+        ProjectMVisualizerSurface()
             .ignoresSafeArea()
             .navigationTitle("projectM MilkDrop Test")
     }
@@ -155,10 +188,18 @@ struct ProjectMVisualizerView: View {
 private struct ProjectMContainer: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> ProjectMViewController { ProjectMViewController() }
     func updateUIViewController(_ vc: ProjectMViewController, context: Context) {}
+    // Stop the consumer immediately when the surface is removed (MilkDrop → Classic
+    // toggle in the open visualizer, or full dismiss).
+    static func dismantleUIViewController(_ vc: ProjectMViewController, coordinator: ()) {
+        vc.stopConsuming()
+    }
 }
 #else
 private struct ProjectMContainer: NSViewControllerRepresentable {
     func makeNSViewController(context: Context) -> ProjectMViewController { ProjectMViewController() }
     func updateNSViewController(_ vc: ProjectMViewController, context: Context) {}
+    static func dismantleNSViewController(_ vc: ProjectMViewController, coordinator: ()) {
+        vc.stopConsuming()
+    }
 }
 #endif

@@ -733,6 +733,7 @@ struct SettingsView: View {
         UserDefaultsKeys.disableVisualizer,
         UserDefaultsKeys.showAlbumArtInLists,
         UserDefaultsKeys.visualizerPreset,
+        UserDefaultsKeys.visualizerMode,
         UserDefaultsKeys.showVisualizerInToolbar,
         UserDefaultsKeys.showEQInToolbar,
         UserDefaultsKeys.showAirPlayInToolbar,

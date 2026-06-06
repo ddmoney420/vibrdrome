@@ -565,5 +565,52 @@ preset switching, no licenses screen, no CI changes.
   `testRapidRotation` (no crash report; 2B code not in that path) and passed clean
   on re-run.
 
-**Phase 2B status: VERIFIED, awaiting commit approval.** Next: 2C (Classic/MilkDrop
-mode picker + accessibility/sim gating) — design first, separate approval.
+**Phase 2B status: ✅ COMMITTED + PUSHED** (`675751e`, `feature/projectm-spike`).
+
+---
+
+## Phase 2C — Classic/MilkDrop mode picker + gating: ✅ VERIFIED (2026-06-06)
+
+Goal (only): make MilkDrop a **user-facing, selectable** visualizer mode alongside
+Classic (still default), with accessibility/safety gates honored and the iOS
+simulator falling back to Classic. No preset corpus, no preset switching, no
+licenses screen, no CI, no Vendor commits, no Settings mirror.
+
+### What was built
+- `VisualizerMode` enum + `VisualizerModeResolver` (pure, unit-tested gating).
+- Mode lives in the **existing preset popover**: Classic / MilkDrop rows (MilkDrop
+  greyed + reason when unavailable), then the Classic preset list or a MilkDrop
+  "single preset for now" note. Top-bar pill + canvas switch follow `effectiveMode`.
+- Keys: `visualizerMode` (default `classic`, added to `backupKeys`) +
+  `visualizerMilkdropWarningShown` (not backed up, so a restored device re-warns).
+- **Photosensitivity re-warn:** first MilkDrop selection shows a dedicated
+  "MilkDrop Visualizer" alert (Enable / Cancel) on top of the existing one-time
+  entry warning.
+- **Gating:** MilkDrop hard-gated off on the **iOS simulator**
+  (`#if targetEnvironment(simulator)`), and suppressed by **Reduce Motion**
+  (→ Classic frozen) and **Disable Visualizer**; `effectiveMode` falls back to
+  Classic whenever MilkDrop is selected-but-not-selectable.
+- **`ProjectMVisualizerSurface`** (no test chrome) is the embeddable renderer;
+  `ProjectMContainer` adds `dismantleUIViewController`/`dismantleNSViewController`
+  → `stopConsuming()` so the consumer tears down **immediately** on
+  MilkDrop→Classic toggle.
+
+### Verification results
+- **`scripts/verify-build.sh`: RESULT: PASS** (SwiftLint 0, iOS/macOS/watchOS
+  0-warning builds, unit + UI rotation tests).
+- **`VisualizerModeResolverTests`** (10 cases) pass — simulator / Reduce Motion /
+  Disable Visualizer all gate MilkDrop off; Classic always Classic.
+- **iOS device (manual, confirmed):** Classic is default; first MilkDrop selection
+  shows the re-warning; MilkDrop renders + reacts; toggle back to Classic switches
+  immediately.
+- **Teardown-on-toggle (deterministic):** the DEBUG lifecycle file logged exactly
+  `begin` → `end` for one MilkDrop session → the consumer
+  (`endRenderConsumer`/`projectm_destroy`) fired immediately on the toggle back.
+- **Release:** iOS + macOS build; MilkDrop UI **ships** (`Device only`,
+  `single preset for now`, `MilkDrop Visualizer` literals + `VisualizerModeResolver`
+  symbols present in the Release binary); DEBUG test-entry/proof/lifecycle strings
+  **absent**. `otool` unchanged (frameworks already shipping from 2B).
+- **Change scope:** no `project.yml`, `.github/`, or `Vendor/` changes.
+
+**Phase 2C status: VERIFIED, awaiting commit approval.** Next: 2D (preset bundle +
+switching) — design first, separate approval.
