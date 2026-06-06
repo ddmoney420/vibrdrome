@@ -435,3 +435,76 @@ reads only what it needs per frame, so this counter will not climb the same way.
 **Phase 1 status: SIGNED OFF.** Next: Phase 2 (the projectM/MetalANGLE renderer in
 the app as a new "MilkDrop" mode, draining this validated PCM ring, alongside the
 existing Classic visualizer) — planning only, on approval; not started.
+
+---
+
+## Phase 2A — Vendor wiring + in-app GLES3 clear-screen: ✅ VERIFIED (2026-06-06)
+
+Goal (only): the real `com.vibrdrome.app` target links + embeds the prebuilt
+MetalANGLE + projectM frameworks via the fetch-pinned strategy, and a DEBUG-only
+in-app `MGLKView` clear-screen proves GLES3 runs inside the app on device + Mac.
+**No** projectM renderer, **no** PCM drain, **no** MilkDrop mode, **no** preset
+bundle yet — those are 2B onward.
+
+### Vendor strategy (B: fetch pinned prebuilts)
+- `scripts/build-metalangle.sh` now injects a **Clang module map** into each
+  framework slice so Swift can `import MetalANGLE` with no bridging header. It is
+  TARGETED (MGLKit + `GLES3/gl3.h` + `EGL/egl.h` and their transitive
+  `gl3platform`/`eglplatform`/`khrplatform`), deliberately excluding `gl.h`/`gl2.h`
+  to avoid the GLES1/2/3 symbol-redefinition conflicts a blanket `umbrella "."`
+  would cause.
+- `scripts/package-vendor.sh` zips the local xcframeworks (`ditto`, to preserve the
+  macOS version symlinks), emits SHA-256, and can `upload` to a GitHub Release.
+- `scripts/fetch-vendor.sh` downloads the pinned Release assets, **verifies SHA-256**,
+  and extracts into the gitignored `Vendor/`. Pins: tag `vendor-frameworks-v1`,
+  `MetalANGLE.xcframework.zip` / `projectM.xcframework.zip`. The Release asset is
+  **not published yet** — 2A was proven against local `Vendor/` and a `selftest`
+  that runs the verify+extract pipeline against the local zips.
+- `Vendor/` and `dist/` stay gitignored; no binaries are committed.
+
+### App wiring (`project.yml`, Vibrdrome target only)
+- Both `.xcframework`s added as `framework` deps with `embed: true codeSign: true`.
+  The Widget/Watch targets do **not** link them.
+- `LD_RUNPATH_SEARCH_PATHS += @executable_path/Frameworks @executable_path/../Frameworks @loader_path/../Frameworks`
+  (covers iOS + macOS).
+- `GCC_PREPROCESSOR_DEFINITIONS += GLES_SILENCE_DEPRECATION=1 GL_SILENCE_DEPRECATION=1`
+  (MetalANGLE supplies its own GLES; silences Apple's deprecation warnings to keep
+  the 0-warning gate).
+
+### Clear-screen proof (DEBUG only, compiled out of release)
+- `Vibrdrome/Features/Visualizer/Debug/MetalANGLEClearScreenView.swift` — an
+  `MGLKViewController` GLES3 clear-screen writing a `GL_VERSION`/`GL_RENDERER`/fps
+  proof file. Reached via Settings ▸ About ▸ Debug Tools ▸ **MetalANGLE GLES3 Test**.
+- A `VIBRDROME_GL_TEST` env hook (`debugGLTestProof()`) shows the clear-screen at
+  launch for headless verification — users never set it; whole hook is `#if DEBUG`.
+
+### Verification results
+- **Bridging decision:** the **module map worked** (`import MetalANGLE`) — no
+  bridging header was needed. (Fallback header was designed but not used.)
+- **iOS device (iPhone 17 Pro Max, A19 Pro):** `OpenGL ES 3.0.0 (ANGLE / Metal
+  Renderer: Apple A19 Pro GPU)`, `rendering=YES`, **60 fps**.
+- **macOS (Apple M5 Pro):** same GL version, `Metal Renderer: Apple M5 Pro`,
+  `rendering=YES`, **61 fps**.
+- **otool:** the app debug dylib loads `@rpath/MetalANGLE.framework/MetalANGLE`
+  (iOS) / `…/Versions/A/MetalANGLE` (mac) and `@rpath/libprojectM-4.4.1.0.dylib` on
+  both; frameworks embed under `…/Frameworks`.
+- **Release compile-out:** `nm` finds **0** `MetalANGLEClearScreen` / `debugGLTestProof`
+  symbols in the Release iOS + macOS binaries; the frameworks are still embedded
+  (linked deps, used from 2B).
+- **`scripts/verify-build.sh`: RESULT: PASS** (SwiftLint 0, iOS/macOS/watchOS
+  0-warning builds, unit + UI rotation tests).
+- **Size (informational):** on-device arm64 embedded delta ≈ **10.6 MB**
+  (MetalANGLE 9.2 MB + projectM 1.4 MB). Universal/simulator slices are ~2× that;
+  the authoritative thinned App Store delta is deferred to an archive/TestFlight
+  build before release (Phase 2 decision #3).
+
+### CI follow-up (deferred — not wired in 2A)
+The cloud `Build iOS` / `SwiftLint` merge-gate workflow (`.github/workflows/ci.yml`)
+runs on PRs to `main` and will need a **`scripts/fetch-vendor.sh` step before the
+build** (so the gitignored `Vendor/` is populated in CI). This is **intentionally
+not edited yet** — `ci.yml` is the protected merge gate and this branch is not yet
+PR'd to `main`. Wire it during PR/main prep, alongside publishing the
+`vendor-frameworks-v1` Release so `fetch-vendor.sh` has live assets.
+
+**Phase 2A status: VERIFIED, awaiting commit approval.** Next: 2B (projectM renderer
+draining the PCM ring) — design first, separate approval.

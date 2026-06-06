@@ -44,6 +44,7 @@ fastlane/test_output/
 
 # projectM spike — local build artifacts (not committed yet)
 Vendor/
+dist/
 spike/.build/
 spike/**/*.xcodeproj
 spike/**/.dd

@@ -83,6 +83,56 @@ locate_fw() { # find the built MetalANGLE.framework in an EXACT build-products s
   find "$DD/Build/Products/$1" -maxdepth 1 -name "MetalANGLE*.framework" -type d 2>/dev/null | head -1
 }
 
+# --- 4a. Inject a Clang module map so Swift can `import MetalANGLE` ----------
+# MetalANGLE ships headers but no module map, so it isn't importable as a Swift
+# module out of the box. A blanket `umbrella "."` is NOT viable here: the
+# Headers dir carries GLES/GLES2/GLES3 side by side and those redefine the same
+# GL symbols, so one module pulling all of them fails to compile. Instead we
+# expose a TARGETED surface — the MGLKit Obj-C classes plus exactly the GLES3
+# and EGL C headers (and their transitive gl3platform/eglplatform/khrplatform
+# includes). gl.h / gl2.h / angle_gl.h are intentionally left out of the module.
+# This is what makes `import MetalANGLE` work without a bridging header.
+MODULEMAP=$(cat <<'EOF'
+framework module MetalANGLE {
+    header "MGLKitPlatform.h"
+    header "MGLLayer.h"
+    header "MGLContext.h"
+    header "MGLKView.h"
+    header "MGLKViewController.h"
+    header "MGLKit.h"
+    header "EGL/egl.h"
+    header "EGL/eglplatform.h"
+    header "GLES3/gl3.h"
+    header "GLES3/gl3platform.h"
+    header "KHR/khrplatform.h"
+    export *
+}
+EOF
+)
+
+# Write the module map into one MetalANGLE.framework (flat iOS or versioned mac).
+inject_one() { # $1 = path to a MetalANGLE.framework
+  local fw="$1"
+  if [ -d "$fw/Versions/A" ]; then            # macOS versioned bundle
+    mkdir -p "$fw/Versions/A/Modules"
+    printf '%s\n' "$MODULEMAP" > "$fw/Versions/A/Modules/module.modulemap"
+    ( cd "$fw" && ln -sfh Versions/Current/Modules Modules )
+  else                                         # iOS flat bundle
+    mkdir -p "$fw/Modules"
+    printf '%s\n' "$MODULEMAP" > "$fw/Modules/module.modulemap"
+  fi
+}
+
+inject_modulemap() { # inject into every slice of the assembled xcframework
+  local xc="$OUT/MetalANGLE.xcframework"
+  [ -d "$xc" ] || fail "no xcframework at $xc — build it first"
+  local n=0
+  while IFS= read -r fw; do inject_one "$fw"; n=$((n + 1)); done < <(
+    find "$xc" -maxdepth 2 -name "MetalANGLE.framework" -type d
+  )
+  log "Injected module.modulemap into $n framework slice(s)"
+}
+
 # --- 4. Assemble xcframework ----------------------------------------------
 make_xcframework() {
   local ios sim mac args=()
@@ -95,6 +145,7 @@ make_xcframework() {
   rm -rf "$OUT/MetalANGLE.xcframework"
   log "Creating xcframework from: $ios $sim $mac"
   xcodebuild -create-xcframework "${args[@]}" -output "$OUT/MetalANGLE.xcframework"
+  inject_modulemap
   log "DONE: $OUT/MetalANGLE.xcframework"
   /usr/bin/du -sh "$OUT/MetalANGLE.xcframework" 2>/dev/null || true
 }
@@ -105,6 +156,7 @@ case "${1:-all}" in
   sim)  build_slice MetalANGLE iphonesimulator sim ;;
   mac)  build_slice MetalANGLE_mac macosx mac ;;
   xcframework) make_xcframework ;;
+  modulemap) inject_modulemap ;;
   all)
     fetch_src; fetch_deps
     build_slice MetalANGLE iphoneos ios
