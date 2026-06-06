@@ -28,8 +28,8 @@ TAG="vendor-frameworks-v1"
 
 # name | dest dir under Vendor/ | release asset | sha256 of the asset zip
 ASSETS=(
-  "MetalANGLE|Vendor/MetalANGLE|MetalANGLE.xcframework.zip|cfebe63237fb5122af73b7a4fcb611a622e4eec3704b1bcab6f3ec698984ffcb"
-  "projectM|Vendor/projectM|projectM.xcframework.zip|bb8bb31ae12297f708f6ebe163737d74cdb8d829e64e2ea85a113fd937afe4fd"
+  "MetalANGLE|Vendor/MetalANGLE|MetalANGLE.xcframework.zip|8980c9666a05f0493baf9beda55388ca08b8338746af87b98d29f6cb2f1799f9"
+  "projectM|Vendor/projectM|projectM.xcframework.zip|b4092845fc1eebe1b002ffab5c6035da42f35c5eaa08dd326913ae219a11e77a"
 )
 
 log()  { printf "\n\033[1;34m==>\033[0m %s\n" "$*"; }
