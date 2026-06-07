@@ -37,6 +37,25 @@ source was opened, referenced side-by-side, copied, ported, or translated. The s
 relied on general graphics/DSP concepts, Apple Metal documentation, and our own
 existing Vibrdrome code.
 
+## Research Step 2 — feedback prototype (2026-06-06)
+
+DEBUG-only Metal prototype (`PermissiveFeedbackRenderer` + `PermissiveVisualizerView`).
+No third-party code copied or ported; no projectM / Butterchurn / `.milk` consulted.
+
+| Technique | Source category | Notes (our words) |
+|---|---|---|
+| ping-pong feedback | general-cg-concept | two alternating `rgba16Float` textures; our own decay/zoom/rotate framing |
+| fragment warp + decay | general-cg-concept | warp the prior-frame sample around center, fade by decay; original |
+| procedural palette | general-cg-concept | hand-rolled 3-stop gradient with a shifting position; original |
+| radial audio pulse | our-own-code | soft pulse scaled by `AudioSpectrum` bass/mid/treble (our existing DSP) |
+| fullscreen-triangle pass | apple-metal-docs, general-cg-concept | standard 3-vertex fullscreen draw; original implementation |
+
+**Guardrail:** the inline Metal source is a **hardcoded DEBUG constant** compiled at
+runtime (`makeLibrary(source:)`) solely to keep the prototype out of the release
+metallib. It is **NOT** a downloaded/arbitrary-shader system; future user/community
+presets must not compile arbitrary shader code without a separate security/provenance
+review.
+
 ## Third-party dependencies considered
-None in Step 1. (Any future permissive dependency must have its license recorded here
-before use.)
+None in Step 1 or Step 2. (Any future permissive dependency must have its license
+recorded here before use.)
