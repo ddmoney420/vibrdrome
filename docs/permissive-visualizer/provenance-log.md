@@ -73,6 +73,22 @@ expressions; a preset can never execute arbitrary code. Presets load from **inli
 DEBUG strings** (`PermissivePresetLibrary`), so **no `.json` is bundled into the app**;
 the `docs/.../presets/*.json` files are reference examples, never app resources.
 
+## Research Step 4 — visual-depth (bloom + spectrum overlay) (2026-06-06)
+
+Added two DEBUG-only visual-depth features + two original presets. No third-party
+code or preset content copied/ported; no projectM / Butterchurn / `.milk` consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| light bloom | general-cg-concept | bright-pass + small 3×3 box blur at half-res, added in present; our single-pass approach |
+| audio-spectrum overlay | general-cg-concept, our-own-code | glowing curve whose height follows `AudioSpectrum.bands` (our existing FFT); original |
+| `vibrdrome_nebula` / `vibrdrome_spectrum` | our-own-code | original presets authored from the parameter knobs |
+
+**Guardrails intact:** format remains **parameters only** (no shader/expression
+execution); presets load from **inline DEBUG strings** (no `.json` bundled). The
+overlay uses `AudioSpectrum.bands` only — **not** `VisualizerPCMSource` — so the
+engine stays independent of projectM's PCM-ring consumer model.
+
 ## Third-party dependencies considered
-None in Steps 1–3. (Any future permissive dependency must have its license recorded
+None in Steps 1–4. (Any future permissive dependency must have its license recorded
 here before use.)

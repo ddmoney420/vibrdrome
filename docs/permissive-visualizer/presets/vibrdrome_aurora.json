@@ -12,5 +12,7 @@
   "pulseScale": 0.55,
   "zoomBass": 0.70,
   "rotateTreble": 0.50,
-  "pulseBass": 0.80
+  "pulseBass": 0.80,
+  "bloomStrength": 0.25,
+  "waveformStrength": 0.00
 }

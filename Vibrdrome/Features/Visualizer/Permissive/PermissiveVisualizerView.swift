@@ -93,12 +93,14 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let audio = Self.sampleAudio(time: time)
         let p = activePreset
 
+        renderer.setBands(audio.bands)
         let u = PermissiveUniforms(
             resolution: SIMD2(Float(view.drawableSize.width), Float(view.drawableSize.height)),
             time: time, bass: audio.bass, mid: audio.mid, treble: audio.treble,
             decay: p.decay, zoom: p.zoom, rotate: p.rotate, paletteShift: p.paletteShift,
             paletteIndex: Float(p.paletteIndex), pulseScale: p.pulseScale,
-            zoomBass: p.zoomBass, rotateTreble: p.rotateTreble, pulseBass: p.pulseBass)
+            zoomBass: p.zoomBass, rotateTreble: p.rotateTreble, pulseBass: p.pulseBass,
+            bloomStrength: p.bloomStrength, waveformStrength: p.waveformStrength)
         renderer.render(in: view, uniforms: u)
         frames += 1
 
@@ -112,7 +114,10 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         }
     }
 
-    private struct AudioFrame { let real: Bool; let energy: Float; let bass: Float; let mid: Float; let treble: Float }
+    private struct AudioFrame {
+        let real: Bool; let energy: Float; let bass: Float; let mid: Float; let treble: Float
+        let bands: [Float]
+    }
 
     /// Use the real audio signal (AudioSpectrum, fed by the EQ tap) when energy is
     /// present; otherwise synthesize a gentle beat so the field animates idle.
@@ -121,12 +126,17 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let s = AudioSpectrum.shared
         let energy = s.energy
         if energy > 0.02 {
-            return AudioFrame(real: true, energy: energy, bass: s.bass, mid: s.mid, treble: s.treble)
+            return AudioFrame(real: true, energy: energy, bass: s.bass, mid: s.mid, treble: s.treble, bands: s.bands)
+        }
+        // Fallback: synthesized beat + a moving 32-band pattern so the overlay animates.
+        let bands = (0..<AudioSpectrum.bandCount).map { i in
+            0.30 + 0.30 * sinf(time * 2.0 + Float(i) * 0.4)
         }
         return AudioFrame(real: false, energy: energy,
                           bass: 0.35 + 0.30 * sinf(time * 2.1),
                           mid: 0.30 + 0.25 * sinf(time * 1.6 + 1.0),
-                          treble: 0.25 + 0.25 * sinf(time * 2.7 + 2.0))
+                          treble: 0.25 + 0.25 * sinf(time * 2.7 + 2.0),
+                          bands: bands)
     }
 
     private func writeProof(fps: Int, audio: AudioFrame, px: (UInt8, UInt8, UInt8)) {
@@ -135,6 +145,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         api=Metal
         fps=\(fps)
         preset=\(activePreset.id)
+        bloom=\(String(format: "%.2f", activePreset.bloomStrength))
+        overlay=\(String(format: "%.2f", activePreset.waveformStrength))
         audio_source=\(audio.real ? "real" : "fallback")
         energy=\(String(format: "%.3f", audio.energy))
         bass=\(String(format: "%.3f", audio.bass)) mid=\(String(format: "%.3f", audio.mid)) treble=\(String(format: "%.3f", audio.treble))

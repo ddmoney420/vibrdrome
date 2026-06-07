@@ -38,6 +38,12 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `zoomBass` | float | audio mapping: bass → extra zoom |
 | `rotateTreble` | float | audio mapping: treble → extra rotation |
 | `pulseBass` | float | audio mapping: bass → pulse |
+| `bloomStrength` | float? | (Phase 4) glow intensity, 0..1 (0 = off). `decodeIfPresent` → 0 |
+| `waveformStrength` | float? | (Phase 4) audio-spectrum overlay intensity, 0..1 (0 = off). `decodeIfPresent` → 0 |
+
+`bloomStrength` and `waveformStrength` are **optional** and default to `0` when absent,
+so older `version: 1` presets remain valid (the field set is a backward-compatible
+superset).
 
 ## Example presets (authorship notes)
 - **`vibrdrome_aurora` ("Aurora")** — original Vibrdrome preset. Slow, deep feedback
@@ -46,7 +52,13 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 - **`vibrdrome_pulse` ("Pulse")** — original Vibrdrome preset. Punchy, beat-locked
   (low `decay`, high `pulseScale`/`pulseBass`), warm palette. Authored from scratch.
 
-See `vibrdrome_aurora.json` and `vibrdrome_pulse.json` in this directory.
+- **`vibrdrome_nebula` ("Nebula")** — original Vibrdrome preset (Phase 4). Long decay,
+  heavy **bloom**, no overlay — soft, dreamy glow. Authored from scratch.
+- **`vibrdrome_spectrum` ("Spectrum")** — original Vibrdrome preset (Phase 4). Strong
+  **audio-spectrum overlay** + moderate bloom, punchier. Authored from scratch.
+
+See `vibrdrome_aurora.json`, `vibrdrome_pulse.json`, `vibrdrome_nebula.json`, and
+`vibrdrome_spectrum.json` in this directory.
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

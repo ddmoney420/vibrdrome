@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "vibrdrome_spectrum",
+  "name": "Spectrum",
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "decay": 0.88,
+  "zoom": 0.030,
+  "rotate": 0.010,
+  "paletteIndex": 1,
+  "paletteShift": 0.50,
+  "pulseScale": 0.70,
+  "zoomBass": 0.80,
+  "rotateTreble": 0.30,
+  "pulseBass": 0.90,
+  "bloomStrength": 0.40,
+  "waveformStrength": 0.90
+}

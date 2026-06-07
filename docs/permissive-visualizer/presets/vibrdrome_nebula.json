@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "vibrdrome_nebula",
+  "name": "Nebula",
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "decay": 0.97,
+  "zoom": 0.015,
+  "rotate": 0.020,
+  "paletteIndex": 0,
+  "paletteShift": 0.10,
+  "pulseScale": 0.50,
+  "zoomBass": 0.60,
+  "rotateTreble": 0.40,
+  "pulseBass": 0.70,
+  "bloomStrength": 0.90,
+  "waveformStrength": 0.00
+}

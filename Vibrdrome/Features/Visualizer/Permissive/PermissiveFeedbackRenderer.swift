@@ -21,6 +21,9 @@ struct PermissiveUniforms {
     var zoomBass: Float
     var rotateTreble: Float
     var pulseBass: Float
+    // Phase 4 visual-depth knobs.
+    var bloomStrength: Float
+    var waveformStrength: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -36,22 +39,30 @@ final class PermissiveFeedbackRenderer {
     let device: MTLDevice
     private let queue: MTLCommandQueue
     private let feedbackPSO: MTLRenderPipelineState
+    private let bloomPSO: MTLRenderPipelineState     // Phase 4
     private let presentPSO: MTLRenderPipelineState
 
     private var texA: MTLTexture?
     private var texB: MTLTexture?
+    private var bloomTex: MTLTexture?                 // half-res bloom (Phase 4)
     private var readIsA = true
     private var lastWritten: MTLTexture?
     private var staging: MTLTexture?          // 1x1 readback (proof only)
     private var size: CGSize = .zero
     private var clearNext = true
 
+    static let bandCount = 32
+    private let bandsBuffer: MTLBuffer        // 32 FFT magnitudes for the overlay (Phase 4)
+
     static let feedbackFormat: MTLPixelFormat = .rgba16Float
 
     init?(device: MTLDevice) {
         self.device = device
-        guard let q = device.makeCommandQueue() else { return nil }
+        guard let q = device.makeCommandQueue(),
+              let bands = device.makeBuffer(length: Self.bandCount * MemoryLayout<Float>.stride,
+                                            options: .storageModeShared) else { return nil }
         queue = q
+        bandsBuffer = bands
         do {
             let lib = try device.makeLibrary(source: Self.shaderSource, options: nil)
             let fd = MTLRenderPipelineDescriptor()
@@ -59,6 +70,12 @@ final class PermissiveFeedbackRenderer {
             fd.fragmentFunction = lib.makeFunction(name: "pv_feedback")
             fd.colorAttachments[0].pixelFormat = Self.feedbackFormat
             feedbackPSO = try device.makeRenderPipelineState(descriptor: fd)
+
+            let bd = MTLRenderPipelineDescriptor()
+            bd.vertexFunction = lib.makeFunction(name: "pv_vertex")
+            bd.fragmentFunction = lib.makeFunction(name: "pv_bloom")
+            bd.colorAttachments[0].pixelFormat = Self.feedbackFormat
+            bloomPSO = try device.makeRenderPipelineState(descriptor: bd)
 
             let pd = MTLRenderPipelineDescriptor()
             pd.vertexFunction = lib.makeFunction(name: "pv_vertex")
@@ -68,6 +85,12 @@ final class PermissiveFeedbackRenderer {
         } catch {
             return nil
         }
+    }
+
+    /// Upload the current 32-band magnitudes for the overlay (called each frame).
+    func setBands(_ bands: [Float]) {
+        let ptr = bandsBuffer.contents().bindMemory(to: Float.self, capacity: Self.bandCount)
+        for i in 0..<Self.bandCount { ptr[i] = i < bands.count ? bands[i] : 0 }
     }
 
     func resize(to newSize: CGSize) {
@@ -80,12 +103,21 @@ final class PermissiveFeedbackRenderer {
         d.storageMode = .private
         texA = device.makeTexture(descriptor: d)
         texB = device.makeTexture(descriptor: d)
+
+        // Quarter-res bloom target (cheap; keeps the prototype near 60fps on device).
+        let bw = max(1, Int(newSize.width) / 4), bh = max(1, Int(newSize.height) / 4)
+        let bd = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: Self.feedbackFormat, width: bw, height: bh, mipmapped: false)
+        bd.usage = [.renderTarget, .shaderRead]
+        bd.storageMode = .private
+        bloomTex = device.makeTexture(descriptor: bd)
+
         clearNext = true
     }
 
     @MainActor
     func render(in view: MTKView, uniforms: PermissiveUniforms) {
-        guard let texA, let texB,
+        guard let texA, let texB, let bloomTex,
               let drawable = view.currentDrawable,
               let presentRPD = view.currentRenderPassDescriptor,
               let cb = queue.makeCommandBuffer() else { return }
@@ -107,11 +139,27 @@ final class PermissiveFeedbackRenderer {
             enc.endEncoding()
         }
 
-        // Pass B — present: palette-map the field to the drawable.
+        // Pass B — bloom (half-res): bright-pass + small blur of the feedback field.
+        let brpd = MTLRenderPassDescriptor()
+        brpd.colorAttachments[0].texture = bloomTex
+        brpd.colorAttachments[0].loadAction = .clear
+        brpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
+        brpd.colorAttachments[0].storeAction = .store
+        if let enc = cb.makeRenderCommandEncoder(descriptor: brpd) {
+            enc.setRenderPipelineState(bloomPSO)
+            enc.setFragmentTexture(write, index: 0)
+            enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            enc.endEncoding()
+        }
+
+        // Pass C — present: field + bloom + audio-spectrum overlay → drawable.
         if let enc = cb.makeRenderCommandEncoder(descriptor: presentRPD) {
             enc.setRenderPipelineState(presentPSO)
             enc.setFragmentTexture(write, index: 0)
+            enc.setFragmentTexture(bloomTex, index: 1)
             enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+            enc.setFragmentBuffer(bandsBuffer, offset: 0, index: 1)
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             enc.endEncoding()
         }
@@ -187,6 +235,8 @@ final class PermissiveFeedbackRenderer {
         float zoomBass;
         float rotateTreble;
         float pulseBass;
+        float bloomStrength;
+        float waveformStrength;
     };
 
     struct VSOut {
@@ -226,6 +276,22 @@ final class PermissiveFeedbackRenderer {
         return float4(sum, 1.0);
     }
 
+    // Bloom pass (half-res): bright-pass + small 3x3 box blur of the feedback field.
+    fragment float4 pv_bloom(VSOut in [[stage_in]],
+                             texture2d<float> field [[texture(0)]],
+                             constant Uniforms& u [[buffer(0)]]) {
+        constexpr sampler s(address::clamp_to_edge, filter::linear);
+        float2 texel = 4.0 / u.resolution;   // wider offset to keep the glow at quarter-res
+        float3 sum = float3(0.0);
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                float3 c = field.sample(s, in.uv + float2(dx, dy) * texel).rgb;
+                sum += max(c - 0.35, 0.0);   // soft bright-pass
+            }
+        }
+        return float4(sum / 9.0, 1.0);
+    }
+
     // Two original 3-stop gradient palettes selected by index (0 = cool, 1 = warm),
     // with a slowly-shifting position.
     float3 pv_palette(float t, float shift, int idx) {
@@ -247,12 +313,25 @@ final class PermissiveFeedbackRenderer {
 
     fragment float4 pv_present(VSOut in [[stage_in]],
                                texture2d<float> field [[texture(0)]],
-                               constant Uniforms& u [[buffer(0)]]) {
+                               texture2d<float> bloom [[texture(1)]],
+                               constant Uniforms& u [[buffer(0)]],
+                               constant float* bands [[buffer(1)]]) {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         float3 v = field.sample(s, in.uv).rgb;
+        v += bloom.sample(s, in.uv).rgb * u.bloomStrength;   // glow
         float intensity = clamp(length(v) * 0.85, 0.0, 1.0);
-        float3 col = pv_palette(intensity + u.time * 0.02, u.paletteShift, int(u.paletteIndex));
-        return float4(col * intensity, 1.0);
+        float3 col = pv_palette(intensity + u.time * 0.02, u.paletteShift, int(u.paletteIndex)) * intensity;
+
+        // Audio-spectrum overlay: a glowing curve whose height follows the 32 bands.
+        if (u.waveformStrength > 0.0) {
+            int bi = clamp(int(in.uv.x * 32.0), 0, 31);
+            float bandH = clamp(bands[bi], 0.0, 1.0);
+            float curveY = 1.0 - bandH;                       // loud = high
+            float line = exp(-abs(in.uv.y - curveY) * 60.0) * u.waveformStrength;
+            float3 lineCol = pv_palette(0.75, u.paletteShift, int(u.paletteIndex));
+            col += line * lineCol * 1.4;
+        }
+        return float4(col, 1.0);
     }
     """
 }
