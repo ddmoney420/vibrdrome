@@ -52,6 +52,13 @@ struct PermissivePreset: Identifiable, Codable {
     let warpMode: Int      // 0 = curl-flow, 1 = polar warp (hero)
     // Phase 8b — kaleidoscope wedge count for the present-time polar fold (0 = off).
     let kaleido: Int
+    // Phase 8c — radial spectrum spokes (Radiant): ray count (0 = off) + radial bar length.
+    let spokes: Int
+    let spokeLen: Float
+    // Phase 8c-2 — inject spokes into the feedback field (1) for bloom + trails, vs present-only (0).
+    let spokeInject: Int
+    // Phase 8c-3 — whirlpool: center-weighted rotational warp (0 = off).
+    let whirl: Float
 
     init(version: Int, id: String, name: String, author: String, license: String?,
          decay: Float, zoom: Float, rotate: Float, paletteIndex: Int, paletteShift: Float,
@@ -63,7 +70,8 @@ struct PermissivePreset: Identifiable, Codable {
          symmetry: Int = 0, vibrance: Float = 1.0,
          spin: Float = 0, beatWave: Float = 0,
          swirl: Float = 0, swirlFreq: Float = 8, warpMode: Int = 0,
-         kaleido: Int = 0) {
+         kaleido: Int = 0, spokes: Int = 0, spokeLen: Float = 0, spokeInject: Int = 0,
+         whirl: Float = 0) {
         self.version = version; self.id = id; self.name = name; self.author = author
         self.license = license; self.decay = decay; self.zoom = zoom; self.rotate = rotate
         self.paletteIndex = paletteIndex; self.paletteShift = paletteShift
@@ -75,7 +83,8 @@ struct PermissivePreset: Identifiable, Codable {
         self.symmetry = symmetry; self.vibrance = vibrance
         self.spin = spin; self.beatWave = beatWave
         self.swirl = swirl; self.swirlFreq = swirlFreq; self.warpMode = warpMode
-        self.kaleido = kaleido
+        self.kaleido = kaleido; self.spokes = spokes; self.spokeLen = spokeLen
+        self.spokeInject = spokeInject; self.whirl = whirl
     }
 
     init(from decoder: Decoder) throws {
@@ -113,6 +122,10 @@ struct PermissivePreset: Identifiable, Codable {
         swirlFreq = try c.decodeIfPresent(Float.self, forKey: .swirlFreq) ?? 8
         warpMode = try c.decodeIfPresent(Int.self, forKey: .warpMode) ?? 0
         kaleido = try c.decodeIfPresent(Int.self, forKey: .kaleido) ?? 0
+        spokes = try c.decodeIfPresent(Int.self, forKey: .spokes) ?? 0
+        spokeLen = try c.decodeIfPresent(Float.self, forKey: .spokeLen) ?? 0
+        spokeInject = try c.decodeIfPresent(Int.self, forKey: .spokeInject) ?? 0
+        whirl = try c.decodeIfPresent(Float.self, forKey: .whirl) ?? 0
     }
 
     static let fallback = PermissivePreset(
@@ -152,6 +165,34 @@ enum PermissivePresetLibrary {
         "waveStyle": 2, "waveAmp": 0.30, "waveBright": 1.00, "tunnel": 0.60,
         "symmetry": 0, "vibrance": 1.40, "spin": 0.00, "beatWave": 1.00,
         "swirl": 0.25, "swirlFreq": 8.0, "warpMode": 0, "kaleido": 6
+      },
+      {
+        "version": 1, "id": "vibrdrome_radiant", "name": "Radiant",
+        "author": "Vibrdrome", "license": "permissive-tbd",
+        "decay": 0.90, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 6, "paletteShift": 0.00, "pulseScale": 0.20,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.50, "waveformStrength": 0.00,
+        "flow": 0.30, "flowScale": 2.50, "beatFlow": 0.50,
+        "beatBloom": 0.50, "hueDrift": 0.30,
+        "waveStyle": 0, "waveAmp": 0.00, "waveBright": 0.00, "tunnel": 0.40,
+        "symmetry": 0, "vibrance": 1.50, "spin": 0.00, "beatWave": 0.00,
+        "swirl": 0.00, "swirlFreq": 8.0, "warpMode": 0, "kaleido": 0,
+        "spokes": 16, "spokeLen": 0.50
+      },
+      {
+        "version": 1, "id": "vibrdrome_spectralspokes", "name": "Spectral Spokes",
+        "author": "Vibrdrome", "license": "permissive-tbd",
+        "decay": 0.96, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 6, "paletteShift": 0.00, "pulseScale": 0.20,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.65, "waveformStrength": 0.00,
+        "flow": 0.25, "flowScale": 2.50, "beatFlow": 0.50,
+        "beatBloom": 0.60, "hueDrift": 0.30,
+        "waveStyle": 1, "waveAmp": 0.12, "waveBright": 0.80, "tunnel": 0.75,
+        "symmetry": 1, "vibrance": 1.50, "spin": 0.00, "beatWave": 0.60,
+        "swirl": 0.00, "swirlFreq": 8.0, "warpMode": 0, "kaleido": 0,
+        "spokes": 16, "spokeLen": 0.50, "spokeInject": 1, "whirl": 0.85
       },
       {
         "version": 1, "id": "vibrdrome_aurora", "name": "Aurora",

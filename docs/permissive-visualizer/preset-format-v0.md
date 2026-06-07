@@ -57,6 +57,10 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `swirlFreq` | float? | (Phase 8) spatial frequency of the swirl. `decodeIfPresent` → 8 |
 | `warpMode` | int? | (Phase 8) 0 = curl-flow, 1 = polar warp (hero vortex). `decodeIfPresent` → 0 |
 | `kaleido` | int? | (Phase 8b) kaleidoscope wedge count for the present-time polar fold; 0 = off, 6/8 = wedges. `decodeIfPresent` → 0 |
+| `spokes` | int? | (Phase 8c) radial spectrum-spoke (ray) count; 0 = off. `decodeIfPresent` → 0 |
+| `spokeLen` | float? | (Phase 8c) radial length of the spectrum bars. `decodeIfPresent` → 0 |
+| `spokeInject` | int? | (Phase 8c) 0 = present-only spokes (sharp), 1 = inject spokes into the feedback field (bloom + trails). `decodeIfPresent` → 0 |
+| `whirl` | float? | (Phase 8c) whirlpool: center-weighted rotational warp (1/r falloff, bass-swelled). 0 = off. `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -79,6 +83,17 @@ The waveform geometry is built **host-side from raw PCM** (`VisualizerPCMSource`
 **DEBUG-only**, enabled only while the native-visualizer screen is visible and never while
 projectM owns the ring). Still **parameters-only** — the preset selects a style and
 intensities; it does not carry code, expressions, or PCM.
+
+### Phase 8c — radial spectrum spokes (Radiant)
+`spokes > 0` draws the **spectrum geometry family**: the 32 `AudioSpectrum.bands` become
+**filled radial bars** whose length tracks each band's energy (`spokeLen`), procedurally in
+the present pass. The bands are **folded around the vertical axis** into a bilaterally-
+symmetric EQ halo (so it reads ornamental, not a left-to-right bar graph), with thin angular
+gaps between rays (crisp), additive-bright on the dark field, hue varying per band, gentle
+time rotation + `treblePunch` shimmer, `bassPunch` radial breathing, and `beatPulse` flash.
+`spokeInject 0` (Radiant) draws them present-only (sharp, no glow/trails); `spokeInject 1`
+(Spectral Spokes) draws them **into the feedback field** so they bloom and trail. No
+concentric rings in this checkpoint.
 
 ### Phase 8b — kaleidoscope waveform (Kaleidoscope)
 `kaleido > 0` adds a **present-time polar wedge fold**: decompose to radius/angle, wrap the
@@ -112,8 +127,20 @@ for discrete hits.
   so the fold has angular detail to mirror into a turning mandala (a rotationally-symmetric
   source would just fold back to a circle). Nebula magenta/blue palette (idx 5),
   `treblePunch`-driven rotation. Authored from scratch; not derived from any third-party preset.
-The presets run the flow/polar engine — each draws a real PCM waveform into the feedback,
-with a distinct palette, form, motion, and beat behaviour:
+- **`vibrdrome_radiant` ("Radiant")** — **Radial Spectrum Spokes family (Phase 8c)**. The 32
+  FFT bands as **filled radial bars** (`spokes 16`, `spokeLen`) folded into a bilaterally-
+  symmetric, hue-cycling EQ halo on a dark field; `bassPunch` breathes the inner radius,
+  `treblePunch` rotates, `beatPulse` flashes. No waveform (the spokes are the geometry).
+  Rainbow palette (idx 6). Present-only (`spokeInject 0`) — sharp, no glow/trails. Authored
+  from scratch; not derived from any third-party preset.
+- **`vibrdrome_spectralspokes` ("Spectral Spokes")** — the **injected** spectrum-spokes variant
+  (`spokeInject 1`): the radial bars drawn **into the feedback field** so they bloom and leave
+  trails (longer `decay`, gentle `flow`), plus three overlaid oscillations for a trippy look —
+  a **vibrating-string ripple** travelling along each spoke, **oscillating tips** (per-band
+  sine), and the **real PCM waveform** ring (`waveStyle 1`) overlaid on top. Authored from
+  scratch.
+The presets run the flow/polar engine — each draws structured geometry (a PCM waveform or
+spectrum spokes) into the field, with a distinct palette, form, motion, and beat behaviour:
 - **`vibrdrome_aurora` ("Aurora")** — calm flowing curtains: circular waveform, aurora
   green/teal palette (idx 3), slow flow, high decay, gentle spin, soft beat. Authored from
   scratch.

@@ -193,6 +193,30 @@ of smearing.
 code/expressions/PCM in the preset). `kaleido 0` leaves every other preset unchanged. No
 projectM/Classic/CI/Vendor/release changes.
 
+## Research Step 8c — Radiant (radial spectrum spokes family) (2026-06-07)
+
+DEBUG-only. New `vibrdrome_radiant` preset — the first spectrum-geometry family. General-CG
+concept; no third-party code or preset content copied; no projectM / Butterchurn / `.milk`
+consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| radial spectrum bars | general-cg-concept, our-own-code | the 32 `AudioSpectrum.bands` mapped to filled radial bars (length = band energy), procedural in the present pass; our own formulation |
+| bilateral band fold | general-cg-concept | fold the bands around the vertical axis so the halo is symmetric/ornamental, not a left-to-right bar graph |
+| anti-debug-graph treatment | our-design-notes | thin angular gaps (crisp rays) + additive bright on a dark field + per-band hue + bloom/beat flash, so it reads as an EQ halo, not an overlay |
+| punch-driven dynamics | our-own-code | `bassPunch` breathes the inner radius, `treblePunch` rotates, `beatPulse` flashes; the bands are the geometry |
+
+| feedback spoke injection | our-own-code, general-cg-concept | present-only spokes read flat, so a second variant draws the same procedural spokes INTO the feedback field (`spokeInject 1`) so they bloom (bloom pass) + trail (feedback decay); bands buffer bound to the feedback pass; original |
+| spoke oscillation overlays | general-cg-concept, our-own-code | Spectral Spokes adds three overlaid oscillations — a traveling sine ripple along each spoke (vibrating string), per-band sine tip wobble, and the real PCM circular waveform (`waveStyle 1`) overlaid; standard sine/oscilloscope ideas, our own formulation |
+| whirlpool warp + spiral twist | general-cg-concept | center-weighted rotational warp (angle ∝ 1/r) on the feedback sample coord, plus a radius-dependent twist on the spoke angle so the rays bend into spiral arms drawn into the centre (a drain/vortex); the L/R `symmetry` mirror re-symmetrizes it; original |
+
+**Scope note:** two variants — `vibrdrome_radiant` (present-only, sharp) and
+`vibrdrome_spectralspokes` (injected → bloom + trails). No concentric rings in this checkpoint.
+
+**Guardrails intact:** parameters-only (`spokes`/`spokeInject` Int, `spokeLen` Float,
+`decodeIfPresent → 0`; no shader code/expressions/PCM in the preset). `spokes 0` leaves every
+other preset unchanged. No projectM/Classic/CI/Vendor/release changes.
+
 ## Third-party dependencies considered
-None in Steps 1–8b. (Any future permissive dependency must have its license recorded
+None in Steps 1–8c. (Any future permissive dependency must have its license recorded
 here before use.)

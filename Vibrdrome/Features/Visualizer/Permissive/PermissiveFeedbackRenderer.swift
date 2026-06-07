@@ -48,6 +48,13 @@ struct PermissiveUniforms {
     var treblePunch: Float
     // Phase 8b — kaleidoscope wedge count (0 = off) for the present-time polar fold.
     var kaleido: Float
+    // Phase 8c — radial spectrum spokes (Radiant): ray count (0 = off) + radial bar length.
+    var spokes: Float
+    var spokeLen: Float
+    // Phase 8c-2 — inject spokes into the feedback field (1) for bloom + trails, vs present-only (0).
+    var spokeInject: Float
+    // Phase 8c-3 — whirlpool: center-weighted rotational warp (spins fast at centre).
+    var whirl: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -193,6 +200,7 @@ final class PermissiveFeedbackRenderer {
             enc.setRenderPipelineState(feedbackPSO)
             enc.setFragmentTexture(read, index: 0)
             enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+            enc.setFragmentBuffer(bandsBuffer, offset: 0, index: 1)   // for spoke injection
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             enc.endEncoding()
         }
@@ -331,6 +339,10 @@ final class PermissiveFeedbackRenderer {
         float midPunch;
         float treblePunch;
         float kaleido;
+        float spokes;
+        float spokeLen;
+        float spokeInject;
+        float whirl;
     };
 
     struct VSOut {
@@ -370,13 +382,17 @@ final class PermissiveFeedbackRenderer {
         return v;
     }
 
+    float3 pv_cospalette(float t, int idx);   // forward decl (defined below; used by inject)
+
     // Feedback pass. When `flow > 0` (hero path) the prior frame is advected along the
     // curl of an animated fbm potential — a flowing, non-centered vector field — and the
     // beat injects a bright flash that the flow then carries. When `flow == 0` (legacy /
-    // debug presets) it falls back to the old center rotate/zoom warp.
+    // debug presets) it falls back to the old center rotate/zoom warp. With `spokeInject`,
+    // the radial spectrum spokes are also drawn into the field here so they bloom + trail.
     fragment float4 pv_feedback(VSOut in [[stage_in]],
                                 texture2d<float> prev [[texture(0)]],
-                                constant Uniforms& u [[buffer(0)]]) {
+                                constant Uniforms& u [[buffer(0)]],
+                                constant float* bands [[buffer(1)]]) {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         float2 uv = in.uv;
         float aspect = u.resolution.x / max(u.resolution.y, 1.0);
@@ -423,6 +439,17 @@ final class PermissiveFeedbackRenderer {
             fc *= (1.0 + u.tunnel * (0.02 + 0.05 * u.beatPulse));
             samplePos = fc + 0.5;
         }
+
+        // Whirlpool: rotate the sample coordinate around centre by an angle that grows toward
+        // the centre (1/r falloff) — a drain/vortex twist that accumulates through feedback.
+        if (abs(u.whirl) > 0.0001) {
+            float2 wc = samplePos - 0.5;
+            float wr = length(wc);
+            float wa = u.whirl * 0.03 / (wr + 0.08) * (1.0 + 0.5 * u.bassPunch);
+            float wca = cos(wa), wsa = sin(wa);
+            wc = float2(wc.x * wca - wc.y * wsa, wc.x * wsa + wc.y * wca);
+            samplePos = wc + 0.5;
+        }
         float3 fed = prev.sample(s, samplePos).rgb * u.decay;
 
         // Energy injection: a soft core that flashes on the beat (beatPulse) with a small
@@ -431,8 +458,39 @@ final class PermissiveFeedbackRenderer {
         float inj = (0.05 + u.pulseScale * (0.12 * u.bass + 0.55 * u.beatPulse)) * exp(-d * 4.0);
         float3 add = inj * (0.45 + 0.55 * float3(u.bass, u.mid, u.treble));
 
-        // Soft-saturate so the field can't blow out to uniform white.
         float3 sum = fed + add;
+
+        // Spectral-spoke injection (Spectral Spokes): draw the radial bars INTO the field so
+        // they bloom (the bloom pass reads the field) and trail (feedback decay carries them).
+        // Same math as the present-pass spokes; gated by spokeInject so Radiant stays present-only.
+        if (u.spokes > 0.5 && u.spokeInject > 0.5) {
+            float2 qq = uv - 0.5; qq.x *= aspect;
+            float rr = length(qq);
+            // Radius-dependent twist: inner radii rotate more than outer → the straight rays
+            // bend into spiral arms drawn into the centre (the whirlpool), turning over time.
+            float swirlTwist = u.whirl * 0.22 / (rr + 0.12);
+            float sang = fract(atan2(qq.y, qq.x) / 6.2831853 + 0.5 + u.time * 0.02
+                               + u.treblePunch * 0.08 + swirlTwist);
+            float sma = (sang < 0.5) ? sang : (1.0 - sang);
+            float sfa = sma * 2.0 * u.spokes;
+            int sN = max(int(u.spokes), 1);
+            int sbi = clamp(int(sfa), 0, sN - 1);
+            int sband = clamp(sbi * 32 / sN, 0, 31);
+            float samp = clamp(bands[sband], 0.0, 1.0);
+            float sr0 = 0.05 + 0.04 * u.bassPunch;   // reach toward centre so the whirl has content to spiral
+            // (2) tips oscillate in/out: a per-band sine over time, swelled by bass.
+            float tipOsc = 0.045 * sin(u.time * 5.0 + float(sband) * 0.6) * (1.0 + u.bassPunch);
+            float sOuter = sr0 + samp * u.spokeLen + tipOsc;
+            float sAngFrac = fract(sfa);
+            float sgap = smoothstep(0.045, 0.0, abs(sAngFrac - 0.5));   // thin centred line
+            float sbar = step(sr0, rr) * smoothstep(sOuter, sOuter - 0.012, rr) * sgap;
+            // (1) vibrating-string ripple: bright/dark bands travel outward along the spoke.
+            float ripple = 0.55 + 0.45 * sin(rr * 70.0 - u.time * 7.0 + u.treblePunch * 5.0);
+            float3 sCol = pv_cospalette(float(sband) / 32.0 + u.time * 0.10, int(u.paletteIndex));
+            sum += sbar * ripple * sCol * (0.6 + 0.9 * samp + 0.7 * u.beatPulse);
+        }
+
+        // Soft-saturate so the field can't blow out to uniform white.
         sum = sum / (1.0 + 0.55 * sum);
         return float4(sum, 1.0);
     }
@@ -603,6 +661,30 @@ final class PermissiveFeedbackRenderer {
             float3 lineCol = (idx >= 2) ? pv_cospalette(0.7, idx)
                                         : pv_palette(0.75, u.paletteShift, idx);
             col += line * lineCol * 1.4;
+        }
+
+        // Radial spectrum spokes (Radiant): filled bars whose length = band energy, the 32
+        // FFT bands FOLDED around the vertical axis into a bilaterally-symmetric EQ halo (so
+        // it reads ornamental, not a left-to-right bar graph). Thin angular gaps keep the rays
+        // crisp; additive bright on the dark field; hue varies per band; beat flashes them.
+        // Present-only when spokeInject == 0 (Radiant); injected presets draw them in feedback.
+        if (u.spokes > 0.5 && u.spokeInject < 0.5) {
+            float2 q = in.uv - 0.5; q.x *= aspect;
+            float r = length(q);
+            float ang = fract(atan2(q.y, q.x) / 6.2831853 + 0.5 + u.time * 0.02 + u.treblePunch * 0.08);
+            float ma = (ang < 0.5) ? ang : (1.0 - ang);      // bilateral fold (L/R mirror)
+            float fa = ma * 2.0 * u.spokes;
+            int sN = max(int(u.spokes), 1);
+            int bi = clamp(int(fa), 0, sN - 1);
+            int band = clamp(bi * 32 / sN, 0, 31);
+            float amp = clamp(bands[band], 0.0, 1.0);
+            float r0 = 0.12 + 0.04 * u.bassPunch;             // inner radius breathes on bass
+            float barOuter = r0 + amp * u.spokeLen;
+            float angFrac = fract(fa);                        // within-spoke position
+            float gap = smoothstep(0.045, 0.0, abs(angFrac - 0.5));   // thin centred line
+            float bar = step(r0, r) * smoothstep(barOuter, barOuter - 0.012, r) * gap;
+            float3 spokeCol = pv_cospalette(float(band) / 32.0 + u.time * 0.05, idx);
+            col += bar * spokeCol * (0.7 + 1.0 * amp + 0.8 * u.beatPulse);
         }
         return float4(col, 1.0);
     }

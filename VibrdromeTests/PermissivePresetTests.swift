@@ -7,12 +7,13 @@ import XCTest
 /// are present with sane fields, including the Phase-4 bloom/overlay knobs.
 final class PermissivePresetTests: XCTestCase {
 
-    func testLibraryDecodesSixPresets() {
+    func testLibraryDecodesEightPresets() {
         let presets = PermissivePresetLibrary.presets
-        XCTAssertEqual(presets.count, 6)
+        XCTAssertEqual(presets.count, 8)
         XCTAssertEqual(presets.map(\.id),
-                       ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_aurora",
-                        "vibrdrome_pulse", "vibrdrome_nebula", "vibrdrome_spectrum"])
+                       ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_radiant",
+                        "vibrdrome_spectralspokes", "vibrdrome_aurora", "vibrdrome_pulse",
+                        "vibrdrome_nebula", "vibrdrome_spectrum"])
         XCTAssertEqual(presets.first?.name, "Flux")   // hero is index 0 (default on open)
     }
 
@@ -37,13 +38,13 @@ final class PermissivePresetTests: XCTestCase {
         }
     }
 
-    func testAllPresetsUseNonLegacyEngineWithWaveform() {
+    func testAllPresetsUseNonLegacyEngine() {
         // Every shipping preset runs the new engine — curl-flow (flow > 0) or polar warp
-        // (warpMode > 0) — with a real waveform and a distinct cosine palette (idx >= 2).
-        // No legacy center-path presets.
+        // (warpMode > 0) — with structured geometry (a waveform OR spectrum spokes) and a
+        // distinct cosine palette (idx >= 2). No legacy center-path presets.
         for p in PermissivePresetLibrary.presets {
             XCTAssertTrue(p.flow > 0 || p.warpMode > 0, "\(p.id) should not be on the legacy center path")
-            XCTAssertGreaterThan(p.waveStyle, 0, "\(p.id) waveStyle")
+            XCTAssertTrue(p.waveStyle > 0 || p.spokes > 0, "\(p.id) needs geometry (waveform or spokes)")
             XCTAssertGreaterThanOrEqual(p.paletteIndex, 2, "\(p.id) palette")
         }
     }
@@ -89,6 +90,29 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertGreaterThan(flux?.vibrance ?? 0, 1.0)    // boosted vibrance
     }
 
+    func testRadiantIsRadialSpectrumSpokes() {
+        // Step 8c — Radiant is the spectrum-geometry family: radial spokes from the bands,
+        // no waveform (the spokes are the geometry).
+        let by = Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
+        let radiant = by["vibrdrome_radiant"]
+        XCTAssertGreaterThan(radiant?.spokes ?? 0, 0)        // spokes on
+        XCTAssertGreaterThan(radiant?.spokeLen ?? 0, 0)
+        XCTAssertEqual(radiant?.waveStyle, 0)                // no waveform
+        XCTAssertEqual(radiant?.kaleido, 0)                  // no wedge fold
+        XCTAssertEqual(radiant?.spokeInject, 0)              // present-only (sharp, no trails)
+    }
+
+    func testSpectralSpokesInjectsForBloomAndTrails() {
+        // Step 8c-2 — Spectral Spokes is the injected variant: spokes drawn into the feedback
+        // field (spokeInject 1) so they bloom and trail.
+        let by = Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
+        let ss = by["vibrdrome_spectralspokes"]
+        XCTAssertGreaterThan(ss?.spokes ?? 0, 0)
+        XCTAssertEqual(ss?.spokeInject, 1)                   // injected → bloom + trails
+        XCTAssertGreaterThan(ss?.whirl ?? 0, 0)              // centre whirlpool
+        XCTAssertEqual(ss?.symmetry, 1)                      // L/R mirror re-symmetrizes the whirl
+    }
+
     func testSpectrumIsScopeAndPulseIsQuad() {
         // Phase 7c — distinct forms: Spectrum is a horizontal scope; Pulse is a quad fold.
         let by = Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
@@ -126,6 +150,10 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(p?.swirlFreq, 8)    // safe default
         XCTAssertEqual(p?.warpMode, 0)
         XCTAssertEqual(p?.kaleido, 0)
+        XCTAssertEqual(p?.spokes, 0)
+        XCTAssertEqual(p?.spokeLen, 0)
+        XCTAssertEqual(p?.spokeInject, 0)
+        XCTAssertEqual(p?.whirl, 0)
     }
 
     func testFallbackPresetExists() {
