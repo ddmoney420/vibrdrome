@@ -39,6 +39,13 @@ struct PermissiveUniforms {
     var vibrance: Float     // saturation + brightness multiplier (1 = neutral)
     // Phase 7c "wow" — field spin (time + beat driven rotation).
     var spin: Float
+    // Phase 8 — polar warp + audio envelope-follower punches.
+    var swirl: Float
+    var swirlFreq: Float
+    var warpMode: Float     // 0 = curl-flow (legacy), 1 = polar warp (hero)
+    var bassPunch: Float
+    var midPunch: Float
+    var treblePunch: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -315,6 +322,12 @@ final class PermissiveFeedbackRenderer {
         float symmetry;
         float vibrance;
         float spin;
+        float swirl;
+        float swirlFreq;
+        float warpMode;
+        float bassPunch;
+        float midPunch;
+        float treblePunch;
     };
 
     struct VSOut {
@@ -364,35 +377,49 @@ final class PermissiveFeedbackRenderer {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         float2 uv = in.uv;
         float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 samplePos;
 
-        // Legacy center path (used only when flow == 0).
-        float2 c = uv - 0.5;
-        float a = u.rotate * (0.4 + u.rotateTreble * u.treble);
-        float ca = cos(a), sa = sin(a);
-        c = float2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
-        c *= (1.0 - u.zoom * (0.5 + u.zoomBass * u.bass));
-        float2 centerPos = c + 0.5;
+        if (u.warpMode > 0.5) {
+            // Polar warp (hero): decompose to radius/angle, modulate the angle by radius +
+            // time (the radius-dependent swirl is the vortex/spiral), and zoom the radius a
+            // tiny amount per frame (the breathing tunnel — bassPunch deepens it). Seam-free:
+            // we modify the angle and recompose with cos/sin, which are periodic, so the
+            // atan2 branch cut vanishes. Small per-frame transforms compound through feedback.
+            float2 p = uv - 0.5; p.x *= aspect;
+            float r = length(p);
+            float ang = atan2(p.y, p.x);
+            ang += sin(r * u.swirlFreq - u.time * 0.6) * u.swirl * (1.0 + 1.5 * u.midPunch);
+            r *= (1.0 - 0.006 * u.tunnel - 0.030 * u.bassPunch);
+            float2 q = float2(cos(ang), sin(ang)) * r; q.x /= aspect;
+            samplePos = q + 0.5;
+        } else {
+            // Legacy center path (used only when flow == 0).
+            float2 c = uv - 0.5;
+            float a = u.rotate * (0.4 + u.rotateTreble * u.treble);
+            float ca = cos(a), sa = sin(a);
+            c = float2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
+            c *= (1.0 - u.zoom * (0.5 + u.zoomBass * u.bass));
+            float2 centerPos = c + 0.5;
 
-        // Curl-noise advection (hero path).
-        float2 p = (uv - 0.5); p.x *= aspect;
-        float t = u.time * 0.15;
-        float eps = 0.0025;
-        float n0 = pv_fbm(p * u.flowScale + float2(0.0, t));
-        float nx = pv_fbm((p + float2(eps, 0.0)) * u.flowScale + float2(0.0, t));
-        float ny = pv_fbm((p + float2(0.0, eps)) * u.flowScale + float2(0.0, t));
-        float2 curl = float2(ny - n0, -(nx - n0)) / eps;     // divergence-free
-        curl = curl / (length(curl) + 1e-4);                 // direction only
-        float speed = u.flow * (1.0 + u.beatFlow * u.beatPulse + 0.4 * u.bass);
-        float2 adv = curl * speed * 0.0025;
-        adv.x /= aspect;                                     // back to uv space
-        float2 flowPos = uv - adv;                           // sample upstream
+            // Curl-noise advection.
+            float2 p = (uv - 0.5); p.x *= aspect;
+            float t = u.time * 0.15;
+            float eps = 0.0025;
+            float n0 = pv_fbm(p * u.flowScale + float2(0.0, t));
+            float nx = pv_fbm((p + float2(eps, 0.0)) * u.flowScale + float2(0.0, t));
+            float ny = pv_fbm((p + float2(0.0, eps)) * u.flowScale + float2(0.0, t));
+            float2 curl = float2(ny - n0, -(nx - n0)) / eps;     // divergence-free
+            curl = curl / (length(curl) + 1e-4);                 // direction only
+            float speed = u.flow * (1.0 + u.beatFlow * u.beatPulse + 0.4 * u.bass);
+            float2 adv = curl * speed * 0.0025;
+            adv.x /= aspect;                                     // back to uv space
+            float2 flowPos = uv - adv;                           // sample upstream
 
-        float2 samplePos = (u.flow > 0.0001) ? flowPos : centerPos;
-        // Tunnel pull: sample slightly outward so the field flows toward the viewer (a
-        // tunnel/spiral that drags the waveform lines into filaments); the beat deepens it.
-        float2 fc = samplePos - 0.5;
-        fc *= (1.0 + u.tunnel * (0.02 + 0.05 * u.beatPulse));
-        samplePos = fc + 0.5;
+            float2 sp = (u.flow > 0.0001) ? flowPos : centerPos;
+            float2 fc = sp - 0.5;                                // tunnel pull
+            fc *= (1.0 + u.tunnel * (0.02 + 0.05 * u.beatPulse));
+            samplePos = fc + 0.5;
+        }
         float3 fed = prev.sample(s, samplePos).rgb * u.decay;
 
         // Energy injection: a soft core that flashes on the beat (beatPulse) with a small
@@ -521,17 +548,21 @@ final class PermissiveFeedbackRenderer {
             // the music). No atan2 angle term (its -x branch cut drew a seam). Radial = no seam.
             float2 q = in.uv - 0.5;
             float rad = length(q);
-            float tpos = rad * 0.65 + u.time * u.hueDrift * 0.08
-                       + u.beatPulse * 0.15 + u.treble * 0.15 + u.paletteShift;
+            // Hue from a smooth radial field + slow drift + beat + a treble PUNCH accent
+            // (smoothed envelope, not raw FFT → musical, not twitchy). Raw treble stays a
+            // tiny secondary term.
+            float tpos = rad * 0.65 + u.time * u.hueDrift * 0.08 + u.beatPulse * 0.15
+                       + u.treblePunch * 0.30 + u.treble * 0.05 + u.paletteShift;
             col = pv_cospalette(tpos, idx) * intensity;
-            col *= (1.0 + 0.30 * u.bass);          // bass pumps brightness
+            // Brightness pumped by the bass PUNCH (raw bass a gentle secondary floor).
+            col *= (1.0 + 0.60 * u.bassPunch + 0.10 * u.bass);
         } else {
             // Legacy/fallback presets: original intensity-driven 3-stop palette.
             col = pv_palette(intensity + u.time * 0.02, u.paletteShift, idx) * intensity;
         }
 
-        // Bloom + beat-kick glow (beatBloom is 0 for legacy presets, so no change there).
-        col += bloom.sample(s, suv).rgb * (u.bloomStrength + u.beatBloom * u.beatPulse);
+        // Bloom: base + beat kick + a treble-punch shimmer (smoothed, not twitchy).
+        col += bloom.sample(s, suv).rgb * (u.bloomStrength + u.beatBloom * u.beatPulse + 0.40 * u.treblePunch);
 
         if (idx >= 2) {
             // Eased vignette (lighter than before so the image isn't muted at the edges).

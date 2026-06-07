@@ -37,11 +37,12 @@ final class PermissivePresetTests: XCTestCase {
         }
     }
 
-    func testAllPresetsUseFlowEngineWithWaveform() {
-        // Phase 7c — every shipping preset now runs the flow engine with a real waveform
-        // and a distinct cosine palette (idx >= 2). No more legacy center-path presets.
+    func testAllPresetsUseNonLegacyEngineWithWaveform() {
+        // Every shipping preset runs the new engine — curl-flow (flow > 0) or polar warp
+        // (warpMode > 0) — with a real waveform and a distinct cosine palette (idx >= 2).
+        // No legacy center-path presets.
         for p in PermissivePresetLibrary.presets {
-            XCTAssertGreaterThan(p.flow, 0, "\(p.id) flow")
+            XCTAssertTrue(p.flow > 0 || p.warpMode > 0, "\(p.id) should not be on the legacy center path")
             XCTAssertGreaterThan(p.waveStyle, 0, "\(p.id) waveStyle")
             XCTAssertGreaterThanOrEqual(p.paletteIndex, 2, "\(p.id) palette")
         }
@@ -52,12 +53,13 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(Set(palettes).count, palettes.count, "each preset should have a unique palette")
     }
 
-    func testHeroFluxUsesFlowEngine() {
-        // Step 6 — the hero opts into the flow engine, the beat→flow link, and palette 2.
+    func testHeroFluxUsesPolarWarp() {
+        // Step 8 — the hero runs the polar warp (vortex), not curl-flow.
         let by = Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
         let flux = by["vibrdrome_flux"]
-        XCTAssertGreaterThan(flux?.flow ?? 0, 0)          // curl-noise advection on
-        XCTAssertGreaterThan(flux?.beatFlow ?? 0, 0)      // beat accelerates flow
+        XCTAssertEqual(flux?.warpMode, 1)                 // polar warp selected
+        XCTAssertGreaterThan(flux?.swirl ?? 0, 0)         // swirl (the spiral) on
+        XCTAssertGreaterThan(flux?.swirlFreq ?? 0, 0)
         XCTAssertEqual(flux?.paletteIndex, 2)             // cosine hero palette
     }
 
@@ -107,6 +109,9 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(p?.vibrance, 1.0)   // neutral default
         XCTAssertEqual(p?.spin, 0)
         XCTAssertEqual(p?.beatWave, 0)
+        XCTAssertEqual(p?.swirl, 0)
+        XCTAssertEqual(p?.swirlFreq, 8)    // safe default
+        XCTAssertEqual(p?.warpMode, 0)
     }
 
     func testFallbackPresetExists() {

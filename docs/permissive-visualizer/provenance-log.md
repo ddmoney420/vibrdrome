@@ -147,6 +147,29 @@ native-visualizer screen is on-screen and gated off when projectM owns the ring 
 **shipping projectM consumer path is unchanged**. Presets still load from inline DEBUG
 strings (no `.json` bundled). No projectM/Classic/CI/Vendor/release changes.
 
+## Research Step 8 — polar warp + envelope followers (the vortex) (2026-06-07)
+
+DEBUG-only. Adds a polar feedback warp (the hero path) and smoothed audio envelopes, after
+the busy spin/quad additions failed to "wow". General-CG/DSP concepts; no third-party code
+or preset content copied; no projectM / Butterchurn / `.milk` consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| polar warp (radius/angle) | general-cg-concept | decompose to polar, modulate angle by radius+time (swirl), zoom radius per frame (tunnel); recompose with cos/sin (seam-free); our own formulation |
+| band-limited spectral-flux punches | general-dsp-concept, our-own-code | positive per-frame band rises grouped into bass/mid/treble, peak-held + decay; robust to clipped/loud levels (a fast/slow level EMA collapsed to 0 when bands pinned at 1.0); standard onset DSP, written by us from `AudioSpectrum.bands` |
+| punch-driven modulation | our-own-code | route bass/mid/treble punches to zoom/swirl/brightness/bloom; continuous bands kept secondary |
+
+**Guardrails intact:** parameters-only (`swirl`/`swirlFreq`/`warpMode`, `decodeIfPresent`
+defaults; no shader code/expressions/PCM in the preset). No new busy effects — this dials the
+look toward a restrained polar vortex. Continuous bands secondary; `beatPulse` kept for hits.
+No projectM/Classic/CI/Vendor/release changes.
+
+**Known limitation (DEBUG prototype):** the raw-PCM feed (`pcm=on/off` in the proof) is
+intermittent — it depends on the playing item being the EQ tap's designated visualizer
+source, which is not always set the instant the spike screen opens. When `pcm=off` the
+waveform falls back to a synthesized line; the vortex, punch, and beat reactivity are
+unaffected. PCM source-designation hardening is deferred (not in scope for 8a).
+
 ## Third-party dependencies considered
-None in Steps 1–7. (Any future permissive dependency must have its license recorded
+None in Steps 1–8. (Any future permissive dependency must have its license recorded
 here before use.)

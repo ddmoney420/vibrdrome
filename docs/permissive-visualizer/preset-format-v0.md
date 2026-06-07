@@ -53,6 +53,9 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `vibrance` | float? | (Phase 7b) saturation + brightness multiplier for the flow path (1 = neutral). `decodeIfPresent` → 1.0 |
 | `spin` | float? | (Phase 7c) field rotation speed (time + beat driven). `decodeIfPresent` → 0 |
 | `beatWave` | float? | (Phase 7c) `beatPulse` → waveform amplitude burst (the kick "explosion"). `decodeIfPresent` → 0 |
+| `swirl` | float? | (Phase 8) radius-modulated angle swirl amount (the spiral/vortex). `decodeIfPresent` → 0 |
+| `swirlFreq` | float? | (Phase 8) spatial frequency of the swirl. `decodeIfPresent` → 8 |
+| `warpMode` | int? | (Phase 8) 0 = curl-flow, 1 = polar warp (hero vortex). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -76,13 +79,23 @@ The waveform geometry is built **host-side from raw PCM** (`VisualizerPCMSource`
 projectM owns the ring). Still **parameters-only** — the preset selects a style and
 intensities; it does not carry code, expressions, or PCM.
 
+### Phase 8 — polar warp + envelope followers (the vortex)
+`warpMode 1` switches the feedback warp from curl-flow to a **polar warp**: decompose to
+radius/angle, add a radius-modulated swirl to the angle (`swirl` / `swirlFreq` — the
+spiral), and zoom the radius a tiny amount per frame (the breathing tunnel). Seam-free —
+the angle is recomposed with `cos/sin` (periodic), so the `atan2` branch cut vanishes; small
+per-frame transforms compound through feedback into hypnotic motion. Per-band
+**spectral-flux punches** (host side — positive band rises grouped into bass/mid/treble,
+peak-held with decay; robust to clipped/loud levels) feed `bassPunch`/`midPunch`/
+`treblePunch`, which drive zoom/swirl/brightness/bloom. The spectral-flux `beatPulse` stays
+for discrete hits.
+
 ## Example presets (authorship notes)
-- **`vibrdrome_flux` ("Flux")** — original Vibrdrome preset; **hero (Phase 6 → 7)**. A
-  bright **circular waveform** (`waveStyle 1`) drawn into the feedback and dragged into
-  glowing filaments by curl-`flow` + `tunnel`; the spectral-flux `beatPulse` punches
-  flow/bloom/tunnel/line brightness; cosine-gradient hero palette (idx 2); no center
-  transform (`zoom`/`rotate` = 0). Authored from scratch for the flow engine; not derived
-  from any third-party preset.
+- **`vibrdrome_flux` ("Flux")** — original Vibrdrome preset; **hero (Phase 8)**. Restrained,
+  hypnotic **polar vortex** (`warpMode 1`, `swirl`/`swirlFreq`): a circular waveform drawn
+  into the feedback and pulled into a breathing tunnel by the polar warp; envelope-follower
+  punches drive zoom/swirl/brightness/bloom; cosine-gradient palette (idx 2); spin off,
+  bilateral mirror. Authored from scratch; not derived from any third-party preset.
 All five presets now run the flow engine (Phase 7c "wow" rework) — each draws a real PCM
 waveform into the feedback, with a distinct palette, form, motion, and beat behaviour:
 - **`vibrdrome_aurora` ("Aurora")** — calm flowing curtains: circular waveform, aurora

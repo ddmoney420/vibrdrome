@@ -56,6 +56,16 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private var fluxAvg: Float = 0
     private var beatPulse: Float = 0
 
+    // Step 8a — band-limited spectral-flux punch envelopes. Positive per-frame band rises
+    // (the same signal that drives beatPulse) grouped into bass/mid/treble, peak-held with
+    // decay. Robust to level saturation: it measures RISES, not absolute (clippable) level —
+    // the fast/slow level EMA collapsed to 0 when bass/mid pinned at 1.0 on loud music.
+    private var bassPunchEnv: Float = 0
+    private var midPunchEnv: Float = 0
+    private var treblePunchEnv: Float = 0
+    private var lastPunch: SIMD3<Float> = .zero
+    private var punchPeak: SIMD3<Float> = .zero   // peak over the last proof window (proof only)
+
     // Step 7 — raw-PCM waveform geometry (DEBUG-only). We enable the PCM ring's tap only
     // while this screen is visible (and never while projectM owns the ring), drain it into
     // a rolling mono window, and build a circular/scope line that the renderer draws into
@@ -183,7 +193,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let time = Float(now - startTime)
         let audio = Self.sampleAudio(time: time)
         let p = activePreset
-        let pulse = updateBeat(bands: audio.bands)
+        let (pulse, punch) = updateAudio(bands: audio.bands)
 
         // Build the waveform line from raw PCM (or a synthesized fallback when idle).
         let w = Float(view.drawableSize.width), h = Float(view.drawableSize.height)
@@ -207,7 +217,9 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
             flow: p.flow, flowScale: p.flowScale, beatFlow: p.beatFlow,
             beatBloom: p.beatBloom, hueDrift: p.hueDrift, beatPulse: pulse,
             tunnel: p.tunnel, waveBright: p.waveBright,
-            symmetry: Float(p.symmetry), vibrance: p.vibrance, spin: p.spin)
+            symmetry: Float(p.symmetry), vibrance: p.vibrance, spin: p.spin,
+            swirl: p.swirl, swirlFreq: p.swirlFreq, warpMode: Float(p.warpMode),
+            bassPunch: punch.x, midPunch: punch.y, treblePunch: punch.z)
         renderer.render(in: view, uniforms: u)
         frames += 1
 
@@ -246,21 +258,32 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
                           bands: bands)
     }
 
-    /// Spectral-flux onset → attack/decay envelope. Sums the positive band-to-band
-    /// increase, compares it to its own rolling average (adaptive threshold), punches
-    /// `beatPulse` up on a transient, and decays it each frame. Continuous bass/mid/treble
-    /// stay as secondary modulation in the shader; this is the primary beat signal.
-    private func updateBeat(bands: [Float]) -> Float {
-        var flux: Float = 0
+    /// Combined audio reactivity from one pass over the band deltas. The overall positive
+    /// spectral flux drives the beat onset (adaptive threshold → attack/decay `beatPulse`);
+    /// band-grouped flux drives bass/mid/treble PUNCH envelopes (peak-hold + decay). Using
+    /// per-frame flux (RISES, not absolute level) keeps punch alive on loud/clipped audio.
+    private func updateAudio(bands: [Float]) -> (beat: Float, punch: SIMD3<Float>) {
         let n = min(bands.count, prevBands.count)
-        for i in 0..<n { flux += max(0, bands[i] - prevBands[i]) }
-        prevBands = bands
-        fluxAvg = fluxAvg * 0.93 + flux * 0.07
-        if flux > fluxAvg * 1.5 && flux > 0.04 {
-            beatPulse = min(1.0, beatPulse + 0.9)       // fast attack
+        var total: Float = 0, bF: Float = 0, mF: Float = 0, tF: Float = 0
+        for i in 0..<n {
+            let d = max(0, bands[i] - prevBands[i])
+            total += d
+            if i < 6 { bF += d } else if i < 17 { mF += d } else { tF += d }   // bass / mid / treble
         }
-        beatPulse *= 0.88                               // decay (~0.2s tail)
-        return beatPulse
+        prevBands = bands
+
+        // Beat onset (adaptive threshold on the overall flux).
+        fluxAvg = fluxAvg * 0.93 + total * 0.07
+        if total > fluxAvg * 1.5 && total > 0.04 { beatPulse = min(1.0, beatPulse + 0.9) }
+        beatPulse *= 0.88
+
+        // Band punches: peak-hold the scaled group flux, decay each frame (VU-meter feel).
+        bassPunchEnv = max(bassPunchEnv * 0.82, min(1.0, bF * 2.5))
+        midPunchEnv = max(midPunchEnv * 0.82, min(1.0, mF * 1.5))
+        treblePunchEnv = max(treblePunchEnv * 0.82, min(1.0, tF * 1.5))
+        lastPunch = SIMD3(bassPunchEnv, midPunchEnv, treblePunchEnv)
+        punchPeak = max(punchPeak, lastPunch)
+        return (beatPulse, lastPunch)
     }
 
     private func writeProof(fps: Int, audio: AudioFrame, px: (UInt8, UInt8, UInt8)) {
@@ -276,6 +299,10 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         waveStyle=\(activePreset.waveStyle)
         symmetry=\(activePreset.symmetry)
         vibrance=\(String(format: "%.2f", activePreset.vibrance))
+        warpMode=\(activePreset.warpMode)
+        swirl=\(String(format: "%.2f", activePreset.swirl))
+        bassPunch=\(String(format: "%.3f", punchPeak.x)) midPunch=\(String(format: "%.3f", punchPeak.y))
+        treblePunch=\(String(format: "%.3f", punchPeak.z))
         pcm=\(lastPcmOn ? "on" : "off")
         samples=\(lastSampleCount)
         audio_source=\(audio.real ? "real" : "fallback")
@@ -287,6 +314,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         """
         try? (text + "\n").write(to: proofURL, atomically: true, encoding: .utf8)
         log.notice("PermissiveFeedback fps=\(fps) src=\(audio.real ? "real" : "fallback", privacy: .public) px=(\(px.0),\(px.1),\(px.2))")
+        punchPeak = .zero   // reset the per-window peak after each proof write
     }
 }
 

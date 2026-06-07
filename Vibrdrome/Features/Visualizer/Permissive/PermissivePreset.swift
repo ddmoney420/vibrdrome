@@ -46,6 +46,10 @@ struct PermissivePreset: Identifiable, Codable {
     // Phase 7c "wow" — field spin + beat-driven waveform amplitude burst.
     let spin: Float        // field rotation speed (time + beat driven)
     let beatWave: Float    // beatPulse → waveform amplitude burst (the kick "explosion")
+    // Phase 8 — polar warp (the vortex). warpMode 1 selects polar; swirl/swirlFreq shape it.
+    let swirl: Float       // radius-modulated angle swirl amount (the spiral)
+    let swirlFreq: Float   // spatial frequency of the swirl
+    let warpMode: Int      // 0 = curl-flow, 1 = polar warp (hero)
 
     init(version: Int, id: String, name: String, author: String, license: String?,
          decay: Float, zoom: Float, rotate: Float, paletteIndex: Int, paletteShift: Float,
@@ -55,7 +59,8 @@ struct PermissivePreset: Identifiable, Codable {
          beatBloom: Float = 0, hueDrift: Float = 0,
          waveStyle: Int = 0, waveAmp: Float = 0, waveBright: Float = 0, tunnel: Float = 0,
          symmetry: Int = 0, vibrance: Float = 1.0,
-         spin: Float = 0, beatWave: Float = 0) {
+         spin: Float = 0, beatWave: Float = 0,
+         swirl: Float = 0, swirlFreq: Float = 8, warpMode: Int = 0) {
         self.version = version; self.id = id; self.name = name; self.author = author
         self.license = license; self.decay = decay; self.zoom = zoom; self.rotate = rotate
         self.paletteIndex = paletteIndex; self.paletteShift = paletteShift
@@ -66,6 +71,7 @@ struct PermissivePreset: Identifiable, Codable {
         self.waveStyle = waveStyle; self.waveAmp = waveAmp; self.waveBright = waveBright; self.tunnel = tunnel
         self.symmetry = symmetry; self.vibrance = vibrance
         self.spin = spin; self.beatWave = beatWave
+        self.swirl = swirl; self.swirlFreq = swirlFreq; self.warpMode = warpMode
     }
 
     init(from decoder: Decoder) throws {
@@ -99,6 +105,9 @@ struct PermissivePreset: Identifiable, Codable {
         vibrance = try c.decodeIfPresent(Float.self, forKey: .vibrance) ?? 1.0
         spin = try c.decodeIfPresent(Float.self, forKey: .spin) ?? 0
         beatWave = try c.decodeIfPresent(Float.self, forKey: .beatWave) ?? 0
+        swirl = try c.decodeIfPresent(Float.self, forKey: .swirl) ?? 0
+        swirlFreq = try c.decodeIfPresent(Float.self, forKey: .swirlFreq) ?? 8
+        warpMode = try c.decodeIfPresent(Int.self, forKey: .warpMode) ?? 0
     }
 
     static let fallback = PermissivePreset(
@@ -116,14 +125,15 @@ enum PermissivePresetLibrary {
       {
         "version": 1, "id": "vibrdrome_flux", "name": "Flux",
         "author": "Vibrdrome", "license": "permissive-tbd",
-        "decay": 0.92, "zoom": 0.000, "rotate": 0.000,
+        "decay": 0.94, "zoom": 0.000, "rotate": 0.000,
         "paletteIndex": 2, "paletteShift": 0.00, "pulseScale": 0.30,
         "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
-        "bloomStrength": 0.60, "waveformStrength": 0.00,
-        "flow": 0.60, "flowScale": 2.50, "beatFlow": 1.00,
-        "beatBloom": 0.60, "hueDrift": 0.50,
-        "waveStyle": 1, "waveAmp": 0.18, "waveBright": 1.00, "tunnel": 0.80,
-        "symmetry": 1, "vibrance": 1.45, "spin": 0.12, "beatWave": 1.20
+        "bloomStrength": 0.55, "waveformStrength": 0.00,
+        "flow": 0.00, "flowScale": 2.50, "beatFlow": 0.00,
+        "beatBloom": 0.50, "hueDrift": 0.40,
+        "waveStyle": 1, "waveAmp": 0.16, "waveBright": 0.95, "tunnel": 1.00,
+        "symmetry": 1, "vibrance": 1.40, "spin": 0.00, "beatWave": 0.80,
+        "swirl": 0.25, "swirlFreq": 8.0, "warpMode": 1
       },
       {
         "version": 1, "id": "vibrdrome_aurora", "name": "Aurora",
