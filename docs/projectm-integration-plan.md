@@ -721,12 +721,26 @@ Ran `scripts/make-dmg.sh` **unchanged** (archive → export Developer ID → not
 
 ---
 
-## Release distribution note (LGPL / iOS)
+## Release distribution decision (LGPL / iOS)
 
 projectM is LGPL-2.1 and dynamically linked. macOS DMG distribution is notarized
-and relink-friendly. iOS App Store/TestFlight distribution remains a distribution
-decision because practical user relinking on iOS is constrained. Do not submit
-this feature to App Store/TestFlight until explicitly approved.
+and relink-friendly. iOS App Store/TestFlight relinking remains practically
+constrained (DRM + code signing). This is not identical to the VLC/GPL situation,
+but the residual LGPL/iOS distribution risk is acknowledged.
+
+**Decision: Ship projectM/MilkDrop on iOS with best-effort LGPL compliance.
+projectM is dynamically linked, license/source/relink notes are included, build
+scripts are public, and vendor assets are SHA-pinned. Residual iOS relinking risk
+is accepted by the project owner.**
+
+**Pre-TestFlight/App Store checklist item:** confirm this decision note ships with
+the build, and that the Acknowledgements screen + LGPL/source/relink note are
+present.
+
+### Marketing / store copy
+- **Do not** advertise "open community MilkDrop presets" yet.
+- **Advertise:** "MilkDrop-style visualizer powered by projectM, with Vibrdrome
+  original presets."
 
 ---
 
