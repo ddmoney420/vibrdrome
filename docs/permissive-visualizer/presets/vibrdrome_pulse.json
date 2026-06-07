@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "vibrdrome_pulse",
+  "name": "Pulse",
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "decay": 0.90,
+  "zoom": 0.045,
+  "rotate": 0.012,
+  "paletteIndex": 1,
+  "paletteShift": 0.30,
+  "pulseScale": 1.10,
+  "zoomBass": 1.00,
+  "rotateTreble": 0.25,
+  "pulseBass": 1.00
+}

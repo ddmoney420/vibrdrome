@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "vibrdrome_aurora",
+  "name": "Aurora",
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "decay": 0.96,
+  "zoom": 0.020,
+  "rotate": 0.030,
+  "paletteIndex": 0,
+  "paletteShift": 0.00,
+  "pulseScale": 0.55,
+  "zoomBass": 0.70,
+  "rotateTreble": 0.50,
+  "pulseBass": 0.80
+}

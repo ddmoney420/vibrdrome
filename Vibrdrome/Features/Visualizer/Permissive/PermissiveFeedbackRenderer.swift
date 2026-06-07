@@ -15,6 +15,12 @@ struct PermissiveUniforms {
     var zoom: Float         // per-frame feedback zoom
     var rotate: Float       // per-frame feedback rotation
     var paletteShift: Float
+    // Preset-driven (Phase 3): selected palette + audio→effect mapping coefficients.
+    var paletteIndex: Float
+    var pulseScale: Float
+    var zoomBass: Float
+    var rotateTreble: Float
+    var pulseBass: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -176,6 +182,11 @@ final class PermissiveFeedbackRenderer {
         float zoom;
         float rotate;
         float paletteShift;
+        float paletteIndex;
+        float pulseScale;
+        float zoomBass;
+        float rotateTreble;
+        float pulseBass;
     };
 
     struct VSOut {
@@ -199,24 +210,36 @@ final class PermissiveFeedbackRenderer {
                                 constant Uniforms& u [[buffer(0)]]) {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         float2 c = in.uv - 0.5;
-        float a = u.rotate * (0.4 + u.treble);
+        float a = u.rotate * (0.4 + u.rotateTreble * u.treble);
         float ca = cos(a), sa = sin(a);
         c = float2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
-        c *= (1.0 - u.zoom * (0.5 + u.bass));
+        c *= (1.0 - u.zoom * (0.5 + u.zoomBass * u.bass));
         float3 fed = prev.sample(s, c + 0.5).rgb * u.decay;
 
         float d = length(in.uv - 0.5);
-        float pulse = exp(-d * (9.0 - 6.0 * u.bass)) * (0.12 + 0.88 * u.bass);
+        float pulse = exp(-d * (9.0 - 6.0 * u.bass)) * u.pulseScale * (0.10 + u.pulseBass * u.bass);
         float3 add = pulse * (0.5 + 0.5 * float3(u.bass, u.mid, u.treble));
-        return float4(fed + add, 1.0);
+        // Soft-saturate so the field can't blow out to uniform white — keeps spatial
+        // structure (warp/trails) and palette differences visible.
+        float3 sum = fed + add;
+        sum = sum / (1.0 + 0.55 * sum);
+        return float4(sum, 1.0);
     }
 
-    // Original 3-stop gradient palette with a slowly-shifting position.
-    float3 pv_palette(float t, float shift) {
+    // Two original 3-stop gradient palettes selected by index (0 = cool, 1 = warm),
+    // with a slowly-shifting position.
+    float3 pv_palette(float t, float shift, int idx) {
         t = fract(t + shift);
-        float3 c1 = float3(0.05, 0.00, 0.22);
-        float3 c2 = float3(0.90, 0.20, 0.55);
-        float3 c3 = float3(0.20, 0.90, 1.00);
+        float3 c1, c2, c3;
+        if (idx == 1) {
+            c1 = float3(0.10, 0.00, 0.05);
+            c2 = float3(1.00, 0.45, 0.00);
+            c3 = float3(0.95, 0.95, 0.20);
+        } else {
+            c1 = float3(0.05, 0.00, 0.22);
+            c2 = float3(0.90, 0.20, 0.55);
+            c3 = float3(0.20, 0.90, 1.00);
+        }
         float3 col = mix(c1, c2, smoothstep(0.0, 0.5, t));
         col = mix(col, c3, smoothstep(0.5, 1.0, t));
         return col;
@@ -227,8 +250,8 @@ final class PermissiveFeedbackRenderer {
                                constant Uniforms& u [[buffer(0)]]) {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         float3 v = field.sample(s, in.uv).rgb;
-        float intensity = clamp(length(v) * 0.7, 0.0, 1.0);
-        float3 col = pv_palette(intensity + u.time * 0.02, u.paletteShift);
+        float intensity = clamp(length(v) * 0.85, 0.0, 1.0);
+        float3 col = pv_palette(intensity + u.time * 0.02, u.paletteShift, int(u.paletteIndex));
         return float4(col * intensity, 1.0);
     }
     """

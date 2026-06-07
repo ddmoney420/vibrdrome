@@ -10,9 +10,30 @@ import simd
 /// `AudioSpectrum` scalar bass/mid/treble (with a synthesized fallback when nothing is
 /// playing) and writes a proof file once per second.
 struct PermissiveVisualizerView: View {
+    @State private var presetIndex = 0
+    private let presets = PermissivePresetLibrary.presets
+
     var body: some View {
-        PermissiveMetalContainer()
+        PermissiveMetalContainer(presetIndex: presetIndex)
             .ignoresSafeArea()
+            // Top placement: the mini-player floats over the bottom of the app, so
+            // a bottom control would be blocked.
+            .overlay(alignment: .top) {
+                if !presets.isEmpty {
+                    Button {
+                        presetIndex = (presetIndex + 1) % presets.count
+                    } label: {
+                        Text("\(presets[presetIndex].name) — tap to switch")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    .accessibilityIdentifier("permissivePresetSwitch")
+                    .padding(.top, 10)
+                }
+            }
             .navigationTitle("Native Visualizer Test")
     }
 }
@@ -28,6 +49,17 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private var lastProofTime: CFTimeInterval = 0
     private var lastProofFrames = 0
     private let log = Logger(subsystem: "com.vibrdrome.app", category: "PermissiveViz")
+
+    private let presets = PermissivePresetLibrary.presets
+    private var presetIndex = 0
+    private var activePreset: PermissivePreset {
+        presets.indices.contains(presetIndex) ? presets[presetIndex] : .fallback
+    }
+
+    func setPresetIndex(_ index: Int) {
+        guard !presets.isEmpty else { return }
+        presetIndex = ((index % presets.count) + presets.count) % presets.count
+    }
 
     private lazy var proofURL: URL = {
         if let override = ProcessInfo.processInfo.environment["VIBRDROME_PERMISSIVE_PROOF"] {
@@ -59,11 +91,14 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let now = CACurrentMediaTime()
         let time = Float(now - startTime)
         let audio = Self.sampleAudio(time: time)
+        let p = activePreset
 
         let u = PermissiveUniforms(
             resolution: SIMD2(Float(view.drawableSize.width), Float(view.drawableSize.height)),
             time: time, bass: audio.bass, mid: audio.mid, treble: audio.treble,
-            decay: 0.94, zoom: 0.03, rotate: 0.02, paletteShift: 0)
+            decay: p.decay, zoom: p.zoom, rotate: p.rotate, paletteShift: p.paletteShift,
+            paletteIndex: Float(p.paletteIndex), pulseScale: p.pulseScale,
+            zoomBass: p.zoomBass, rotateTreble: p.rotateTreble, pulseBass: p.pulseBass)
         renderer.render(in: view, uniforms: u)
         frames += 1
 
@@ -99,6 +134,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         engine=PermissiveFeedback
         api=Metal
         fps=\(fps)
+        preset=\(activePreset.id)
         audio_source=\(audio.real ? "real" : "fallback")
         energy=\(String(format: "%.3f", audio.energy))
         bass=\(String(format: "%.3f", audio.bass)) mid=\(String(format: "%.3f", audio.mid)) treble=\(String(format: "%.3f", audio.treble))
@@ -113,6 +149,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
 
 #if canImport(UIKit)
 struct PermissiveMetalContainer: UIViewRepresentable {
+    let presetIndex: Int
     func makeCoordinator() -> PermissiveCoordinator { PermissiveCoordinator() }
     func makeUIView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: context.coordinator.device)
@@ -122,12 +159,16 @@ struct PermissiveMetalContainer: UIViewRepresentable {
         view.framebufferOnly = false
         view.isPaused = false
         view.enableSetNeedsDisplay = false
+        context.coordinator.setPresetIndex(presetIndex)
         return view
     }
-    func updateUIView(_ uiView: MTKView, context: Context) {}
+    func updateUIView(_ uiView: MTKView, context: Context) {
+        context.coordinator.setPresetIndex(presetIndex)
+    }
 }
 #else
 struct PermissiveMetalContainer: NSViewRepresentable {
+    let presetIndex: Int
     func makeCoordinator() -> PermissiveCoordinator { PermissiveCoordinator() }
     func makeNSView(context: Context) -> MTKView {
         let view = MTKView(frame: .zero, device: context.coordinator.device)
@@ -137,9 +178,12 @@ struct PermissiveMetalContainer: NSViewRepresentable {
         view.framebufferOnly = false
         view.isPaused = false
         view.enableSetNeedsDisplay = false
+        context.coordinator.setPresetIndex(presetIndex)
         return view
     }
-    func updateNSView(_ nsView: MTKView, context: Context) {}
+    func updateNSView(_ nsView: MTKView, context: Context) {
+        context.coordinator.setPresetIndex(presetIndex)
+    }
 }
 #endif
 #endif

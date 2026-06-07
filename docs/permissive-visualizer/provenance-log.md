@@ -56,6 +56,23 @@ metallib. It is **NOT** a downloaded/arbitrary-shader system; future user/commun
 presets must not compile arbitrary shader code without a separate security/provenance
 review.
 
+## Research Step 3 — preset format v0 + example presets (2026-06-06)
+
+Original Vibrdrome preset format (`docs/permissive-visualizer/preset-format-v0.md`)
+and two original presets (`vibrdrome_aurora`, `vibrdrome_pulse`). No third-party code
+or preset content copied/ported; no projectM / Butterchurn / `.milk` consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| v0 preset schema | our-design-notes | parameters-only JSON; field set derived from our Step-2 engine knobs |
+| `vibrdrome_aurora` / `vibrdrome_pulse` | our-own-code | original presets authored from the parameter knobs; not derived from any preset |
+| palette selection (2 built-ins) | general-cg-concept | hand-rolled gradients selected by index; original |
+
+**Guardrail:** the format is **parameters only** — no embedded shader code or
+expressions; a preset can never execute arbitrary code. Presets load from **inline
+DEBUG strings** (`PermissivePresetLibrary`), so **no `.json` is bundled into the app**;
+the `docs/.../presets/*.json` files are reference examples, never app resources.
+
 ## Third-party dependencies considered
-None in Step 1 or Step 2. (Any future permissive dependency must have its license
-recorded here before use.)
+None in Steps 1–3. (Any future permissive dependency must have its license recorded
+here before use.)
