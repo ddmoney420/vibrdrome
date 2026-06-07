@@ -25,16 +25,47 @@ struct PermissivePreset: Identifiable, Codable {
     // backward-compatible at version 1).
     let bloomStrength: Float
     let waveformStrength: Float
+    // Step 6 — optional flow-engine knobs. `flow > 0` switches the feedback pass from the
+    // legacy center rotate/zoom to curl-noise advection; the rest shape flow/beat/colour.
+    // All decode with safe defaults (decodeIfPresent), so version stays 1.
+    let flow: Float        // flow-field advection strength, 0 = legacy center path
+    let flowScale: Float   // spatial frequency of the flow field
+    let beatFlow: Float    // beatPulse → flow acceleration
+    let beatBloom: Float   // beatPulse → bloom kick
+    let hueDrift: Float    // colour drift speed (cosine-palette path)
+    // Step 7 — waveform-into-feedback (the fine-line MilkDrop look). The audio waveform is
+    // drawn as thin bright geometry into the feedback texture; the warp/flow/tunnel loop
+    // then pulls it into filaments. All optional/defaulted, version stays 1.
+    let waveStyle: Int     // 0 = off, 1 = circular, 2 = horizontal scope
+    let waveAmp: Float     // waveform displacement amount
+    let waveBright: Float  // line brightness (the glow)
+    let tunnel: Float      // zoom-in pull that turns the lines into a tunnel/spiral
+    // Phase 7b — bilateral mirror + vibrance.
+    let symmetry: Int      // 0 = off, 1 = vertical (L/R) mirror, 2 = quad (4-way)
+    let vibrance: Float    // saturation + brightness multiplier (1 = neutral)
+    // Phase 7c "wow" — field spin + beat-driven waveform amplitude burst.
+    let spin: Float        // field rotation speed (time + beat driven)
+    let beatWave: Float    // beatPulse → waveform amplitude burst (the kick "explosion")
 
     init(version: Int, id: String, name: String, author: String, license: String?,
          decay: Float, zoom: Float, rotate: Float, paletteIndex: Int, paletteShift: Float,
          pulseScale: Float, zoomBass: Float, rotateTreble: Float, pulseBass: Float,
-         bloomStrength: Float = 0, waveformStrength: Float = 0) {
+         bloomStrength: Float = 0, waveformStrength: Float = 0,
+         flow: Float = 0, flowScale: Float = 2.5, beatFlow: Float = 0,
+         beatBloom: Float = 0, hueDrift: Float = 0,
+         waveStyle: Int = 0, waveAmp: Float = 0, waveBright: Float = 0, tunnel: Float = 0,
+         symmetry: Int = 0, vibrance: Float = 1.0,
+         spin: Float = 0, beatWave: Float = 0) {
         self.version = version; self.id = id; self.name = name; self.author = author
         self.license = license; self.decay = decay; self.zoom = zoom; self.rotate = rotate
         self.paletteIndex = paletteIndex; self.paletteShift = paletteShift
         self.pulseScale = pulseScale; self.zoomBass = zoomBass; self.rotateTreble = rotateTreble
         self.pulseBass = pulseBass; self.bloomStrength = bloomStrength; self.waveformStrength = waveformStrength
+        self.flow = flow; self.flowScale = flowScale; self.beatFlow = beatFlow
+        self.beatBloom = beatBloom; self.hueDrift = hueDrift
+        self.waveStyle = waveStyle; self.waveAmp = waveAmp; self.waveBright = waveBright; self.tunnel = tunnel
+        self.symmetry = symmetry; self.vibrance = vibrance
+        self.spin = spin; self.beatWave = beatWave
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +86,19 @@ struct PermissivePreset: Identifiable, Codable {
         pulseBass = try c.decode(Float.self, forKey: .pulseBass)
         bloomStrength = try c.decodeIfPresent(Float.self, forKey: .bloomStrength) ?? 0
         waveformStrength = try c.decodeIfPresent(Float.self, forKey: .waveformStrength) ?? 0
+        flow = try c.decodeIfPresent(Float.self, forKey: .flow) ?? 0
+        flowScale = try c.decodeIfPresent(Float.self, forKey: .flowScale) ?? 2.5
+        beatFlow = try c.decodeIfPresent(Float.self, forKey: .beatFlow) ?? 0
+        beatBloom = try c.decodeIfPresent(Float.self, forKey: .beatBloom) ?? 0
+        hueDrift = try c.decodeIfPresent(Float.self, forKey: .hueDrift) ?? 0
+        waveStyle = try c.decodeIfPresent(Int.self, forKey: .waveStyle) ?? 0
+        waveAmp = try c.decodeIfPresent(Float.self, forKey: .waveAmp) ?? 0
+        waveBright = try c.decodeIfPresent(Float.self, forKey: .waveBright) ?? 0
+        tunnel = try c.decodeIfPresent(Float.self, forKey: .tunnel) ?? 0
+        symmetry = try c.decodeIfPresent(Int.self, forKey: .symmetry) ?? 0
+        vibrance = try c.decodeIfPresent(Float.self, forKey: .vibrance) ?? 1.0
+        spin = try c.decodeIfPresent(Float.self, forKey: .spin) ?? 0
+        beatWave = try c.decodeIfPresent(Float.self, forKey: .beatWave) ?? 0
     }
 
     static let fallback = PermissivePreset(
@@ -70,36 +114,64 @@ enum PermissivePresetLibrary {
     static let json = """
     [
       {
+        "version": 1, "id": "vibrdrome_flux", "name": "Flux",
+        "author": "Vibrdrome", "license": "permissive-tbd",
+        "decay": 0.92, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 2, "paletteShift": 0.00, "pulseScale": 0.30,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.60, "waveformStrength": 0.00,
+        "flow": 0.60, "flowScale": 2.50, "beatFlow": 1.00,
+        "beatBloom": 0.60, "hueDrift": 0.50,
+        "waveStyle": 1, "waveAmp": 0.18, "waveBright": 1.00, "tunnel": 0.80,
+        "symmetry": 1, "vibrance": 1.45, "spin": 0.12, "beatWave": 1.20
+      },
+      {
         "version": 1, "id": "vibrdrome_aurora", "name": "Aurora",
         "author": "Vibrdrome", "license": "permissive-tbd",
-        "decay": 0.96, "zoom": 0.020, "rotate": 0.030,
-        "paletteIndex": 0, "paletteShift": 0.00, "pulseScale": 0.55,
-        "zoomBass": 0.70, "rotateTreble": 0.50, "pulseBass": 0.80,
-        "bloomStrength": 0.25, "waveformStrength": 0.00
+        "decay": 0.95, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 3, "paletteShift": 0.00, "pulseScale": 0.25,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.55, "waveformStrength": 0.00,
+        "flow": 0.45, "flowScale": 2.00, "beatFlow": 0.70,
+        "beatBloom": 0.40, "hueDrift": 0.35,
+        "waveStyle": 1, "waveAmp": 0.15, "waveBright": 0.85, "tunnel": 0.50,
+        "symmetry": 1, "vibrance": 1.30, "spin": 0.05, "beatWave": 0.70
       },
       {
         "version": 1, "id": "vibrdrome_pulse", "name": "Pulse",
         "author": "Vibrdrome", "license": "permissive-tbd",
-        "decay": 0.90, "zoom": 0.045, "rotate": 0.012,
-        "paletteIndex": 1, "paletteShift": 0.30, "pulseScale": 1.10,
-        "zoomBass": 1.00, "rotateTreble": 0.25, "pulseBass": 1.00,
-        "bloomStrength": 0.35, "waveformStrength": 0.20
+        "decay": 0.87, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 4, "paletteShift": 0.00, "pulseScale": 0.40,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.80, "waveformStrength": 0.00,
+        "flow": 0.85, "flowScale": 3.00, "beatFlow": 1.50,
+        "beatBloom": 1.00, "hueDrift": 0.60,
+        "waveStyle": 1, "waveAmp": 0.22, "waveBright": 1.00, "tunnel": 0.95,
+        "symmetry": 2, "vibrance": 1.60, "spin": 0.28, "beatWave": 2.00
       },
       {
         "version": 1, "id": "vibrdrome_nebula", "name": "Nebula",
         "author": "Vibrdrome", "license": "permissive-tbd",
-        "decay": 0.97, "zoom": 0.015, "rotate": 0.020,
-        "paletteIndex": 0, "paletteShift": 0.10, "pulseScale": 0.50,
-        "zoomBass": 0.60, "rotateTreble": 0.40, "pulseBass": 0.70,
-        "bloomStrength": 0.90, "waveformStrength": 0.00
+        "decay": 0.97, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 5, "paletteShift": 0.10, "pulseScale": 0.30,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.95, "waveformStrength": 0.00,
+        "flow": 0.40, "flowScale": 2.20, "beatFlow": 0.60,
+        "beatBloom": 0.50, "hueDrift": 0.25,
+        "waveStyle": 1, "waveAmp": 0.14, "waveBright": 0.80, "tunnel": 1.20,
+        "symmetry": 1, "vibrance": 1.35, "spin": 0.03, "beatWave": 0.60
       },
       {
         "version": 1, "id": "vibrdrome_spectrum", "name": "Spectrum",
         "author": "Vibrdrome", "license": "permissive-tbd",
-        "decay": 0.88, "zoom": 0.030, "rotate": 0.010,
-        "paletteIndex": 1, "paletteShift": 0.50, "pulseScale": 0.70,
-        "zoomBass": 0.80, "rotateTreble": 0.30, "pulseBass": 0.90,
-        "bloomStrength": 0.40, "waveformStrength": 0.90
+        "decay": 0.90, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 6, "paletteShift": 0.50, "pulseScale": 0.30,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.70, "waveformStrength": 0.00,
+        "flow": 0.50, "flowScale": 2.50, "beatFlow": 1.20,
+        "beatBloom": 0.80, "hueDrift": 0.50,
+        "waveStyle": 2, "waveAmp": 0.35, "waveBright": 1.00, "tunnel": 0.60,
+        "symmetry": 2, "vibrance": 1.60, "spin": 0.15, "beatWave": 1.50
       }
     ]
     """

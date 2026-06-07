@@ -89,6 +89,64 @@ execution); presets load from **inline DEBUG strings** (no `.json` bundled). The
 overlay uses `AudioSpectrum.bands` only — **not** `VisualizerPCMSource` — so the
 engine stays independent of projectM's PCM-ring consumer model.
 
+## Research Step 6 — flow-field engine rewrite + onset detector + cosine palette (2026-06-06)
+
+DEBUG-only rewrite of the motion model and colour pipeline after the Step 5 visual gate
+failed (see `step5-postmortem.md`). New hero `vibrdrome_flux`. No third-party code or
+preset content copied/ported; no projectM / Butterchurn / `.milk` consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| value noise + 2-octave fbm | general-cg-concept | standard hash/value-noise/fbm; original constants |
+| curl-noise advection | general-cg-concept | advect the prior frame along the curl of an fbm potential (divergence-free → circulating, non-centered flow); our own formulation |
+| legacy center fallback gate | our-own-code | the old rotate/zoom warp kept only for `flow == 0` presets |
+| spectral-flux onset detector | general-dsp-concept, our-own-code | positive band-to-band flux vs a rolling average → attack/decay `beatPulse`; standard onset DSP, written by us from our `AudioSpectrum.bands` |
+| cosine-gradient palette | general-cg-concept | IQ-style `a + b·cos(2π(c·t + d))`; original coefficients, dark base for depth |
+| vignette / depth falloff | general-cg-concept | radial edge darkening on the hero path |
+| beat-driven flow/bloom/hue | our-own-code | route `beatPulse` to flow acceleration, bloom kick, and a small hue shift |
+
+**Guardrails intact:** format remains **parameters only** (`flow`/`flowScale`/`beatFlow`/
+`beatBloom`/`hueDrift` are floats with safe `decodeIfPresent` defaults; no shader/expression
+execution; **no `.milk`**). The onset detector reads `AudioSpectrum.bands` only — **not**
+`VisualizerPCMSource`. Presets still load from **inline DEBUG strings** (no `.json` bundled).
+No projectM/Classic/CI/Vendor/release changes.
+
+## Research Step 7 — waveform-into-feedback (raw PCM, fine-line look) (2026-06-06)
+
+DEBUG-only addition after Step 6 still read as a soft field with no fine detail. The audio
+**waveform** is now drawn as thin bright additive geometry into the feedback texture so the
+warp/flow/tunnel loop pulls it into filaments. No third-party code or preset content
+copied/ported; no projectM / Butterchurn / `.milk` consulted — only the projectM PCM *feed*
+(`VisualizerPCMSource`, our own code) is read, DEBUG-only.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| waveform line into feedback | general-cg-concept, general-dsp-concept | oscilloscope line traced from PCM, drawn additively into the feedback field; the feedback-of-a-line filament idea is general CG; our own implementation |
+| circular / horizontal waveform | general-dsp-concept | map PCM around a circle (radius = base + sample) or across a scope; original |
+| raw PCM source | our-own-code | reads `VisualizerPCMSource` (our existing ring) via the DEBUG `setActiveForTesting` flag, only while the spike screen is visible; never while projectM owns the ring |
+| tunnel pull | general-cg-concept | sample slightly outward so the field flows toward the viewer; original |
+| additive line blend + bloom glow | apple-metal-docs, general-cg-concept | standard additive blending; thin bright lines glow via the existing bloom pass |
+
+**Step 7b follow-ups (visual feedback):** fixed an `atan2` branch-cut seam in the hero hue
+(switched to a smooth radial driver — general-cg); added a **bilateral vertical-axis mirror**
+(`symmetry`, a simple L/R fold — general-cg, not a polar kaleidoscope) and a **vibrance**
+saturation/brightness lift (`vibrance` — general-cg). No third-party source consulted.
+
+**Step 7c "wow" rework:** all five presets moved onto the flow engine, each with a distinct
+cosine palette (idx 2–6 — original coefficients, general-cg) and personality. Added
+**field spin** (`spin`, time/beat rotation — general-cg), **beat amplitude burst**
+(`beatWave`, scales the waveform deviation on the onset — our own DSP mapping), **quad
+symmetry** (`symmetry 2`, a rectilinear 4-fold — general-cg, not polar), and **colour-dance**
+(treble→hue, bass→brightness, from our own `AudioSpectrum`). No projectM/Butterchurn/`.milk`
+consulted; no third-party code or preset content copied.
+
+**Guardrails intact:** the format stays **parameters only** (`waveStyle`/`waveAmp`/
+`waveBright`/`tunnel`/`symmetry`/`vibrance` are scalars with `decodeIfPresent` defaults; the
+preset carries no shader code, expressions, or PCM). PCM use is **DEBUG-only**, enabled solely while the
+native-visualizer screen is on-screen and gated off when projectM owns the ring — the
+**shipping projectM consumer path is unchanged**. Presets still load from inline DEBUG
+strings (no `.json` bundled). No projectM/Classic/CI/Vendor/release changes.
+
 ## Third-party dependencies considered
-None in Steps 1–4. (Any future permissive dependency must have its license recorded
+None in Steps 1–7. (Any future permissive dependency must have its license recorded
 here before use.)
