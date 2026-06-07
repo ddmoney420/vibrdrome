@@ -50,6 +50,8 @@ struct PermissivePreset: Identifiable, Codable {
     let swirl: Float       // radius-modulated angle swirl amount (the spiral)
     let swirlFreq: Float   // spatial frequency of the swirl
     let warpMode: Int      // 0 = curl-flow, 1 = polar warp (hero)
+    // Phase 8b — kaleidoscope wedge count for the present-time polar fold (0 = off).
+    let kaleido: Int
 
     init(version: Int, id: String, name: String, author: String, license: String?,
          decay: Float, zoom: Float, rotate: Float, paletteIndex: Int, paletteShift: Float,
@@ -60,7 +62,8 @@ struct PermissivePreset: Identifiable, Codable {
          waveStyle: Int = 0, waveAmp: Float = 0, waveBright: Float = 0, tunnel: Float = 0,
          symmetry: Int = 0, vibrance: Float = 1.0,
          spin: Float = 0, beatWave: Float = 0,
-         swirl: Float = 0, swirlFreq: Float = 8, warpMode: Int = 0) {
+         swirl: Float = 0, swirlFreq: Float = 8, warpMode: Int = 0,
+         kaleido: Int = 0) {
         self.version = version; self.id = id; self.name = name; self.author = author
         self.license = license; self.decay = decay; self.zoom = zoom; self.rotate = rotate
         self.paletteIndex = paletteIndex; self.paletteShift = paletteShift
@@ -72,6 +75,7 @@ struct PermissivePreset: Identifiable, Codable {
         self.symmetry = symmetry; self.vibrance = vibrance
         self.spin = spin; self.beatWave = beatWave
         self.swirl = swirl; self.swirlFreq = swirlFreq; self.warpMode = warpMode
+        self.kaleido = kaleido
     }
 
     init(from decoder: Decoder) throws {
@@ -108,6 +112,7 @@ struct PermissivePreset: Identifiable, Codable {
         swirl = try c.decodeIfPresent(Float.self, forKey: .swirl) ?? 0
         swirlFreq = try c.decodeIfPresent(Float.self, forKey: .swirlFreq) ?? 8
         warpMode = try c.decodeIfPresent(Int.self, forKey: .warpMode) ?? 0
+        kaleido = try c.decodeIfPresent(Int.self, forKey: .kaleido) ?? 0
     }
 
     static let fallback = PermissivePreset(
@@ -134,6 +139,19 @@ enum PermissivePresetLibrary {
         "waveStyle": 1, "waveAmp": 0.16, "waveBright": 0.95, "tunnel": 1.00,
         "symmetry": 1, "vibrance": 1.40, "spin": 0.00, "beatWave": 0.80,
         "swirl": 0.25, "swirlFreq": 8.0, "warpMode": 1
+      },
+      {
+        "version": 1, "id": "vibrdrome_kaleidoscope", "name": "Kaleidoscope",
+        "author": "Vibrdrome", "license": "permissive-tbd",
+        "decay": 0.94, "zoom": 0.000, "rotate": 0.000,
+        "paletteIndex": 5, "paletteShift": 0.00, "pulseScale": 0.30,
+        "zoomBass": 0.00, "rotateTreble": 0.00, "pulseBass": 0.00,
+        "bloomStrength": 0.55, "waveformStrength": 0.00,
+        "flow": 0.60, "flowScale": 3.00, "beatFlow": 1.00,
+        "beatBloom": 0.50, "hueDrift": 0.35,
+        "waveStyle": 2, "waveAmp": 0.30, "waveBright": 1.00, "tunnel": 0.60,
+        "symmetry": 0, "vibrance": 1.40, "spin": 0.00, "beatWave": 1.00,
+        "swirl": 0.25, "swirlFreq": 8.0, "warpMode": 0, "kaleido": 6
       },
       {
         "version": 1, "id": "vibrdrome_aurora", "name": "Aurora",

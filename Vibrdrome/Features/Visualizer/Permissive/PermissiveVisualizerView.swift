@@ -219,7 +219,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
             tunnel: p.tunnel, waveBright: p.waveBright,
             symmetry: Float(p.symmetry), vibrance: p.vibrance, spin: p.spin,
             swirl: p.swirl, swirlFreq: p.swirlFreq, warpMode: Float(p.warpMode),
-            bassPunch: punch.x, midPunch: punch.y, treblePunch: punch.z)
+            bassPunch: punch.x, midPunch: punch.y, treblePunch: punch.z,
+            kaleido: Float(p.kaleido))
         renderer.render(in: view, uniforms: u)
         frames += 1
 
@@ -301,6 +302,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         vibrance=\(String(format: "%.2f", activePreset.vibrance))
         warpMode=\(activePreset.warpMode)
         swirl=\(String(format: "%.2f", activePreset.swirl))
+        kaleido=\(activePreset.kaleido)
         bassPunch=\(String(format: "%.3f", punchPeak.x)) midPunch=\(String(format: "%.3f", punchPeak.y))
         treblePunch=\(String(format: "%.3f", punchPeak.z))
         pcm=\(lastPcmOn ? "on" : "off")

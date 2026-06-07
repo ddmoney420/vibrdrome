@@ -56,6 +56,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `swirl` | float? | (Phase 8) radius-modulated angle swirl amount (the spiral/vortex). `decodeIfPresent` → 0 |
 | `swirlFreq` | float? | (Phase 8) spatial frequency of the swirl. `decodeIfPresent` → 8 |
 | `warpMode` | int? | (Phase 8) 0 = curl-flow, 1 = polar warp (hero vortex). `decodeIfPresent` → 0 |
+| `kaleido` | int? | (Phase 8b) kaleidoscope wedge count for the present-time polar fold; 0 = off, 6/8 = wedges. `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -79,6 +80,15 @@ The waveform geometry is built **host-side from raw PCM** (`VisualizerPCMSource`
 projectM owns the ring). Still **parameters-only** — the preset selects a style and
 intensities; it does not carry code, expressions, or PCM.
 
+### Phase 8b — kaleidoscope waveform (Kaleidoscope)
+`kaleido > 0` adds a **present-time polar wedge fold**: decompose to radius/angle, wrap the
+angle into `kaleido` wedges and mirror within each (reflected, seam-free), then sample the
+already-waveform-fed/warped field from the folded coordinate. It folds **only at present** —
+the feedback physics stay un-folded and alive, so the vortex doesn't collapse to a centred
+blob; instead the fine waveform filaments **multiply into a mandala**. A slow time drift +
+`treblePunch` turns it. This is the *radial* kaleidoscope (distinct from the rectilinear
+`symmetry` mirror); a preset may use either or both.
+
 ### Phase 8 — polar warp + envelope followers (the vortex)
 `warpMode 1` switches the feedback warp from curl-flow to a **polar warp**: decompose to
 radius/angle, add a radius-modulated swirl to the angle (`swirl` / `swirlFreq` — the
@@ -96,8 +106,14 @@ for discrete hits.
   into the feedback and pulled into a breathing tunnel by the polar warp; envelope-follower
   punches drive zoom/swirl/brightness/bloom; cosine-gradient palette (idx 2); spin off,
   bilateral mirror. Authored from scratch; not derived from any third-party preset.
-All five presets now run the flow engine (Phase 7c "wow" rework) — each draws a real PCM
-waveform into the feedback, with a distinct palette, form, motion, and beat behaviour:
+- **`vibrdrome_kaleidoscope` ("Kaleidoscope")** — **Kaleidoscope Waveform family (Phase 8b)**. A 6-wedge
+  present-time kaleidoscope (`kaleido 6`, `symmetry 0`) over an intentionally **asymmetric**
+  source — curl-flow (`warpMode 0`, `flow`) + a horizontal **scope** waveform (`waveStyle 2`) —
+  so the fold has angular detail to mirror into a turning mandala (a rotationally-symmetric
+  source would just fold back to a circle). Nebula magenta/blue palette (idx 5),
+  `treblePunch`-driven rotation. Authored from scratch; not derived from any third-party preset.
+The presets run the flow/polar engine — each draws a real PCM waveform into the feedback,
+with a distinct palette, form, motion, and beat behaviour:
 - **`vibrdrome_aurora` ("Aurora")** — calm flowing curtains: circular waveform, aurora
   green/teal palette (idx 3), slow flow, high decay, gentle spin, soft beat. Authored from
   scratch.

@@ -170,6 +170,29 @@ source, which is not always set the instant the spike screen opens. When `pcm=of
 waveform falls back to a synthesized line; the vortex, punch, and beat reactivity are
 unaffected. PCM source-designation hardening is deferred (not in scope for 8a).
 
+## Research Step 8b — Kaleidoscope (kaleidoscope waveform family) (2026-06-07)
+
+DEBUG-only. New `vibrdrome_kaleidoscope` preset + a present-time polar wedge fold. General-CG
+concept; no third-party code or preset content copied; no projectM / Butterchurn / `.milk`
+consulted.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| polar wedge fold (kaleidoscope) | general-cg-concept | wrap the angle into N wedges + mirror within each (reflected, seam-free via cos/sin recompose); applied at present only; original |
+| fold the field, not the geometry | our-design-notes | fold the already-waveform-fed/warped field at sample time; feedback physics stay un-folded so it doesn't collapse to a centred blob (the Step 5 failure) |
+| asymmetric source for the fold | our-design-notes | a kaleidoscope only mirrors *angular* detail; the source is intentionally asymmetric (curl-flow `warpMode 0` + horizontal scope `waveStyle 2`) so the wedges show distinct detail — a rotationally-symmetric source (polar vortex + circular wave) folds back to a plain circle |
+| treble-driven mandala rotation | our-own-code | slow time drift + `treblePunch` rotate the wedge pattern |
+
+**Why this isn't the Step 5 mirror failure:** Step 5 folded a soft structureless field around
+the centre → "wet galaxy / blob". Kaleidoscope folds a field that already carries fine PCM-waveform
+filament structure, folds **only at present** (the recursive feedback stays un-folded), and
+keeps a dark base + thin bright lines — so the fold multiplies detail into a mandala instead
+of smearing.
+
+**Guardrails intact:** parameters-only (`kaleido` Int, `decodeIfPresent → 0`; no shader
+code/expressions/PCM in the preset). `kaleido 0` leaves every other preset unchanged. No
+projectM/Classic/CI/Vendor/release changes.
+
 ## Third-party dependencies considered
-None in Steps 1–8. (Any future permissive dependency must have its license recorded
+None in Steps 1–8b. (Any future permissive dependency must have its license recorded
 here before use.)

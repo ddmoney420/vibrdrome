@@ -7,12 +7,12 @@ import XCTest
 /// are present with sane fields, including the Phase-4 bloom/overlay knobs.
 final class PermissivePresetTests: XCTestCase {
 
-    func testLibraryDecodesFivePresets() {
+    func testLibraryDecodesSixPresets() {
         let presets = PermissivePresetLibrary.presets
-        XCTAssertEqual(presets.count, 5)
+        XCTAssertEqual(presets.count, 6)
         XCTAssertEqual(presets.map(\.id),
-                       ["vibrdrome_flux", "vibrdrome_aurora", "vibrdrome_pulse",
-                        "vibrdrome_nebula", "vibrdrome_spectrum"])
+                       ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_aurora",
+                        "vibrdrome_pulse", "vibrdrome_nebula", "vibrdrome_spectrum"])
         XCTAssertEqual(presets.first?.name, "Flux")   // hero is index 0 (default on open)
     }
 
@@ -48,9 +48,22 @@ final class PermissivePresetTests: XCTestCase {
         }
     }
 
-    func testPresetsHaveDistinctPalettes() {
+    func testPresetsHaveVariedPalettes() {
+        // 6 presets across 5 cosine palettes (2–6) — expect broad variety (≥5 distinct).
         let palettes = PermissivePresetLibrary.presets.map(\.paletteIndex)
-        XCTAssertEqual(Set(palettes).count, palettes.count, "each preset should have a unique palette")
+        XCTAssertGreaterThanOrEqual(Set(palettes).count, 5, "presets should span varied palettes")
+    }
+
+    func testKaleidoscopeIsKaleidoscopeWaveform() {
+        // Step 8b — Kaleidoscope is the kaleidoscope-waveform family: the wedge fold supplies
+        // the symmetry; the source is intentionally ASYMMETRIC (curl-flow + scope) so the fold
+        // has angular detail to mirror into a mandala (a symmetric source folds to a circle).
+        let by = Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
+        let kaleidoscope = by["vibrdrome_kaleidoscope"]
+        XCTAssertEqual(kaleidoscope?.kaleido, 6)        // wedge fold on
+        XCTAssertEqual(kaleidoscope?.symmetry, 0)       // rectilinear mirror off (wedge supplies it)
+        XCTAssertGreaterThan(kaleidoscope?.flow ?? 0, 0)  // curl-flow (asymmetric) under the fold
+        XCTAssertGreaterThan(kaleidoscope?.waveStyle ?? 0, 0)
     }
 
     func testHeroFluxUsesPolarWarp() {
@@ -112,6 +125,7 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(p?.swirl, 0)
         XCTAssertEqual(p?.swirlFreq, 8)    // safe default
         XCTAssertEqual(p?.warpMode, 0)
+        XCTAssertEqual(p?.kaleido, 0)
     }
 
     func testFallbackPresetExists() {

@@ -46,6 +46,8 @@ struct PermissiveUniforms {
     var bassPunch: Float
     var midPunch: Float
     var treblePunch: Float
+    // Phase 8b — kaleidoscope wedge count (0 = off) for the present-time polar fold.
+    var kaleido: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -328,6 +330,7 @@ final class PermissiveFeedbackRenderer {
         float bassPunch;
         float midPunch;
         float treblePunch;
+        float kaleido;
     };
 
     struct VSOut {
@@ -523,6 +526,7 @@ final class PermissiveFeedbackRenderer {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
         int idx = int(u.paletteIndex);
 
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
         // Spin: rotate the sampled coordinate around centre (time + beat), so the field
         // kaleidoscopes instead of sitting still.
         float2 suv = in.uv;
@@ -533,8 +537,22 @@ final class PermissiveFeedbackRenderer {
             c = float2(c.x * ca - c.y * sa, c.x * sa + c.y * ca);
             suv = c + 0.5;
         }
-        // Symmetry: 1 = vertical (L/R) mirror, 2 = quad (4-way) kaleidoscope fold. A clean
-        // rectilinear fold — NOT a polar kaleidoscope (no centred blob).
+        // Kaleidoscope wedge fold (present-time only — the feedback physics stay
+        // un-folded): fold the angle into `kaleido` mirrored wedges, recompose with cos/sin
+        // (seam-free). Folds the already waveform-fed/warped field, so detail multiplies into
+        // a mandala. A slow time drift + treble punch turns it.
+        if (u.kaleido > 0.5) {
+            float2 p = suv - 0.5; p.x *= aspect;
+            float r = length(p);
+            float a = atan2(p.y, p.x) + u.time * 0.03 + u.treblePunch * 0.40;
+            float seg = 6.2831853 / u.kaleido;
+            a = a - seg * floor(a / seg);       // wrap into [0, seg)
+            a = fabs(a - seg * 0.5);            // mirror within the wedge (reflected edges)
+            float2 q = float2(cos(a), sin(a)) * r; q.x /= aspect;
+            suv = q + 0.5;
+        }
+        // Symmetry: 1 = vertical (L/R) mirror, 2 = quad (4-way) rectilinear fold. NOT a polar
+        // kaleidoscope (that's `kaleido`); orthogonal, a preset may use either/both.
         if (u.symmetry > 0.5) { suv.x = 0.5 - abs(suv.x - 0.5); }
         if (u.symmetry > 1.5) { suv.y = 0.5 - abs(suv.y - 0.5); }
 
