@@ -266,6 +266,27 @@ presets and the whole 2D engine are unchanged. Parameters-only (no shader code/e
 the preset). DEBUG-only inline shader; nothing bundled. No projectM/Classic/CI/Vendor/release
 changes. Overlay-compositing and auto-transitions are documented but **not implemented**.
 
+## Research Step 15 — glowing-orb / metaball field (3D scene 2) (2026-06-07)
+
+DEBUG-only. Adds a second 3D raymarch scene (`sceneMode 2`) reusing the Phase-14 route — a
+glowing-orb / metaball field. General computer-graphics concepts, our own field, animation,
+shading, and audio mapping; **no projectM / Butterchurn / `.milk`** consulted, no third-party
+code or preset content.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| metaball SDF (8 spheres) | general-cg-concept | sphere SDFs `length(p−c)−r`, animated on deterministic Lissajous orbits spread in depth; our own field |
+| polynomial smooth-min union | general-cg-concept | IQ-style `smin` to merge the spheres into metaballs; standard, our implementation |
+| glow accumulation + fresnel rim | general-cg-concept | accumulate proximity glow along the ray (halos) + fresnel edge lighting; original |
+| orbiting camera + audio mapping | our-own-code | camera circles the cluster; bass→radii breathing, bassPunch→expansion, beat→push/flash, treble→shimmer |
+| iOS quarter-res raymarch | our-own-code | on-device profiling: 3D march is resolution-bound + iPhone GPU drops to a low power state under sustained load; iOS renders the raymarch at `raymarchScale` 0.25 (locked 60 fps), macOS full-res |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and the Phase-14 tunnel are unchanged (orbs live behind `sceneMode 2` + the
+`vibrdrome_orbs` preset). Parameters-only; DEBUG-only inline shader; nothing bundled. No
+projectM/Classic/CI/Vendor/release changes. Overlay-compositing and auto-transitions remain
+documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–14. (Any future permissive dependency must have its license recorded
+None in Steps 1–15. (Any future permissive dependency must have its license recorded
 here before use.)

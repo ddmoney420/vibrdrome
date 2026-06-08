@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | (Phase 14) render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel. `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -176,6 +176,22 @@ is unchanged. Audio: `bass` → forward speed + tunnel pulse, `bassPunch` → fo
 palettes (`paletteIndex`) and `vibrance`/`bloomStrength`. Marching is **bounded** (64 steps);
 the proof reports `sceneMode`/`marchSteps`/`avgSteps`/`raymarchScale`.
 
+### Phase 15 — glowing-orb / metaball field (sceneMode 2)
+`sceneMode 2` reuses the same raymarch route for a second 3D scene: **8 soft spheres** combined
+with a **polynomial smooth-min union** (metaballs that merge), drifting on deterministic
+Lissajous orbits spread in depth, lit with diffuse + **fresnel rim** + specular and **glow
+accumulated along the ray** (halos into the dark). An **orbiting camera** circles the cluster.
+Audio: `bass` breathes the radii, `bassPunch` expands them, `beatPulse` pushes the camera +
+flashes, `treble` shimmers the highlights. Bounded to the shared 64-step cap; tone-mapped (no
+blowout) via the present pass. Preset: `vibrdrome_orbs`.
+
+**iOS raymarch resolution:** the raymarch pass (both 3D scenes) renders into a separate target at
+`raymarchScale` and the linear present sampler upscales it. On iPhone this is fixed at **0.25**
+(quarter-res); macOS stays full-res. On-device profiling showed the march is resolution-bound
+*and* the GPU drops to a low power state under sustained load — quarter-res keeps the frame light
+enough (~10 ms) to hold a locked 60 fps, and the smooth orbs/tunnel upscale cleanly. Platform-
+fixed and deterministic (no adaptive scaling, no per-preset knob); reported as `raymarchScale`.
+
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
   a second texture and the 3D scene into another, then the present pass blends them. The texture
@@ -185,7 +201,7 @@ the proof reports `sceneMode`/`marchSteps`/`avgSteps`/`raymarchScale`.
 - **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
   and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
   (duration/curve), not preset fields. Not implemented in Phase 1.
-- **More 3D scenes** select via the same `sceneMode` enum later (2 = Mandelbulb, 3 = orbs, …).
+- **More 3D scenes** select via the same `sceneMode` enum later (3 = Mandelbulb/Mandelbox, …).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

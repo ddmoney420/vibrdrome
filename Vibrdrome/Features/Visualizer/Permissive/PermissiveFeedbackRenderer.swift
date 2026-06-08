@@ -105,7 +105,17 @@ final class PermissiveFeedbackRenderer {
     private let presentPSO: MTLRenderPipelineState
 
     static let marchSteps = 64                        // bounded raymarch cap (mirrors MAXS in pv_raymarch)
-    private(set) var raymarchScale: CGFloat = 1.0     // 1.0 = full-res; 0.5 = half-res fallback (proof)
+    // 3D raymarch internal resolution. The march (per-step orb/tunnel SDF) is the 3D cost, and on
+    // iPhone the GPU drops to a low power state under sustained load — quarter-res keeps the frame
+    // light enough (~10ms) to hold a locked 60fps, and the smooth orbs/tunnel upscale cleanly via
+    // the linear present sampler. macOS has the headroom to stay full-res. Platform-fixed and
+    // deterministic (no adaptive runtime scaling, no per-preset knob). 2D presets ignore this
+    // (they use the full-res feedback field). Reported in the proof.
+    #if os(iOS)
+    private(set) var raymarchScale: CGFloat = 0.25
+    #else
+    private(set) var raymarchScale: CGFloat = 1.0
+    #endif
 
     static let maxWaveVerts = 1024
     private let waveBuffer: MTLBuffer                 // NDC float2 positions for the wave line
@@ -114,6 +124,7 @@ final class PermissiveFeedbackRenderer {
     private var texA: MTLTexture?
     private var texB: MTLTexture?
     private var bloomTex: MTLTexture?                 // half-res bloom (Phase 4)
+    private var raymarchTex: MTLTexture?             // 3D raymarch target at raymarchScale (Phase 15)
     private var readIsA = true
     private var lastWritten: MTLTexture?
     private var staging: MTLTexture?          // 1x1 readback (proof only)
@@ -220,13 +231,24 @@ final class PermissiveFeedbackRenderer {
         bd.storageMode = .private
         bloomTex = device.makeTexture(descriptor: bd)
 
+        // 3D raymarch target at raymarchScale (half-res on iOS, full-res on macOS). Mipmapped like
+        // the feedback field so readAvgSteps can mip-reduce its per-pixel step count. Present/bloom
+        // sample this via the linear sampler, so the half-res image upscales cleanly to the drawable.
+        let rw = max(1, Int((newSize.width * raymarchScale).rounded()))
+        let rh = max(1, Int((newSize.height * raymarchScale).rounded()))
+        let rmd = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: Self.feedbackFormat, width: rw, height: rh, mipmapped: true)
+        rmd.usage = [.renderTarget, .shaderRead]
+        rmd.storageMode = .private
+        raymarchTex = device.makeTexture(descriptor: rmd)
+
         clearNext = true
     }
 
     @MainActor
     // swiftlint:disable:next function_body_length
     func render(in view: MTKView, uniforms: PermissiveUniforms) {
-        guard let texA, let texB, let bloomTex,
+        guard let texA, let texB, let bloomTex, let raymarchTex,
               let drawable = view.currentDrawable,
               let presentRPD = view.currentRenderPassDescriptor,
               let cb = queue.makeCommandBuffer() else { return }
@@ -234,10 +256,14 @@ final class PermissiveFeedbackRenderer {
         let is3D = u.sceneMode > 0.5
         let read = readIsA ? texA : texB
         let write = readIsA ? texB : texA
+        // 3D renders into the (possibly quarter-res) raymarch target; 2D uses the full-res ping-pong
+        // field. Pass B/C and the proof readback all read whichever was written this frame.
+        let scene = is3D ? raymarchTex : write
 
-        // Pass A — feedback (2D) OR raymarch (3D): write the scene into `write`.
+        // Pass A — feedback (2D, full-res `write`) OR raymarch (3D, `raymarchTex` at raymarchScale).
+        // The render-target size sets the viewport, so the 3D shader naturally runs at reduced res on iOS.
         let rpd = MTLRenderPassDescriptor()
-        rpd.colorAttachments[0].texture = write
+        rpd.colorAttachments[0].texture = scene
         rpd.colorAttachments[0].loadAction = (is3D || clearNext) ? .clear : .load
         rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
         rpd.colorAttachments[0].storeAction = .store
@@ -281,7 +307,7 @@ final class PermissiveFeedbackRenderer {
         brpd.colorAttachments[0].storeAction = .store
         if let enc = cb.makeRenderCommandEncoder(descriptor: brpd) {
             enc.setRenderPipelineState(bloomPSO)
-            enc.setFragmentTexture(write, index: 0)
+            enc.setFragmentTexture(scene, index: 0)
             enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             enc.endEncoding()
@@ -290,7 +316,7 @@ final class PermissiveFeedbackRenderer {
         // Pass C — present: field + bloom + audio-spectrum overlay → drawable.
         if let enc = cb.makeRenderCommandEncoder(descriptor: presentRPD) {
             enc.setRenderPipelineState(presentPSO)
-            enc.setFragmentTexture(write, index: 0)
+            enc.setFragmentTexture(scene, index: 0)
             enc.setFragmentTexture(bloomTex, index: 1)
             enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
             enc.setFragmentBuffer(bandsBuffer, offset: 0, index: 1)
@@ -300,7 +326,7 @@ final class PermissiveFeedbackRenderer {
 
         cb.present(drawable)
         cb.commit()
-        lastWritten = write
+        lastWritten = scene          // 3D → raymarchTex (mipmapped) for avgSteps; 2D → field
         readIsA.toggle()
         clearNext = false
     }
@@ -732,7 +758,73 @@ final class PermissiveFeedbackRenderer {
         float dz = pv_tunnelMap(p + float3(0, 0, e), u) - pv_tunnelMap(p - float3(0, 0, e), u);
         return normalize(float3(dx, dy, dz) + 1e-5);
     }
+
+    // --- Phase 15: glowing-orb / metaball field (sceneMode 2). Smooth-min union of 8 animated
+    // spheres + glow accumulation + fresnel rim. General-CG metaball/SDF; our own field + audio.
+    float pv_smin(float a, float b, float k) {
+        float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+        return mix(b, a, h) - k * h * (1.0 - h);
+    }
+    float pv_orbMap(float3 p, constant Uniforms& u, thread float &nearID) {
+        float d = 1e9, k = 0.55;
+        float rscale = 1.0 + 0.6 * u.bass + 0.8 * u.bassPunch;     // bass breathing + kick expansion
+        for (int i = 0; i < 8; i++) {
+            float fi = float(i);
+            float3 c = float3(1.3 * sin(u.time * (0.30 + 0.05 * fi) + fi * 1.7),
+                              1.0 * cos(u.time * (0.25 + 0.04 * fi) + fi * 2.3),
+                              3.0 + 0.45 * sin(u.time * 0.2 + fi * 2.0));   // Lissajous drift, spread in depth
+            float r = (0.34 + 0.12 * sin(u.time + fi)) * rscale;
+            float ds = length(p - c) - r;
+            if (ds < d) nearID = fi;                              // nearest orb → its hue
+            d = pv_smin(d, ds, k);                                // smooth-min union (metaball merge)
+        }
+        return d;
+    }
+    float3 pv_orbNormal(float3 p, constant Uniforms& u) {
+        float e = 0.004; float dummy = 0.0;
+        float dx = pv_orbMap(p + float3(e, 0, 0), u, dummy) - pv_orbMap(p - float3(e, 0, 0), u, dummy);
+        float dy = pv_orbMap(p + float3(0, e, 0), u, dummy) - pv_orbMap(p - float3(0, e, 0), u, dummy);
+        float dz = pv_orbMap(p + float3(0, 0, e), u, dummy) - pv_orbMap(p - float3(0, 0, e), u, dummy);
+        return normalize(float3(dx, dy, dz) + 1e-5);
+    }
+    float4 pv_renderOrbs(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        // Orbiting camera looking at the cluster (beat pushes it in).
+        float3 target = float3(0.0, 0.0, 3.0);
+        float3 ro = float3(1.6 * sin(u.time * 0.2), 1.0 * sin(u.time * 0.13), -1.6 - u.beatPulse * 0.7);
+        float3 fwd = normalize(target - ro);
+        float3 right = normalize(cross(float3(0, 1, 0), fwd));
+        float3 vup = cross(fwd, right);
+        float3 rd = normalize(fwd + uvc.x * right + uvc.y * vup);
+        float t = 0.0, d = 0.0, glow = 0.0, nearID = 0.0;
+        int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_orbMap(ro + rd * t, u, nearID);
+            glow += 0.03 / (1.0 + d * d * 18.0);                 // halo glow into the dark
+            if (d < 0.003 || t > 30.0) { steps = i; break; }
+            t += d * 0.7;                                        // under-step (smin is approximate)
+        }
+        float3 glowCol = pv_cospalette(nearID * 0.13 + u.time * 0.15, idx);
+        float3 col = float3(0.0);
+        if (d < 0.01) {                                          // hit a surface
+            float3 p = ro + rd * t;
+            float3 n = pv_orbNormal(p, u);
+            float3 lightDir = normalize(float3(0.6, 0.8, -0.5) - p);
+            float diff = max(dot(n, lightDir), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);  // fresnel rim glow
+            float spec = pow(max(dot(reflect(rd, n), lightDir), 0.0), 16.0 + 40.0 * u.treble);
+            col = glowCol * (0.20 + 0.85 * diff) + glowCol * fres * 1.2
+                + float3(spec) * (0.4 + 0.6 * u.treble) + glowCol * 0.30;   // + emissive
+        }
+        col += glow * glowCol * (0.8 + 0.5 * u.beatPulse);       // halos + beat flash
+        return float4(max(col * u.vibrance, 0.0), float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 1.5) { return pv_renderOrbs(in.uv, u); }   // sceneMode 2 = glowing orbs
         const int MAXS = 64;                                     // bounded march (perf cap)
         int idx = int(u.paletteIndex);
         float aspect = u.resolution.x / max(u.resolution.y, 1.0);
