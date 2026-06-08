@@ -84,6 +84,8 @@ struct PermissivePreset: Identifiable, Codable {
     let ripple: Float
     let hex: Float
     let chroma: Float
+    // Phase 14 — 3D scene selector: 0 = 2D feedback engine, 1 = raymarched tunnel.
+    let sceneMode: Int
 
     init(version: Int, id: String, name: String, author: String, license: String?,
          decay: Float, zoom: Float, rotate: Float, paletteIndex: Int, paletteShift: Float,
@@ -101,7 +103,8 @@ struct PermissivePreset: Identifiable, Codable {
          fractal: Int = 0, cells: Float = 0, spiral: Float = 0,
          tile: Float = 0, pixelate: Float = 0, truchet: Float = 0,
          tunnel3d: Float = 0, plasma: Float = 0, phyllo: Float = 0,
-         ripple: Float = 0, hex: Float = 0, chroma: Float = 0) {
+         ripple: Float = 0, hex: Float = 0, chroma: Float = 0,
+         sceneMode: Int = 0) {
         self.version = version; self.id = id; self.name = name; self.author = author
         self.license = license; self.decay = decay; self.zoom = zoom; self.rotate = rotate
         self.paletteIndex = paletteIndex; self.paletteShift = paletteShift
@@ -120,6 +123,7 @@ struct PermissivePreset: Identifiable, Codable {
         self.tile = tile; self.pixelate = pixelate; self.truchet = truchet
         self.tunnel3d = tunnel3d; self.plasma = plasma; self.phyllo = phyllo
         self.ripple = ripple; self.hex = hex; self.chroma = chroma
+        self.sceneMode = sceneMode
     }
 
     init(from decoder: Decoder) throws {
@@ -177,6 +181,7 @@ struct PermissivePreset: Identifiable, Codable {
         ripple = try c.decodeIfPresent(Float.self, forKey: .ripple) ?? 0
         hex = try c.decodeIfPresent(Float.self, forKey: .hex) ?? 0
         chroma = try c.decodeIfPresent(Float.self, forKey: .chroma) ?? 0
+        sceneMode = try c.decodeIfPresent(Int.self, forKey: .sceneMode) ?? 0
     }
 
     static let fallback = PermissivePreset(
@@ -225,6 +230,26 @@ enum PermissivePresetLibrary {
           "swirl": 0.25,
           "swirlFreq": 8.0,
           "warpMode": 1
+        },
+        {
+          "version": 1,
+          "id": "vibrdrome_tunnel",
+          "name": "Tunnel",
+          "author": "Vibrdrome",
+          "license": "permissive-tbd",
+          "decay": 0.9,
+          "zoom": 0.0,
+          "rotate": 0.0,
+          "paletteIndex": 6,
+          "paletteShift": 0.0,
+          "pulseScale": 0.2,
+          "zoomBass": 0.0,
+          "rotateTreble": 0.0,
+          "pulseBass": 0.0,
+          "bloomStrength": 0.6,
+          "vibrance": 1.5,
+          "beatBloom": 0.7,
+          "sceneMode": 1
         },
         {
           "version": 1,

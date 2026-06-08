@@ -11,16 +11,25 @@ final class PermissivePresetTests: XCTestCase {
         Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
     }
 
-    func testLibraryDecodesFiftyPresets() {
+    func testLibraryDecodesFiftyOnePresets() {
         let presets = PermissivePresetLibrary.presets
-        XCTAssertEqual(presets.count, 50)
+        XCTAssertEqual(presets.count, 51)                     // 50 2D presets + the 3D Tunnel
         XCTAssertEqual(presets.first?.name, "Flux")           // hero is index 0 (default on open)
-        XCTAssertEqual(Set(presets.map(\.id)).count, 50)      // ids are unique
+        XCTAssertEqual(Set(presets.map(\.id)).count, 51)      // ids are unique
         // A spread of families is present.
         for id in ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_radiant",
-                   "vibrdrome_spectralspokes", "vibrdrome_wormhole", "vibrdrome_zenith"] {
+                   "vibrdrome_spectralspokes", "vibrdrome_wormhole", "vibrdrome_zenith",
+                   "vibrdrome_tunnel"] {
             XCTAssertNotNil(byId[id], "missing \(id)")
         }
+    }
+
+    func testTunnelIsThe3DScene() {
+        let t = byId["vibrdrome_tunnel"]
+        XCTAssertEqual(t?.sceneMode, 1)                       // 3D raymarch tunnel
+        // Every other preset stays on the 2D engine (sceneMode 0).
+        let threeD = PermissivePresetLibrary.presets.filter { $0.sceneMode > 0 }
+        XCTAssertEqual(threeD.map(\.id), ["vibrdrome_tunnel"])
     }
 
     func testAllPresetsVersion1AndAuthored() {
@@ -118,6 +127,7 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(p?.ripple, 0)
         XCTAssertEqual(p?.hex, 0)
         XCTAssertEqual(p?.chroma, 0)
+        XCTAssertEqual(p?.sceneMode, 0)   // defaults to the 2D engine
     }
 
     func testFallbackPresetExists() {

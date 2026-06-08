@@ -3,6 +3,10 @@ import Metal
 import MetalKit
 import simd
 
+// Most of this DEBUG-only file is the inline Metal `shaderSource` string (a data blob, not
+// logic), so the file/type length rules don't meaningfully apply here.
+// swiftlint:disable file_length
+
 /// Uniforms shared with the inline Metal source (layout must match `struct Uniforms`
 /// in `shaderSource`: float2 first for 8-byte alignment, then packed scalars).
 struct PermissiveUniforms {
@@ -76,8 +80,12 @@ struct PermissiveUniforms {
     var ripple: Float
     var hex: Float
     var chroma: Float
+    // Phase 14 — 3D raymarch: scene selector + host-accumulated forward camera position.
+    var sceneMode: Float
+    var camZ: Float
 }
 
+// swiftlint:disable type_body_length
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
 /// spike). Two `rgba16Float` textures are ping-ponged: each frame warps + decays the
 /// prior frame and adds a small audio-reactive pulse, then a present pass maps the
@@ -93,7 +101,11 @@ final class PermissiveFeedbackRenderer {
     private let feedbackPSO: MTLRenderPipelineState
     private let bloomPSO: MTLRenderPipelineState     // Phase 4
     private let wavePSO: MTLRenderPipelineState       // Phase 7 — waveform line geometry
+    private let raymarchPSO: MTLRenderPipelineState   // Phase 14 — 3D raymarch tunnel
     private let presentPSO: MTLRenderPipelineState
+
+    static let marchSteps = 64                        // bounded raymarch cap (mirrors MAXS in pv_raymarch)
+    private(set) var raymarchScale: CGFloat = 1.0     // 1.0 = full-res; 0.5 = half-res fallback (proof)
 
     static let maxWaveVerts = 1024
     private let waveBuffer: MTLBuffer                 // NDC float2 positions for the wave line
@@ -152,6 +164,13 @@ final class PermissiveFeedbackRenderer {
             wd.colorAttachments[0].destinationAlphaBlendFactor = .one
             wavePSO = try device.makeRenderPipelineState(descriptor: wd)
 
+            // Raymarch pass (Phase 14) — fullscreen 3D tunnel into the feedback-format target.
+            let rd14 = MTLRenderPipelineDescriptor()
+            rd14.vertexFunction = lib.makeFunction(name: "pv_vertex")
+            rd14.fragmentFunction = lib.makeFunction(name: "pv_raymarch")
+            rd14.colorAttachments[0].pixelFormat = Self.feedbackFormat
+            raymarchPSO = try device.makeRenderPipelineState(descriptor: rd14)
+
             let pd = MTLRenderPipelineDescriptor()
             pd.vertexFunction = lib.makeFunction(name: "pv_vertex")
             pd.fragmentFunction = lib.makeFunction(name: "pv_present")
@@ -182,9 +201,12 @@ final class PermissiveFeedbackRenderer {
     func resize(to newSize: CGSize) {
         guard newSize.width > 0, newSize.height > 0, newSize != size else { return }
         size = newSize
+        // Mipmapped so the 3D raymarch pass can store its per-pixel step count in alpha and we
+        // read the top (1×1) mip via generateMipmaps for a true frame-average (avgSteps proof).
+        // 2D feedback samples mip 0 only, so the mip chain is inert there.
         let d = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: Self.feedbackFormat,
-            width: Int(newSize.width), height: Int(newSize.height), mipmapped: false)
+            width: Int(newSize.width), height: Int(newSize.height), mipmapped: true)
         d.usage = [.renderTarget, .shaderRead]
         d.storageMode = .private
         texA = device.makeTexture(descriptor: d)
@@ -202,34 +224,41 @@ final class PermissiveFeedbackRenderer {
     }
 
     @MainActor
+    // swiftlint:disable:next function_body_length
     func render(in view: MTKView, uniforms: PermissiveUniforms) {
         guard let texA, let texB, let bloomTex,
               let drawable = view.currentDrawable,
               let presentRPD = view.currentRenderPassDescriptor,
               let cb = queue.makeCommandBuffer() else { return }
         var u = uniforms
+        let is3D = u.sceneMode > 0.5
         let read = readIsA ? texA : texB
         let write = readIsA ? texB : texA
 
-        // Pass A — feedback (offscreen): warp + decay the prior frame, add audio pulse.
+        // Pass A — feedback (2D) OR raymarch (3D): write the scene into `write`.
         let rpd = MTLRenderPassDescriptor()
         rpd.colorAttachments[0].texture = write
-        rpd.colorAttachments[0].loadAction = clearNext ? .clear : .load
+        rpd.colorAttachments[0].loadAction = (is3D || clearNext) ? .clear : .load
         rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
         rpd.colorAttachments[0].storeAction = .store
         if let enc = cb.makeRenderCommandEncoder(descriptor: rpd) {
-            enc.setRenderPipelineState(feedbackPSO)
-            enc.setFragmentTexture(read, index: 0)
-            enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
-            enc.setFragmentBuffer(bandsBuffer, offset: 0, index: 1)   // for spoke injection
+            if is3D {
+                enc.setRenderPipelineState(raymarchPSO)
+                enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+            } else {
+                enc.setRenderPipelineState(feedbackPSO)
+                enc.setFragmentTexture(read, index: 0)
+                enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+                enc.setFragmentBuffer(bandsBuffer, offset: 0, index: 1)   // for spoke injection
+            }
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             enc.endEncoding()
         }
 
-        // Pass A2 — waveform line (NEW): draw the audio waveform as thin bright additive
+        // Pass A2 — waveform line (2D only): draw the audio waveform as thin bright additive
         // geometry INTO the feedback field, so next frame's warp/flow/tunnel pulls it into
         // filaments. Loads (not clears) the field written by Pass A.
-        if waveCount > 1 {
+        if !is3D && waveCount > 1 {
             let wrpd = MTLRenderPassDescriptor()
             wrpd.colorAttachments[0].texture = write
             wrpd.colorAttachments[0].loadAction = .load
@@ -308,6 +337,38 @@ final class PermissiveFeedbackRenderer {
         return (toByte(halves[0]), toByte(halves[1]), toByte(halves[2]))
     }
 
+    /// Mean raymarch step count across the frame (proof-only, ~once/sec). The raymarch pass
+    /// stores `steps/marchSteps` in the alpha channel; we `generateMipmaps` and read the top
+    /// (1×1) mip's alpha — a true frame average — then scale back to a step count.
+    func readAvgSteps() -> Int {
+        guard let src = lastWritten, src.mipmapLevelCount > 1 else { return 0 }
+        if staging == nil {
+            let d = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .rgba16Float, width: 1, height: 1, mipmapped: false)
+            d.storageMode = .shared
+            staging = device.makeTexture(descriptor: d)
+        }
+        guard let staging,
+              let cb = queue.makeCommandBuffer(),
+              let blit = cb.makeBlitCommandEncoder() else { return 0 }
+        blit.generateMipmaps(for: src)
+        let top = src.mipmapLevelCount - 1                      // 1×1 mip = whole-frame average
+        blit.copy(from: src, sourceSlice: 0, sourceLevel: top,
+                  sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                  sourceSize: MTLSize(width: 1, height: 1, depth: 1),
+                  to: staging, destinationSlice: 0, destinationLevel: 0,
+                  destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+        blit.endEncoding()
+        cb.commit()
+        cb.waitUntilCompleted()
+        var halves = [UInt16](repeating: 0, count: 4)
+        staging.getBytes(&halves, bytesPerRow: 8,
+                         from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0),
+                                         size: MTLSize(width: 1, height: 1, depth: 1)),
+                         mipmapLevel: 0)
+        return Int((Self.halfToFloat(halves[3]) * Float(Self.marchSteps)).rounded())
+    }
+
     /// IEEE-754 half (binary16) → Float. Avoids the `Float16` type, which is
     /// unavailable on x86_64.
     private static func halfToFloat(_ h: UInt16) -> Float {
@@ -380,6 +441,8 @@ final class PermissiveFeedbackRenderer {
         float ripple;
         float hex;
         float chroma;
+        float sceneMode;
+        float camZ;
     };
 
     struct VSOut {
@@ -653,12 +716,72 @@ final class PermissiveFeedbackRenderer {
         return smoothstep(0.09, 0.0, min(d1, d2));      // thin arc lines
     }
 
+    // --- Phase 14: 3D raymarched tunnel (signed-distance / sphere tracing). General-CG
+    // demoscene concept; our own SDF, shading, and audio mapping. We are INSIDE the tube.
+    float pv_tunnelMap(float3 p, constant Uniforms& u) {
+        // Winding centerline sway (bass widens it).
+        p.xy += float2(sin(p.z * 0.30 + u.time * 0.5), cos(p.z * 0.25)) * (0.5 + 0.3 * u.bass);
+        float wall = 1.0 - length(p.xy);                          // TUNNEL_R = 1.0
+        float ribs = (0.05 + 0.04 * u.treble) * sin(p.z * 4.0 - u.time * 2.0);  // treble → rib detail
+        return wall + ribs;
+    }
+    float3 pv_tunnelNormal(float3 p, constant Uniforms& u) {
+        float e = 0.003;
+        float dx = pv_tunnelMap(p + float3(e, 0, 0), u) - pv_tunnelMap(p - float3(e, 0, 0), u);
+        float dy = pv_tunnelMap(p + float3(0, e, 0), u) - pv_tunnelMap(p - float3(0, e, 0), u);
+        float dz = pv_tunnelMap(p + float3(0, 0, e), u) - pv_tunnelMap(p - float3(0, 0, e), u);
+        return normalize(float3(dx, dy, dz) + 1e-5);
+    }
+    fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        const int MAXS = 64;                                     // bounded march (perf cap)
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = in.uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 rd = normalize(float3(uvc, 1.3));                 // perspective ray
+        float3 ro = float3(u.beatPulse * 0.12 * sin(u.time * 28.0),
+                           u.beatPulse * 0.12 * cos(u.time * 23.0), u.camZ);  // forward + beat kick
+        float t = 0.0, d = 0.0;
+        int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_tunnelMap(ro + rd * t, u);
+            if (d < 0.002 || t > 40.0) { steps = i; break; }
+            t += d * 0.8;                                        // under-step (inexact SDF)
+        }
+        float3 p = ro + rd * t;
+        float3 n = pv_tunnelNormal(p, u);
+        float fog = exp(-t * 0.09);                             // dark foggy vanishing point
+        float diff = max(dot(n, -rd), 0.0);
+        // Angle as fraction of a turn (−0.5…0.5): it jumps by exactly 1.0 across the atan2 cut,
+        // so an INTEGER number of hue cycles wraps seamlessly around the tube (no seam line).
+        float hueA = atan2(p.y, p.x) / 6.2831853;
+        // Strong global hue cycle (time) + a beat hue-kick, on top of the depth/angle hue.
+        float3 base = pv_cospalette(p.z * 0.04 + hueA * 2.0 + u.time * 0.5 + u.beatPulse * 0.35, idx);
+        float3 col = base * (0.15 + 0.85 * diff) * fog;
+        float rib = 0.5 + 0.5 * sin(p.z * 4.0 - u.time * 2.0);  // emissive rib bands
+        col += base * fog * rib * (0.25 + 0.5 * u.treble) * 0.5;
+        col += pv_cospalette(0.5, idx) * u.beatBloom * u.beatPulse * fog;   // beat light burst
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));         // alpha = normalised step count (proof)
+    }
+
     fragment float4 pv_present(VSOut in [[stage_in]],
                                texture2d<float> field [[texture(0)]],
                                texture2d<float> bloom [[texture(1)]],
                                constant Uniforms& u [[buffer(0)]],
                                constant float* bands [[buffer(1)]]) {
         constexpr sampler s(address::clamp_to_edge, filter::linear);
+
+        // 3D scene mode: the raymarch pass already produced the final lit colour in `field`.
+        // Just composite bloom + a mild vignette and skip all the 2D waveform/feedback logic.
+        if (u.sceneMode > 0.5) {
+            float3 c3 = field.sample(s, in.uv).rgb;
+            c3 += bloom.sample(s, in.uv).rgb * u.bloomStrength;
+            c3 = 1.0 - exp(-max(c3, 0.0));        // tone-map: highlights glow + roll off (no blowout)
+            float vig3 = smoothstep(1.05, 0.25, length(in.uv - 0.5));
+            c3 *= mix(1.0, vig3, 0.35);
+            return float4(c3, 1.0);
+        }
+
         int idx = int(u.paletteIndex);
 
         float aspect = u.resolution.x / max(u.resolution.y, 1.0);
@@ -905,4 +1028,5 @@ final class PermissiveFeedbackRenderer {
     }
     """
 }
+// swiftlint:enable type_body_length
 #endif

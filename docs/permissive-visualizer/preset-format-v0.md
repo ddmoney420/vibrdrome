@@ -75,6 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | (Phase 14) render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel. `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -162,6 +163,29 @@ aberration, across cosine palettes 2–10. Each is original Vibrdrome work, not 
 third-party preset. **The inline `PermissivePresetLibrary` string is the source of truth;** the
 `docs/permissive-visualizer/presets/*.json` files are byte-for-byte reference copies (one per
 preset) regenerated from it.
+
+## Phase 14 — 3D raymarch (sceneMode)
+`sceneMode 1` switches the renderer from the 2D feedback engine to a **raymarched 3D tunnel**:
+a fullscreen fragment pass sphere-traces a signed-distance tunnel (winding centerline + ring
+ribs), shades it (fog vanishing point + emissive ribs + headlight glow), and writes the lit
+colour into the feedback-format target; the existing **quarter-res bloom** + **present** passes
+are reused (present has a `sceneMode` branch that skips all the 2D waveform/feedback logic and
+just composites bloom + a mild vignette). The 2D feedback path (`sceneMode 0`, the 50 presets)
+is unchanged. Audio: `bass` → forward speed + tunnel pulse, `bassPunch` → forward surge,
+`beatPulse` → camera kick + light burst, `treble` → rib shimmer. Colour reuses the cosine
+palettes (`paletteIndex`) and `vibrance`/`bloomStrength`. Marching is **bounded** (64 steps);
+the proof reports `sceneMode`/`marchSteps`/`avgSteps`/`raymarchScale`.
+
+### Future hooks (designed, NOT implemented in Phase 1)
+- **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
+  a second texture and the 3D scene into another, then the present pass blends them. The texture
+  separation that makes this a drop-in is already in place.
+- **Future overlay fields:** `overlayPreset` (string id of a 2D preset), `overlayBlend` (int:
+  add/screen/alpha), `overlayOpacity` (float). Not added in Phase 1 — only `sceneMode` exists.
+- **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
+  and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
+  (duration/curve), not preset fields. Not implemented in Phase 1.
+- **More 3D scenes** select via the same `sceneMode` enum later (2 = Mandelbulb, 3 = orbs, …).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

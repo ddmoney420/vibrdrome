@@ -246,6 +246,26 @@ defaults; the preset carries no shader code, expressions, or PCM; version stays 
 load from the inline DEBUG string (no `.json` bundled). PCM use stays DEBUG-only and gated.
 No projectM/Classic/CI/Vendor/release changes.
 
+## Research Step 14 — raymarched 3D tunnel (first 3D scene) (2026-06-07)
+
+DEBUG-only. Adds a 3D rendering path (`sceneMode 1`) alongside the 2D feedback engine — a
+raymarched signed-distance tunnel. General computer-graphics concepts, our own SDF, shading,
+and audio mapping; **no projectM / Butterchurn / `.milk`** source consulted, no third-party
+code, no preset content.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| sphere tracing / SDF raymarch | general-cg-concept | march a ray through a signed-distance field; standard technique, our own loop (bounded to 64 steps) |
+| signed-distance tunnel | general-cg-concept | inside-out tube `R − length(xy)` with a winding centerline + sinusoidal ring ribs; our own SDF |
+| shading (fog / diffuse / emissive ribs / beat burst) | general-cg-concept | depth fog, gradient normal, rib emissives, beat light burst; original |
+| host-accumulated forward camera + audio mapping | our-own-code | integrate `camZ` from a bass/bass-punch speed; beat→camera kick, treble→rib detail |
+| avgSteps proof (mipmap average) | general-cg-concept | store step count in alpha, `generateMipmaps`, read the 1×1 top mip = frame average |
+
+**Guardrails intact:** `sceneMode` is an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and the whole 2D engine are unchanged. Parameters-only (no shader code/expressions in
+the preset). DEBUG-only inline shader; nothing bundled. No projectM/Classic/CI/Vendor/release
+changes. Overlay-compositing and auto-transitions are documented but **not implemented**.
+
 ## Third-party dependencies considered
-None in Steps 1–13. (Any future permissive dependency must have its license recorded
+None in Steps 1–14. (Any future permissive dependency must have its license recorded
 here before use.)

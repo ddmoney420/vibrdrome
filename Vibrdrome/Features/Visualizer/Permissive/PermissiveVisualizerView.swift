@@ -66,6 +66,10 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private var lastPunch: SIMD3<Float> = .zero
     private var punchPeak: SIMD3<Float> = .zero   // peak over the last proof window (proof only)
 
+    // Phase 14 — host-accumulated forward camera position for the 3D raymarch tunnel.
+    private var camZ: Float = 0
+    private var lastFrameTime: CFTimeInterval = 0
+
     // Step 7 — raw-PCM waveform geometry (DEBUG-only). We enable the PCM ring's tap only
     // while this screen is visible (and never while projectM owns the ring), drain it into
     // a rolling mono window, and build a circular/scope line that the renderer draws into
@@ -195,6 +199,11 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let p = activePreset
         let (pulse, punch) = updateAudio(bands: audio.bands)
 
+        // 3D tunnel: integrate forward camera position from speed (bass + bass-punch surge).
+        let dt = lastFrameTime == 0 ? 0 : Float(now - lastFrameTime)
+        lastFrameTime = now
+        if p.sceneMode > 0 { camZ += dt * (1.5 + 3.0 * audio.bass + 4.0 * punch.x) }
+
         // Build the waveform line from raw PCM (or a synthesized fallback when idle).
         let w = Float(view.drawableSize.width), h = Float(view.drawableSize.height)
         let aspect = h > 0 ? w / h : 1
@@ -226,7 +235,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
             fractal: Float(p.fractal), cells: p.cells, spiral: p.spiral,
             tile: p.tile, pixelate: p.pixelate, truchet: p.truchet,
             tunnel3d: p.tunnel3d, plasma: p.plasma, phyllo: p.phyllo,
-            ripple: p.ripple, hex: p.hex, chroma: p.chroma)
+            ripple: p.ripple, hex: p.hex, chroma: p.chroma,
+            sceneMode: Float(p.sceneMode), camZ: camZ)
         renderer.render(in: view, uniforms: u)
         frames += 1
 
@@ -299,6 +309,10 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         api=Metal
         fps=\(fps)
         preset=\(activePreset.id)
+        sceneMode=\(activePreset.sceneMode)
+        marchSteps=\(PermissiveFeedbackRenderer.marchSteps)
+        avgSteps=\(activePreset.sceneMode > 0 ? (renderer?.readAvgSteps() ?? 0) : 0)
+        raymarchScale=\(String(format: "%.2f", Double(renderer?.raymarchScale ?? 1.0)))
         bloom=\(String(format: "%.2f", activePreset.bloomStrength))
         overlay=\(String(format: "%.2f", activePreset.waveformStrength))
         flow=\(String(format: "%.2f", activePreset.flow))
