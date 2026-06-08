@@ -287,6 +287,26 @@ presets and the Phase-14 tunnel are unchanged (orbs live behind `sceneMode 2` + 
 projectM/Classic/CI/Vendor/release changes. Overlay-compositing and auto-transitions remain
 documented-only.
 
+## Research Step 16 — warp starfield (3D scene 3) (2026-06-08)
+
+DEBUG-only. Adds a third 3D scene (`sceneMode 3`) — a **screen-space procedural** hyperspace
+warp starfield, the first scene built without SDF raymarching. General computer-graphics
+concepts, our own field, animation, and audio mapping; **no projectM / Butterchurn / `.milk`**
+consulted, no third-party code or preset content.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| hash-based star cells | general-cg-concept | classic `fract(sin·43758…)` integer hash for per-angular-cell star identity — deterministic, no RNG state; our own field |
+| warp-tunnel star streaks | general-cg-concept | stars born at the centre vanishing point fly outward into radial streaks (head + trailing tail); a well-known demoscene/shader-genre look, our implementation |
+| 3-shell parallax + core glow | general-cg-concept | fixed shell loop for layered depth + a beat-pulsed centre flare; O(1)/pixel, no march |
+| audio mapping | our-own-code | bass/bassPunch→warp speed/depth, beat→streak length + core flare, energy→brightness, treble→sparkle, mid→funnel opening |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets, the Tunnel (`sceneMode 1`), and the Orbs (`sceneMode 2`) are unchanged (warpfield lives
+behind `sceneMode 3` + the `vibrdrome_warpfield` preset). Parameters-only; DEBUG-only inline
+shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlay-compositing and
+auto-transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–15. (Any future permissive dependency must have its license recorded
+None in Steps 1–16. (Any future permissive dependency must have its license recorded
 here before use.)

@@ -823,7 +823,57 @@ final class PermissiveFeedbackRenderer {
         return float4(max(col * u.vibrance, 0.0), float(steps) / float(MAXS));
     }
 
+    // ── Warpfield (sceneMode 3) — screen-space procedural hyperspace star-streak tunnel ─────
+    // NOT raymarched: O(1)/pixel over a fixed shell loop, with a deterministic per-angular-cell
+    // hash (no RNG state). Stars are born at the centre vanishing point and fly outward into
+    // streaks; motion comes from camZ/time + audio. Reuses the 3D route, bloom, and present.
+    float pv_hash11(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+
+    float4 pv_renderWarpfield(float2 uv, constant Uniforms& u) {
+        const int SHELLS = 3;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 p = uv * 2.0 - 1.0; p.x *= aspect;            // centre = vanishing point
+        float r = length(p);
+        float ang = atan2(p.y, p.x);                          // -pi..pi
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float speed = 0.15 + 0.5 * u.bass + 0.8 * u.bassPunch;        // forward warp rate
+        float streakLen = 0.12 + 0.55 * u.beatPulse + 0.15 * u.bass;  // beat = warp surge
+        float maxR = 1.6 + 0.3 * u.mid;                               // mid opens the funnel
+        float angW = 500.0 + 1800.0 * u.treble;                      // treble sharpens streaks
+
+        float3 col = float3(0.0);
+        for (int s = 0; s < SHELLS; s++) {
+            float fs = float(s);
+            float N = 80.0 + 50.0 * fs;                              // angular star density / shell
+            float cell = floor((ang + 3.14159265) / 6.2831853 * N);
+            float h  = pv_hash11(cell * 1.7 + fs * 53.3);
+            float h2 = pv_hash11(cell * 3.1 + fs * 17.1);
+            float cellCentre = (cell + 0.5) / N * 6.2831853 - 3.14159265;
+            float dA = ang - cellCentre;
+            float angFall = exp(-dA * dA * angW);                    // thin radial streak
+            // Per-star life phase 0..1 (born centre → fly to edge); rate varies per hash.
+            float phase = fract(h + (u.camZ * speed + u.time * 0.12 * (1.0 + 0.4 * fs)) * (0.6 + 0.8 * h2));
+            float starR = phase * maxR;
+            float behind = starR - r;                               // tail trails toward centre
+            float head = exp(-(r - starR) * (r - starR) * 700.0);   // bright head dot
+            float tail = clamp(1.0 - behind / streakLen, 0.0, 1.0) * step(0.0, behind);
+            float life = smoothstep(0.0, 0.12, phase) * smoothstep(1.0, 0.82, phase); // soft in/out
+            float bright = (head + tail * 0.55) * angFall * life * (0.45 + 0.55 * h);
+            float hue = starR * 0.5 + (ang / 6.2831853) * 2.0 + u.paletteShift
+                      + u.time * 0.12 + u.beatPulse * 0.25 + h * 0.3;
+            col += pv_cospalette(hue, idx) * bright;
+        }
+        col *= (0.45 + 1.1 * energy) * (1.0 + 0.5 * u.treble);       // brightness + treble sparkle
+        float core = exp(-r * r * 10.0) * (0.4 + 1.6 * u.beatPulse);  // centre tunnel-mouth flare
+        col += pv_cospalette(u.time * 0.2, idx) * core;
+        col += pv_cospalette(0.5, idx) * u.beatBloom * u.beatPulse * exp(-r * 2.0);  // beat burst
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(SHELLS) / 64.0);                   // alpha → avgSteps ≈ 3 (cheap)
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 2.5) { return pv_renderWarpfield(in.uv, u); }  // sceneMode 3 = warp starfield
         if (u.sceneMode > 1.5) { return pv_renderOrbs(in.uv, u); }   // sceneMode 2 = glowing orbs
         const int MAXS = 64;                                     // bounded march (perf cap)
         int idx = int(u.paletteIndex);
