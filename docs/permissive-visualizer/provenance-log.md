@@ -217,6 +217,35 @@ consulted.
 `decodeIfPresent → 0`; no shader code/expressions/PCM in the preset). `spokes 0` leaves every
 other preset unchanged. No projectM/Classic/CI/Vendor/release changes.
 
+## Research Steps 9–13 — preset-library expansion to 50 (variant rounds) (2026-06-07)
+
+DEBUG-only. Expanded the inline preset library to **50 original presets** and added a broad set
+of compositing/warp layers, all gated by optional parameters. Every item below is a general
+computer-graphics / DSP concept implemented in our own words; **no projectM / Butterchurn /
+`.milk` source was opened, copied, ported, or translated**, and no third-party preset content
+was used.
+
+| Layer | Source category | Notes (our words) |
+|---|---|---|
+| polar lattice (`lattice`) | general-cg-concept | intersecting concentric rings + radial lines → moiré grid; original |
+| colour wash (`wash`) | general-cg-concept | moving full-screen hue-gradient overlay; original |
+| fractal fold (`fractal`) | general-cg-concept | Kaliset-style iterated abs-fold + rotate + scale; original |
+| Voronoi cells (`cells`) | general-cg-concept | standard cellular noise (animated points, 2-nearest edge); original |
+| log spiral (`spiral`) | general-cg-concept | log-polar (Droste) self-similar spiral; original |
+| mirror-tiling (`tile`) / pixelate / Truchet (`truchet`) | general-cg-concept | domain repetition, block quantise, and random arc-tile maze; standard ideas, our implementations |
+| 3D tunnel (`tunnel3d`) | general-cg-concept | demoscene angle + 1/r depth mapping; original |
+| sine plasma (`plasma`) | general-cg-concept | classic demoscene multi-sine field; original |
+| phyllotaxis (`phyllo`) | general-cg-concept, general-dsp-concept | golden-angle seed spiral; original |
+| ripples (`ripple`) | general-cg-concept | multi-source sine wave interference; original |
+| hex grid (`hex`) | general-cg-concept | standard hexagonal-lattice distance; original |
+| chromatic aberration (`chroma`) | general-cg-concept | RGB-channel offset sampling; original |
+| cosine palettes 7–10 (acid/ice/sunset/mono) | general-cg-concept | IQ-style cosine gradients; original coefficients |
+
+**Guardrails intact:** parameters-only (all new knobs are scalars/ints with `decodeIfPresent`
+defaults; the preset carries no shader code, expressions, or PCM; version stays 1). Presets
+load from the inline DEBUG string (no `.json` bundled). PCM use stays DEBUG-only and gated.
+No projectM/Classic/CI/Vendor/release changes.
+
 ## Third-party dependencies considered
-None in Steps 1–8c. (Any future permissive dependency must have its license recorded
+None in Steps 1–13. (Any future permissive dependency must have its license recorded
 here before use.)

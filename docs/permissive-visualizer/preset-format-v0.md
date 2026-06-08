@@ -32,7 +32,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `decay` | float | feedback persistence, 0..1 |
 | `zoom` | float | base per-frame feedback zoom |
 | `rotate` | float | base per-frame feedback rotation |
-| `paletteIndex` | int | palette: 0/1 = legacy 3-stop (fallback only); 2–6 = cosine-gradient themes (2 deep-space, 3 aurora, 4 fire, 5 nebula, 6 rainbow) |
+| `paletteIndex` | int | palette: 0/1 = legacy 3-stop (fallback only); 2–10 = cosine-gradient themes (2 deep-space, 3 aurora, 4 fire, 5 nebula, 6 rainbow, 7 acid, 8 ice, 9 sunset, 10 mono) |
 | `paletteShift` | float | palette position offset |
 | `pulseScale` | float | radial audio-pulse intensity |
 | `zoomBass` | float | audio mapping: bass → extra zoom |
@@ -60,7 +60,21 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `spokes` | int? | (Phase 8c) radial spectrum-spoke (ray) count; 0 = off. `decodeIfPresent` → 0 |
 | `spokeLen` | float? | (Phase 8c) radial length of the spectrum bars. `decodeIfPresent` → 0 |
 | `spokeInject` | int? | (Phase 8c) 0 = present-only spokes (sharp), 1 = inject spokes into the feedback field (bloom + trails). `decodeIfPresent` → 0 |
-| `whirl` | float? | (Phase 8c) whirlpool: center-weighted rotational warp (1/r falloff, bass-swelled). 0 = off. `decodeIfPresent` → 0 |
+| `whirl` | float? | (Phase 8c) whirlpool: center-weighted rotational warp (1/r falloff, bass-swelled) + radius-dependent spiral twist on the spokes. 0 = off. `decodeIfPresent` → 0 |
+| `lattice` / `latticeR` / `latticeA` | float? | (Phase 9) polar lattice: intersecting concentric rings (`latticeR` count, → 12) + radial lines (`latticeA` count, → 16) = moiré grid; `lattice` strength → 0 |
+| `wash` | float? | (Phase 9) moving full-screen colour-wash overlay. `decodeIfPresent` → 0 |
+| `fractal` | int? | (Phase 10) Kaliset fractal-fold iterations on the sample coord (nested mandala). `decodeIfPresent` → 0 |
+| `cells` | float? | (Phase 10) Voronoi liquid-cell layer (molten edges). `decodeIfPresent` → 0 |
+| `spiral` | float? | (Phase 11) logarithmic (Droste) self-similar spiral warp. `decodeIfPresent` → 0 |
+| `tile` | float? | (Phase 12) mirror-tiling grid (domain repetition). `decodeIfPresent` → 0 |
+| `pixelate` | float? | (Phase 12) quantise the sample coord to blocks (cubist). `decodeIfPresent` → 0 |
+| `truchet` | float? | (Phase 12) Truchet arc-tile maze overlay. `decodeIfPresent` → 0 |
+| `tunnel3d` | float? | (Phase 13) demoscene 3D tunnel (angle + 1/r depth). `decodeIfPresent` → 0 |
+| `plasma` | float? | (Phase 13) sine-plasma colour field. `decodeIfPresent` → 0 |
+| `phyllo` | float? | (Phase 13) phyllotaxis (golden-angle sunflower) seed spiral. `decodeIfPresent` → 0 |
+| `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
+| `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
+| `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -139,23 +153,15 @@ for discrete hits.
   a **vibrating-string ripple** travelling along each spoke, **oscillating tips** (per-band
   sine), and the **real PCM waveform** ring (`waveStyle 1`) overlaid on top. Authored from
   scratch.
-The presets run the flow/polar engine — each draws structured geometry (a PCM waveform or
-spectrum spokes) into the field, with a distinct palette, form, motion, and beat behaviour:
-- **`vibrdrome_aurora` ("Aurora")** — calm flowing curtains: circular waveform, aurora
-  green/teal palette (idx 3), slow flow, high decay, gentle spin, soft beat. Authored from
-  scratch.
-- **`vibrdrome_pulse` ("Pulse")** — aggressive fire kaleidoscope: circular waveform, fire
-  palette (idx 4), fast flow, **quad** symmetry, hard `beatWave`/`beatFlow`/`beatBloom`
-  kicks, fast spin. Authored from scratch.
-- **`vibrdrome_nebula` ("Nebula")** — dreamy deep tunnel: circular waveform, nebula
-  magenta/blue palette (idx 5), slow flow, heavy bloom, deep `tunnel`, gentle spin.
-  Authored from scratch.
-- **`vibrdrome_spectrum` ("Spectrum")** — rainbow scope kaleidoscope: **horizontal scope**
-  waveform (`waveStyle 2`), rainbow palette (idx 6), **quad** symmetry, strong beat, mid
-  spin. Authored from scratch.
 
-See `vibrdrome_flux.json`, `vibrdrome_aurora.json`, `vibrdrome_pulse.json`,
-`vibrdrome_nebula.json`, and `vibrdrome_spectrum.json` in this directory.
+The library now holds **50 original presets** spanning the families above plus the Phase 9–13
+layers — vortices, kaleidoscope mandalas, radial spectrum spokes, whirlpool spirals, lattice
+moiré, colour washes, fractal folds, Voronoi liquid cells, log-spirals, tiling/pixelate/Truchet
+geometry, demoscene 3D tunnels, sine plasma, phyllotaxis, ripples, hex grids, and chromatic
+aberration, across cosine palettes 2–10. Each is original Vibrdrome work, not derived from any
+third-party preset. **The inline `PermissivePresetLibrary` string is the source of truth;** the
+`docs/permissive-visualizer/presets/*.json` files are byte-for-byte reference copies (one per
+preset) regenerated from it.
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

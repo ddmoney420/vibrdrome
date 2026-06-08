@@ -221,7 +221,12 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
             swirl: p.swirl, swirlFreq: p.swirlFreq, warpMode: Float(p.warpMode),
             bassPunch: punch.x, midPunch: punch.y, treblePunch: punch.z,
             kaleido: Float(p.kaleido), spokes: Float(p.spokes), spokeLen: p.spokeLen,
-            spokeInject: Float(p.spokeInject), whirl: p.whirl)
+            spokeInject: Float(p.spokeInject), whirl: p.whirl,
+            lattice: p.lattice, latticeR: p.latticeR, latticeA: p.latticeA, wash: p.wash,
+            fractal: Float(p.fractal), cells: p.cells, spiral: p.spiral,
+            tile: p.tile, pixelate: p.pixelate, truchet: p.truchet,
+            tunnel3d: p.tunnel3d, plasma: p.plasma, phyllo: p.phyllo,
+            ripple: p.ripple, hex: p.hex, chroma: p.chroma)
         renderer.render(in: view, uniforms: u)
         frames += 1
 

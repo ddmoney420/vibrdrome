@@ -55,6 +55,27 @@ struct PermissiveUniforms {
     var spokeInject: Float
     // Phase 8c-3 — whirlpool: center-weighted rotational warp (spins fast at centre).
     var whirl: Float
+    // Phase 9 — polar lattice (intersecting rings + radial lines → moiré) + colour wash overlay.
+    var lattice: Float
+    var latticeR: Float
+    var latticeA: Float
+    var wash: Float
+    // Phase 10 — fractal fold (nested self-similar mandala) + Voronoi liquid cells.
+    var fractal: Float
+    var cells: Float
+    // Phase 11 — logarithmic (Droste) spiral warp: self-similar fractal spiral / nautilus.
+    var spiral: Float
+    // Phase 12 — angular: mirror-tiling (grid), pixelate (cubist blocks), Truchet maze.
+    var tile: Float
+    var pixelate: Float
+    var truchet: Float
+    // Phase 13 — outside-the-box: 3D tunnel, sine plasma, phyllotaxis, ripples, hex, chroma.
+    var tunnel3d: Float
+    var plasma: Float
+    var phyllo: Float
+    var ripple: Float
+    var hex: Float
+    var chroma: Float
 }
 
 /// Research Step 2 — DEBUG-only native Metal feedback prototype (permissive visualizer
@@ -343,6 +364,22 @@ final class PermissiveFeedbackRenderer {
         float spokeLen;
         float spokeInject;
         float whirl;
+        float lattice;
+        float latticeR;
+        float latticeA;
+        float wash;
+        float fractal;
+        float cells;
+        float spiral;
+        float tile;
+        float pixelate;
+        float truchet;
+        float tunnel3d;
+        float plasma;
+        float phyllo;
+        float ripple;
+        float hex;
+        float chroma;
     };
 
     struct VSOut {
@@ -548,6 +585,18 @@ final class PermissiveFeedbackRenderer {
         } else if (idx == 6) {     // Rainbow — full spectrum
             a = float3(0.50, 0.50, 0.50); b = float3(0.50, 0.50, 0.50);
             cc = float3(1.0, 1.0, 1.0);   dd = float3(0.00, 0.33, 0.67);
+        } else if (idx == 7) {     // Acid — lime / green / yellow
+            a = float3(0.30, 0.45, 0.10); b = float3(0.45, 0.45, 0.30);
+            cc = float3(1.0, 1.0, 1.0);   dd = float3(0.15, 0.10, 0.05);
+        } else if (idx == 8) {     // Ice — cyan / blue / white
+            a = float3(0.25, 0.45, 0.60); b = float3(0.40, 0.40, 0.40);
+            cc = float3(1.0, 1.0, 1.0);   dd = float3(0.55, 0.62, 0.70);
+        } else if (idx == 9) {     // Sunset — orange / pink / violet
+            a = float3(0.55, 0.25, 0.35); b = float3(0.45, 0.35, 0.45);
+            cc = float3(1.0, 1.0, 1.0);   dd = float3(0.05, 0.18, 0.40);
+        } else if (idx == 10) {    // Mono — high-contrast greyscale (B&W marble)
+            a = float3(0.55); b = float3(0.48);
+            cc = float3(1.0, 1.0, 1.0);   dd = float3(0.0, 0.0, 0.0);
         } else {                   // 2 = deep-space — violet / magenta / teal
             a = float3(0.18, 0.10, 0.30); b = float3(0.55, 0.45, 0.65);
             cc = float3(1.0, 1.0, 1.0);   dd = float3(0.00, 0.18, 0.40);
@@ -574,6 +623,34 @@ final class PermissiveFeedbackRenderer {
         float3 tint = pv_cospalette(in.uv.x * 0.5 + u.time * 0.05 + u.paletteShift, int(u.paletteIndex));
         float3 col = mix(float3(1.0), tint, 0.45) * b;
         return float4(col, b);
+    }
+
+    // Voronoi liquid cells: animated feature points; returns cell-border closeness (.x, small
+    // near a boundary) and a per-cell id (.y). Standard cellular noise; original.
+    float2 pv_cells(float2 p, float t) {
+        float2 ip = floor(p), fp = fract(p);
+        float f1 = 8.0, f2 = 8.0; float2 cellId = float2(0.0);
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                float2 g = float2(dx, dy);
+                float2 h = float2(pv_hash21(ip + g), pv_hash21(ip + g + 17.3));
+                float2 o = 0.5 + 0.5 * sin(t * 0.8 + 6.2831853 * h);   // animated point
+                float2 r = g + o - fp;
+                float d = dot(r, r);
+                if (d < f1) { f2 = f1; f1 = d; cellId = h; } else if (d < f2) { f2 = d; }
+            }
+        }
+        return float2(sqrt(f2) - sqrt(f1), cellId.x);
+    }
+
+    // Truchet tiles: each grid cell randomly draws one of two quarter-arc orientations, so the
+    // arcs connect across cells into a continuous interconnecting maze/circuit. Original.
+    float pv_truchet(float2 p) {
+        float2 ip = floor(p), fp = fract(p);
+        if (pv_hash21(ip) < 0.5) fp.x = 1.0 - fp.x;     // flip → the two tile orientations
+        float d1 = abs(length(fp) - 0.5);
+        float d2 = abs(length(fp - float2(1.0, 1.0)) - 0.5);
+        return smoothstep(0.09, 0.0, min(d1, d2));      // thin arc lines
     }
 
     fragment float4 pv_present(VSOut in [[stage_in]],
@@ -614,7 +691,54 @@ final class PermissiveFeedbackRenderer {
         if (u.symmetry > 0.5) { suv.x = 0.5 - abs(suv.x - 0.5); }
         if (u.symmetry > 1.5) { suv.y = 0.5 - abs(suv.y - 0.5); }
 
-        float3 v = field.sample(s, suv).rgb;
+        // Logarithmic (Droste) spiral: in log-polar space, twist the angle by log-radius (a
+        // logarithmic spiral) and wrap the log-radius into self-similar bands → an infinite-
+        // zoom fractal spiral (nautilus). Self-similar, NOT a kaleidoscope fold.
+        if (u.spiral > 0.0) {
+            float2 sp = (suv - 0.5); sp.x *= aspect;
+            float sr = max(length(sp), 1e-4);
+            float sa = atan2(sp.y, sp.x);
+            float slr = log(sr);
+            sa += slr * u.spiral;                       // log-spiral twist
+            slr = fract(slr * 0.65 + u.time * 0.05);    // self-similar repeating scale bands
+            sr = exp((slr - 0.5) * 1.6);
+            sp = float2(cos(sa), sin(sa)) * sr; sp.x /= aspect;
+            suv = sp + 0.5;
+        }
+
+        // Fractal fold (Kaliset-style): iterate abs-fold + rotate + scale so the field is
+        // sampled through a self-similar coordinate → nested, recursive mandala detail.
+        if (u.fractal > 0.5) {
+            float2 fp = (suv - 0.5) * 2.0;
+            int it = min(int(u.fractal), 8);
+            for (int i = 0; i < it; i++) {
+                fp = abs(fp) - 0.5;
+                float fa = 0.5 + u.time * 0.05;
+                fp = float2(fp.x * cos(fa) - fp.y * sin(fa), fp.x * sin(fa) + fp.y * cos(fa));
+                fp *= 1.3;
+            }
+            suv = fract(fp * 0.5 + 0.5);
+        }
+
+        // Mirror-tiling: repeat the field in a grid, reflected at cell edges (seamless) → a
+        // kaleidoscopic tiled mosaic.
+        if (u.tile > 0.0) {
+            float2 t = (suv - 0.5) * u.tile;
+            suv = abs(fract(t) - 0.5) * 2.0;
+        }
+        // Pixelate: quantise the sample coordinate to blocks → cubist mosaic.
+        if (u.pixelate > 0.0) {
+            suv = (floor(suv * u.pixelate) + 0.5) / u.pixelate;
+        }
+
+        // Chromatic aberration: split the RGB channels by sampling at offset positions.
+        float3 v;
+        if (u.chroma > 0.0) {
+            float2 coff = (suv - 0.5) * u.chroma * 0.05;
+            v = float3(field.sample(s, suv + coff).r, field.sample(s, suv).g, field.sample(s, suv - coff).b);
+        } else {
+            v = field.sample(s, suv).rgb;
+        }
         float intensity = clamp(length(v) * 0.85, 0.0, 1.0);
         float3 col;
 
@@ -685,6 +809,97 @@ final class PermissiveFeedbackRenderer {
             float bar = step(r0, r) * smoothstep(barOuter, barOuter - 0.012, r) * gap;
             float3 spokeCol = pv_cospalette(float(band) / 32.0 + u.time * 0.05, idx);
             col += bar * spokeCol * (0.7 + 1.0 * amp + 0.8 * u.beatPulse);
+        }
+
+        // Colour wash: a slow moving fullscreen hue gradient overlaid (additive, breathing).
+        if (u.wash > 0.0) {
+            float washT = in.uv.x * 0.4 + in.uv.y * 0.25 + u.time * 0.07 + u.bassPunch * 0.2;
+            float3 washCol = pv_cospalette(washT, idx);
+            col += washCol * u.wash * (0.45 + 0.35 * sin(u.time + in.uv.x * 6.0));
+        }
+
+        // Polar lattice: thin concentric rings (circular) + radial lines (angular) intersecting
+        // → a moiré grid over the warped field. Intersections glow brighter.
+        if (u.lattice > 0.0) {
+            float2 lq = in.uv - 0.5; lq.x *= aspect;
+            float lr = length(lq);
+            float la01 = atan2(lq.y, lq.x) / 6.2831853 + 0.5;
+            float ringL = smoothstep(0.08, 0.0, abs(fract(lr * u.latticeR - u.time * 0.3) - 0.5));
+            float radL  = smoothstep(0.08, 0.0, abs(fract(la01 * u.latticeA + u.time * 0.1) - 0.5));
+            float grid = max(ringL, radL) + ringL * radL;   // lines + brighter intersections
+            float3 gridCol = pv_cospalette(lr * 1.5 + u.time * 0.10, idx);
+            col += grid * gridCol * u.lattice * (0.7 + 0.5 * u.treblePunch);
+        }
+
+        // Voronoi liquid cells: dim palette-tinted cell fills with bright glowing borders —
+        // the molten / reaction-diffusion look. Cells drift over time and pulse with bass.
+        if (u.cells > 0.0) {
+            float2 cp = (in.uv - 0.5); cp.x *= aspect;
+            float2 cv = pv_cells(cp * 6.0 + 10.0, u.time);
+            float border = smoothstep(0.12, 0.0, cv.x);
+            float3 fillCol = pv_cospalette(cv.y + u.time * 0.04, idx) * 0.30;
+            float3 edgeCol = pv_cospalette(cv.y + 0.45, idx) * 1.30;
+            col += (fillCol + border * edgeCol) * u.cells * (0.7 + 0.6 * u.bassPunch);
+        }
+
+        // Truchet maze: interconnecting arc-tile circuits (angular), drifting + beat-bright.
+        if (u.truchet > 0.0) {
+            float2 tp = in.uv; tp.x *= aspect;
+            float arcs = pv_truchet(tp * 8.0 + float2(u.time * 0.05, 0.0));
+            float3 arcCol = pv_cospalette(in.uv.x + in.uv.y + u.time * 0.1, idx);
+            col += arcs * arcCol * u.truchet * (0.7 + 0.6 * u.beatPulse);
+        }
+
+        float2 cq = in.uv - 0.5; cq.x *= aspect;
+        float cr = length(cq);
+
+        // 3D tunnel (demoscene): map angle + 1/r depth to a scrolling wall texture → infinite
+        // receding tunnel; darker toward the vanishing point.
+        if (u.tunnel3d > 0.0) {
+            float ang = atan2(cq.y, cq.x) / 6.2831853;
+            float depth = 0.30 / max(cr, 0.02) + u.time * (0.4 + u.bassPunch);
+            float pat = 0.5 + 0.5 * sin(ang * 6.2831853 * 6.0) * sin(depth * 6.2831853 * 2.0);
+            float3 tc = pv_cospalette(depth * 0.25, idx) * pat * clamp(cr * 2.2, 0.0, 1.0);
+            col = mix(col, tc * 1.4, u.tunnel3d);
+        }
+
+        // Sine plasma (demoscene): smooth multi-sine colour field.
+        if (u.plasma > 0.0) {
+            float2 pp = in.uv * 7.0;
+            float pv = sin(pp.x + u.time) + sin(pp.y + u.time * 1.3)
+                     + sin((pp.x + pp.y) * 0.7 + u.time * 0.7) + sin(cr * 18.0 - u.time * 2.0);
+            col += pv_cospalette(pv * 0.12 + u.time * 0.05, idx) * u.plasma * (0.5 + 0.3 * sin(pv));
+        }
+
+        // Phyllotaxis (sunflower): golden-angle spiral of glowing seeds.
+        if (u.phyllo > 0.0) {
+            float a = atan2(cq.y, cq.x);
+            float n = cr * cr * 60.0;
+            float dots = pow(max(0.0, cos(a - n * 2.39996 + u.time * 0.4)), 24.0)
+                       * pow(max(0.0, cos(n * 3.14159)), 8.0);
+            col += dots * pv_cospalette(n * 0.04, idx) * u.phyllo * (1.0 + u.beatPulse);
+        }
+
+        // Ripple interference: concentric waves from a few drifting sources (pond).
+        if (u.ripple > 0.0) {
+            float rv = 0.0;
+            for (int i = 0; i < 3; i++) {
+                float2 src = 0.3 * float2(sin(u.time * 0.5 + float(i) * 2.1), cos(u.time * 0.4 + float(i) * 1.7));
+                rv += sin(length(cq - src) * 38.0 - u.time * 3.0);
+            }
+            col += pv_cospalette(rv * 0.1 + 0.5, idx) * u.ripple * (0.4 + 0.3 * rv);
+        }
+
+        // Hex honeycomb: glowing hexagonal cell borders.
+        if (u.hex > 0.0) {
+            float2 hp = in.uv * 10.0;
+            const float2 hs = float2(1.0, 1.7320508);
+            float2 ha = fmod(hp, hs) - hs * 0.5;
+            float2 hb = fmod(hp - hs * 0.5, hs) - hs * 0.5;
+            float2 hg = dot(ha, ha) < dot(hb, hb) ? ha : hb;
+            float hd = abs(max(abs(hg.x) * 0.8660254 + hg.y * 0.5, hg.y) - 0.42);
+            float hl = smoothstep(0.06, 0.0, hd);
+            col += hl * pv_cospalette(in.uv.x + u.time * 0.08, idx) * u.hex * (0.7 + 0.5 * u.treblePunch);
         }
         return float4(col, 1.0);
     }
