@@ -180,6 +180,44 @@ final class AudioEngine {
     var lastScrobbleTime: Date?
     var generation: Int = 0
 
+    // MARK: - Stalled-Stream Auto-Recovery
+
+    /// Kill switch (default true). Disables the recovery *action*, not the lightweight logs. A
+    /// network stall leaves the player parked at `paused`/rate-0 while the buffer refills, but
+    /// `automaticallyWaitsToMinimizeStalling` does not always auto-resume — so playback stays
+    /// silent until we re-issue play. We only do so when the app still intends to play (`isPlaying`).
+    private static let stallAutoRecoveryKey = "stallAutoRecoveryEnabled"
+    var stallAutoRecoveryEnabled: Bool {
+        UserDefaults.standard.object(forKey: Self.stallAutoRecoveryKey) as? Bool ?? true
+    }
+    static let stallRecoveryMaxAttempts = 3
+    static let stallRecoveryBufferThreshold: Double = 10.0  // buffered-ahead seconds = "ample"
+    static let stallRecoveryMinInterval: TimeInterval = 1.5  // anti-thrash between attempts
+    /// Grace period after the buffer becomes ample before we override a persistent WAITING. Long
+    /// enough that AVPlayer's normal short waiting (1–3s at track start) self-recovers untouched;
+    /// short enough that a stuck WAITING (observed: 53s silent with 79s buffered) is rescued fast.
+    static let stallRecoveryGrace: TimeInterval = 7.0
+
+    var stallRecoveryArmed = false
+    var stallRecoveryAttempts = 0
+    var lastStallRecoveryTime: Date?
+    var stallBufferAmpleSince: Date?   // when buffer first became ample during the current stall
+    var stallItemHasPlayed = false     // gate: only a playing→not-playing transition is a real stall
+    var pendingStallRecovery: Task<Void, Never>?
+    var stallObservers: Set<AnyCancellable> = []
+    var stallNotifToken: NSObjectProtocol?
+
+    /// Seconds of contiguous buffered media ahead of `current` (0 if the playhead isn't in a range).
+    static func bufferedAhead(in item: AVPlayerItem, current: Double) -> Double {
+        var best = 0.0
+        for value in item.loadedTimeRanges {
+            let r = value.timeRangeValue
+            let start = r.start.seconds, end = (r.start + r.duration).seconds
+            if current >= start - 0.25 && current <= end { best = max(best, end - current) }
+        }
+        return best
+    }
+
     // Near-end download check — tracks the song ID for which we've already
     // inserted a fallback, so we don't insert multiple times per track.
     var nearEndCheckSongId: String?
@@ -255,6 +293,11 @@ final class AudioEngine {
         durationObserver?.cancel(); durationObserver = nil
         bufferingObserver?.cancel(); bufferingObserver = nil
         statusObserver?.cancel(); statusObserver = nil
+        stallObservers.removeAll()
+        if let stallNotifToken {
+            NotificationCenter.default.removeObserver(stallNotifToken)
+            self.stallNotifToken = nil
+        }
     }
 
     let networkMonitor = NWPathMonitor()
