@@ -131,6 +131,11 @@ struct DebugView: View {
             } label: {
                 Label("projectM MilkDrop Test", systemImage: "waveform.circle")
             }
+            NavigationLink {
+                PermissiveVisualizerView()
+            } label: {
+                Label("Native Visualizer Test", systemImage: "sparkles.tv")
+            }
         }
     }
 

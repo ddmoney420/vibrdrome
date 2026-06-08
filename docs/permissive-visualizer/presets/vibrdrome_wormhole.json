@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "zoom": 0.0,
+  "rotate": 0.0,
+  "paletteShift": 0.0,
+  "pulseScale": 0.2,
+  "zoomBass": 0.0,
+  "rotateTreble": 0.0,
+  "pulseBass": 0.0,
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "id": "vibrdrome_wormhole",
+  "name": "Wormhole",
+  "decay": 0.9,
+  "paletteIndex": 8,
+  "bloomStrength": 0.55,
+  "vibrance": 1.55,
+  "symmetry": 0,
+  "tunnel3d": 1.0,
+  "chroma": 0.5
+}

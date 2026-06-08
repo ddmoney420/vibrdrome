@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "zoom": 0.0,
+  "rotate": 0.0,
+  "paletteShift": 0.0,
+  "pulseScale": 0.2,
+  "zoomBass": 0.0,
+  "rotateTreble": 0.0,
+  "pulseBass": 0.0,
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "id": "vibrdrome_neuron",
+  "name": "Neuron",
+  "decay": 0.92,
+  "paletteIndex": 10,
+  "bloomStrength": 0.4,
+  "vibrance": 1.6,
+  "warpMode": 0,
+  "flow": 0.3,
+  "symmetry": 0,
+  "truchet": 0.9,
+  "cells": 0.5
+}
