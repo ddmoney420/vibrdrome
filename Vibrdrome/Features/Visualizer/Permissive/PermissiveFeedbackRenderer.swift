@@ -2025,7 +2025,155 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Truchet Circuit (sceneMode 23) — raised circuit-trace heightfield (domain repetition) ──
+    // Truchet tiling → continuous winding raised copper traces on a dark board; data pulses flow
+    // along them; flown over low so traces self-occlude and recede into fog. Not a flat tile texture.
+    float pv_truchetDist(float2 xz, float cell, constant Uniforms& u, thread float &flow, thread float &hue) {
+        float2 c = floor(xz / cell);
+        float2 local = fract(xz / cell) - 0.5;
+        float h = pv_hash21(c);
+        if (h < 0.5) local.x = -local.x;                         // two diagonal arc configs
+        float2 ca = local - 0.5, cb = local + 0.5;
+        float da = abs(length(ca) - 0.5);                        // quarter-arc at (0.5,0.5)
+        float db = abs(length(cb) - 0.5);                        // quarter-arc at (-0.5,-0.5)
+        float d; float2 ctr;
+        if (da < db) { d = da; ctr = ca; } else { d = db; ctr = cb; }
+        float s = atan2(ctr.y, ctr.x);                           // along-trace parameter
+        float speed = 0.35 + 0.5 * u.bass + 0.5 * u.bassPunch;   // crawl flow
+        flow = pow(0.5 + 0.5 * sin(s * 6.0 - u.time * speed + h * 6.2831), 8.0);  // data pulses
+        hue = h;
+        return d;
+    }
+    float pv_truchetHeight(float2 xz, constant Uniforms& u, thread float &trace, thread float &flow, thread float &hue) {
+        float cell = 0.9 - 0.3 * u.mid;                          // mid → finer traces
+        float d = pv_truchetDist(xz, cell, u, flow, hue);
+        float tw = 0.13;
+        trace = smoothstep(tw, tw * 0.4, d);                     // 1 on the trace centerline
+        return -1.0 + trace * 0.35;                              // raised copper traces
+    }
+    float4 pv_renderTruchet(float2 uv, constant Uniforms& u) {
+        const int MAXS = 72;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float travel = u.camZ * 0.07 * (1.0 + 0.4 * u.bass);     // crawl flyover
+        float3 ro = float3(0.3 * sin(u.time * 0.15), 1.1 + 0.1 * u.beatPulse, travel);
+        float3 rd = normalize(float3(uvc.x, uvc.y - 0.5, 1.0));  // forward + downward tilt
+        float t = 0.1, tprev = 0.0; bool hit = false; int steps = MAXS;
+        float trace = 0.0, flow = 0.0, hue = 0.0;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float dh = p.y - pv_truchetHeight(p.xz, u, trace, flow, hue);
+            if (dh < 0.0) { hit = true; steps = i; break; }
+            tprev = t; t += max(0.04, dh * 0.5);
+            if (t > 45.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float ta = tprev, tb = t;
+            for (int j = 0; j < 5; j++) {
+                float tm = 0.5 * (ta + tb); float3 pm = ro + rd * tm;
+                if (pm.y - pv_truchetHeight(pm.xz, u, trace, flow, hue) < 0.0) tb = tm; else ta = tm;
+            }
+            float3 p = ro + rd * tb;
+            float e2 = 0.03;
+            float tr0; float fl0; float hu0;
+            float hL = pv_truchetHeight(p.xz - float2(e2, 0), u, tr0, fl0, hu0);
+            float hR = pv_truchetHeight(p.xz + float2(e2, 0), u, tr0, fl0, hu0);
+            float hD = pv_truchetHeight(p.xz - float2(0, e2), u, tr0, fl0, hu0);
+            float hU = pv_truchetHeight(p.xz + float2(0, e2), u, tr0, fl0, hu0);
+            float3 n = normalize(float3(hL - hR, 2.0 * e2, hD - hU));
+            pv_truchetHeight(p.xz, u, trace, flow, hue);          // centre sample → trace/flow/hue
+            float fog = exp(-tb * 0.06);
+            float3 board = pv_cospalette(0.62 + u.paletteShift, idx) * 0.04;   // dark board
+            float3 traceCol = pv_cospalette(0.1 + hue * 0.6 + u.paletteShift, idx);  // full neon palette per trace
+            float3 ld = normalize(float3(0.3, 0.85, -0.2));
+            float diff = max(dot(n, ld), 0.0);
+            col = board + traceCol * trace * (0.4 + 0.7 * diff);
+            // data packets flare white-hot, localized to the trace
+            col += mix(traceCol, float3(1.0), 0.6) * trace * flow * (1.2 + 1.6 * u.treble + 1.4 * u.beatPulse);
+            col *= fog;
+        } else {
+            col = pv_cospalette(0.6 + u.paletteShift, idx) * 0.03;
+        }
+        col *= (0.6 + 0.8 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Torus-Knot Surface (sceneMode 24) — analytic (p,q) torus-knot SDF, self-occluding tube ─
+    // One continuous knotted tube (distinct from the Gyroid lattice): angular-winding distance to
+    // the nearest of kp strand passes; surface ridges + hue-along-length; slow tumble → self-occlusion.
+    float pv_knotDE(float3 p, constant Uniforms& u, thread float &along) {
+        const float R = 1.4;                                     // major radius
+        float tr = 0.20 + 0.04 * u.mid + 0.03 * sin(u.time * 0.3);  // tube radius (gentle smooth breathe)
+        const float kp = 3.0, kq = 2.0;                          // trefoil-class winding
+        float a = atan2(p.z, p.x);                               // main-axis angle
+        float2 cs = float2(length(p.xz) - R, p.y);              // cross-section (radial offset, height)
+        float beta = atan2(cs.y, cs.x);
+        float rho = length(cs);
+        float best = 1e9; float bestAlong = 0.0;
+        for (int k = 0; k < 3; k++) {                            // kp strand passes
+            float target = (kq / kp) * a + 6.2831853 * float(k) / kp;
+            float dB = beta - target;
+            dB = atan2(sin(dB), cos(dB));                        // wrap to -pi..pi
+            float dd = length(float2(rho, dB * 0.55));          // radial + along-tube angular offset
+            if (dd < best) { best = dd; bestAlong = target; }
+        }
+        along = a + bestAlong;                                   // along-tube param for colour/ridges
+        float ridge = 0.03 * sin(along * (10.0 + 8.0 * u.treble));  // treble → surface ridges (continuous, no snap)
+        return best - tr + ridge;
+    }
+    float4 pv_renderTorusKnot(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float zoom = 4.0 - 0.6 * sin(u.time * 0.1);
+        float ax = u.time * 0.22, ay = u.time * 0.13;            // monotonic time → smooth rotation (no reversal)
+        float3 ro = float3(zoom * sin(ax) * cos(ay), zoom * sin(ay), zoom * cos(ax) * cos(ay));
+        float3 fwd = normalize(-ro), rt = normalize(cross(float3(0, 1, 0), fwd));
+        float3 up = cross(fwd, rt);
+        float3 rd = normalize(uvc.x * rt + uvc.y * up + 1.6 * fwd);
+        float t = 0.2; int steps = MAXS; bool hit = false; float along = 0.0, alongHit = 0.0;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_knotDE(p, u, along);
+            if (d < 0.0015) { hit = true; steps = i; alongHit = along; break; }
+            t += d * 0.6;                                        // under-step (approximate field)
+            if (t > 9.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (hit) {
+            float3 p = ro + rd * t;
+            float e = 0.002; float od;
+            float2 kk = float2(1.0, -1.0);
+            float3 n = normalize(kk.xyy * pv_knotDE(p + kk.xyy * e, u, od) +
+                                 kk.yyx * pv_knotDE(p + kk.yyx * e, u, od) +
+                                 kk.yxy * pv_knotDE(p + kk.yxy * e, u, od) +
+                                 kk.xxx * pv_knotDE(p + kk.xxx * e, u, od));
+            float3 ld = normalize(float3(0.5, 0.8, 0.3));
+            float diff = max(dot(n, ld), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+            float spec = pow(max(dot(reflect(rd, n), ld), 0.0), 40.0);
+            float fog = exp(-t * 0.12);
+            float3 base = pv_cospalette(0.1 + alongHit * 0.16 + u.paletteShift + u.time * 0.02, idx);  // hue along length
+            col  = base * (0.12 + 0.7 * diff);
+            col += base * fres * (0.6 + 0.8 * u.treble);
+            col += float3(spec) * (0.5 + 0.6 * u.treble);
+            col += base * fres * u.beatPulse * 0.5;              // beat → tube rim only (no full-screen flash)
+            col *= fog;
+        }
+        col *= (0.7 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 23.5) { return pv_renderTorusKnot(in.uv, u); }   // sceneMode 24 = torus-knot
+        if (u.sceneMode > 22.5) { return pv_renderTruchet(in.uv, u); }     // sceneMode 23 = truchet circuit
         if (u.sceneMode > 21.5) { return pv_renderHex(in.uv, u); }         // sceneMode 22 = hex honeycomb
         if (u.sceneMode > 20.5) { return pv_renderReaction(in.uv, u); }    // sceneMode 21 = reaction membrane
         if (u.sceneMode > 19.5) { return pv_renderApollonian(in.uv, u); }  // sceneMode 20 = apollonian gasket

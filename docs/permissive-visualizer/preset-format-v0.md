@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35), 23 = truchet circuit (Phase 36), 24 = torus-knot surface (Phase 37). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -398,6 +398,28 @@ neon hue (`hash(id)`), exponential fog → near cells occlude far. Per-cell heig
 =crawl speed + (per-cell) height, `treble`=edge glow, `beatPulse`=cell/edge pulse only (no full-screen flash).
 Verified iPhone 61fps @0.25 / mac 59–60 full-res (avgSteps≈8–18). Preset: `vibrdrome_hex` (the id
 `vibrdrome_honeycomb` was already an original 2D preset).
+
+### Phase 36 — truchet circuit (sceneMode 23)
+`sceneMode 23` raymarches a **3D circuit board in relief**: Truchet tiling (per-cell hashed orientation,
+two quarter-arcs connecting edge midpoints → continuous winding traces) carved as **raised copper traces**
+on a dark board via a heightfield (`smoothstep` on the trace-centerline distance). Ocean-class heightfield
+march (bisection + finite-difference normal); **data pulses** flow along each trace (`sin` of the along-arc
+angle scrolled by time → white-hot packets), glowing neon traces (full cosine palette per cell), fog +
+occlusion; flown over at a **crawl**. Distinct from Highway (flat grid) and Hex (cells). Audio: `bass`=crawl
++ pulse-flow speed, `bassPunch`=pulse burst, `mid`=trace fineness, `treble`=glow sharpness, `beatPulse`=
+traces/pulses only (no full-screen flash). Verified iPhone 61fps @0.25 / mac 60–61 full-res (avgSteps≈9–19).
+Preset: `vibrdrome_truchet` (the id `vibrdrome_circuit` was already an original 2D preset).
+
+### Phase 37 — torus-knot surface (sceneMode 24)
+`sceneMode 24` raymarches an **analytic (kp,kq) torus-knot SDF** (trefoil-class 3,2): main-axis angle +
+tube cross-section coords, distance to the nearest of `kp` strand passes via wrapped tube-angle difference
+→ one continuous **self-occluding knotted tube** (distinct from the Gyroid lattice). Surface **ridges**
+(`sin` along the tube, treble→count, continuous so it never snaps) + diffuse/fresnel/specular + glow + hue
+**along the tube length**; slow multi-axis tumble for self-occlusion + depth. Bounded (fixed winding,
+clamped tube radius) — **not** Mandelbox/Mandelbulb. All motion is smooth monotonic time (a `time×bass`
+rotation snapped backward; fixed). Audio: `bass`(via energy/glow), `mid`→tube radius, `treble`→ridges,
+`beatPulse`→tube rim only (no full-screen flash). Verified iPhone 60fps @0.25 / mac 59–60 full-res
+(avgSteps≈7–19). Preset: `vibrdrome_torusknot`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

@@ -567,6 +567,32 @@ presets and scenes 1–20 are unchanged (reaction/hex live behind `sceneMode 21/
 `vibrdrome_honeycomb` was already an original 2D preset, untouched). Parameters-only; DEBUG-only inline
 shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 36 — truchet circuit (scene 23) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 23` — a raised Truchet-circuit heightfield raymarch.
+General-CG; our own relief/pulses/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| Truchet tiling + heightfield raymarch + domain repetition | general-cg-concept | per-cell hashed two-arc Truchet (continuous winding traces), Ocean-style heightfield march + bisection + finite-difference normal; standard, our implementation |
+| trace relief + data-pulse flow + audio | our-own-code | raised copper traces, along-arc data packets flaring white-hot, neon palette, crawl flyover (distinct from Highway/Hex); bass=crawl/flow, punch=burst, mid=fineness, treble=glow, beat=traces only (no full-screen flash) |
+
+## Research Step 37 — torus-knot surface (scene 24) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 24` — an analytic torus-knot SDF raymarch (continuous self-occluding tube).
+General-CG; our own surface/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| analytic (kp,kq) torus-knot SDF | general-cg-concept | angular-winding distance to the nearest of kp strand passes (wrapped tube-angle), tube-distance combine; standard real-time torus-knot approach, bounded — NOT Mandelbox/Mandelbulb; our implementation |
+| surface ridges + smooth motion + audio | our-own-code | along-tube ridge bands (continuous, no snap), hue-along-length, fresnel/specular glow, fully smooth monotonic-time tumble (fixed a time×bass rotation reversal); mid=tube radius, treble=ridges, beat=rim only (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–22 are unchanged (truchet/torus-knot live behind `sceneMode 23/24` +
+`vibrdrome_truchet`/`vibrdrome_torusknot`; the new truchet scene uses id `vibrdrome_truchet` because
+`vibrdrome_circuit` was already an original 2D preset, untouched). Parameters-only; DEBUG-only inline
+shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–35. (Any future permissive dependency must have its license recorded
+None in Steps 1–37. (Any future permissive dependency must have its license recorded
 here before use.)

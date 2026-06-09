@@ -11,11 +11,11 @@ final class PermissivePresetTests: XCTestCase {
         Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
     }
 
-    func testLibraryDecodesSeventyTwoPresets() {
+    func testLibraryDecodesSeventyFourPresets() {
         let presets = PermissivePresetLibrary.presets
-        XCTAssertEqual(presets.count, 72)                     // 50 2D + 22 3D/procedural scenes
+        XCTAssertEqual(presets.count, 74)                     // 50 2D + 24 3D/procedural scenes
         XCTAssertEqual(presets.first?.name, "Flux")           // hero is index 0 (default on open)
-        XCTAssertEqual(Set(presets.map(\.id)).count, 72)      // ids are unique
+        XCTAssertEqual(Set(presets.map(\.id)).count, 74)      // ids are unique
         // A spread of families is present.
         for id in ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_radiant",
                    "vibrdrome_spectralspokes", "vibrdrome_wormhole", "vibrdrome_zenith",
@@ -25,12 +25,13 @@ final class PermissivePresetTests: XCTestCase {
                    "vibrdrome_faultline", "vibrdrome_cymatic", "vibrdrome_horizondome",
                    "vibrdrome_vortex", "vibrdrome_shockwave", "vibrdrome_menger",
                    "vibrdrome_urbancanyon", "vibrdrome_chrome", "vibrdrome_apollonian",
-                   "vibrdrome_reaction", "vibrdrome_hex"] {
+                   "vibrdrome_reaction", "vibrdrome_hex", "vibrdrome_truchet",
+                   "vibrdrome_torusknot"] {
             XCTAssertNotNil(byId[id], "missing \(id)")
         }
     }
 
-    func testThreeDScenesAreTwentyTwoSceneModes() {
+    func testThreeDScenesAreTwentyFourSceneModes() {
         XCTAssertEqual(byId["vibrdrome_tunnel"]?.sceneMode, 1)            // raymarch tunnel
         XCTAssertEqual(byId["vibrdrome_orbs"]?.sceneMode, 2)            // glowing-orb / metaball
         XCTAssertEqual(byId["vibrdrome_warpfield"]?.sceneMode, 3)       // screen-space warp starfield
@@ -53,7 +54,9 @@ final class PermissivePresetTests: XCTestCase {
         XCTAssertEqual(byId["vibrdrome_apollonian"]?.sceneMode, 20)     // sphere-inversion apollonian DE
         XCTAssertEqual(byId["vibrdrome_reaction"]?.sceneMode, 21)       // procedural reaction-diffusion membrane
         XCTAssertEqual(byId["vibrdrome_hex"]?.sceneMode, 22)           // extruded hex honeycomb heightfield
-        // Exactly those twenty-two are non-2D; everything else stays on the 2D engine (sceneMode 0).
+        XCTAssertEqual(byId["vibrdrome_truchet"]?.sceneMode, 23)        // raised truchet circuit heightfield
+        XCTAssertEqual(byId["vibrdrome_torusknot"]?.sceneMode, 24)      // analytic torus-knot SDF
+        // Exactly those twenty-four are non-2D; everything else stays on the 2D engine (sceneMode 0).
         let threeD = PermissivePresetLibrary.presets.filter { $0.sceneMode > 0 }.map(\.id)
         XCTAssertEqual(Set(threeD),
                        ["vibrdrome_tunnel", "vibrdrome_orbs", "vibrdrome_warpfield",
@@ -65,7 +68,8 @@ final class PermissivePresetTests: XCTestCase {
                         "vibrdrome_vortex", "vibrdrome_shockwave",
                         "vibrdrome_menger", "vibrdrome_urbancanyon",
                         "vibrdrome_chrome", "vibrdrome_apollonian",
-                        "vibrdrome_reaction", "vibrdrome_hex"])
+                        "vibrdrome_reaction", "vibrdrome_hex",
+                        "vibrdrome_truchet", "vibrdrome_torusknot"])
     }
 
     func testAllPresetsVersion1AndAuthored() {
