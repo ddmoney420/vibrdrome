@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "id": "vibrdrome_highway",
+  "name": "Highway",
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "decay": 0.9,
+  "zoom": 0.0,
+  "rotate": 0.0,
+  "paletteIndex": 5,
+  "paletteShift": 0.0,
+  "pulseScale": 0.2,
+  "zoomBass": 0.0,
+  "rotateTreble": 0.0,
+  "pulseBass": 0.0,
+  "bloomStrength": 0.75,
+  "vibrance": 1.5,
+  "beatBloom": 0.7,
+  "sceneMode": 6
+}

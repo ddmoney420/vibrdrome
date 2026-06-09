@@ -327,6 +327,34 @@ presets, Tunnel (1), Orbs (2), and Warpfield (3) are unchanged (gyroid lives beh
 projectM/Classic/CI/Vendor/release changes. Overlay-compositing and auto-transitions remain
 documented-only.
 
+## Research Step 18 — audio ocean (3D scene 5) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 5` — a raymarched audio-reactive water **heightfield**. General-CG
+technique; our own waves, shading, and audio mapping; **no projectM / Butterchurn / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| heightfield raymarch + bisection | general-cg-concept | march until ray drops below the surface, refine the waterline; standard demoscene/shader ocean technique, our implementation |
+| layered directional sine waves | general-cg-concept | a few audio-weighted sine octaves (swell/ripple/chop); our own field |
+| fresnel/specular/sky shading + audio | our-own-code | crest fresnel + sun glint + sky/horizon; bass→swell/speed, mid→ripple, treble→chop/sparkle, beat→surge/flash/bob |
+
+## Research Step 19 — synthwave highway (3D scene 6) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 6` — a **screen-space procedural** retro neon perspective grid (no
+march). General-CG / shader-genre technique; our own grid, sun, and audio mapping; **no projectM /
+Butterchurn / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| analytic ground projection + neon grid | general-cg-concept | perspective-project below-horizon pixels to a ground plane, draw fwidth-antialiased grid lines; well-known synthwave-shader look, our implementation |
+| banded synthwave sun + sky | general-cg-concept | horizon sun disc with horizontal gaps + sky gradient; our own |
+| audio mapping | our-own-code | bass→scroll/grid pulse, beat→flash/sun pulse, mid→hills, treble→sparkle, energy→brightness |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and 3D scenes 1–4 are unchanged (ocean/highway live behind `sceneMode 5/6` +
+`vibrdrome_ocean`/`vibrdrome_highway`). Parameters-only; DEBUG-only inline shader; nothing bundled.
+No projectM/Classic/CI/Vendor/release changes. Overlays and auto-transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–17. (Any future permissive dependency must have its license recorded
+None in Steps 1–19. (Any future permissive dependency must have its license recorded
 here before use.)

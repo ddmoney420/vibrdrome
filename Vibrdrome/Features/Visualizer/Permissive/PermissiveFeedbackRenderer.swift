@@ -939,7 +939,115 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));          // alpha = normalised step count
     }
 
+    // ── Ocean (sceneMode 5) — raymarched audio-reactive water heightfield ──────────────────
+    // Layered directional sine waves (bass=swell, mid=ripple, treble=chop, beat=surge); the ray
+    // is marched until it drops below the surface, then bisection-refined. Sky above the horizon.
+    float pv_oceanHeight(float2 xz, constant Uniforms& u) {
+        float t = u.time;
+        float h = (0.25 + 0.55 * u.bass)   * sin(dot(xz, float2(0.8, 0.6)) * 0.5 + t * 0.7);
+        h += (0.12 + 0.28 * u.mid)         * sin(dot(xz, float2(-0.5, 0.9)) * 1.1 + t * 1.1);
+        h += (0.08 + 0.18 * u.mid)         * sin(dot(xz, float2(0.9, -0.4)) * 1.7 + t * 1.5);
+        h += (0.04 + 0.14 * u.treble)      * sin(dot(xz, float2(0.3, 1.0)) * 3.3 + t * 2.4);
+        return h * (1.0 + 0.5 * u.beatPulse);                    // beat amplitude surge
+    }
+
+    float4 pv_renderOcean(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 ro = float3(0.0, 1.6 + u.beatPulse * 0.15, u.camZ);   // low camera + beat bob
+        float3 rd = normalize(float3(uvc.x, uvc.y - 0.35, 1.0));     // forward + downward tilt
+        float t = 0.1, tprev = 0.0;
+        bool hit = false; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float dh = p.y - pv_oceanHeight(p.xz, u);
+            if (dh < 0.0) { hit = true; steps = i; break; }         // crossed below the surface
+            tprev = t;
+            t += max(0.06, dh * 0.4);                               // step grows with clearance
+            if (t > 60.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float ta = tprev, tb = t;                              // bisection refine the waterline
+            for (int j = 0; j < 5; j++) {
+                float tm = 0.5 * (ta + tb);
+                float3 pm = ro + rd * tm;
+                if (pm.y - pv_oceanHeight(pm.xz, u) < 0.0) tb = tm; else ta = tm;
+            }
+            float3 p = ro + rd * tb;
+            float e = 0.06;
+            float hL = pv_oceanHeight(p.xz - float2(e, 0), u), hR = pv_oceanHeight(p.xz + float2(e, 0), u);
+            float hD = pv_oceanHeight(p.xz - float2(0, e), u), hU = pv_oceanHeight(p.xz + float2(0, e), u);
+            float3 n = normalize(float3(hL - hR, 2.0 * e, hD - hU));
+            float fog = exp(-tb * 0.05);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 4.0);    // bright crests / horizon
+            float3 lightDir = normalize(float3(0.4, 0.7, -0.3));
+            float diff = max(dot(n, lightDir), 0.0);
+            float spec = pow(max(dot(reflect(rd, n), lightDir), 0.0), 40.0);
+            float crest = smoothstep(0.10, 0.40, p.y);             // glints on the crests
+            float3 base = pv_cospalette(p.y * 0.4 + tb * 0.02 + u.paletteShift + u.beatPulse * 0.2, idx);
+            col = base * (0.12 + 0.60 * diff);
+            col += base * fres * 1.2;
+            col += float3(spec) * (0.6 + 0.6 * u.treble);
+            col += base * crest * (0.4 + 0.6 * u.beatPulse);
+            col *= fog;
+        } else {
+            float skyT = clamp(uvc.y * 0.5 + 0.5, 0.0, 1.0);
+            float3 sky = pv_cospalette(0.6 + skyT * 0.3 + u.paletteShift, idx) * (0.30 + 0.40 * skyT);
+            float horizon = exp(-abs(uvc.y) * 6.0) * (0.8 + 0.8 * u.beatPulse);
+            col = sky + pv_cospalette(0.5, idx) * horizon;          // luminous horizon band
+        }
+        col *= (0.6 + 0.8 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));            // alpha = heightfield step count
+    }
+
+    // ── Highway (sceneMode 6) — screen-space synthwave perspective grid ─────────────────────
+    // O(1)/pixel analytic ground projection (no march). Below the horizon = scrolling neon grid
+    // (fwidth-antialiased so it doesn't shimmer at quarter-res); above = sky gradient + a banded sun.
+    float4 pv_renderHighway(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float horizon = 0.05;
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (uvc.y < horizon) {
+            float d = 1.0 / (horizon - uvc.y);                    // ground depth → ∞ at horizon
+            float gx = uvc.x * d;
+            float speed = 0.4 + 1.5 * u.bass + 2.0 * u.bassPunch;
+            float gz = d + u.camZ * speed;
+            gz += sin(gx * 0.7 + u.time * 0.5) * u.mid * 0.6;     // mid → rolling hills
+            float lx = abs(fract(gx) - 0.5), lz = abs(fract(gz) - 0.5);
+            float gridX = smoothstep(fwidth(gx) * 1.5, 0.0, lx);
+            float gridZ = smoothstep(fwidth(gz) * 1.5, 0.0, lz);
+            float grid = max(gridX, gridZ);
+            float fade = exp(-d * 0.06);
+            float3 neon = pv_cospalette(d * 0.05 + u.paletteShift + u.time * 0.05, idx);
+            col = neon * grid * fade * (1.1 + 1.4 * u.bass + 2.0 * u.beatPulse);
+            col += neon * 0.12 * fade;                            // ground glow
+        } else {
+            float skyT = (uvc.y - horizon) / (1.0 - horizon);
+            float3 sky = pv_cospalette(0.5 + skyT * 0.25 + u.paletteShift, idx) * (0.15 + 0.30 * skyT);
+            float2 sc = float2(uvc.x, uvc.y - (horizon + 0.45));
+            float disc = smoothstep(0.52, 0.50, length(sc));      // sun disc
+            float gaps = step(0.35, fract((uvc.y - horizon) * 42.0));        // horizontal bands
+            float below = smoothstep(horizon + 0.45, horizon + 0.05, uvc.y); // gaps grow downward
+            float sun = disc * mix(1.0, gaps, below);
+            float3 sunCol = pv_cospalette(0.1 + u.time * 0.03, idx);
+            col = sky + sunCol * sun * (1.0 + 0.9 * u.beatPulse);
+        }
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                           // cheap signal: avgSteps ≈ 2
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 5.5) { return pv_renderHighway(in.uv, u); }    // sceneMode 6 = wireframe highway
+        if (u.sceneMode > 4.5) { return pv_renderOcean(in.uv, u); }      // sceneMode 5 = audio ocean
         if (u.sceneMode > 3.5) { return pv_renderGyroid(in.uv, u); }     // sceneMode 4 = gyroid lattice
         if (u.sceneMode > 2.5) { return pv_renderWarpfield(in.uv, u); }  // sceneMode 3 = warp starfield
         if (u.sceneMode > 1.5) { return pv_renderOrbs(in.uv, u); }   // sceneMode 2 = glowing orbs

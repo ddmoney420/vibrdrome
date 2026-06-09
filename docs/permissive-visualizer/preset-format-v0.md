@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17), 5 = raymarched audio ocean (Phase 18), 6 = screen-space synthwave highway (Phase 19). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -216,6 +216,22 @@ pulse + camera kick, `mid` = lattice scale/openness, `treble` = rim sharpness + 
 Preset: `vibrdrome_gyroid`. (A head-on kaleidoscope fold was tried and rejected — it flattens the
 3D fly-through into a 2D mandala; symmetry, if revisited, must preserve depth.)
 
+### Phase 18 — audio ocean (sceneMode 5)
+`sceneMode 5` **raymarches a heightfield** water surface: layered directional sine waves
+(`bass`=swells + forward speed, `mid`=ripples, `treble`=fine chop, `beatPulse`=amplitude surge +
+crest flash + camera bob) marched until the ray drops below the surface, then **bisection-refined**
+for a clean waterline. Shading = height-gradient normal + **fresnel** (bright crests/horizon) +
+diffuse + specular sun-glint; rays that escape draw a sky gradient + luminous horizon band. Reuses
+the 3D route (iOS quarter-res), bloom, present. avgSteps ~26. Preset: `vibrdrome_ocean`.
+
+### Phase 19 — synthwave highway (sceneMode 6)
+`sceneMode 6` is **screen-space procedural** (no march, O(1)/pixel, `avgSteps≈2`): the retro neon
+outrun grid. Below the horizon, each pixel is analytically projected onto the ground plane and
+grid lines are drawn with **`fwidth` antialiasing** (so they stay clean at quarter-res); above, a
+sky gradient + a banded synthwave **sun**. Audio: `bass`+`bassPunch`=scroll speed + grid pulse,
+`beatPulse`=flash + sun pulse, `mid`=rolling hills, `treble`=sparkle, `energy`=brightness. Reuses
+the 3D route, bloom, present. Preset: `vibrdrome_highway`.
+
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
   a second texture and the 3D scene into another, then the present pass blends them. The texture
@@ -225,7 +241,7 @@ Preset: `vibrdrome_gyroid`. (A head-on kaleidoscope fold was tried and rejected 
 - **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
   and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
   (duration/curve), not preset fields. Not implemented in Phase 1.
-- **More 3D scenes** select via the same `sceneMode` enum later (5 = lattice tunnel, then Mandelbulb/Mandelbox, …).
+- **More 3D scenes** select via the same `sceneMode` enum later (7 = lattice tunnel, … per the 50-scene roadmap; particle + mesh subsystems and Mandelbox come in later tracks).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),
