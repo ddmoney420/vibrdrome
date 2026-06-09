@@ -541,6 +541,32 @@ presets and scenes 1–18 are unchanged (chrome/apollonian live behind `sceneMod
 `vibrdrome_chrome`/`vibrdrome_apollonian`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 34 — reaction membrane (scene 21) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 21` — a screen-space procedural Turing/Gray-Scott *approximation* (no solver).
+General-CG; our own field/relief/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| domain-warped FBM + threshold-edge veins + derivative relief | general-cg-concept | warped value-noise FBM, edge-of-threshold extraction for labyrinthine veins, `dfdx`/`dfdy` hardware-derivative normal for emboss; standard, our implementation — **a single-frame procedural approximation, NOT a multi-frame reaction-diffusion solver and no sim state/buffers** |
+| vein shaping + audio restructuring | our-own-code | fat solid-cored veins (`pow` falloff), audio-swelled width; bass→threshold (spots↔maze) + width, mid→warp/evolution, treble→sharpness, beat→veins only (no full-screen flash) |
+
+## Research Step 35 — hex honeycomb (scene 22) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 22` — a 3D extruded honeycomb heightfield raymarch.
+General-CG; our own extrusion/glow/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| hex tiling distance + heightfield raymarch + domain repetition | general-cg-concept | two-lattice positive-mod hex fold + hex-edge distance, Ocean-style heightfield march + bisection + finite-difference normal; standard, our implementation |
+| extrusion + glow + slow morph + audio | our-own-code | per-cell prism extrusion with a slow undulation (morphy/trippy) + gentle per-band audio pulse, glowing edge walls, neon per-cell hue, crawl fly-forward; bass=crawl/height, treble=edge glow, beat=cells/edges only (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–20 are unchanged (reaction/hex live behind `sceneMode 21/22` +
+`vibrdrome_reaction`/`vibrdrome_hex`; the new hex scene uses id `vibrdrome_hex` because
+`vibrdrome_honeycomb` was already an original 2D preset, untouched). Parameters-only; DEBUG-only inline
+shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–33. (Any future permissive dependency must have its license recorded
+None in Steps 1–35. (Any future permissive dependency must have its license recorded
 here before use.)

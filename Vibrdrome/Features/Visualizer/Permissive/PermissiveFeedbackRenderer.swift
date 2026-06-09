@@ -1913,7 +1913,121 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Reaction Membrane (sceneMode 21) — procedural Turing/Gray-Scott approximation ─────────
+    // Domain-warped FBM thresholded at its EDGE → crisp labyrinthine veins (not soft plasma). Bass
+    // shifts the threshold (spots↔maze restructuring); the relief normal comes from hardware screen
+    // derivatives (dfdx/dfdy) — embossed membrane with NO extra FBM taps. Screen-space, single frame
+    // (no solver, no sim state).
+    float4 pv_renderReaction(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 q = uv * 2.0 - 1.0; q.x *= aspect; q *= 2.6;       // zoom into the pattern
+        float t = u.time * (0.05 + 0.15 * u.mid);                 // mid → evolution speed
+        float2 w = q + 0.55 * float2(pv_fbm(q * 1.5 + t), pv_fbm(q * 1.5 + 5.2 + t));  // domain warp (mid amount)
+        float v = pv_fbm(w * 2.0 + t * 0.7);                      // reaction field
+        float thr = 0.5 + 0.28 * (u.bass - 0.5);                  // bass → spots↔maze threshold (wider swing)
+        float fat = 0.07 + 0.06 * u.bass + 0.07 * u.beatPulse;    // fat veins that SWELL on bass/beat
+        float vw = max(fwidth(v) * 1.5, fat) * (0.85 + (1.0 - u.treble) * 0.6);  // treble can still thin a touch
+        float vein = pow(1.0 - smoothstep(0.0, vw, abs(v - thr)), 0.7);  // fat, solid-cored ridge network
+        float2 grad = float2(dfdx(v), dfdy(v));                   // hardware derivative → cheap relief
+        float3 n = normalize(float3(-grad * 9.0, 1.0));
+        float3 ld = normalize(float3(cos(u.time * 0.3), sin(u.time * 0.3), 0.85));  // orbiting light
+        float diff = max(dot(n, ld), 0.0);
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 cell = pv_cospalette(0.3 + v * 0.8 + u.paletteShift + u.time * 0.02, idx);
+        float3 veinCol = pv_cospalette(0.62 + u.paletteShift, idx);
+        float3 col = cell * (0.15 + 0.70 * diff);                 // embossed cells catch the light
+        col += veinCol * vein * (0.7 + 0.8 * u.treble + 1.6 * u.beatPulse);  // glowing veins flare on beat (veins only)
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                           // screen-space: avgSteps ≈ 2
+    }
+
+    // ── Hex Honeycomb (sceneMode 22) — 3D extruded honeycomb heightfield raymarch ─────────────
+    // Hex-tiled plane, each cell a prism risen to an audio-driven height; glowing edge walls; flown
+    // over low so near cells occlude far (real depth + fog). NOT a flat grid, NOT the 2D honeycomb.
+    float2 pv_hexLocal(float2 p, thread float2 &id) {
+        float2 r = float2(1.0, 1.7320508);
+        float2 h = r * 0.5;
+        float2 a = (p - r * floor(p / r)) - h;                   // positive-mod hex lattice A
+        float2 b = (p - h - r * floor((p - h) / r)) - h;         // lattice B (offset)
+        float2 gv = dot(a, a) < dot(b, b) ? a : b;
+        id = p - gv;
+        return gv;
+    }
+    float pv_hexEdge(float2 p) {
+        p = abs(p);
+        return max(dot(p, float2(0.5, 0.8660254)), p.x);         // distance to hex cell edge (0 centre … ~0.5 wall)
+    }
+    float pv_hexHeight(float2 xz, constant Uniforms& u, thread float &edge, thread float2 &cellId) {
+        float cellSize = 0.7;                                   // constant → no grid-scale jitter
+        float2 id;
+        float2 gv = pv_hexLocal(xz / cellSize, id);
+        cellId = id;
+        float hd = pv_hexEdge(gv);
+        edge = hd;
+        float hsh = pv_hash21(id * 0.37);
+        float band = (hsh < 0.34) ? u.bass : (hsh < 0.67 ? u.mid : u.treble);  // per-cell frequency band
+        float morph = 0.35 + 0.35 * sin(u.time * 0.5 + hsh * 6.2831);          // slow per-cell undulation (trippy)
+        float cellH = 0.15 + morph + band * (0.4 + 0.5 * u.beatPulse) + 0.10 * hsh;  // gentle audio pulse on top
+        float plateau = smoothstep(0.5, 0.40, hd);              // 1 inside cell, 0 in the gap (honeycomb wall)
+        return -1.0 + plateau * cellH;
+    }
+    float4 pv_renderHex(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float travel = u.camZ * 0.08 * (1.0 + 0.4 * u.bass);    // crawl forward (morphy/trippy, not a race)
+        float3 ro = float3(0.2 * sin(u.time * 0.12), 1.4 + 0.10 * u.beatPulse, travel);
+        float3 rd = normalize(float3(uvc.x, uvc.y - 0.45, 1.0));  // forward + downward tilt
+        float t = 0.1, tprev = 0.0; bool hit = false; int steps = MAXS;
+        float edge = 0.0; float2 cellId = float2(0.0);
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float dh = p.y - pv_hexHeight(p.xz, u, edge, cellId);
+            if (dh < 0.0) { hit = true; steps = i; break; }
+            tprev = t;
+            t += max(0.05, dh * 0.5);
+            if (t > 50.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float ta = tprev, tb = t;
+            for (int j = 0; j < 5; j++) {                        // bisection refine the surface
+                float tm = 0.5 * (ta + tb);
+                float3 pm = ro + rd * tm;
+                if (pm.y - pv_hexHeight(pm.xz, u, edge, cellId) < 0.0) tb = tm; else ta = tm;
+            }
+            float3 p = ro + rd * tb;
+            float e2 = 0.04;
+            float hL = pv_hexHeight(p.xz - float2(e2, 0), u, edge, cellId);
+            float hR = pv_hexHeight(p.xz + float2(e2, 0), u, edge, cellId);
+            float hD = pv_hexHeight(p.xz - float2(0, e2), u, edge, cellId);
+            float hU = pv_hexHeight(p.xz + float2(0, e2), u, edge, cellId);
+            float3 n = normalize(float3(hL - hR, 2.0 * e2, hD - hU));
+            pv_hexHeight(p.xz, u, edge, cellId);                  // re-sample → centre cell's edge/id (out-params)
+            float fog = exp(-tb * 0.06);
+            float hsh = pv_hash21(cellId * 0.37);
+            float3 hue = pv_cospalette(0.1 + hsh * 0.7 + u.paletteShift, idx);  // per-cell neon
+            float3 ld = normalize(float3(0.4, 0.8, -0.3));
+            float diff = max(dot(n, ld), 0.0);
+            float edgeGlow = smoothstep(0.40, 0.49, edge);        // bright near the cell wall
+            col = hue * (0.12 + 0.70 * diff);
+            col += hue * edgeGlow * (0.6 + 1.0 * u.treble + 1.2 * u.beatPulse);  // glowing walls (beat → edges only)
+            col *= fog;
+        } else {
+            col = pv_cospalette(0.6 + u.paletteShift, idx) * (0.05 + 0.05 * uvc.y);  // dark sky
+        }
+        col *= (0.6 + 0.8 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 21.5) { return pv_renderHex(in.uv, u); }         // sceneMode 22 = hex honeycomb
+        if (u.sceneMode > 20.5) { return pv_renderReaction(in.uv, u); }    // sceneMode 21 = reaction membrane
         if (u.sceneMode > 19.5) { return pv_renderApollonian(in.uv, u); }  // sceneMode 20 = apollonian gasket
         if (u.sceneMode > 18.5) { return pv_renderChrome(in.uv, u); }      // sceneMode 19 = liquid chrome
         if (u.sceneMode > 17.5) { return pv_renderUrbanCanyon(in.uv, u); } // sceneMode 18 = urban canyon

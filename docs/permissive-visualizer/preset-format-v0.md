@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -376,6 +376,28 @@ bands) + fresnel edge glow + fog. **All camera motion is smooth monotonic time**
 snapped backward when bass dropped, and a `fract(camZ)` zoom sawtooth jumped — both replaced). Audio: `bass`
 (via energy/glow), `mid`→`k` breathe (clamped), `treble`→edge sharpness, `beatPulse`→edges only. Verified
 iPhone 61fps @0.25 / mac 59–61 full-res (avgSteps swings with view). Preset: `vibrdrome_apollonian`.
+
+### Phase 34 — reaction membrane (sceneMode 21)
+`sceneMode 21` is **screen-space procedural** (no march, O(1)/pixel): a procedural **Turing/Gray-Scott
+approximation** (NOT a multi-frame solver — single frame, no sim state). Domain-warped FBM `v = fbm(q +
+0.55·fbm-warp)` is thresholded at its **edge** → `vein = pow(1 − smoothstep(0, vw, |v − thr|), 0.7)` for
+fat, solid-cored labyrinthine ridges (not soft plasma). Relief comes from **hardware screen derivatives**
+(`dfdx`/`dfdy` of `v`) → an embossed normal lit by an orbiting light (no extra FBM taps). Audio: `bass`
+shifts `thr` (spots↔maze restructuring) AND swells vein width; `mid`=warp amount + evolution speed;
+`treble`=vein sharpness; `beatPulse`=vein width swell + brightness flare (veins only, no full-screen flash).
+fwidth-AA. Verified iPhone 61fps @0.25 / mac 59–60 full-res, `avgSteps≈2`. Preset: `vibrdrome_reaction`.
+
+### Phase 35 — hex honeycomb (sceneMode 22)
+`sceneMode 22` raymarches a **3D extruded honeycomb heightfield**: the xz plane is hex-tiled (two-lattice
+positive-mod fold → cell id + local), each cell a prism risen to an audio + slow-morph height, with the
+surface dropping to a gap near the hex edge (the honeycomb walls). Ocean-class heightfield march (bisection
+refine + finite-difference normal), **glowing edge walls** (`smoothstep` on the hex-edge distance), per-cell
+neon hue (`hash(id)`), exponential fog → near cells occlude far. Per-cell heights = a **slow undulation**
+(`sin(time·0.5 + hash)`, ~12s — morphy/trippy) with a gentle per-band audio pulse on top; forward fly is a
+**crawl** (`camZ·0.08`). Distinct from Highway (flat) and the 2D `vibrdrome_honeycomb` preset. Audio: `bass`
+=crawl speed + (per-cell) height, `treble`=edge glow, `beatPulse`=cell/edge pulse only (no full-screen flash).
+Verified iPhone 61fps @0.25 / mac 59–60 full-res (avgSteps≈8–18). Preset: `vibrdrome_hex` (the id
+`vibrdrome_honeycomb` was already an original 2D preset).
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
