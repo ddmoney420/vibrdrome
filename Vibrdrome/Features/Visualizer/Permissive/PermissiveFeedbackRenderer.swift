@@ -1168,7 +1168,122 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Kaleido Mirror Chamber (sceneMode 9) — depth-preserving kaleidoscopic corridor ──────
+    // Mirror-fold the CROSS-SECTION (xy) only; the camera flies forward along z (parallax) and the
+    // content repeats in z → a 3D mirrored shaft you fly through, NOT a flat head-on mandala.
+    float pv_chamberMap(float3 p, constant Uniforms& u) {
+        float r = length(p.xy);
+        float a = atan2(p.y, p.x);
+        float seg = 6.2831853 / 6.0;
+        a = abs(fract(a / seg + 0.5) - 0.5) * seg;            // 6-fold mirror fold (cross-section only)
+        float2 q = float2(cos(a), sin(a)) * r;
+        float zc = fract(p.z * 0.5) * 2.0 - 1.0;              // z domain repetition (cell length 2)
+        float R = 0.9 + 0.3 * u.mid;                          // chamber radius (mid opens it)
+        float strut = length(q - float2(R, 0.0)) - 0.10;      // vertical glowing bar (×6 around axis)
+        float orb = length(float3(q - float2(R, 0.0), zc)) - 0.22;  // glowing orbs, repeated in z
+        return min(strut, orb);
+    }
+    float3 pv_chamberNormal(float3 p, constant Uniforms& u) {
+        float e = 0.012;
+        float dx = pv_chamberMap(p + float3(e, 0, 0), u) - pv_chamberMap(p - float3(e, 0, 0), u);
+        float dy = pv_chamberMap(p + float3(0, e, 0), u) - pv_chamberMap(p - float3(0, e, 0), u);
+        float dz = pv_chamberMap(p + float3(0, 0, e), u) - pv_chamberMap(p - float3(0, 0, e), u);
+        return normalize(float3(dx, dy, dz));
+    }
+    float4 pv_renderMirrorChamber(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float roll = u.time * 0.15;                           // slow axial roll (evolving symmetry)
+        float cr = cos(roll), sr = sin(roll);
+        uvc = float2(uvc.x * cr - uvc.y * sr, uvc.x * sr + uvc.y * cr);
+        float3 ro = float3(0.0, 0.0, u.camZ);                 // fly forward down the axis
+        float3 rd = normalize(float3(uvc, 1.4));
+        float t = 0.0, d = 0.0; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_chamberMap(ro + rd * t, u);
+            if (d < 0.002 || t > 20.0) { steps = i; break; }
+            t += d * 0.8;
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (d < 0.01) {
+            float3 p = ro + rd * t;
+            float3 n = pv_chamberNormal(p, u);
+            float fog = exp(-t * 0.10);
+            float diff = max(dot(n, -rd), 0.0);
+            float fres = pow(1.0 - diff, 3.0) * (0.6 + 0.8 * u.treble);
+            float hueA = atan2(p.y, p.x) / 6.2831853;
+            float3 base = pv_cospalette(p.z * 0.05 + hueA * 3.0 + u.paletteShift
+                                        + u.time * 0.20 + u.beatPulse * 0.30, idx);
+            col = base * (0.18 + 0.70 * diff) * fog + base * fres * fog
+                + base * (0.30 + 0.40 * u.beatPulse) * fog;   // emissive struts (beat glow, no full-screen flash)
+        }
+        col *= (0.6 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Endless Elevator (sceneMode 10) — inside-out box shaft, infinite fall ────────────────
+    float pv_elevatorMap(float3 p, constant Uniforms& u) {
+        float ang = p.z * 0.6 + u.time * 0.15 + u.bass * 0.5;  // spiral twist (corkscrew descent)
+        float ca = cos(ang), sa = sin(ang);
+        p.xy = float2(p.x * ca - p.y * sa, p.x * sa + p.y * ca);
+        float shaft = 1.0 + 0.2 * u.beatPulse;                // walls pulse outward on the beat
+        float2 d2 = abs(p.xy) - shaft;
+        return -max(d2.x, d2.y);                              // distance to the nearest wall (inside)
+    }
+    float3 pv_elevatorNormal(float3 p, constant Uniforms& u) {
+        float e = 0.01;
+        float dx = pv_elevatorMap(p + float3(e, 0, 0), u) - pv_elevatorMap(p - float3(e, 0, 0), u);
+        float dy = pv_elevatorMap(p + float3(0, e, 0), u) - pv_elevatorMap(p - float3(0, e, 0), u);
+        float dz = pv_elevatorMap(p + float3(0, 0, e), u) - pv_elevatorMap(p - float3(0, 0, e), u);
+        return normalize(float3(dx, dy, dz));
+    }
+    float4 pv_renderElevator(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 ro = float3(0.10 * sin(u.time * 0.3), 0.10 * cos(u.time * 0.25), u.camZ * 1.6);  // fast fall + sway
+        float3 rd = normalize(float3(uvc, 1.3));
+        float t = 0.0, d = 0.0; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_elevatorMap(ro + rd * t, u);
+            if (d < 0.002 || t > 26.0) { steps = i; break; }
+            t += d * 0.60;                                    // tighter under-step (twisted domain)
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (d < 0.01) {
+            float3 p = ro + rd * t;
+            float3 n = pv_elevatorNormal(p, u);
+            float fog = exp(-t * 0.06);
+            float diff = max(dot(n, -rd), 0.0);
+            float fres = pow(1.0 - diff, 4.0);
+            float panel = 0.5 + 0.5 * u.mid;                  // mid → panel density
+            float band = smoothstep(0.06, 0.0, abs(fract(p.z * (1.0 + panel)) - 0.5) - 0.04);  // light strips
+            // recompute the spiral-twisted cross-section so the girders track the corkscrew walls.
+            float ang = p.z * 0.6 + u.time * 0.15 + u.bass * 0.5;
+            float ca = cos(ang), sa = sin(ang);
+            float2 tw = float2(p.x * ca - p.y * sa, p.x * sa + p.y * ca);
+            float shaftS = 1.0 + 0.2 * u.beatPulse;
+            float girder = smoothstep(0.12, 0.0, min(abs(abs(tw.x) - shaftS), abs(abs(tw.y) - shaftS)));  // spiral girders
+            float3 base = pv_cospalette(p.z * 0.06 + u.paletteShift + u.time * 0.15 + u.beatPulse * 0.3, idx);
+            col = base * (0.12 + 0.50 * diff) * fog;
+            col += base * band * (0.8 + 1.0 * u.treble + 0.6 * u.beatPulse) * fog;   // glowing strips (beat flash localised)
+            col += base * fres * fog * 1.0;                   // grazing glow down the shaft
+            col += base * girder * (0.5 + 0.4 * u.beatPulse) * fog;  // glowing spiral girders
+        }
+        col *= (0.6 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 9.5) { return pv_renderElevator(in.uv, u); }      // sceneMode 10 = endless elevator
+        if (u.sceneMode > 8.5) { return pv_renderMirrorChamber(in.uv, u); } // sceneMode 9 = mirror chamber
         if (u.sceneMode > 7.5) { return pv_renderCrystal(in.uv, u); }    // sceneMode 8 = crystal cluster
         if (u.sceneMode > 6.5) { return pv_renderFracture(in.uv, u); }   // sceneMode 7 = voronoi fracture
         if (u.sceneMode > 5.5) { return pv_renderHighway(in.uv, u); }    // sceneMode 6 = wireframe highway

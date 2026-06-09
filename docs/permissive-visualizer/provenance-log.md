@@ -381,6 +381,31 @@ presets and 3D scenes 1–6 are unchanged (fracture/crystal live behind `sceneMo
 `vibrdrome_fracture`/`vibrdrome_crystal`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 22 — kaleido mirror chamber (3D scene 9) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 9` — a depth-preserving kaleidoscopic corridor raymarch. General-CG;
+our own content, shading, audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| cross-section mirror fold + z-repeat | general-cg-concept | fold xy angle only, repeat in z, fly forward → 3D mirrored shaft (NOT a flat mandala — the Gyroid lesson applied); standard domain ops, our implementation |
+| strut/orb content + shading + audio | our-own-code | glowing struts/orbs at a wedge radius, fresnel/emissive, axial roll; bass→speed/scale, beat→glow, mid→radius, treble→sparkle |
+
+## Research Step 23 — spiraling endless elevator (3D scene 10) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 10` — an inside-out box-shaft raymarch with a spiral twist. General-CG;
+our own shaft/lights/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| inside-out box shaft + z-repeat + spiral twist | general-cg-concept | `−max(|p.xy|−size)` walls, depth-dependent xy rotation (corkscrew), z-repeated light strips; standard domain ops, our implementation |
+| wall lights/girders + audio | our-own-code | emissive z-strips + spiral corner girders + grazing glow; bass→speed/twist/pulse, beat→pulse/flash, mid→panel density, treble→sparkle (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and 3D scenes 1–8 are unchanged (mirror-chamber/elevator live behind `sceneMode 9/10` +
+`vibrdrome_mirrorchamber`/`vibrdrome_elevator`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–21. (Any future permissive dependency must have its license recorded
+None in Steps 1–23. (Any future permissive dependency must have its license recorded
 here before use.)

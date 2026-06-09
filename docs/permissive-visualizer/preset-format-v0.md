@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17), 5 = raymarched audio ocean (Phase 18), 6 = screen-space synthwave highway (Phase 19), 7 = raymarched 3D Voronoi fracture (Phase 20), 8 = octahedron-cluster crystal (Phase 21). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -249,6 +249,23 @@ flash added to every pixel (background included) — removed as a **photosensiti
 emission/glow carry the beat instead. Audio: `treble`=vibration/sparkle, `beatPulse`=cluster
 pulse + camera kick, `bass`=shard size, `mid`=rotation. Preset: `vibrdrome_crystal`.
 
+### Phase 22 — kaleido mirror chamber (sceneMode 9)
+`sceneMode 9` raymarches a **depth-preserving kaleidoscopic corridor**: the mirror fold is applied
+to the **cross-section (xy) only** (6-fold), while the camera flies **forward along z** (parallax)
+and content **repeats in z** → a 3D mirrored shaft you fly *through*, NOT a flat 2D mandala (the
+explicit fix for the Gyroid kaleidoscope mistake). Content = glowing struts + orbs at a wedge radius
+(replicated ×6 around the axis), z-repeated; a slow axial roll evolves the symmetry. Audio:
+`bass`=speed/scale, `beatPulse`=glow + camera kick, `mid`=chamber radius, `treble`=sparkle/hue.
+Preset: `vibrdrome_mirrorchamber`.
+
+### Phase 23 — spiraling endless elevator (sceneMode 10)
+`sceneMode 10` raymarches an **inside-out box shaft** you fall down endlessly, with a **spiral
+twist** (cross-section rotation that grows with depth → corkscrew descent) — z-repeated glowing
+light-strips + spiral corner girders streaming past; the walls pulse outward on the beat. Fast
+forward fall (`camZ`×1.6). NB: a plain (untwisted) shaft read as boring/static — the spiral makes
+it dynamic. Audio: `bass`=descent speed + twist + wall pulse, `beatPulse`=pulse + strip flash,
+`mid`=panel density, `treble`=sparkle. No full-screen flash. Preset: `vibrdrome_elevator`.
+
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
   a second texture and the 3D scene into another, then the present pass blends them. The texture
@@ -258,7 +275,7 @@ pulse + camera kick, `bass`=shard size, `mid`=rotation. Preset: `vibrdrome_cryst
 - **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
   and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
   (duration/curve), not preset fields. Not implemented in Phase 1.
-- **More 3D scenes** select via the same `sceneMode` enum later (9+ per the 50-scene roadmap; particle + mesh subsystems and Mandelbox come in later tracks).
+- **More 3D scenes** select via the same `sceneMode` enum later (11+ per the 50-scene roadmap; particle + mesh subsystems and Mandelbox come in later tracks).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),
