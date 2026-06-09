@@ -406,6 +406,37 @@ presets and 3D scenes 1–8 are unchanged (mirror-chamber/elevator live behind `
 `vibrdrome_mirrorchamber`/`vibrdrome_elevator`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 24 — Perlin blob (3D scene 11) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 11` — an SDF sphere displaced by ridged 3D FBM (solid writhing surface,
+not volumetric). General-CG; our own noise/shading/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| value noise + ridged FBM + domain warp | general-cg-concept | hash-lattice value noise, `1-|2n-1|` ridged octaves, domain-warp for writhing; displaced-SDF sphere-trace with conservative under-step (non-Lipschitz); standard, our implementation |
+| gradient-normal shading + audio | our-own-code | diffuse + colored fresnel rim + specular + noise AO so it reads solid (NOT fog — the Flames lesson); bass→radius, bassPunch→spike, mid→turbulence, treble→ridge shimmer, beat→localized swell (no full-screen flash) |
+
+*A first Step-24 attempt (Galactic Spiral) was cut — flat/unimpressive on the visual gate; replaced
+by Perlin Blob. No code from the cut attempt remains.*
+
+## Research Step 25 — fault terrain (3D scene 12) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 12` — a ridged-FBM heightfield march with glowing magma channels.
+General-CG; our own terrain/lighting/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| ridged-FBM heightfield + bisection march | general-cg-concept | Ocean-style heightfield raymarch (our proven route), ridged FBM for sharp cracked plates, bisection-refined hit + finite-difference normal; standard, our implementation |
+| gloomy magma look + camera torch + audio | our-own-code | purple rock/atmosphere + deep-red magma emission in low crevices; a proximity camera torch (slow full-spectrum colour cycle) + rim light reveal approaching geometry; slow-drift `camZ×0.35`; bass→amplitude/speed, mid→ridge sharpness, treble→flicker, beat→localized magma flare (cracks only, no full-screen flash) |
+
+*A first Step-25 attempt (Matrix Rain cube lattice) was cut — read as blocky/zoomed-in on the visual
+gate; replaced by Fault Terrain. No code from the cut attempt remains.*
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and 3D scenes 1–10 are unchanged (blob/fault live behind `sceneMode 11/12` +
+`vibrdrome_perlinblob`/`vibrdrome_faultline`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–23. (Any future permissive dependency must have its license recorded
+None in Steps 1–25. (Any future permissive dependency must have its license recorded
 here before use.)

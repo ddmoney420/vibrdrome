@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -265,6 +265,27 @@ light-strips + spiral corner girders streaming past; the walls pulse outward on 
 forward fall (`camZ`×1.6). NB: a plain (untwisted) shaft read as boring/static — the spiral makes
 it dynamic. Audio: `bass`=descent speed + twist + wall pulse, `beatPulse`=pulse + strip flash,
 `mid`=panel density, `treble`=sparkle. No full-screen flash. Preset: `vibrdrome_elevator`.
+
+### Phase 24 — Perlin blob (sceneMode 11)
+`sceneMode 11` sphere-traces an **SDF sphere displaced by ridged 3D FBM** — a solid writhing
+organic mass, NOT fog/plasma. 3D value noise → ridged FBM (`1-|2n-1|` per octave, 3 octaves) with
+a domain-warp pass; the displaced field is non-Lipschitz so the march uses a conservative under-step
+(`d×0.55`, cap 46). Gradient normals are lit with **diffuse + colored fresnel rim + specular** so the
+surface reads as a solid with depth; crevices darken via a noise-driven AO term. Audio: `bass`=radius
+inflate, `bassPunch`=spike burst, `mid`=turbulence/domain-warp, `treble`=high-freq ridge shimmer + rim,
+`beatPulse`=localized surface swell (no full-screen flash). Slow camera orbit for parallax. Verified
+iPhone 60fps @0.25 (avgSteps≈9), mac full-res. Preset: `vibrdrome_perlinblob`.
+
+### Phase 25 — fault terrain (sceneMode 12)
+`sceneMode 12` reuses the **Ocean-style heightfield march** (proven cost profile) but with **ridged FBM**
+(4 octaves) → sharp cracked rock plates. The hit point is bisection-refined, normal-shaded, and tinted
+**gloomy purple** (rock + atmosphere) with **deep-red magma** emission concentrated in the low crevices
+(`smoothstep` on height), flickering with `treble`. A **camera torch** (proximity × `dot(n,-rd)`, slow
+full-spectrum colour cycle) lights approaching plates/crevices as they rush in, plus a rim term for ridge
+silhouettes. Forward fly-through is intentionally a **slow drift** (`camZ×0.35`, calmer than the elevator)
+so it's not a 500-mph plunge; `bass` still pushes. Audio: `bass`=terrain amplitude + fly speed, `mid`=ridge
+sharpness, `treble`=magma flicker, `beatPulse`=localized magma flare (cracks only, no full-screen flash).
+Verified iPhone 60fps @0.25 (avgSteps≈3–14), mac full-res. Preset: `vibrdrome_faultline`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

@@ -1281,7 +1281,171 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Perlin Blob (sceneMode 11) — ridged-FBM-displaced SDF, solid writhing surface ─────────
+    // 3D value noise → ridged FBM (1-|n| per octave) displaces a sphere SDF. Sphere-traced with a
+    // conservative under-step (the displaced field is non-Lipschitz), gradient normals, then lit
+    // with diffuse + fresnel rim + specular so it reads as a solid mass, NOT fog/plasma.
+    float pv_vnoise3(float3 p) {
+        float3 i = floor(p), f = fract(p);
+        float3 w = f * f * (3.0 - 2.0 * f);
+        float n = dot(i, float3(1.0, 57.0, 113.0));
+        float a = mix(pv_hash11(n +   0.0), pv_hash11(n +   1.0), w.x);
+        float b = mix(pv_hash11(n +  57.0), pv_hash11(n +  58.0), w.x);
+        float c = mix(pv_hash11(n + 113.0), pv_hash11(n + 114.0), w.x);
+        float d = mix(pv_hash11(n + 170.0), pv_hash11(n + 171.0), w.x);
+        return mix(mix(a, b, w.y), mix(c, d, w.y), w.z);
+    }
+    float pv_ridged3(float3 p, constant Uniforms& u) {
+        // domain warp (mid drives turbulence) keeps the surface writhing — 2 samples, z derived (cheaper)
+        float w0 = pv_vnoise3(p * 0.9 + u.time * 0.15);
+        float w1 = pv_vnoise3(p * 0.9 + 7.3);
+        float3 warp = float3(w0, w1, w0 - w1) - float3(0.5, 0.5, 0.0);
+        p += warp * (0.35 + 0.9 * u.mid);
+        float v = 0.0, amp = 0.5, freq = 1.0;
+        for (int i = 0; i < 3; i++) {                      // 3 octaves (perf budget)
+            float n = pv_vnoise3(p * freq + u.time * 0.1);
+            n = 1.0 - abs(2.0 * n - 1.0);                  // ridged: sharp veins, not soft blobs
+            v += amp * n * n;
+            freq *= 2.02; amp *= 0.5;
+        }
+        return v;                                          // shimmer moved to shading (free; keeps geometry cheap)
+    }
+    float pv_blobMap(float3 p, constant Uniforms& u) {
+        float radius = 1.05 + 0.45 * u.bass + 0.6 * u.bassPunch;        // bass inflates, punch spikes
+        float disp = pv_ridged3(p, u) * (0.55 + 0.30 * u.beatPulse);    // beat = localized swell
+        return length(p) - radius - disp * 0.9;
+    }
+    float3 pv_blobNormal(float3 p, constant Uniforms& u) {
+        const float e = 0.012;
+        float2 k = float2(1.0, -1.0);
+        return normalize(k.xyy * pv_blobMap(p + k.xyy * e, u) +
+                         k.yyx * pv_blobMap(p + k.yyx * e, u) +
+                         k.yxy * pv_blobMap(p + k.yxy * e, u) +
+                         k.xxx * pv_blobMap(p + k.xxx * e, u));
+    }
+    float4 pv_renderPerlinBlob(float2 uv, constant Uniforms& u) {
+        const int MAXS = 46;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float ca = cos(u.time * 0.2), sa = sin(u.time * 0.2);          // slow orbit for parallax
+        float3 ro = float3(3.4 * sa, 0.3, 3.4 * ca);
+        float3 fwd = normalize(-ro), rt = normalize(cross(float3(0, 1, 0), fwd));
+        float3 up = cross(fwd, rt);
+        float3 rd = normalize(uvc.x * rt + uvc.y * up + 1.5 * fwd);
+        float t = 0.5; int steps = MAXS; bool hit = false;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_blobMap(p, u);
+            if (d < 0.004) { hit = true; steps = i; break; }
+            t += d * 0.55;                                             // strong under-step (non-Lipschitz)
+            if (t > 7.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (hit) {
+            float3 p = ro + rd * t;
+            float3 n = pv_blobNormal(p, u);
+            float3 ld = normalize(float3(0.5, 0.8, 0.2));
+            float diff = max(dot(n, ld), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);        // rim light defines silhouette
+            float spec = pow(max(dot(reflect(rd, n), ld), 0.0), 32.0);
+            float field = pv_ridged3(p, u);                            // one eval, reused for AO + colour
+            float ao = clamp(field * 0.6, 0.0, 0.6);                   // crevice darkening
+            float3 base = pv_cospalette(0.2 + field * 0.5 + u.paletteShift + u.time * 0.02, idx);
+            float shimmer = 0.5 + 0.5 * sin(field * 26.0 + u.time * 6.0);   // treble micro-sparkle (shading only)
+            col  = base * (0.10 + 0.70 * diff) * (1.0 - 0.5 * ao);
+            col += base * fres * (0.7 + 0.6 * u.treble);               // colored rim
+            col += float3(spec) * (0.5 + 0.6 * u.treble);
+            col += base * shimmer * u.treble * 0.15;                   // high-freq ridge shimmer (was geometry, now free)
+        }
+        col *= (0.6 + 0.8 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Fault Terrain (sceneMode 12) — ridged heightfield with glowing magma channels ────────
+    // Ocean-style heightfield march (proven 60fps cost profile), but ridged FBM → sharp cracked
+    // plates, and emission added in the low crevices for glowing magma between dark rock.
+    float pv_faultHeight(float2 xz, constant Uniforms& u) {
+        float2 p = xz * 0.35;
+        float v = 0.0, amp = 1.0, freq = 1.0;
+        for (int i = 0; i < 4; i++) {                      // 4 octaves of ridged noise
+            float n = pv_vnoise(p * freq + float2(0.0, u.time * 0.05));
+            n = 1.0 - abs(2.0 * n - 1.0);                  // ridge
+            n = pow(n, 1.4 + 1.4 * u.mid);                 // mid sharpens the ridges
+            v += amp * n;
+            freq *= 2.03; amp *= 0.48;
+        }
+        return v * (1.6 + 1.2 * u.bass) - 0.6;             // bass drives terrain amplitude
+    }
+    float4 pv_renderFaultTerrain(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float fly = u.camZ * 0.35 * (1.0 + 0.6 * u.bass);              // slow drift base; bass still pushes
+        float3 ro = float3(0.0, 2.2 + 0.12 * u.beatPulse, fly);
+        float3 rd = normalize(float3(uvc.x, uvc.y - 0.40, 1.0));       // forward + downward tilt
+        float t = 0.1, tprev = 0.0; bool hit = false; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float dh = p.y - pv_faultHeight(p.xz, u);
+            if (dh < 0.0) { hit = true; steps = i; break; }
+            tprev = t;
+            t += max(0.05, dh * 0.4);
+            if (t > 55.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float ta = tprev, tb = t;
+            for (int j = 0; j < 5; j++) {
+                float tm = 0.5 * (ta + tb);
+                float3 pm = ro + rd * tm;
+                if (pm.y - pv_faultHeight(pm.xz, u) < 0.0) tb = tm; else ta = tm;
+            }
+            float3 p = ro + rd * tb;
+            float e = 0.05;
+            float hL = pv_faultHeight(p.xz - float2(e, 0), u), hR = pv_faultHeight(p.xz + float2(e, 0), u);
+            float hD = pv_faultHeight(p.xz - float2(0, e), u), hU = pv_faultHeight(p.xz + float2(0, e), u);
+            float3 n = normalize(float3(hL - hR, 2.0 * e, hD - hU));
+            float fog = exp(-tb * 0.045);
+            float3 ld = normalize(float3(0.3, 0.8, -0.2));
+            float diff = max(dot(n, ld), 0.0);
+            float3 gloom = float3(0.15, 0.06, 0.22);                  // gloomy purple rock tint
+            float3 rock = mix(pv_cospalette(0.62 + p.y * 0.05 + u.paletteShift, idx) * 0.22, gloom, 0.6);
+            // magma: emission concentrated in the low crevices, flickering with treble
+            float low = smoothstep(0.35, -0.45, p.y);
+            float flick = 0.7 + 0.3 * sin(u.time * 9.0 + p.x * 3.0 + p.z * 2.0) * u.treble;
+            float3 deepRed = float3(0.80, 0.09, 0.06);                // gloomy deep-red magma
+            float3 magma = mix(pv_cospalette(0.06 + 0.05 * u.beatPulse, idx), deepRed, 0.5);
+            // camera torch: near surfaces facing the camera light up as they rush in (reveals crevices coming at you)
+            float head = exp(-tb * 0.16) * pow(max(dot(n, -rd), 0.0), 1.3);
+            float tc = u.time * 0.06;                                 // slow torch colour cycle
+            float3 torch = 0.55 + 0.45 * cos(6.2831853 * (tc + float3(0.0, 0.33, 0.67)));  // full-spectrum sweep
+            float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * exp(-tb * 0.10);  // edge highlight on ridges
+            col  = rock * (0.30 + 0.9 * diff);
+            col += torch * head * (0.9 + 0.5 * u.bass);               // illuminate approaching plates/crevices
+            col += torch * rim * 0.5;                                 // crisp ridge silhouettes
+            col += magma * low * (0.6 + 1.4 * u.bass) * flick;        // glowing fault channels
+            col += magma * low * u.beatBloom * u.beatPulse * 0.8;     // localized beat flare (cracks only)
+            col *= fog;
+        } else {
+            float skyT = clamp(uvc.y * 0.5 + 0.5, 0.0, 1.0);
+            float3 sky = mix(pv_cospalette(0.66 + skyT * 0.2 + u.paletteShift, idx) * (0.10 + 0.18 * skyT),
+                             float3(0.10, 0.04, 0.16), 0.6);          // gloomy purple atmosphere
+            float horizon = exp(-abs(uvc.y) * 7.0) * (0.5 + 0.7 * u.beatPulse);
+            col = sky + mix(pv_cospalette(0.08, idx), float3(0.70, 0.11, 0.09), 0.5) * horizon;  // smouldering red horizon
+        }
+        col *= (0.6 + 0.8 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 11.5) { return pv_renderFaultTerrain(in.uv, u); } // sceneMode 12 = fault terrain
+        if (u.sceneMode > 10.5) { return pv_renderPerlinBlob(in.uv, u); }   // sceneMode 11 = perlin blob
         if (u.sceneMode > 9.5) { return pv_renderElevator(in.uv, u); }      // sceneMode 10 = endless elevator
         if (u.sceneMode > 8.5) { return pv_renderMirrorChamber(in.uv, u); } // sceneMode 9 = mirror chamber
         if (u.sceneMode > 7.5) { return pv_renderCrystal(in.uv, u); }    // sceneMode 8 = crystal cluster
