@@ -1610,7 +1610,164 @@ final class PermissiveFeedbackRenderer {
         return float4(col, 2.0 / 64.0);                            // screen-space: avgSteps ≈ 2
     }
 
+    // Shared box SDF (re-added after the Matrix Rain revert removed the prior one).
+    float pv_sdBox(float3 p, float3 b) {
+        float3 d = abs(p) - b;
+        return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0);
+    }
+
+    // ── Menger Sponge (sceneMode 17) — bounded recursive cubic fractal (distance estimator) ───
+    // Canonical Menger DE (fixed ITER=4 — bounded, NOT Mandelbox): a cube carved with cross holes
+    // at each scale. Sphere-traced, gradient-normal shaded; the camera dives in while the sponge
+    // tumbles → recursive holes with hard occlusion + fog. No FBM/trig in the DE → cheap per step.
+    float pv_mengerDE(float3 p, int iter) {
+        float d = pv_sdBox(p, float3(1.0));
+        float s = 1.0;
+        for (int m = 0; m < iter; m++) {
+            float3 ps = p * s;
+            float3 a = (ps - 2.0 * floor(ps * 0.5)) - 1.0;        // true mod(ps,2)-1 (symmetric)
+            s *= 3.0;
+            float3 r = abs(1.0 - 3.0 * abs(a));
+            float c = (min(max(r.x, r.y), min(max(r.y, r.z), max(r.z, r.x))) - 1.0) / s;
+            d = max(d, c);                                         // carve cross-holes at this scale
+        }
+        return d;
+    }
+    float pv_mengerMap(float3 p, constant Uniforms& u, int iter) {
+        float scale = 1.0 + 0.10 * sin(u.time * 0.6) * u.mid;      // mid → gentle breathing (uniform only)
+        p /= scale;
+        float P = 2.0;                                            // infinite sponge lattice (period = box size)
+        float3 q = p - P * floor(p / P + 0.5);                    // dive never exits structure
+        return pv_mengerDE(q, iter) * scale;
+    }
+    float4 pv_renderMenger(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int iter = 4;                                             // fixed depth (perf dial → 3 if needed)
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float fly = u.camZ * 0.5 * (1.0 + u.bass) + u.bassPunch * 0.5;          // dive through the lattice
+        float3 ro = float3(0.45 * sin(u.time * 0.25), 0.40 * cos(u.time * 0.2), fly);
+        float3 rd0 = normalize(float3(uvc, 1.5));
+        float roll = u.time * 0.15;                              // camera roll → tumble/parallax (not field rot)
+        float cr = cos(roll), sr = sin(roll);
+        float3 rd = float3(cr * rd0.x - sr * rd0.y, sr * rd0.x + cr * rd0.y, rd0.z);
+        float t = 0.0; int steps = MAXS; bool hit = false;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_mengerMap(p, u, iter);
+            if (d < 0.0008) { hit = true; steps = i; break; }
+            t += d * 0.75;                                        // under-step (repetition cell boundaries)
+            if (t > 12.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (hit) {
+            float3 p = ro + rd * t;
+            float e = 0.0012;
+            float2 k = float2(1.0, -1.0);
+            float3 n = normalize(k.xyy * pv_mengerMap(p + k.xyy * e, u, iter) +
+                                 k.yyx * pv_mengerMap(p + k.yyx * e, u, iter) +
+                                 k.yxy * pv_mengerMap(p + k.yxy * e, u, iter) +
+                                 k.xxx * pv_mengerMap(p + k.xxx * e, u, iter));
+            float3 ld = normalize(float3(0.6, 0.8, -0.4));
+            float diff = max(dot(n, ld), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+            float ao = 1.0 - float(steps) / float(MAXS);          // step-count cavity AO
+            float fog = exp(-t * 0.18);
+            float3 base = pv_cospalette(0.2 + t * 0.10 + u.paletteShift + u.time * 0.02, idx);
+            col  = base * (0.10 + 0.75 * diff) * (0.4 + 0.6 * ao);
+            col += base * fres * (0.6 + 0.8 * u.treble);          // edge glow (treble sharpens)
+            col += base * fres * u.beatPulse * 0.5;               // beat → edges only (no full-screen flash)
+            col *= fog;
+        }
+        col *= (0.7 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Urban Canyon (sceneMode 18) — neon city corridor flythrough (domain-repetition boxes) ──
+    // Fly forward down a street: varying-height buildings line BOTH sides (a carved-out central
+    // street), lit window grids on the facades, lane lines below, dark sky above, depth fog. Real
+    // forward motion with near buildings occluding far. Distinct from Highway (flat grid) + Elevator
+    // (single tube): side walls + discrete buildings + windows + street + sky.
+    float pv_canyonMap(float3 p, constant Uniforms& u, thread float &facadeU, thread float &cellHash, thread float &isBuilding) {
+        float ground = p.y + 1.0;                                 // street plane at y = -1
+        float spacing = 2.2;
+        float streetHalf = 1.6;                                   // central street kept clear
+        // building rows on both sides: snap x to the nearest building column outside the street
+        float side = (p.x > 0.0) ? 1.0 : -1.0;
+        float ax = abs(p.x);
+        float colF = floor((ax - streetHalf) / spacing);
+        float colCenter = streetHalf + (colF + 0.5) * spacing;
+        float rowF = floor(p.z / spacing);
+        cellHash = pv_hash11(colF * 13.1 + rowF * 7.7 + side * 41.0);
+        float crossGap = step(0.86, pv_hash11(rowF * 2.3));       // occasional cross-street
+        float height = mix(0.6, 3.4, cellHash) * (1.0 + 0.5 * u.mid);  // mid → taller/varied
+        isBuilding = (ax > streetHalf && crossGap < 0.5) ? 1.0 : 0.0;
+        float3 bc = float3(side * colCenter, -1.0 + height, (rowF + 0.5) * spacing);
+        float3 q = p - bc;
+        float bw = spacing * 0.42;
+        float bd = pv_sdBox(q, float3(bw, height, bw));
+        if (isBuilding < 0.5) bd = 1e9;
+        facadeU = (abs(q.x) > abs(q.z)) ? q.z : q.x;              // facade coordinate for windows
+        return min(ground, bd);
+    }
+    float4 pv_renderUrbanCanyon(float2 uv, constant Uniforms& u) {
+        const int MAXS = 80;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float travel = u.camZ * 0.7 * (1.0 + 0.8 * u.bass) + u.bassPunch * 0.5;  // forward fly
+        float sway = sin(u.time * 0.4) * 0.25 * (0.5 + u.bass);
+        float3 ro = float3(sway, -0.1, travel);
+        float3 rd = normalize(float3(uvc.x, uvc.y - 0.05, 1.3));
+        float t = 0.1; int steps = MAXS; bool hit = false;
+        float facadeU = 0.0, cellHash = 0.0, isB = 0.0;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_canyonMap(p, u, facadeU, cellHash, isB);
+            if (d < 0.004) { hit = true; steps = i; break; }
+            t += max(0.03, d * 0.85);
+            if (t > 60.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float fog = exp(-t * 0.05);
+        float3 col;
+        if (hit) {
+            float3 p = ro + rd * t;
+            if (p.y < -0.96) {                                    // street
+                float lane = smoothstep(0.06, 0.0, abs(fract(p.z * 0.5 - travel * 0.5) - 0.5) - 0.45);
+                float center = smoothstep(0.04, 0.0, abs(p.x));
+                float3 road = float3(0.02, 0.02, 0.03);
+                float3 neon = pv_cospalette(0.5 + u.paletteShift, idx);
+                col = road + neon * (lane * 0.5 + center * 0.7) * (0.6 + 0.8 * u.beatPulse);
+                col += neon * 0.04;                               // wet glow
+            } else {                                              // building facade
+                float3 hue = pv_cospalette(0.1 + cellHash * 0.7 + u.paletteShift, idx);  // per-building neon
+                float wy = fract(p.y * 2.5);
+                float wu = fract(facadeU * 1.6);
+                float winCell = step(0.18, wy) * step(wy, 0.82) * step(0.2, wu) * step(wu, 0.8);
+                float lit = step(0.42, pv_hash11(floor(p.y * 2.5) * 3.1 + floor(facadeU * 1.6) * 5.7 + cellHash * 17.0));
+                float flick = 0.8 + 0.2 * sin(u.time * 6.0 + cellHash * 30.0) * u.treble;
+                float window = winCell * lit * flick;
+                float3 wall = hue * 0.05;                         // dark facade
+                col = wall + hue * window * (1.0 + 1.2 * u.treble + 1.2 * u.beatPulse);  // lit windows only
+            }
+            col *= fog;
+        } else {                                                  // sky above rooflines
+            float skyT = clamp(uvc.y * 0.5 + 0.5, 0.0, 1.0);
+            col = pv_cospalette(0.62 + u.paletteShift, idx) * (0.04 + 0.10 * skyT);
+            col += pv_cospalette(0.5, idx) * exp(-abs(uvc.y) * 8.0) * 0.15;  // horizon haze
+        }
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 17.5) { return pv_renderUrbanCanyon(in.uv, u); } // sceneMode 18 = urban canyon
+        if (u.sceneMode > 16.5) { return pv_renderMenger(in.uv, u); }      // sceneMode 17 = menger sponge
         if (u.sceneMode > 15.5) { return pv_renderSupernova(in.uv, u); }   // sceneMode 16 = supernova
         if (u.sceneMode > 14.5) { return pv_renderVortex(in.uv, u); }      // sceneMode 15 = vortex tornado
         if (u.sceneMode > 13.5) { return pv_renderHorizonDome(in.uv, u); } // sceneMode 14 = horizon dome

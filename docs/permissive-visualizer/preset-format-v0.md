@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -331,6 +331,29 @@ capped (`min(0.8+0.7·energy, 1.6)`) so there is no white-out. Audio: `bass`=exp
 `beatPulse`=leading ring + core only. Verified iPhone 60fps @0.25 / mac 59 full-res, `avgSteps≈2`.
 Preset: `vibrdrome_shockwave` (display "Supernova Shockwave"; the id `vibrdrome_supernova` was already
 taken by an original 2D feedback preset, so this scene uses `vibrdrome_shockwave`).
+
+### Phase 30 — menger sponge (sceneMode 17)
+`sceneMode 17` raymarches the **canonical Menger distance estimator** (fixed `ITER=4` — bounded, **not**
+Mandelbox): `d = sdBox(p,1)`; then per scale `s×=3`, `a = mod(p·s,2)−1`, carve `d = max(d, (min over the
+three max-pairs of |1−3|a|| − 1)/s)`. The DE is **domain-repeated** (period 2) into an infinite sponge
+lattice so the camera dives through aligned holes forever (a single bounded cube went black once you flew
+past it). Gradient-normal shaded (diffuse + fresnel edge glow + step-count AO + fog). `mid` breathes a
+uniform scale only (never the iteration structure). Audio: `bass`=fly speed + (camera roll) tumble,
+`bassPunch`=zoom kick, `mid`=breathing, `treble`=edge-glow sharpness, `beatPulse`=edge glow only (no
+full-screen flash). No FBM/trig in the DE → cheap per step. Verified iPhone 60fps @0.25 / mac 60 full-res
+(avgSteps swings with camera position). Preset: `vibrdrome_menger`.
+
+### Phase 31 — urban canyon (sceneMode 18)
+`sceneMode 18` raymarches a **neon city canyon** via domain repetition: buildings tile the xz plane
+(`floor(p.xz/spacing)` + per-cell hash height), with the central street carved clear (`|x|<streetHalf`
+empty) so they line **both sides**; occasional cross-streets (`hash(row)` gap). On hit, the facade gets a
+**lit window grid** (per-window on/off hash + treble flicker), the street gets scrolling lane lines, and
+above the rooflines is a dark sky + horizon haze; exponential fog gives depth and near buildings occlude
+far. Real forward motion (`camZ`). Deliberately **not** Highway (that's a flat single ground plane, no
+walls) and **not** Elevator (single box tube): side walls + varying-height buildings + windows + street +
+sky. Audio: `bass`=fly speed + sway, `bassPunch`=speed kick, `mid`=building height/density, `treble`=window
+flicker, `beatPulse`=lit windows + edges only (no full-screen flash). Verified iPhone 60fps @0.25 / mac
+59–60 full-res (avgSteps≈10–44). Preset: `vibrdrome_urbancanyon`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

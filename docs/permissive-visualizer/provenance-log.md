@@ -491,6 +491,31 @@ presets and scenes 1–14 are unchanged (vortex/supernova live behind `sceneMode
 because `vibrdrome_supernova` was already an original 2D preset). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 30 — menger sponge (scene 17) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 17` — a bounded Menger-sponge distance-estimator raymarch, domain-repeated.
+General-CG; our own camera/lattice/audio/shading; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| Menger sponge distance estimator | general-cg-concept | canonical fixed-iteration (ITER=4) Menger DE (`sdBox` + per-scale cross-carve `max(d,…)`); standard, bounded — NOT Mandelbox/Mandelbulb; our implementation |
+| infinite lattice + dive camera + shading + audio | our-own-code | period-2 domain repetition so the dive never exits structure, camera-roll tumble (not field rotation), fresnel/AO/fog shading; bass=fly/tumble, bassPunch=zoom, mid=breathing, treble=edge glow, beat=edges only (no full-screen flash) |
+
+## Research Step 31 — urban canyon (scene 18) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 18` — a neon city-canyon raymarch via domain-repetition box buildings.
+General-CG; our own canyon layout/windows/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| domain-repetition box city + window grid | general-cg-concept | tiled box SDFs with per-cell hash heights, carved central street, facade window grid; standard repetition/SDF, our implementation |
+| canyon composition + audio | our-own-code | both-sided buildings + cross-streets + lit/unlit windows + lane lines + sky + fog (distinct from Highway/Elevator); bass=speed/sway, bassPunch=kick, mid=height/density, treble=window flicker, beat=windows/edges only (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–16 are unchanged (menger/urban-canyon live behind `sceneMode 17/18` +
+`vibrdrome_menger`/`vibrdrome_urbancanyon`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–29. (Any future permissive dependency must have its license recorded
+None in Steps 1–31. (Any future permissive dependency must have its license recorded
 here before use.)
