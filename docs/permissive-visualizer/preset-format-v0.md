@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17), 5 = raymarched audio ocean (Phase 18), 6 = screen-space synthwave highway (Phase 19). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17), 5 = raymarched audio ocean (Phase 18), 6 = screen-space synthwave highway (Phase 19), 7 = raymarched 3D Voronoi fracture (Phase 20), 8 = octahedron-cluster crystal (Phase 21). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -232,6 +232,23 @@ sky gradient + a banded synthwave **sun**. Audio: `bass`+`bassPunch`=scroll spee
 `beatPulse`=flash + sun pulse, `mid`=rolling hills, `treble`=sparkle, `energy`=brightness. Reuses
 the 3D route, bloom, present. Preset: `vibrdrome_highway`.
 
+### Phase 20 — Voronoi fracture (sceneMode 7)
+`sceneMode 7` raymarches a **3D Voronoi/Worley** cell field as shattered glowing crystalline
+chunks separated by dark fracture gaps, each cell its own palette colour (hashed cell id). One
+27-cell pass tracks the two nearest centres; the cheap **F2−F1** difference approximates the
+distance to the cell wall (half the cost of the IQ two-pass edge — the perf mitigation that took
+it from over-budget to 60fps after a step-size trim). Emissive front-to-back accumulation (dark
+interiors, sharp bright walls = contrast, not wash). Audio: `bass`/`bassPunch`=separation + speed,
+`beatPulse`=edge flash, `mid`=cell scale, `treble`=sparkle/hue. Preset: `vibrdrome_fracture`.
+
+### Phase 21 — crystal cluster (sceneMode 8)
+`sceneMode 8` raymarches a **hard union of ~8 jagged octahedron shards** (the *sharp* counterpart
+to Orbs' soft metaballs) — faceted, per-shard tinted, fresnel-rimmed, with a treble emission flash
+and gentle treble vibration; an orbiting camera. NB: an early build had a full-screen `beatBloom`
+flash added to every pixel (background included) — removed as a **photosensitivity hazard**; shard
+emission/glow carry the beat instead. Audio: `treble`=vibration/sparkle, `beatPulse`=cluster
+pulse + camera kick, `bass`=shard size, `mid`=rotation. Preset: `vibrdrome_crystal`.
+
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
   a second texture and the 3D scene into another, then the present pass blends them. The texture
@@ -241,7 +258,7 @@ the 3D route, bloom, present. Preset: `vibrdrome_highway`.
 - **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
   and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
   (duration/curve), not preset fields. Not implemented in Phase 1.
-- **More 3D scenes** select via the same `sceneMode` enum later (7 = lattice tunnel, … per the 50-scene roadmap; particle + mesh subsystems and Mandelbox come in later tracks).
+- **More 3D scenes** select via the same `sceneMode` enum later (9+ per the 50-scene roadmap; particle + mesh subsystems and Mandelbox come in later tracks).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

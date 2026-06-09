@@ -1045,7 +1045,132 @@ final class PermissiveFeedbackRenderer {
         return float4(col, 2.0 / 64.0);                           // cheap signal: avgSteps ≈ 2
     }
 
+    // ── Voronoi Fracture (sceneMode 7) — raymarched 3D Worley cell field ────────────────────
+    float3 pv_hash33(float3 p) {
+        p = float3(dot(p, float3(127.1, 311.7, 74.7)),
+                   dot(p, float3(269.5, 183.3, 246.1)),
+                   dot(p, float3(113.5, 271.9, 124.6)));
+        return fract(sin(p) * 43758.5453);
+    }
+    // 3D Voronoi: ONE 27-cell pass tracking the two nearest centres; the cheap F2−F1 difference
+    // approximates the distance to the cell wall (half the cost of the two-pass edge version).
+    float pv_voronoi(float3 p, thread float3 &cellId) {
+        float3 n = floor(p), f = fract(p);
+        float md = 1e9, md2 = 1e9; float3 mg = float3(0.0);
+        for (int k = -1; k <= 1; k++)
+        for (int j = -1; j <= 1; j++)
+        for (int i = -1; i <= 1; i++) {
+            float3 g = float3(i, j, k);
+            float3 r = g + (0.5 + 0.4 * pv_hash33(n + g)) - f;
+            float d = dot(r, r);
+            if (d < md) { md2 = md; md = d; mg = g; }
+            else if (d < md2) { md2 = d; }
+        }
+        cellId = n + mg;
+        return (sqrt(md2) - sqrt(md)) * 0.5;                  // F2−F1 ≈ distance to the cell wall
+    }
+    float4 pv_renderFracture(float2 uv, constant Uniforms& u) {
+        const int MAXS = 26;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 rd = normalize(float3(uvc, 1.4));
+        float3 ro = float3(0.3 * sin(u.time * 0.10), 0.3 * cos(u.time * 0.08), u.camZ);
+        float scale = 1.5 - 0.25 * u.mid;                          // mid → bigger/denser cells
+        float inset = 0.06 + 0.05 * u.bass + 0.05 * u.beatPulse;   // gap between cells (bass separates)
+        float t = 0.0; float3 col = float3(0.0); float alpha = 0.0; int steps = MAXS;
+        for (int s = 0; s < MAXS; s++) {
+            float3 cellId;
+            float ed = pv_voronoi((ro + rd * t) * scale, cellId);
+            float wall = ed - inset;                               // >0 inside the chunk, <0 in the gap
+            if (wall > 0.0) {
+                float3 cc = pv_cospalette(dot(cellId, float3(0.13, 0.27, 0.19))
+                                          + u.time * 0.05 + u.beatPulse * 0.2, idx);
+                float edge = 1.0 - smoothstep(0.0, 0.08, wall);    // sharp bright fracture walls
+                col += (1.0 - alpha) * cc * (0.06 + 0.85 * edge * edge);  // dark interior, bright edges
+                alpha += (1.0 - alpha) * 0.65;                     // opaque fast → less buildup, fewer steps
+                if (alpha > 0.95) { steps = s; break; }
+                t += 0.10;
+            } else {
+                t += max(0.06, -wall * 0.7 + 0.06);                // larger steps through the gap
+            }
+            if (t > 26.0) { steps = s; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        col += pv_cospalette(0.5, idx) * u.beatBloom * u.beatPulse * 0.2;
+        col *= (0.45 + 0.6 * energy);                              // pulled back (no wash)
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Crystal Cluster (sceneMode 8) — hard union of jagged octahedron shards ───────────────
+    float pv_octa(float3 p, float s) { return (abs(p.x) + abs(p.y) + abs(p.z) - s) * 0.57735; }
+    float pv_crystalMap(float3 p, constant Uniforms& u, thread float &nearId) {
+        float d = 1e9;
+        for (int i = 0; i < 8; i++) {
+            float fi = float(i);
+            float3 c = float3(1.2 * sin(u.time * 0.20 + fi * 1.7),
+                              1.0 * sin(u.time * 0.15 + fi * 2.3),
+                              0.9 * cos(u.time * 0.18 + fi * 1.1));
+            c += 0.03 * u.treble * float3(sin(u.time * 12.0 + fi),
+                                          cos(u.time * 11.0 + fi), sin(u.time * 13.0 + fi));  // gentle vibration
+            float3 q = p - c;
+            float a = fi * 1.3 + u.time * (0.3 + 0.1 * u.mid);
+            float ca = cos(a), sa = sin(a);
+            q.xy = float2(q.x * ca - q.y * sa, q.x * sa + q.y * ca);
+            q.yz = float2(q.y * ca - q.z * sa, q.y * sa + q.z * ca);
+            float sz = (0.30 + 0.15 * sin(fi * 2.0)) * (1.0 + 0.3 * u.bass + 0.4 * u.bassPunch);
+            float ds = pv_octa(q, sz);
+            if (ds < d) { d = ds; nearId = fi; }                  // hard union (sharp facets)
+        }
+        return d;
+    }
+    float3 pv_crystalNormal(float3 p, constant Uniforms& u) {
+        float e = 0.01; float dummy;
+        float dx = pv_crystalMap(p + float3(e, 0, 0), u, dummy) - pv_crystalMap(p - float3(e, 0, 0), u, dummy);
+        float dy = pv_crystalMap(p + float3(0, e, 0), u, dummy) - pv_crystalMap(p - float3(0, e, 0), u, dummy);
+        float dz = pv_crystalMap(p + float3(0, 0, e), u, dummy) - pv_crystalMap(p - float3(0, 0, e), u, dummy);
+        return normalize(float3(dx, dy, dz));
+    }
+    float4 pv_renderCrystal(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 ro = float3(3.2 * sin(u.time * 0.15), 1.0 * sin(u.time * 0.10), -3.2 - u.beatPulse * 0.5);
+        float3 fwd = normalize(float3(0.0) - ro);
+        float3 right = normalize(cross(float3(0, 1, 0), fwd)), vup = cross(fwd, right);
+        float3 rd = normalize(fwd + uvc.x * right + uvc.y * vup);
+        float t = 0.0, d = 0.0, glow = 0.0, nearId = 0.0; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_crystalMap(ro + rd * t, u, nearId);
+            glow += 0.02 / (1.0 + d * d * 40.0);
+            if (d < 0.002 || t > 14.0) { steps = i; break; }
+            t += d * 0.70;                                        // moderate under-step (perf vs flicker)
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (d < 0.01) {
+            float3 p = ro + rd * t;
+            float3 n = pv_crystalNormal(p, u);
+            float3 lightDir = normalize(float3(0.5, 0.8, -0.4));
+            float diff = max(dot(n, lightDir), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+            float spec = pow(max(dot(reflect(rd, n), lightDir), 0.0), 30.0 + 50.0 * u.treble);
+            float3 base = pv_cospalette(nearId * 0.16 + u.time * 0.10 + u.paletteShift, idx);
+            col = base * (0.15 + 0.70 * diff) + base * fres * 1.3 + float3(spec) * (0.6 + 0.8 * u.treble);
+            col += base * u.treble * 0.4;                          // treble emission flash
+        }
+        float3 glowCol = pv_cospalette(u.time * 0.12 + u.beatPulse * 0.3, idx);
+        col += glow * glowCol * (0.7 + 0.6 * u.beatPulse);       // localised glow near shards only
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 7.5) { return pv_renderCrystal(in.uv, u); }    // sceneMode 8 = crystal cluster
+        if (u.sceneMode > 6.5) { return pv_renderFracture(in.uv, u); }   // sceneMode 7 = voronoi fracture
         if (u.sceneMode > 5.5) { return pv_renderHighway(in.uv, u); }    // sceneMode 6 = wireframe highway
         if (u.sceneMode > 4.5) { return pv_renderOcean(in.uv, u); }      // sceneMode 5 = audio ocean
         if (u.sceneMode > 3.5) { return pv_renderGyroid(in.uv, u); }     // sceneMode 4 = gyroid lattice

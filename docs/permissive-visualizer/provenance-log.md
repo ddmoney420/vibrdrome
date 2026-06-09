@@ -355,6 +355,32 @@ presets and 3D scenes 1–4 are unchanged (ocean/highway live behind `sceneMode 
 `vibrdrome_ocean`/`vibrdrome_highway`). Parameters-only; DEBUG-only inline shader; nothing bundled.
 No projectM/Classic/CI/Vendor/release changes. Overlays and auto-transitions remain documented-only.
 
+## Research Step 20 — Voronoi fracture (3D scene 7) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 7` — a raymarched 3D Voronoi/Worley fracture field. General-CG;
+our own field, shading, audio; **no projectM / Butterchurn / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| 3D Worley/Voronoi | general-cg-concept | hash-perturbed grid centres, nearest-cell search; standard technique, our implementation |
+| F2−F1 cell-wall approximation | general-cg-concept | the cheap "distance to second-nearest minus nearest" edge proxy (one 27-cell pass) — the perf mitigation vs the IQ two-pass edge |
+| emissive fracture shading + audio | our-own-code | dark interiors / bright walls, per-cell hashed colour; bass→separation, beat→edge flash, mid→scale, treble→sparkle |
+
+## Research Step 21 — crystal cluster (3D scene 8) (2026-06-08)
+
+DEBUG-only. Adds `sceneMode 8` — a hard-union octahedron-shard cluster (the sharp counterpart to
+the Orbs metaballs). General-CG; our own cluster, shading, audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| octahedron SDF + hard union | general-cg-concept | `(|x|+|y|+|z|−s)·1/√3` octahedra combined with `min()` for sharp facets; standard, our implementation |
+| faceted shading + audio | our-own-code | fresnel rim + sharp specular + per-shard tint + treble emission/vibration; beat→pulse/camera kick (full-screen beat flash removed as a photosensitivity hazard) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and 3D scenes 1–6 are unchanged (fracture/crystal live behind `sceneMode 7/8` +
+`vibrdrome_fracture`/`vibrdrome_crystal`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–19. (Any future permissive dependency must have its license recorded
+None in Steps 1–21. (Any future permissive dependency must have its license recorded
 here before use.)
