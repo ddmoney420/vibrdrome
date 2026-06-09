@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -354,6 +354,28 @@ walls) and **not** Elevator (single box tube): side walls + varying-height build
 sky. Audio: `bass`=fly speed + sway, `bassPunch`=speed kick, `mid`=building height/density, `treble`=window
 flicker, `beatPulse`=lit windows + edges only (no full-screen flash). Verified iPhone 60fps @0.25 / mac
 59–60 full-res (avgSteps≈10–44). Preset: `vibrdrome_urbancanyon`.
+
+### Phase 32 — liquid chrome (sceneMode 19)
+`sceneMode 19` raymarches a **smooth-min metaball surface shaded as chrome/glass** (reuses `pv_smin`): at
+each hit, Schlick fresnel mixes a **mirror reflection** and a **refracted** sample of a *structured analytic
+background* (`pv_chromeBG`: spherical grid + palette bands + lights), with **chromatic dispersion** (2 refract
+samples at offset eta → R from low / B from high → rainbow edges) and a **sharp specular glint**. No emissive
+glow — the anti-Orbs differentiator. No second geometry march (refraction samples the analytic background, not
+the blobs). Audio: `bass`=blob inflate/merge, `bassPunch`=expansion pulse, `mid`=orbit speed + wobble,
+`treble`=dispersion width, `beatPulse`=specular glint only (no full-screen flash). Verified iPhone 60–61fps
+@0.25 (after trimming dispersion 3→2 samples + dropping `asin`) / mac 59–60 full-res. Preset: `vibrdrome_chrome`.
+
+### Phase 33 — apollonian gasket (sceneMode 20)
+`sceneMode 20` raymarches the **canonical Apollonian sphere-inversion distance estimator** (fixed `ITER=7`,
+`k` **clamped** to [1.0,1.25]): reflective fold `p = -1+2·fract(0.5p+0.5)`, then sphere inversion `p *= k/r2`,
+accumulating `scale`; `orb = min(r2)` is the **orbit trap** → tiered nested-sphere colouring. **Bounded — NOT
+Mandelbox** (no box/min-radius sphere fold with `scale·p+offset` escape) and **NOT Mandelbulb** (no polar
+power). Curved recursive packing, distinct from Menger's cubes. Shaded with diffuse + **SDF ambient occlusion**
+(5 DE taps along the normal — carves the recursive crevices so the small spheres read, instead of broad colour
+bands) + fresnel edge glow + fog. **All camera motion is smooth monotonic time** (an early `time×bass` rotation
+snapped backward when bass dropped, and a `fract(camZ)` zoom sawtooth jumped — both replaced). Audio: `bass`
+(via energy/glow), `mid`→`k` breathe (clamped), `treble`→edge sharpness, `beatPulse`→edges only. Verified
+iPhone 61fps @0.25 / mac 59–61 full-res (avgSteps swings with view). Preset: `vibrdrome_apollonian`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

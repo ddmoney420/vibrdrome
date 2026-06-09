@@ -516,6 +516,31 @@ presets and scenes 1–16 are unchanged (menger/urban-canyon live behind `sceneM
 `vibrdrome_menger`/`vibrdrome_urbancanyon`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 32 — liquid chrome (scene 19) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 19` — reflective/refractive metaball chrome raymarch.
+General-CG; our own field/background/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| metaball SDF + Schlick fresnel + reflect/refract + chromatic dispersion | general-cg-concept | smooth-min sphere union; reflect/refract MSL builtins; Schlick fresnel; per-channel refraction offset for dispersion; standard, our implementation |
+| chrome shading + analytic lensed background + audio | our-own-code | structured `pv_chromeBG` (grid + bands + lights) lensed by reflection/refraction (anti-Orbs: no emissive glow), sharp specular; bass=inflate, punch=pulse, mid=orbit/wobble, treble=dispersion, beat=glint only (no full-screen flash) |
+
+## Research Step 33 — apollonian gasket (scene 20) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 20` — bounded Apollonian sphere-inversion distance-estimator raymarch.
+General-CG; our own camera/shading/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| Apollonian sphere-inversion DE + orbit-trap colour | general-cg-concept | canonical fixed-iteration (ITER=7) reflective-fold + sphere-inversion DE with `min(r2)` orbit trap; bounded, clamped k — NOT Mandelbox (no box/min-radius sphere fold + escape), NOT Mandelbulb (no polar power); our implementation |
+| SDF AO + smooth camera + audio | our-own-code | 5-tap SDF ambient occlusion to carve recursive crevices, fully smooth monotonic-time camera (fixed a time×bass rotation reversal + a fract-zoom snap), fresnel/fog; mid=k breathe (clamped), treble=edges, beat=edges only (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–18 are unchanged (chrome/apollonian live behind `sceneMode 19/20` +
+`vibrdrome_chrome`/`vibrdrome_apollonian`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–31. (Any future permissive dependency must have its license recorded
+None in Steps 1–33. (Any future permissive dependency must have its license recorded
 here before use.)

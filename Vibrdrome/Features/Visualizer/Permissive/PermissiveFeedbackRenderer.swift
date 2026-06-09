@@ -1765,7 +1765,157 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Liquid Chrome (sceneMode 19) — reflective/refractive metaballs lensing a background ───
+    // Smooth-min metaball surface shaded as chrome/glass: Schlick fresnel mixes a mirror reflection
+    // and a refracted (chromatic-dispersion) sample of a STRUCTURED analytic background, plus sharp
+    // specular glints. NOT emissive glow (the anti-Orbs differentiator). No second geometry march.
+    float pv_chromeMap(float3 p, constant Uniforms& u) {
+        float k = 0.5 + 0.25 * u.bass;                            // bass → merge softness
+        float rad = 0.42 + 0.18 * u.bass + 0.22 * u.bassPunch;    // bass/punch → inflate
+        float spd = 0.6 + 0.8 * u.mid;                            // mid → orbit speed
+        float t = u.time;
+        float d = 1e9;
+        for (int i = 0; i < 6; i++) {
+            float fi = float(i);
+            float3 c = 0.85 * float3(sin(t * spd * (0.5 + 0.1 * fi) + fi * 1.7),
+                                     cos(t * spd * (0.4 + 0.13 * fi) + fi * 2.3),
+                                     sin(t * spd * (0.6 + 0.07 * fi) + fi * 0.9));
+            float wob = 0.05 * u.mid * sin(p.x * 6.0 + t * 3.0);   // liquid wobble
+            d = pv_smin(d, length(p - c) - rad - wob, k);
+        }
+        return d;
+    }
+    float3 pv_chromeBG(float3 dir, constant Uniforms& u, int idx) {
+        // structured analytic backdrop (what the chrome lenses): lat/long grid + palette bands + lights
+        float az = atan2(dir.x, dir.z), el = clamp(dir.y, -1.0, 1.0);   // dir.y proxy (drops asin — cheaper)
+        float gl = smoothstep(0.04, 0.0, abs(fract(az * 3.0 / 3.14159 + u.time * 0.02) - 0.5) - 0.46);
+        float gt = smoothstep(0.04, 0.0, abs(fract(el * 4.0) - 0.5) - 0.46);
+        float3 band = pv_cospalette(0.5 + el * 0.4 + az * 0.05 + u.paletteShift + u.time * 0.03, idx);
+        float light = pow(max(0.0, sin(az * 2.0 + u.time * 0.3) * cos(el * 3.0)), 8.0);  // bright spots
+        float3 col = band * (0.18 + 0.5 * max(gl, gt)) + pv_cospalette(0.1, idx) * light;
+        return col;
+    }
+    float4 pv_renderChrome(float2 uv, constant Uniforms& u) {
+        const int MAXS = 56;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float th = u.time * 0.2;                                   // slow orbit
+        float3 ro = float3(3.0 * sin(th), 0.5, 3.0 * cos(th));
+        float3 fwd = normalize(-ro), rt = normalize(cross(float3(0, 1, 0), fwd));
+        float3 up = cross(fwd, rt);
+        float3 rd = normalize(uvc.x * rt + uvc.y * up + 1.6 * fwd);
+        float t = 0.2; int steps = MAXS; bool hit = false;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_chromeMap(p, u);
+            if (d < 0.004) { hit = true; steps = i; break; }
+            t += d * 0.8;
+            if (t > 8.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float3 p = ro + rd * t;
+            float e = 0.006;
+            float2 kk = float2(1.0, -1.0);
+            float3 n = normalize(kk.xyy * pv_chromeMap(p + kk.xyy * e, u) +
+                                 kk.yyx * pv_chromeMap(p + kk.yyx * e, u) +
+                                 kk.yxy * pv_chromeMap(p + kk.yxy * e, u) +
+                                 kk.xxx * pv_chromeMap(p + kk.xxx * e, u));
+            float F = 0.04 + 0.96 * pow(1.0 - max(dot(n, -rd), 0.0), 5.0);   // Schlick fresnel
+            float3 refl = pv_chromeBG(reflect(rd, n), u, idx);              // chrome mirror
+            float disp = 0.03 + 0.05 * u.treble;                           // treble → dispersion width
+            float3 cLo = pv_chromeBG(refract(rd, n, 0.66 - disp), u, idx);  // 2 samples → rainbow edges (was 3)
+            float3 cHi = pv_chromeBG(refract(rd, n, 0.66 + disp), u, idx);
+            float3 refr = float3(cLo.r, 0.5 * (cLo.g + cHi.g), cHi.b);      // R low-eta, B high-eta, G mid
+            float3 ld = normalize(float3(0.5, 0.8, 0.3));
+            float spec = pow(max(dot(reflect(rd, n), ld), 0.0), 90.0);     // sharp wet glint
+            col = mix(refr, refl, F);
+            col += float3(spec) * (1.0 + 1.5 * u.beatPulse);               // glints only on beat (localized)
+        } else {
+            col = pv_chromeBG(rd, u, idx) * 0.7;                           // the background itself
+        }
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Apollonian Gasket (sceneMode 20) — bounded sphere-inversion fractal (distance estimator) ─
+    // Canonical Apollonian DE: reflective fold into [-1,1] + sphere inversion, FIXED ITER, CLAMPED k.
+    // Orbit-trap colours nested sphere tiers. NOT Mandelbox (no box/min-radius sphere fold + escape)
+    // and NOT Mandelbulb (no polar power). Curved recursive packing — distinct from Menger's cubes.
+    float pv_apollonianDE(float3 p, float k, int iter, thread float &orb) {
+        float scale = 1.0; orb = 1e9;
+        for (int i = 0; i < iter; i++) {
+            p = -1.0 + 2.0 * fract(0.5 * p + 0.5);                // reflective fold into [-1,1]
+            float r2 = dot(p, p);
+            orb = min(orb, r2);                                   // orbit trap → tiered colour
+            float kk = k / max(r2, 0.05);                         // sphere inversion (guarded)
+            p *= kk; scale *= kk;
+        }
+        return 0.25 * abs(p.y) / scale;                          // distance estimate
+    }
+    float4 pv_renderApollonian(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int iter = 7;                                            // fixed bounded depth (dial → 6/5)
+        int idx = int(u.paletteIndex);
+        float k = clamp(1.08 + 0.10 * sin(u.time * 0.05), 1.0, 1.25);  // smooth k breathe (time only — no spiky coupling)
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float th = u.time * 0.05;                               // monotonic time → perfectly smooth rotation (no reversal)
+        float zoom = 3.7 + 0.30 * sin(u.time * 0.06);           // smooth in/out (no fract sawtooth wrap)
+        float3 ro = float3(zoom * sin(th), 0.35 * sin(u.time * 0.03), zoom * cos(th));
+        float3 fwd = normalize(-ro), rt = normalize(cross(float3(0, 1, 0), fwd));
+        float3 up = cross(fwd, rt);
+        float3 rd = normalize(uvc.x * rt + uvc.y * up + 1.8 * fwd);  // slightly narrower FOV → more detail
+        float t = 0.0; int steps = MAXS; bool hit = false; float orb = 0.0, orbHit = 0.0;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_apollonianDE(p, k, iter, orb);
+            if (d < 0.0008) { hit = true; steps = i; orbHit = orb; break; }
+            t += d * 0.7;                                        // safe under-step
+            if (t > 11.0) { steps = i; break; }                 // farther camera → longer reach
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = float3(0.0);
+        if (hit) {
+            float3 p = ro + rd * t;
+            float e = 0.0012; float od;
+            float2 kk = float2(1.0, -1.0);
+            float3 n = normalize(kk.xyy * pv_apollonianDE(p + kk.xyy * e, k, iter, od) +
+                                 kk.yyx * pv_apollonianDE(p + kk.yyx * e, k, iter, od) +
+                                 kk.yxy * pv_apollonianDE(p + kk.yxy * e, k, iter, od) +
+                                 kk.xxx * pv_apollonianDE(p + kk.xxx * e, k, iter, od));
+            float3 ld = normalize(float3(0.6, 0.7, -0.4));
+            float diff = max(dot(n, ld), 0.0);
+            float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
+            // SDF ambient occlusion — samples the DE along the normal to carve the recursive crevices
+            // (reveals the nested small spheres the broad colour bands were hiding)
+            float ao = 0.0, sca = 1.0;
+            for (int a = 1; a <= 5; a++) {
+                float hr = 0.02 * float(a);
+                float dd = pv_apollonianDE(p + n * hr, k, iter, od);
+                ao += (hr - dd) * sca;
+                sca *= 0.6;
+            }
+            ao = clamp(1.0 - 2.8 * ao, 0.0, 1.0);
+            float fog = exp(-t * 0.18);
+            float ot = sqrt(max(orbHit, 0.0));                    // sharper, higher-freq orbit-trap → fine tiers
+            float3 base = pv_cospalette(0.05 + ot * 3.8 + u.paletteShift + u.time * 0.003, idx);  // slow hue drift
+            col  = base * (0.05 + 0.72 * diff) * ao;              // AO defines the recursive detail
+            col += base * fres * (0.5 + 0.8 * u.treble);          // edge glow (treble sharpens)
+            col += base * fres * u.beatPulse * 0.5;               // beat → edges only (no full-screen flash)
+            col *= fog;
+        }
+        col *= (0.7 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 19.5) { return pv_renderApollonian(in.uv, u); }  // sceneMode 20 = apollonian gasket
+        if (u.sceneMode > 18.5) { return pv_renderChrome(in.uv, u); }      // sceneMode 19 = liquid chrome
         if (u.sceneMode > 17.5) { return pv_renderUrbanCanyon(in.uv, u); } // sceneMode 18 = urban canyon
         if (u.sceneMode > 16.5) { return pv_renderMenger(in.uv, u); }      // sceneMode 17 = menger sponge
         if (u.sceneMode > 15.5) { return pv_renderSupernova(in.uv, u); }   // sceneMode 16 = supernova
