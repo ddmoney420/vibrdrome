@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35), 23 = truchet circuit (Phase 36), 24 = torus-knot surface (Phase 37). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35), 23 = truchet circuit (Phase 36), 24 = torus-knot surface (Phase 37), 25 = caustic pool (Phase 38), 26 = interior cathedral (Phase 39). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -420,6 +420,27 @@ clamped tube radius) — **not** Mandelbox/Mandelbulb. All motion is smooth mono
 rotation snapped backward; fixed). Audio: `bass`(via energy/glow), `mid`→tube radius, `treble`→ridges,
 `beatPulse`→tube rim only (no full-screen flash). Verified iPhone 60fps @0.25 / mac 59–60 full-res
 (avgSteps≈7–19). Preset: `vibrdrome_torusknot`.
+
+### Phase 38 — caustic pool (sceneMode 25)
+`sceneMode 25` is **screen-space procedural** (no march): an **animated Worley caustic net** — bright lines
+at the boundaries of drifting Voronoi cells (`F2−F1`, cells orbit via `sin(t+…)`) = the classic moving
+pool-caustic web — mapped onto a **perspective pool floor** (`d = 1/(hz−uvc.y)`, clamped near the horizon) with
+a second offset layer for the through-water refraction, a visible deep-water base, and depth fog. Robust: the
+net always has edges + the water base is lit, so it **never goes dead black** (the first iterative-caustic
+version did). Audio: `bass`→flow speed + line-width swell, `bassPunch`→ripple burst, `mid`→ripple frequency,
+`treble`→sharpness/shimmer, `beatPulse`→web lines only (no full-screen flash). Verified iPhone 61fps @0.25 /
+mac 59–60 full-res, `avgSteps≈2`. Preset: `vibrdrome_caustic`.
+
+### Phase 39 — interior cathedral (sceneMode 26)
+`sceneMode 26` raymarches a **gothic interior**: a colonnade (vertical cylinders at `±navX`, repeated down the
+nave via `fmod`) + a **pointed-arch vault** overhead (intersection of two leaning cylinders, banded to the
+ceiling) + a stone floor; glide forward down the nave with near/far occlusion + fog. **Volumetric light shafts**
+(colored stained-glass beams between bays, sampled every other step in the near field) cut through the dark
+interior. Distinct from Urban Canyon (exterior city) — you're inside looking down a colonnade. SDFs are
+near-exact so the march uses a `d·0.9` step. Audio: `bass`→glide speed + shaft intensity, `bassPunch`→step,
+`mid`→bay spacing/arch height, `treble`→stone detail + shaft shimmer, `beatPulse`→light beams only (no
+full-screen flash). Verified iPhone 60fps @0.25 / mac 59–60 full-res (avgSteps≈32–35). Preset:
+`vibrdrome_cathedral`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

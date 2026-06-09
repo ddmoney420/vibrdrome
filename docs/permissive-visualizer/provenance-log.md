@@ -593,6 +593,31 @@ presets and scenes 1–22 are unchanged (truchet/torus-knot live behind `sceneMo
 `vibrdrome_circuit` was already an original 2D preset, untouched). Parameters-only; DEBUG-only inline
 shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 38 — caustic pool (scene 25) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 25` — a screen-space animated Worley caustic net on a perspective floor.
+General-CG; our own net/floor/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| animated Worley/Voronoi net + perspective floor | general-cg-concept | F2−F1 cell-edge net with drifting cell centres (moving caustic web) + Highway-style perspective floor projection; standard, our implementation (first iterative-caustic attempt collapsed to black — replaced) |
+| caustic compositing + refraction layer + audio | our-own-code | bright cyan-white net + visible deep-water base + second offset refraction layer + fog; bass=flow/width, punch=burst, mid=frequency, treble=sharpness, beat=web lines only (no full-screen flash) |
+
+## Research Step 39 — interior cathedral (scene 26) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 26` — a raymarched gothic interior with volumetric light shafts.
+General-CG; our own layout/shafts/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| domain-repetition column/arch SDFs + volumetric shafts | general-cg-concept | repeated vertical cylinders (colonnade) + pointed-arch vault (intersection of leaning cylinders) + floor; near-field volumetric light-shaft accumulation along the ray; standard, our implementation |
+| cathedral composition + audio | our-own-code | nave glide with occlusion + fog, colored stained-glass shafts between bays (distinct from Urban Canyon's exterior); bass=glide/shaft, punch=step, mid=bay/arch, treble=detail/shimmer, beat=beams only (no full-screen flash) |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–24 are unchanged (caustic/cathedral live behind `sceneMode 25/26` +
+`vibrdrome_caustic`/`vibrdrome_cathedral`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–37. (Any future permissive dependency must have its license recorded
+None in Steps 1–39. (Any future permissive dependency must have its license recorded
 here before use.)

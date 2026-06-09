@@ -2171,7 +2171,132 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Caustic Pool (sceneMode 25) — animated Worley caustic net on a perspective floor ──────
+    // Bright lines at the boundaries of drifting Voronoi cells = the classic moving pool-caustic web.
+    // Robust (never goes black — the net always has edges) + a visible water base. Two layers for depth.
+    float2 pv_hash22(float2 p) {
+        p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453);
+    }
+    float pv_causticNet(float2 p, float t) {                     // F2−F1 → ~0 on cell boundaries
+        float2 n = floor(p), f = fract(p);
+        float f1 = 9.0, f2 = 9.0;
+        for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+                float2 g = float2(i, j);
+                float2 o = pv_hash22(n + g);
+                o = 0.5 + 0.5 * sin(t + 6.2831853 * o);          // cells drift → moving caustic
+                float d = length(g + o - f);
+                if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+            }
+        }
+        return f2 - f1;
+    }
+    float4 pv_renderCaustic(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float hz = 0.35;                                          // horizon (water surface line)
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (uvc.y < hz) {
+            float d = min(1.0 / (hz - uvc.y), 30.0);             // perspective floor depth (clamped near horizon)
+            float scale = 1.4 + 1.2 * u.mid;                     // mid → ripple frequency
+            float2 g = float2(uvc.x * d, d * 0.6 + u.camZ * 0.25) * scale;
+            float spd = u.time * (0.4 + 0.6 * u.bass);           // bass → flow speed
+            float lw = 0.07 + 0.05 * u.bass + 0.04 * u.bassPunch; // bass/punch → caustic line width (ripple swell)
+            float net  = 1.0 - smoothstep(0.0, lw, pv_causticNet(g, spd));            // floor caustic
+            float net2 = 1.0 - smoothstep(0.0, lw, pv_causticNet(g * 1.9 + 4.0, spd * 1.4));  // refraction layer
+            float caustic = pow(net, 1.5 + 1.5 * u.treble) + 0.5 * pow(net2, 2.0);   // treble → sharpness
+            float fog = exp(-d * 0.05);
+            float3 deep = pv_cospalette(0.55 + u.paletteShift, idx) * 0.14;          // visible deep water (never dead black)
+            float3 web = mix(pv_cospalette(0.45 + u.paletteShift, idx), float3(0.8, 1.0, 1.0), 0.5);  // cyan-white web
+            col = deep + web * caustic * (0.7 + 0.6 * u.treble + 0.9 * u.beatPulse);  // beat → web lines only
+            col *= fog;
+        } else {
+            float st = (uvc.y - hz) / (1.0 - hz);
+            col = pv_cospalette(0.58 + u.paletteShift, idx) * (0.10 + 0.12 * (1.0 - st));  // water surface gradient
+        }
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                           // screen-space: avgSteps ≈ 2
+    }
+
+    // ── Interior Cathedral (sceneMode 26) — raymarched gothic interior + volumetric light shafts ─
+    // Colonnade (repeated cylinders both sides) + pointed-arch vault overhead + floor; glide down the
+    // nave with near/far occlusion + fog; colored volumetric light shafts cut through the dark interior.
+    float pv_cylY(float3 p, float2 c, float r) {                  // vertical cylinder at xz=c
+        return length(p.xz - c) - r;
+    }
+    float pv_cathedralMap(float3 p, constant Uniforms& u, thread float &mat) {
+        float bay = 3.0 - 0.6 * u.mid;                            // mid → bay spacing
+        float archH = 3.2 + 0.6 * u.mid;
+        float3 q = p; q.z = fmod(q.z + bay * 0.5, bay) - bay * 0.5;  // repeat down the nave
+        float navX = 2.2;
+        float cols = min(pv_cylY(q, float2(-navX, 0.0), 0.32), pv_cylY(q, float2(navX, 0.0), 0.32));  // colonnade
+        // pointed vault: two leaning cylinders meeting at a ridge above the nave
+        float al = length(float2(q.x + navX, p.y - archH)) - (navX + 0.2);
+        float ar = length(float2(q.x - navX, p.y - archH)) - (navX + 0.2);
+        float vault = max(max(al, ar), p.y - (archH + 1.6));      // intersection → pointed arch shell
+        vault = max(vault, -(p.y - archH + 0.2));                 // keep only the overhead band
+        float floorD = p.y + 2.2;                                 // stone floor
+        float d = min(min(cols, floorD), vault);
+        mat = (floorD < cols && floorD < vault) ? 0.0 : 1.0;      // 0 floor, 1 stone
+        return d;
+    }
+    float4 pv_renderCathedral(float2 uv, constant Uniforms& u) {
+        const int MAXS = 80;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float travel = u.camZ * 0.18 * (1.0 + 0.5 * u.bass) + u.bassPunch * 0.3;  // calm glide
+        float3 ro = float3(0.25 * sin(u.time * 0.2), 0.2, travel);
+        float3 rd = normalize(float3(uvc.x, uvc.y, 1.25));
+        float t = 0.1; int steps = MAXS; bool hit = false; float mat = 1.0;
+        float shaft = 0.0;                                        // volumetric light accumulation
+        float bay = 3.0 - 0.6 * u.mid;                           // hoisted out of the loop
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float d = pv_cathedralMap(p, u, mat);
+            // light shaft: sampled every other step in the near field (fog kills far) → cheaper, same look
+            if (t < 20.0 && (i & 1) == 0) {
+                float win = smoothstep(0.6, 0.0, abs(fmod(p.z + bay * 0.5, bay) - bay * 0.5) - 0.2);
+                float high = smoothstep(0.5, 2.6, p.y) * smoothstep(3.4, 2.2, p.y);
+                shaft += win * high * 0.08;                       // 2× weight, half the samples
+            }
+            if (d < 0.01) { hit = true; steps = i; break; }
+            t += d * 0.9;                                         // near-exact SDFs → larger safe step (fewer evals)
+            if (t > 38.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (hit) {
+            float3 p = ro + rd * t;
+            float e = 0.01; float md;
+            float2 kk = float2(1.0, -1.0);
+            float3 n = normalize(kk.xyy * pv_cathedralMap(p + kk.xyy * e, u, md) +
+                                 kk.yyx * pv_cathedralMap(p + kk.yyx * e, u, md) +
+                                 kk.yxy * pv_cathedralMap(p + kk.yxy * e, u, md) +
+                                 kk.xxx * pv_cathedralMap(p + kk.xxx * e, u, md));
+            float3 ld = normalize(float3(0.4, 0.8, -0.2));
+            float diff = max(dot(n, ld), 0.0);
+            float fog = exp(-t * 0.05);
+            float3 stone = float3(0.13, 0.12, 0.11) * (mat > 0.5 ? 1.0 : 0.6);  // stone / darker floor
+            col = stone * (0.3 + 0.7 * diff) * (0.7 + 0.5 * u.treble);
+            col *= fog;
+        } else {
+            col = float3(0.01, 0.01, 0.02);                       // dark interior depth
+        }
+        float3 shaftCol = pv_cospalette(0.2 + u.paletteShift + u.time * 0.02, idx);  // stained-glass hue
+        col += shaftCol * shaft * (1.0 + 1.4 * u.bass + 1.6 * u.beatPulse) * (0.7 + 0.6 * u.treble);  // beams only
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 25.5) { return pv_renderCathedral(in.uv, u); }   // sceneMode 26 = interior cathedral
+        if (u.sceneMode > 24.5) { return pv_renderCaustic(in.uv, u); }     // sceneMode 25 = caustic pool
         if (u.sceneMode > 23.5) { return pv_renderTorusKnot(in.uv, u); }   // sceneMode 24 = torus-knot
         if (u.sceneMode > 22.5) { return pv_renderTruchet(in.uv, u); }     // sceneMode 23 = truchet circuit
         if (u.sceneMode > 21.5) { return pv_renderHex(in.uv, u); }         // sceneMode 22 = hex honeycomb
