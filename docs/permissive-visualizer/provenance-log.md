@@ -437,6 +437,34 @@ presets and 3D scenes 1–10 are unchanged (blob/fault live behind `sceneMode 11
 `vibrdrome_perlinblob`/`vibrdrome_faultline`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 26 — cymatic plate (scene 13) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 13` — a screen-space analytic Chladni square-plate (no march).
+General-CG/physics; our own superposition/audio mapping/shading; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| Chladni square-plate nodal function | general-cg-concept | standard free-edge plate eigenmode `cos(nπx)cos(mπy) − cos(mπx)cos(nπy)`; textbook physics, our implementation |
+| mode superposition + nodal-line render + audio | our-own-code | sum of 4 audio-weighted modes (bass→coarse, treble→fine) each time-oscillated; fwidth-AA nodal lines; bass/mid/treble=weights, mid=spin, treble=sharpness, beat=line thickening (no full-screen flash) |
+
+## Research Step 27 — horizon dome (scene 14) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 14` — a screen-space analytic dome + polar floor grid (no march).
+General-CG; our own projection/grid/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| spherical lat/long + perspective floor projection | general-cg-concept | pitched-camera `asin`/`atan2` spherical grid for the dome + `1/sin(elev)` perspective polar floor; standard projection math, our implementation |
+| dome/floor compositing + curved horizon + audio | our-own-code | latitude rings + longitude ribs converging to a zenith, glow-fill, fwidth-AA, curved horizon band; bass=spin/travel, mid=density, treble=shimmer, beat=grid/horizon pulse (no full-screen flash) |
+
+*A flat head-on first attempt at Step 27 read as lame/flat (didn't register as a dome); the shipped
+version pitches the camera up so ribs converge to a zenith with a curved horizon. Same scene slot.*
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–12 are unchanged (cymatic/dome live behind `sceneMode 13/14` +
+`vibrdrome_cymatic`/`vibrdrome_horizondome`). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–25. (Any future permissive dependency must have its license recorded
+None in Steps 1–27. (Any future permissive dependency must have its license recorded
 here before use.)

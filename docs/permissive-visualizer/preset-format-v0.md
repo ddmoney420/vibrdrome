@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -286,6 +286,27 @@ silhouettes. Forward fly-through is intentionally a **slow drift** (`camZ×0.35`
 so it's not a 500-mph plunge; `bass` still pushes. Audio: `bass`=terrain amplitude + fly speed, `mid`=ridge
 sharpness, `treble`=magma flicker, `beatPulse`=localized magma flare (cracks only, no full-screen flash).
 Verified iPhone 60fps @0.25 (avgSteps≈3–14), mac full-res. Preset: `vibrdrome_faultline`.
+
+### Phase 26 — cymatic plate (sceneMode 13)
+`sceneMode 13` is **screen-space procedural** (no march, O(1)/pixel): a top-down Chladni square-plate.
+The nodal lines (zeros of the standing-wave field) glow like sand collecting on a vibrating plate.
+Field = a superposition of 4 resonant modes `cos(nπx)cos(mπy) − cos(mπx)cos(nπy)`, each weighted by an
+audio band (bass→coarse `(2,3)`, treble→fine `(5,7)`) and oscillating at its own rate, so the figure
+visibly restructures with the music. Lines are `fwidth`-antialiased (no shimmer at iOS 0.25). Audio:
+`bass`/`mid`/`treble`=mode weights (coarse→fine), `mid`=plate spin, `treble`=line sharpness,
+`beatPulse`=thicken/brighten the nodal lines only (no full-screen flash). Verified iPhone 61fps @0.25 /
+mac 59–60 full-res, `avgSteps≈2`. Preset: `vibrdrome_cymatic`.
+
+### Phase 27 — horizon dome (sceneMode 14)
+`sceneMode 14` is **screen-space procedural** analytic projection (no march, O(1)/pixel): the camera is
+pitched up ~36° into a vast wireframe dome. Longitude ribs + latitude rings (`asin` elevation / `atan2`
+azimuth) converge toward a zenith overhead; below the horizon a polar floor grid (concentric rings +
+the same ribs) recedes with `1/sin(elev)` perspective; a bright **curved horizon band** sits where they
+meet. Glow-fill keeps it from ever reading empty. Lines `fwidth`-antialiased. Audio: `bass`=dome spin +
+floor-ring travel, `mid`=grid density, `treble`=shimmer/brightness, `beatPulse`=pulses grid + horizon
+band only (no full-screen flash). NB: a flat head-on first attempt read as lame/flat (no dome) — pitching
+the camera up so ribs converge to a zenith + a curved horizon fixed it. Verified iPhone 61fps @0.25 /
+mac 59–60 full-res, `avgSteps≈2`. Preset: `vibrdrome_horizondome`.
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

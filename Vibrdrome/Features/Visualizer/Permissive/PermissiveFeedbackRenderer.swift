@@ -1443,7 +1443,91 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(steps) / float(MAXS));
     }
 
+    // ── Cymatic Plate (sceneMode 13) — analytic Chladni square-plate, screen-space ────────────
+    // Top-down vibrating plate; thin glowing nodal lines (sand) trace standing-wave zeros. A
+    // superposition of 4 resonant modes weighted by the audio spectrum makes the figure restructure
+    // with the music. O(1)/pixel, fwidth-antialiased so lines stay crisp at iOS 0.25 scale.
+    float pv_chladni(float n, float m, float2 s) {
+        return cos(n * 3.14159265 * s.x) * cos(m * 3.14159265 * s.y)
+             - cos(m * 3.14159265 * s.x) * cos(n * 3.14159265 * s.y);
+    }
+    float4 pv_renderCymatic(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 s = uv * 2.0 - 1.0; s.x *= aspect;
+        float th = u.time * (0.05 + 0.10 * u.mid);                 // slow plate spin (mid nudges)
+        float cs = cos(th), sn = sin(th);
+        s = float2(cs * s.x - sn * s.y, sn * s.x + cs * s.y);
+        s *= 1.05;                                                 // fit plate to view
+        // 4 modes: bass→coarse, treble→fine; each oscillates at its own rate
+        float wB = u.bass, wBM = 0.5 * (u.bass + u.mid), wM = u.mid, wT = u.treble;
+        float A = wB  * pv_chladni(2.0, 3.0, s) * sin(6.2831853 * 0.5 * u.time)
+                + wBM * pv_chladni(3.0, 5.0, s) * sin(6.2831853 * 0.8 * u.time + 1.3)
+                + wM  * pv_chladni(4.0, 5.0, s) * sin(6.2831853 * 1.2 * u.time + 2.1)
+                + wT  * pv_chladni(5.0, 7.0, s) * sin(6.2831853 * 1.7 * u.time + 0.6);
+        A /= max(wB + wBM + wM + wT, 0.001);
+        // nodal lines = zeros of A; fwidth AA, treble sharpens, beat thickens (lines only)
+        float aa = fwidth(A) * 1.5;
+        float lw = aa * (1.0 + (1.0 - u.treble) * 1.2 + u.beatPulse * 1.5);
+        float line = pow(1.0 - smoothstep(0.0, lw, abs(A)), 3.0);
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 sand = pv_cospalette(0.45 + abs(A) * 0.25 + u.paletteShift + u.time * 0.03, idx);
+        float3 anti = pv_cospalette(0.05 + u.paletteShift, idx) * 0.10 * (1.0 - line);  // faint antinode tint
+        float3 col = sand * line * (0.9 + 1.2 * energy + 1.0 * u.beatPulse) + anti;
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                            // screen-space: avgSteps ≈ 2
+    }
+
+    // ── Horizon Dome (sceneMode 14) — analytic dome + floor grid, screen-space ────────────────
+    // Camera inside a vast wireframe dome: lat/long grid curves overhead, polar floor grid recedes
+    // below, a bright curved horizon band where they meet. Slow spin + floor-ring travel. O(1)/pixel.
+    float4 pv_renderHorizonDome(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        // camera pitched UP into the dome: zenith overhead, horizon sweeps low as a curved band
+        float3 rd = normalize(float3(uvc.x, uvc.y, 1.25));
+        float pitch = 0.62;                                        // look up ~36°
+        float cp = cos(pitch), sp = sin(pitch);
+        rd = float3(rd.x, cp * rd.y + sp * rd.z, -sp * rd.y + cp * rd.z);
+        float elev = asin(clamp(rd.y, -1.0, 1.0));                 // 0 = horizon, +π/2 = zenith
+        float spin = u.time * (0.10 + 0.55 * u.bass);              // bass → dome spin
+        float az = atan2(rd.x, rd.z) + spin;
+        float travel = u.camZ * 0.5 * (1.0 + 0.8 * u.bass);        // forward floor-ring travel
+        float Nlat = 11.0 + floor(8.0 * u.mid);                   // mid → density
+        float Nlon = 28.0;
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col;
+        if (elev >= 0.0) {                                         // DOME — ribs converge to zenith
+            float lat = fract(elev * Nlat * 0.62 - travel * 0.2);  // latitude rings stack toward zenith
+            float lon = fract(az * Nlon / 6.2831853);              // longitude ribs
+            float gl = smoothstep(fwidth(lat) * 1.5, 0.0, min(lat, 1.0 - lat));
+            float gs = smoothstep(fwidth(lon) * 1.5, 0.0, min(lon, 1.0 - lon));
+            float depth = 0.45 + 0.55 * cos(elev);                // brighter near horizon → recession
+            float3 dome = pv_cospalette(0.6 + elev * 0.18 + u.paletteShift + u.time * 0.03, idx);
+            col = dome * max(gl, gs) * depth * (0.7 + 1.0 * u.treble + 1.4 * u.beatPulse);
+            col += dome * 0.06 * depth;                            // glow fill — never empty
+        } else {                                                  // FLOOR — polar grid to the horizon
+            float d = -1.0 / sin(elev);                            // ground distance → ∞ at horizon
+            float ring = fract(d * 0.12 - travel);
+            float lon = fract(az * Nlon / 6.2831853);
+            float gr = smoothstep(fwidth(ring) * 1.5, 0.0, min(ring, 1.0 - ring));
+            float gs = smoothstep(fwidth(lon) * 1.5, 0.0, min(lon, 1.0 - lon));
+            float fade = exp(-d * 0.05);
+            float3 fl = pv_cospalette(0.15 + d * 0.01 + u.paletteShift + u.time * 0.03, idx);
+            col = fl * max(gr, gs) * fade * (0.8 + 1.2 * u.bass + 1.4 * u.beatPulse);
+            col += fl * 0.05 * fade;                               // glow fill
+        }
+        float horizon = exp(-abs(elev) * 9.0) * (0.9 + 1.0 * u.beatPulse);   // bright curved horizon band
+        col += pv_cospalette(0.5 + u.paletteShift, idx) * horizon;
+        col *= (0.7 + 0.6 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                            // screen-space: avgSteps ≈ 2
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 13.5) { return pv_renderHorizonDome(in.uv, u); } // sceneMode 14 = horizon dome
+        if (u.sceneMode > 12.5) { return pv_renderCymatic(in.uv, u); }     // sceneMode 13 = cymatic plate
         if (u.sceneMode > 11.5) { return pv_renderFaultTerrain(in.uv, u); } // sceneMode 12 = fault terrain
         if (u.sceneMode > 10.5) { return pv_renderPerlinBlob(in.uv, u); }   // sceneMode 11 = perlin blob
         if (u.sceneMode > 9.5) { return pv_renderElevator(in.uv, u); }      // sceneMode 10 = endless elevator
