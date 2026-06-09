@@ -872,7 +872,75 @@ final class PermissiveFeedbackRenderer {
         return float4(col, float(SHELLS) / 64.0);                   // alpha → avgSteps ≈ 3 (cheap)
     }
 
+    // ── Gyroid (sceneMode 4) — raymarched volumetric TPMS membrane ─────────────────────────
+    // Implicit gyroid surface sin·cos·triple, rendered as a finite-thickness glowing shell. NOT a
+    // true SDF (gradient isn't unit-length) → conservative under-step. Reuses the 3D route.
+    float pv_gyroidMap(float3 p, constant Uniforms& u) {
+        // Domain twist → the lattice corkscrews into vortices (angle grows with depth; bass spins
+        // it faster). Twisting warps space, so we under-step harder below to stay conservative.
+        float ang = p.z * 0.40 + u.time * 0.06 + u.bass * 0.30;
+        float ca = cos(ang), sa = sin(ang);
+        p.xy = float2(p.x * ca - p.y * sa, p.x * sa + p.y * ca);  // twist → corkscrew vortices
+        float scale = 2.6 + 0.6 * u.mid;                          // tighter, denser lattice
+        float thick = 0.05 + 0.04 * u.bass + 0.05 * u.beatPulse;  // membrane fatness (breathes)
+        float3 q = p * scale;
+        float g = dot(sin(q), cos(q.yzx));                        // gyroid implicit
+        return (abs(g) - thick) / scale * 0.5;                    // shell, normalised + under-stepped
+    }
+
+    float3 pv_gyroidNormal(float3 p, constant Uniforms& u) {
+        float e = 0.02;
+        float dx = pv_gyroidMap(p + float3(e, 0, 0), u) - pv_gyroidMap(p - float3(e, 0, 0), u);
+        float dy = pv_gyroidMap(p + float3(0, e, 0), u) - pv_gyroidMap(p - float3(0, e, 0), u);
+        float dz = pv_gyroidMap(p + float3(0, 0, e), u) - pv_gyroidMap(p - float3(0, 0, e), u);
+        return normalize(float3(dx, dy, dz));
+    }
+
+    float4 pv_renderGyroid(float2 uv, constant Uniforms& u) {
+        const int MAXS = 64;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float3 rd = normalize(float3(uvc, 1.4));
+        // Off-axis curving flight → parallax/depth (the 3D fly-through feel), slowed down.
+        float3 ro = float3(0.45 * sin(u.time * 0.06) + u.beatPulse * 0.07 * sin(u.time * 26.0),
+                           0.30 * sin(u.time * 0.045) + u.beatPulse * 0.07 * cos(u.time * 22.0),
+                           u.camZ * 0.5);                   // slower forward warp
+        float t = 0.0, d = 0.0, glow = 0.0;
+        int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            d = pv_gyroidMap(ro + rd * t, u);
+            glow += 0.010 / (1.0 + d * d * 150.0);                // tighter proximity glow (less haze)
+            if (d < 0.0015 || t > 24.0) { steps = i; break; }
+            t += d;                                               // under-step baked into the map
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 hp = ro + rd * t;
+        float fog = exp(-t * 0.11);                               // depth fade
+        float3 col = float3(0.0);
+        if (d < 0.01) {                                           // hit the membrane
+            float3 n = pv_gyroidNormal(hp, u);
+            float diff = max(dot(n, -rd), 0.0);
+            float fres = pow(1.0 - diff, 3.0) * (0.6 + 0.8 * u.treble);   // glowing rim edges
+            // Wide hue spread across depth + radius → many palette colours visible at once.
+            float hue = hp.z * 0.12 + length(hp.xy) * 0.30 + u.paletteShift
+                      + u.time * 0.10 + u.beatPulse * 0.30;
+            float3 base = pv_cospalette(hue, idx);
+            col = base * (0.12 + 1.05 * diff * diff) * fog;       // low ambient + punchy diffuse = contrast
+            col += base * fres * fog * 0.9;
+            col += base * 0.15 * fog;                            // subtle emissive (no wash)
+        }
+        // Glow tinted across the palette by depth so the volume isn't one flat colour.
+        float3 glowCol = pv_cospalette(t * 0.10 + u.time * 0.08 + u.beatPulse * 0.3, idx);
+        col += glow * glowCol * (0.7 + 0.6 * u.beatPulse);       // volumetric proximity glow
+        col += pv_cospalette(0.5, idx) * u.beatBloom * u.beatPulse * fog * 0.6;  // beat burst
+        col *= (0.45 + 1.0 * energy);                            // global brightness
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));          // alpha = normalised step count
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 3.5) { return pv_renderGyroid(in.uv, u); }     // sceneMode 4 = gyroid lattice
         if (u.sceneMode > 2.5) { return pv_renderWarpfield(in.uv, u); }  // sceneMode 3 = warp starfield
         if (u.sceneMode > 1.5) { return pv_renderOrbs(in.uv, u); }   // sceneMode 2 = glowing orbs
         const int MAXS = 64;                                     // bounded march (perf cap)

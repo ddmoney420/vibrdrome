@@ -11,26 +11,28 @@ final class PermissivePresetTests: XCTestCase {
         Dictionary(uniqueKeysWithValues: PermissivePresetLibrary.presets.map { ($0.id, $0) })
     }
 
-    func testLibraryDecodesFiftyThreePresets() {
+    func testLibraryDecodesFiftyFourPresets() {
         let presets = PermissivePresetLibrary.presets
-        XCTAssertEqual(presets.count, 53)                     // 50 2D + 3D Tunnel + Orbs + Warpfield
+        XCTAssertEqual(presets.count, 54)                     // 50 2D + Tunnel + Orbs + Warpfield + Gyroid
         XCTAssertEqual(presets.first?.name, "Flux")           // hero is index 0 (default on open)
-        XCTAssertEqual(Set(presets.map(\.id)).count, 53)      // ids are unique
+        XCTAssertEqual(Set(presets.map(\.id)).count, 54)      // ids are unique
         // A spread of families is present.
         for id in ["vibrdrome_flux", "vibrdrome_kaleidoscope", "vibrdrome_radiant",
                    "vibrdrome_spectralspokes", "vibrdrome_wormhole", "vibrdrome_zenith",
-                   "vibrdrome_tunnel", "vibrdrome_orbs", "vibrdrome_warpfield"] {
+                   "vibrdrome_tunnel", "vibrdrome_orbs", "vibrdrome_warpfield", "vibrdrome_gyroid"] {
             XCTAssertNotNil(byId[id], "missing \(id)")
         }
     }
 
-    func testThreeDScenesAreTunnelOrbsAndWarpfield() {
+    func testThreeDScenesAreTunnelOrbsWarpfieldAndGyroid() {
         XCTAssertEqual(byId["vibrdrome_tunnel"]?.sceneMode, 1)     // raymarch tunnel
         XCTAssertEqual(byId["vibrdrome_orbs"]?.sceneMode, 2)       // glowing-orb / metaball field
         XCTAssertEqual(byId["vibrdrome_warpfield"]?.sceneMode, 3)  // screen-space warp starfield
-        // Exactly those three are 3D; everything else stays on the 2D engine (sceneMode 0).
+        XCTAssertEqual(byId["vibrdrome_gyroid"]?.sceneMode, 4)     // raymarched gyroid TPMS lattice
+        // Exactly those four are 3D; everything else stays on the 2D engine (sceneMode 0).
         let threeD = PermissivePresetLibrary.presets.filter { $0.sceneMode > 0 }.map(\.id)
-        XCTAssertEqual(Set(threeD), ["vibrdrome_tunnel", "vibrdrome_orbs", "vibrdrome_warpfield"])
+        XCTAssertEqual(Set(threeD),
+                       ["vibrdrome_tunnel", "vibrdrome_orbs", "vibrdrome_warpfield", "vibrdrome_gyroid"])
     }
 
     func testAllPresetsVersion1AndAuthored() {

@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine, 1 = raymarched 3D tunnel (Phase 14), 2 = glowing-orb / metaball field (Phase 15), 3 = screen-space warp starfield (Phase 16), 4 = raymarched gyroid lattice (Phase 17). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -203,6 +203,19 @@ different angular density for parallax; a bright core glows at the vanishing poi
 funnel. Reuses the 3D route (so the iOS quarter-res policy above applies), bloom, and present.
 Preset: `vibrdrome_warpfield`. The first scene built screen-space rather than via SDF raymarch.
 
+### Phase 17 — gyroid lattice (sceneMode 4)
+`sceneMode 4` raymarches the **gyroid** triply-periodic minimal surface
+(`sin x·cos y + sin y·cos z + sin z·cos x`) as a finite-thickness glowing membrane you fly
+through — an organic/alien/mathematical lattice. The field is an **implicit surface, not a true
+SDF** (gradient isn't unit), so it under-steps conservatively (×0.5). A **depth-domain twist**
+corkscrews the lattice into vortices; an **off-axis curving camera** gives parallax/depth. Shading
+= low-ambient + punchy diffuse (for contrast/detail) + fresnel rim + proximity glow, depth-fogged.
+Audio: `bass`+`bassPunch` = camera speed + membrane breathing/twist, `beatPulse` = glow/thickness
+pulse + camera kick, `mid` = lattice scale/openness, `treble` = rim sharpness + hue drift, `energy`
+= brightness. Reuses the 3D route (iOS quarter-res policy applies), bloom, present. avgSteps ~9–15.
+Preset: `vibrdrome_gyroid`. (A head-on kaleidoscope fold was tried and rejected — it flattens the
+3D fly-through into a 2D mandala; symmetry, if revisited, must preserve depth.)
+
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
   a second texture and the 3D scene into another, then the present pass blends them. The texture
@@ -212,7 +225,7 @@ Preset: `vibrdrome_warpfield`. The first scene built screen-space rather than vi
 - **Auto-transitions:** the coordinator would hold `current` + `next` preset + a transition timer
   and crossfade between scenes (or lerp uniforms for same-engine transitions). App-level fields
   (duration/curve), not preset fields. Not implemented in Phase 1.
-- **More 3D scenes** select via the same `sceneMode` enum later (4 = gyroid, 5 = lattice tunnel, then Mandelbulb/Mandelbox, …).
+- **More 3D scenes** select via the same `sceneMode` enum later (5 = lattice tunnel, then Mandelbulb/Mandelbox, …).
 
 ## Architecture decision
 The preset drives the **`MTKView` render-pass engine** (`PermissiveFeedbackRenderer`),

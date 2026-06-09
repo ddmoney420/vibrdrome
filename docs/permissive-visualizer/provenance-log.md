@@ -307,6 +307,26 @@ behind `sceneMode 3` + the `vibrdrome_warpfield` preset). Parameters-only; DEBUG
 shader; nothing bundled. No projectM/Classic/CI/Vendor/release changes. Overlay-compositing and
 auto-transitions remain documented-only.
 
+## Research Step 17 — gyroid lattice (3D scene 4) (2026-06-08)
+
+DEBUG-only. Adds a fourth 3D scene (`sceneMode 4`) — a raymarched **gyroid** triply-periodic
+minimal surface rendered as a glowing membrane you fly through. General computer-graphics /
+mathematics concepts, our own field, twist, shading, camera, and audio mapping; **no projectM /
+Butterchurn / `.milk`** consulted, no third-party code or preset content.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| gyroid implicit surface | general-cg-concept | the gyroid TPMS `sin·cos·triple` is a well-known mathematical minimal surface; `dot(sin(p), cos(p.yzx))` |
+| implicit field as thickness shell | general-cg-concept | render `abs(g)−thickness` and under-step (not a true SDF); standard demoscene/shader raymarch, our implementation |
+| domain twist (vortices) | general-cg-concept | depth-dependent xy rotation corkscrews the lattice; our own warp + audio coupling |
+| shading + camera + audio mapping | our-own-code | low-ambient/punchy-diffuse + fresnel rim + proximity glow; off-axis curving flight; bass→speed/breathe/twist, beat→glow/thickness/kick, mid→scale, treble→rim/hue, energy→brightness |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets, Tunnel (1), Orbs (2), and Warpfield (3) are unchanged (gyroid lives behind `sceneMode 4`
++ the `vibrdrome_gyroid` preset). Parameters-only; DEBUG-only inline shader; nothing bundled. No
+projectM/Classic/CI/Vendor/release changes. Overlay-compositing and auto-transitions remain
+documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–16. (Any future permissive dependency must have its license recorded
+None in Steps 1–17. (Any future permissive dependency must have its license recorded
 here before use.)
