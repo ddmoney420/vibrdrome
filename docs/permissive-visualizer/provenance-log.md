@@ -465,6 +465,32 @@ presets and scenes 1–12 are unchanged (cymatic/dome live behind `sceneMode 13/
 `vibrdrome_cymatic`/`vibrdrome_horizondome`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Research Step 28 — vortex tornado (scene 15) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 15` — a thin-shell emission raymarch funnel around the Y axis.
+General-CG; our own funnel/filament/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| surface-of-revolution funnel + thin-shell emission march + domain twist | general-cg-concept | cylindrical `ρ/φ/y`, `exp(−Δ²)` shell, front-to-back emission accumulation, height-dependent angular twist for the spiral; standard, our implementation |
+| funnel profile + filaments + core + audio | our-own-code | exp funnel profile, `pow(sin)` spiral filaments, axial core, orbiting camera; bass=spin/flare, bassPunch=pulse, mid=twist, treble=filaments, beat=shell/core brightness only (no full-screen flash) |
+
+## Research Step 29 — supernova shockwave (scene 16) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 16` — a screen-space radial expanding ring stream (no march).
+General-CG; our own shells/filaments/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| radial expanding Gaussian shells + polar filament modulation | general-cg-concept | `fract`-phased expanding rings, `exp(−Δ²)` shell profile dimming with radius, `pow(cos(Mφ))` radial arcs; standard, our implementation |
+| ring stream + core + photosensitivity-safe compositing + audio | our-own-code | continuous shell stream, localized core star, capped global gain + no full-frame beat term (energy in rings/core only); bass=speed, bassPunch=amplitude, mid=sharpness/count, treble=filaments, beat=leading ring + core only |
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D
+presets and scenes 1–14 are unchanged (vortex/supernova live behind `sceneMode 15/16` +
+`vibrdrome_vortex`/`vibrdrome_shockwave` — the new shockwave scene uses id `vibrdrome_shockwave`
+because `vibrdrome_supernova` was already an original 2D preset). Parameters-only; DEBUG-only inline shader; nothing
+bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
+
 ## Third-party dependencies considered
-None in Steps 1–27. (Any future permissive dependency must have its license recorded
+None in Steps 1–29. (Any future permissive dependency must have its license recorded
 here before use.)

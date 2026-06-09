@@ -1525,7 +1525,94 @@ final class PermissiveFeedbackRenderer {
         return float4(col, 2.0 / 64.0);                            // screen-space: avgSteps ≈ 2
     }
 
+    // ── Vortex Tornado (sceneMode 15) — thin-shell emission raymarch around the Y axis ────────
+    // A vertical funnel: narrow at the bottom, flared at the top, built from sharp spiral filaments
+    // on a thin glowing shell + a bright core column. Front-to-back accumulation → near wall occludes
+    // far wall (real depth); the camera orbits for parallax. Thin shell keeps it sharp, not mush.
+    float4 pv_renderVortex(float2 uv, constant Uniforms& u) {
+        const int MAXS = 48;
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 uvc = uv * 2.0 - 1.0; uvc.x *= aspect;
+        float th = u.time * 0.15;                                  // slow orbit
+        float3 ro = float3(3.2 * sin(th), 0.25, 3.2 * cos(th));
+        float3 fwd = normalize(float3(0.0, 0.1, 0.0) - ro);
+        float3 rt = normalize(cross(float3(0, 1, 0), fwd));
+        float3 up = cross(fwd, rt);
+        float3 rd = normalize(uvc.x * rt + uvc.y * up + 1.4 * fwd);
+        float spin = u.time * (0.6 + 2.0 * u.bass);                // bass → spin
+        float twist = 1.6 + 2.2 * u.mid;                          // mid → twist (spiral tightness)
+        float flare = 1.0 + 0.4 * u.bass + 0.6 * u.bassPunch;     // bass/punch → funnel flare + pulse
+        float fcount = 9.0 + floor(6.0 * u.treble);              // treble → filament count
+        float t = 0.3; float3 acc = float3(0.0); float alpha = 0.0; int steps = MAXS;
+        for (int i = 0; i < MAXS; i++) {
+            float3 p = ro + rd * t;
+            float y = clamp(p.y, -1.4, 1.6);
+            float rho = length(p.xz);
+            float Rf = (0.12 + 0.55 * exp((y + 1.0) * 0.45)) * flare;   // funnel profile
+            float shellD = rho - Rf;
+            float shell = exp(-shellD * shellD * 60.0);            // thin wall
+            float phi = atan2(p.z, p.x);
+            float streak = pow(0.5 + 0.5 * sin(fcount * (phi + y * twist + spin)), 8.0);  // spiral filaments
+            float core = exp(-rho * rho * 14.0);                   // bright axial core
+            float hfade = smoothstep(1.7, -1.3, y) * smoothstep(-1.5, -1.0, y);
+            float dens = (shell * (0.25 + streak) + core * 0.8) * hfade;
+            if (dens > 0.001) {
+                float3 c = pv_cospalette(0.15 + y * 0.18 + phi * 0.05 + u.paletteShift + u.time * 0.03, idx);
+                c += float3(0.6, 0.7, 0.9) * core * 0.6;           // hot core tint
+                float e = dens * (0.6 + 0.8 * u.beatPulse);        // beat brightens shell/core only
+                acc += (1.0 - alpha) * c * e;
+                alpha += (1.0 - alpha) * clamp(e * 0.5, 0.0, 1.0);
+                if (alpha > 0.95) { steps = i; break; }
+            }
+            t += 0.07;
+            if (t > 7.0) { steps = i; break; }
+        }
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float3 col = acc * (0.7 + 0.7 * energy);
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, float(steps) / float(MAXS));
+    }
+
+    // ── Supernova Shockwave (sceneMode 16) — radial expanding ring stream, screen-space ───────
+    // Bright core star + a stream of expanding shockwave rings, each structured by sharp radial
+    // filaments and dimming as it grows. Energy lives in thin rings + a small core — dark space
+    // between rings, NO full-frame beat flash (beat raises only the youngest ring + core).
+    float4 pv_renderSupernova(float2 uv, constant Uniforms& u) {
+        int idx = int(u.paletteIndex);
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float2 s = uv * 2.0 - 1.0; s.x *= aspect;
+        float r = length(s);
+        float phi = atan2(s.y, s.x);
+        float speed = 0.12 + 0.25 * u.bass;                        // bass → expansion speed
+        float Rmax = 1.6;
+        float M = 18.0 + floor(18.0 * u.treble);                  // treble → filament count
+        float fil = 0.4 + 0.6 * pow(0.5 + 0.5 * cos(M * phi + u.time * 0.3), 6.0);  // sharp radial arcs
+        float sharp = 0.05 + 0.05 * (1.0 - u.mid);                 // mid → ring sharpness
+        int shells = 3 + int(floor(2.0 * u.mid));                 // mid → concurrent shells
+        float3 ringAccum = float3(0.0);
+        for (int k = 0; k < 5; k++) {
+            if (k >= shells) break;
+            float Rk = fract(u.time * speed - float(k) * 0.25);    // 0→1 expanding phase
+            float w = sharp + 0.10 * Rk;                           // widens as it grows
+            float amp = (1.0 - Rk);                                // dims outward (energy spreads)
+            float lead = (k == 0) ? (0.6 + 1.0 * u.beatPulse + 0.8 * u.bassPunch) : 0.7;  // beat → youngest ring
+            float ring = exp(-pow((r - Rk * Rmax) / w, 2.0)) * amp * lead;
+            float3 rc = pv_cospalette(0.15 + Rk * 0.5 + u.paletteShift, idx);  // cools outward
+            ringAccum += rc * ring * fil;
+        }
+        float core = exp(-r * r * 70.0) * (1.0 + 1.2 * u.beatPulse);   // small localized core star
+        float3 coreCol = mix(float3(0.7, 0.85, 1.0), pv_cospalette(0.1, idx), 0.4);
+        float3 col = ringAccum + coreCol * core;
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        col *= min(0.8 + 0.7 * energy, 1.6);                       // capped global gain (no white-out)
+        col = max(col * u.vibrance, 0.0);
+        return float4(col, 2.0 / 64.0);                            // screen-space: avgSteps ≈ 2
+    }
+
     fragment float4 pv_raymarch(VSOut in [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
+        if (u.sceneMode > 15.5) { return pv_renderSupernova(in.uv, u); }   // sceneMode 16 = supernova
+        if (u.sceneMode > 14.5) { return pv_renderVortex(in.uv, u); }      // sceneMode 15 = vortex tornado
         if (u.sceneMode > 13.5) { return pv_renderHorizonDome(in.uv, u); } // sceneMode 14 = horizon dome
         if (u.sceneMode > 12.5) { return pv_renderCymatic(in.uv, u); }     // sceneMode 13 = cymatic plate
         if (u.sceneMode > 11.5) { return pv_renderFaultTerrain(in.uv, u); } // sceneMode 12 = fault terrain

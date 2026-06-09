@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -307,6 +307,30 @@ floor-ring travel, `mid`=grid density, `treble`=shimmer/brightness, `beatPulse`=
 band only (no full-screen flash). NB: a flat head-on first attempt read as lame/flat (no dome) — pitching
 the camera up so ribs converge to a zenith + a curved horizon fixed it. Verified iPhone 61fps @0.25 /
 mac 59–60 full-res, `avgSteps≈2`. Preset: `vibrdrome_horizondome`.
+
+### Phase 28 — vortex tornado (sceneMode 15)
+`sceneMode 15` is a **thin-shell emission raymarch** around the Y axis: a vertical funnel (narrow at
+the bottom, flared at the top via `Rf(y)=0.12+0.55·exp((y+1)·0.45)`) built from sharp spiral filaments
+(`pow(0.5+0.5·sin(N·(φ + y·twist + spin)), 8)` — the `y·twist` term makes them *spiral* up, not ring)
+on a tight shell (`exp(−(ρ−Rf)²·60)`) + a bright axial core. Front-to-back accumulation → near wall
+occludes far wall (real depth); the camera orbits for parallax. Audio: `bass`=spin + funnel flare,
+`bassPunch`=expansion pulse, `mid`=twist (spiral tightness), `treble`=filament count + sharpness,
+`beatPulse`=shell/core brightness only (no full-screen flash). Bounded 48 steps (runs near the cap —
+thin shell rarely early-breaks). Verified iPhone 60fps @0.25 (avgSteps≈cap) / mac 60 full-res. Preset:
+`vibrdrome_vortex`.
+
+### Phase 29 — supernova shockwave (sceneMode 16)
+`sceneMode 16` is **screen-space procedural** (no march, O(1)/pixel): a bright core star + a stream of
+expanding shockwave rings. K shells at `Rk=fract(time·speed − k·0.25)`, each a Gaussian ring
+`exp(−((r−Rk·Rmax)/w)²)` that widens + dims as it grows (energy spreads), modulated by sharp radial
+filaments `pow(0.5+0.5·cos(M·φ), 6)` so it reads as arcs/streaks, not smooth circles. **Photosensitivity-
+safe:** energy lives in thin rings + a small core; dark space between rings; **no term multiplies the whole
+frame by `beatPulse`** — beat raises only the youngest ring + core (both localized), and global gain is
+capped (`min(0.8+0.7·energy, 1.6)`) so there is no white-out. Audio: `bass`=expansion speed,
+`bassPunch`=ring amplitude, `mid`=ring sharpness + shell count, `treble`=filament count + shimmer,
+`beatPulse`=leading ring + core only. Verified iPhone 60fps @0.25 / mac 59 full-res, `avgSteps≈2`.
+Preset: `vibrdrome_shockwave` (display "Supernova Shockwave"; the id `vibrdrome_supernova` was already
+taken by an original 2D feedback preset, so this scene uses `vibrdrome_shockwave`).
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into
