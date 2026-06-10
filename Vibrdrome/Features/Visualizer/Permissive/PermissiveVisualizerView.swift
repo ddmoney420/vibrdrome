@@ -31,6 +31,12 @@ struct PermissiveVisualizerView: View {
     @State private var transitionStart: Date?     // non-nil while a fade is in progress
     @State private var didSwitch = false          // whether the scene was already swapped (at full black)
     @State private var dwellDeadline = Date()
+
+    // ── Overlay/Compositing v1 (A13): one fixed audio-reactive spectrum ribbon, SwiftUI-only,
+    // reading AudioSpectrum.shared.bands. Sits UNDER the A12 fade so transitions cover it. ──────
+    @State private var overlayEnabled = true
+    @State private var pendingTap: DispatchWorkItem?   // for manual single/double-tap disambiguation
+    private static let overlayIntensity = 0.45    // subtle opacity / glow scale
     // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME — it can't die and
     // never depends on animation-completion callbacks (those were dropping → scenes got stuck).
     private let autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
@@ -115,32 +121,56 @@ struct PermissiveVisualizerView: View {
         beginTransition()
     }
 
+    /// Manual single/double-tap disambiguation (SwiftUI's count resolver was unreliable here).
+    /// A 2nd tap within the window cancels the pending single (= next) and toggles the overlay.
+    private func handlePillTap() {
+        if let pending = pendingTap {
+            pending.cancel()
+            pendingTap = nil
+            overlayEnabled.toggle()                                  // double-tap → toggle spectrum
+            return
+        }
+        let work = DispatchWorkItem {
+            pendingTap = nil
+            manualNext()                                            // single-tap → next scene
+        }
+        pendingTap = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: work)
+    }
+
     var body: some View {
         PermissiveMetalContainer(presetIndex: presetIndex)
             .ignoresSafeArea()
+            // Audio-reactive spectrum ribbon — placed BEFORE the fade overlay so the fade covers it.
+            .overlay {
+                if overlayEnabled {
+                    SpectrumRibbon(intensity: Self.overlayIntensity).allowsHitTesting(false)
+                }
+            }
             // Deliberate fade-to-black between scenes (no extra Metal targets; cheap layer composite).
             .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
             // Top placement: the mini-player floats over the bottom of the app, so
             // a bottom control would be blocked.
             .overlay(alignment: .top) {
                 if !presets.isEmpty {
-                    Button(action: manualNext) {
-                        Text("\(presets[presetIndex].name)  ·  \(autoEnabled ? "auto ⏵" : "paused ⏸")  (hold = toggle)")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(.black.opacity(0.55), in: Capsule())
-                            .foregroundStyle(.white)
-                    }
-                    .accessibilityIdentifier("permissivePresetSwitch")
-                    // Long-press toggles auto-rotation on/off (debug-only; not a Settings control).
-                    .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                            autoEnabled.toggle()
-                            dwellDeadline = Date().addingTimeInterval(nextDwell())
-                        }
-                    )
-                    .padding(.top, 10)
+                    Text("\(presets[presetIndex].name)  ·  \(autoEnabled ? "auto ⏵" : "paused ⏸")  ·  spec \(overlayEnabled ? "⏵" : "⏷")")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .foregroundStyle(.white)
+                        .contentShape(Capsule())
+                        .accessibilityIdentifier("permissivePresetSwitch")
+                        // single tap = next, double tap = toggle spectrum (disambiguated in code).
+                        .onTapGesture { handlePillTap() }
+                        // long-press (simultaneous) toggles auto-rotation (debug-only).
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                                autoEnabled.toggle()
+                                dwellDeadline = Date().addingTimeInterval(nextDwell())
+                            }
+                        )
+                        .padding(.top, 10)
                 }
             }
             .navigationTitle("Native Visualizer Test")
@@ -154,6 +184,71 @@ struct PermissiveVisualizerView: View {
             }
             // Combine timer drives the dwell check — robust (auto-cancels on disappear, never "exits").
             .onReceive(autoTicker) { _ in tick() }
+    }
+}
+
+/// A13 — audio-reactive spectrum ribbon (DEBUG-only). A vertically-CENTERED symmetric spectrum: the
+/// 32 `AudioSpectrum.shared` bands reach up AND down from a glowing centerline (brightest at center,
+/// fading to the mirrored edges). Redrawn at ~30fps via `TimelineView`; pure SwiftUI Canvas (no Metal,
+/// no buffers). Subtle, additive, preserves dark space. (The native test screen is portrait-only.)
+private struct SpectrumRibbon: View {
+    let intensity: Double
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
+            Canvas { ctx, size in
+                let spec = AudioSpectrum.shared
+                let bands = spec.bands
+                guard bands.count > 1 else { return }
+                let n = bands.count
+                let t = context.date.timeIntervalSinceReferenceDate
+                let idle = spec.energy < 0.02
+
+                let centerY = size.height * 0.5                 // vertically centered
+                let amp = size.height * 0.11                    // reach each direction from the centerline
+
+                // Mirrored outlines (up + down) and the silhouette between them.
+                var topPath = Path(); var botPath = Path(); var fillPath = Path()
+                var pts = [CGPoint](); pts.reserveCapacity(n)
+                for i in 0..<n {
+                    let raw = idle
+                        ? 0.12 + 0.10 * sin(t * 1.4 + Double(i) * 0.5)   // idle: gentle breathing
+                        : Double(min(max(bands[i], 0), 1))
+                    let x = size.width * CGFloat(i) / CGFloat(n - 1)
+                    pts.append(CGPoint(x: x, y: CGFloat(raw) * amp))      // y = half-height from centre
+                }
+                for (i, p) in pts.enumerated() {
+                    let up = CGPoint(x: p.x, y: centerY - p.y), dn = CGPoint(x: p.x, y: centerY + p.y)
+                    if i == 0 { topPath.move(to: up); botPath.move(to: dn); fillPath.move(to: up) } else {
+                        topPath.addLine(to: up); botPath.addLine(to: dn); fillPath.addLine(to: up)
+                    }
+                }
+                for p in pts.reversed() { fillPath.addLine(to: CGPoint(x: p.x, y: centerY + p.y)) }
+                fillPath.closeSubpath()
+
+                // Colour from bass/mid/treble; glow scales with energy. Localized to the band only.
+                let r = Double(min(max(spec.bass, 0), 1))
+                let g = Double(min(max(spec.mid, 0), 1))
+                let b = Double(min(max(spec.treble, 0), 1))
+                let glow = 0.6 + 0.5 * Double(min(max(spec.energy, 0), 1))
+                let col = Color(red: 0.40 + 0.55 * r, green: 0.45 + 0.50 * g, blue: 0.60 + 0.40 * b)
+                let bright = Color(red: 0.7 + 0.3 * r, green: 0.75 + 0.25 * g, blue: 0.85 + 0.15 * b)
+
+                ctx.opacity = intensity * glow                 // soft body, brightest at the centerline
+                ctx.fill(fillPath, with: .linearGradient(
+                    Gradient(stops: [
+                        .init(color: col.opacity(0.0), location: 0.0),
+                        .init(color: col.opacity(0.9), location: 0.5),
+                        .init(color: col.opacity(0.0), location: 1.0)
+                    ]),
+                    startPoint: CGPoint(x: size.width / 2, y: centerY - amp),
+                    endPoint: CGPoint(x: size.width / 2, y: centerY + amp)))
+                ctx.opacity = min(1.0, intensity * glow * 1.8)  // crisp mirrored outlines so it reads clearly
+                ctx.stroke(topPath, with: .color(bright), lineWidth: 1.8)
+                ctx.stroke(botPath, with: .color(bright), lineWidth: 1.8)
+            }
+            .ignoresSafeArea()
+        }
     }
 }
 

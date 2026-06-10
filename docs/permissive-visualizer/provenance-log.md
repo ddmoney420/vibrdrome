@@ -629,6 +629,17 @@ Family-skip avoids same-family back-to-back. Code-level toggles only (`heroOnly`
 default false; long-press the debug pill toggles auto). No new families, no third-party code, no
 renderer/preset changes. Preset count stays 76, sceneMode range 0–26.
 
+## Step 41 — overlay/compositing v1 (host-side debug behavior) (2026-06-09)
+
+DEBUG-only. **No scene/shader/preset/JSON change** — a host-side overlay in
+`PermissiveVisualizerView.swift`: one **audio-reactive spectrum ribbon** (a vertically-centered,
+mirrored 32-band spectrum) drawn with a SwiftUI `Canvas` at ~30fps, reading the existing
+`AudioSpectrum.shared.bands` + `bass/mid/treble/energy`. **No Metal pass, no new textures/buffers/render
+targets, no second scene render, no new audio analysis.** Sits under the A12 fade so transitions cover it;
+double-tap the debug pill toggles it. Energy is localized to the ribbon (no full-screen flash). Preset
+count stays 76, sceneMode range 0–26. (Code-based single/double-tap disambiguation was needed — SwiftUI's
+tap-count resolver was unreliable with the existing long-press.)
+
 ## Third-party dependencies considered
-None in Steps 1–40. (Any future permissive dependency must have its license recorded
+None in Steps 1–41. (Any future permissive dependency must have its license recorded
 here before use.)
