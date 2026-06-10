@@ -640,6 +640,19 @@ double-tap the debug pill toggles it. Energy is localized to the ribbon (no full
 count stays 76, sceneMode range 0–26. (Code-based single/double-tap disambiguation was needed — SwiftUI's
 tap-count resolver was unreliable with the existing long-press.)
 
+## Step 42 — particles v1 (host-side debug behavior) (2026-06-09)
+
+DEBUG-only. **No scene/shader/preset/JSON change** — a host-side particle layer in
+`PermissiveVisualizerView.swift`: a sparse **star/spark swarm** (~80 points) drifting in a faked-3D
+volume, drawn with a SwiftUI `Canvas` (`blendMode = .plusLighter`, additive) at ~30fps. CPU-updated in
+place (a `ParticleField` reference object — no per-frame allocation, RNG only at seed/reseed). Reads the
+existing `AudioSpectrum.shared` (`bass` streams forward + Δbass burst, `mid` swirls, `treble` sparkles,
+`energy` brightness). **No Metal pass, no GPU compute, no buffers/textures/render targets, no second
+scene render, no new audio analysis.** Layered under the spectrum ribbon + the A12 fade (covered during
+transitions); always-on (code constant). Count tuned 120→80 to keep heavy scenes (Fracture/Perlin Blob)
+at 60fps; sub-60 readings during back-to-back long runs were thermal (crystal read 52 hot → 60 cooled).
+Preset count stays 76, sceneMode range 0–26.
+
 ## Third-party dependencies considered
-None in Steps 1–41. (Any future permissive dependency must have its license recorded
+None in Steps 1–42. (Any future permissive dependency must have its license recorded
 here before use.)

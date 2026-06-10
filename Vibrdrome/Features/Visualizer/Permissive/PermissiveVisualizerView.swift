@@ -37,6 +37,12 @@ struct PermissiveVisualizerView: View {
     @State private var overlayEnabled = true
     @State private var pendingTap: DispatchWorkItem?   // for manual single/double-tap disambiguation
     private static let overlayIntensity = 0.45    // subtle opacity / glow scale
+
+    // ── Particles v1 (A14): a sparse music-reactive star/spark swarm (SwiftUI Canvas, additive).
+    // CPU-updated, fixed buffer; sits UNDER the ribbon + the A12 fade. Always-on (code constant). ──
+    @State private var field = ParticleField(count: 80)
+    private static let particlesEnabled = true
+    private static let particleIntensity = 0.7
     // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME — it can't die and
     // never depends on animation-completion callbacks (those were dropping → scenes got stuck).
     private let autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
@@ -141,6 +147,12 @@ struct PermissiveVisualizerView: View {
     var body: some View {
         PermissiveMetalContainer(presetIndex: presetIndex)
             .ignoresSafeArea()
+            // Star/spark particle swarm — bottom-most overlay (under the ribbon + the fade).
+            .overlay {
+                if Self.particlesEnabled {
+                    ParticleSwarm(field: field, intensity: Self.particleIntensity).allowsHitTesting(false)
+                }
+            }
             // Audio-reactive spectrum ribbon — placed BEFORE the fade overlay so the fade covers it.
             .overlay {
                 if overlayEnabled {
@@ -246,6 +258,84 @@ private struct SpectrumRibbon: View {
                 ctx.opacity = min(1.0, intensity * glow * 1.8)  // crisp mirrored outlines so it reads clearly
                 ctx.stroke(topPath, with: .color(bright), lineWidth: 1.8)
                 ctx.stroke(botPath, with: .color(bright), lineWidth: 1.8)
+            }
+            .ignoresSafeArea()
+        }
+    }
+}
+
+/// A14 — CPU-updated star/spark swarm (DEBUG-only). A fixed pre-allocated array of points drifting in a
+/// faked-3D volume, streamed toward the camera by bass; updated in place each tick (no per-frame alloc).
+private final class ParticleField {
+    struct P { var pos: SIMD3<Float>; var vel: SIMD3<Float>; var seed: Float }
+    var ps: [P]
+    private var lastBass: Float = 0
+    let near: Float = 0.4
+    let far: Float = 4.6
+
+    init(count: Int) { ps = (0..<count).map { _ in ParticleField.spawn(atFar: false) } }
+
+    private static func spawn(atFar: Bool) -> P {
+        let z = atFar ? Float.random(in: 3.6...4.6) : Float.random(in: 0.4...4.6)
+        return P(pos: SIMD3(Float.random(in: -1.5...1.5), Float.random(in: -1.5...1.5), z),
+                 vel: SIMD3(Float.random(in: -0.05...0.05), Float.random(in: -0.05...0.05), 0),
+                 seed: Float.random(in: 0...1))
+    }
+
+    /// Integrate one step. `bass` streams particles toward the camera (with a Δbass burst); `mid` swirls.
+    func update(dt: Float, bass: Float, mid: Float) {
+        let dBass = max(0, bass - lastBass); lastBass = bass
+        let push = 0.45 + 2.0 * bass + 6.0 * dBass               // forward stream speed (z toward camera)
+        let swirl = 0.4 * mid * dt
+        let cs = cos(swirl), sn = sin(swirl)
+        for i in ps.indices {
+            var p = ps[i]
+            let nx = cs * p.pos.x - sn * p.pos.y, ny = sn * p.pos.x + cs * p.pos.y  // gentle swirl
+            p.pos.x = nx + p.vel.x * dt
+            p.pos.y = ny + p.vel.y * dt
+            p.pos.z -= push * dt
+            if p.pos.z < near { p = ParticleField.spawn(atFar: true) }   // streamed past → reseed at far
+            ps[i] = p
+        }
+    }
+}
+
+/// A14 — draws the swarm with additive blending (small glowing dots, perspective size/brightness by depth).
+private struct ParticleSwarm: View {
+    let field: ParticleField
+    let intensity: Double
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
+            Canvas { ctx, size in
+                let spec = AudioSpectrum.shared
+                let t = context.date.timeIntervalSinceReferenceDate
+                field.update(dt: 1.0 / 30.0, bass: spec.bass, mid: spec.mid)
+
+                let cx = size.width / 2, cy = size.height / 2
+                let focal = size.height * 0.5
+                let baseR = size.height * 0.006
+                let energy = Double(min(max(spec.energy, 0), 1))
+                let treble = Double(min(max(spec.treble, 0), 1))
+                let star = Color(red: 0.82, green: 0.88, blue: 1.0)
+
+                ctx.blendMode = .plusLighter                    // additive glow where dots overlap
+                for p in field.ps {
+                    let z = max(p.pos.z, 0.05)
+                    let invz = CGFloat(1.0 / z)
+                    let sx = cx + CGFloat(p.pos.x) * invz * focal
+                    let sy = cy + CGFloat(p.pos.y) * invz * focal
+                    if sx < -30 || sx > size.width + 30 || sy < -30 || sy > size.height + 30 { continue }
+                    let r = max(0.6, baseR * invz)
+                    let flick = 0.7 + 0.3 * sin(t * 9.0 + Double(p.seed) * 37.0)      // sparkle
+                    let depthB = min(1.0, Double(invz) * 0.45)
+                    let bright = depthB * (0.45 + 0.6 * energy) * (1.0 - 0.5 * treble + 0.5 * treble * flick)
+                    ctx.opacity = min(0.9, bright * intensity)
+                    ctx.fill(Path(ellipseIn: CGRect(x: sx - r * 1.4, y: sy - r * 1.4, width: r * 2.8, height: r * 2.8)),
+                             with: .color(star.opacity(0.30)))   // smaller halo (less additive overdraw)
+                    ctx.fill(Path(ellipseIn: CGRect(x: sx - r, y: sy - r, width: r * 2, height: r * 2)),
+                             with: .color(star))                 // core
+                }
             }
             .ignoresSafeArea()
         }
