@@ -11,6 +11,7 @@ struct TrackContextMenuModifier: ViewModifier, Equatable {
     @Environment(\.openWindow) private var openWindow
     @State private var showAddToPlaylist = false
     @State private var showGetInfo = false
+    @State private var isCreatingShare = false
 
     nonisolated static func == (lhs: TrackContextMenuModifier, rhs: TrackContextMenuModifier) -> Bool {
         lhs.song == rhs.song && lhs.index == rhs.index
@@ -26,7 +27,8 @@ struct TrackContextMenuModifier: ViewModifier, Equatable {
                     song: song, queue: queue, index: index,
                     onRemove: onRemove,
                     showAddToPlaylist: $showAddToPlaylist,
-                    showGetInfo: $showGetInfo
+                    showGetInfo: $showGetInfo,
+                    isCreatingShare: $isCreatingShare
                 )
             }
             .sheet(isPresented: $showAddToPlaylist) {
@@ -56,6 +58,7 @@ private struct TrackContextMenuContent: View {
     var onRemove: (() -> Void)?
     @Binding var showAddToPlaylist: Bool
     @Binding var showGetInfo: Bool
+    @Binding var isCreatingShare: Bool
 
     @Environment(AppState.self) private var appState
     #if os(macOS)
@@ -213,6 +216,32 @@ private struct TrackContextMenuContent: View {
         ShareLink(item: shareText) {
             Label("Share", systemImage: "square.and.arrow.up")
         }
+
+        Button {
+            isCreatingShare = true
+            Task {
+                defer { isCreatingShare = false }
+                do {
+                    let share = try await appState.subsonicClient.createShare(ids: [song.id])
+                    #if os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(share.url, forType: .string)
+                    #else
+                    UIPasteboard.general.string = share.url
+                    #endif
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Sharing")
+                        .error("Failed to create Navidrome share: \(error)")
+                }
+            }
+        } label: {
+            if isCreatingShare {
+                Label("Creating Share…", systemImage: "link")
+            } else {
+                Label("Copy Navidrome Share Link", systemImage: "link")
+            }
+        }
+        .disabled(isCreatingShare)
     }
 }
 

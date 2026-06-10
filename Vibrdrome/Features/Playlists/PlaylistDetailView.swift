@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftData
 import SwiftUI
 
@@ -24,6 +25,8 @@ struct PlaylistDetailView: View {
     @State private var showRemoveOfflineConfirmation = false
     @State private var smartCriteria: NSPCriteria?
     @State private var isLoadingSmartRules = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isUploadingImage = false
     @AppStorage("playlistDetailViewMode") private var viewModeRaw: String = PlaylistViewMode.songs.rawValue
     @Query private var downloadedSongs: [DownloadedSong]
     #if os(macOS)
@@ -121,6 +124,21 @@ struct PlaylistDetailView: View {
                         } label: {
                             Label(isSmartPlaylist ? "Edit Smart Playlist" : "Edit Playlist",
                                   systemImage: isSmartPlaylist ? "sparkles" : "pencil")
+                        }
+
+                        if appState.navidromeClient?.isAvailable == true {
+                            PhotosPicker(
+                                selection: $selectedPhotoItem,
+                                matching: .images,
+                                photoLibrary: .shared()
+                            ) {
+                                Label("Change Image", systemImage: "photo.badge.arrow.down")
+                            }
+                            .disabled(isUploadingImage)
+                            .onChange(of: selectedPhotoItem) { _, item in
+                                guard let item else { return }
+                                Task { await uploadPlaylistImage(from: item) }
+                            }
                         }
 
                         Button {
@@ -669,6 +687,24 @@ struct PlaylistDetailView: View {
                 self.error = ErrorPresenter.userMessage(for: error)
             }
             await loadPlaylist()
+        }
+    }
+
+    // MARK: - Image Upload
+
+    private func uploadPlaylistImage(from item: PhotosPickerItem) async {
+        guard let client = appState.navidromeClient else { return }
+        isUploadingImage = true
+        defer {
+            isUploadingImage = false
+            selectedPhotoItem = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return }
+            try await client.uploadImage(resourceType: "playlist", id: playlistId, imageData: data, mimeType: "image/jpeg")
+            await loadPlaylist()
+        } catch {
+            self.error = ErrorPresenter.userMessage(for: error)
         }
     }
 

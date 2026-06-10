@@ -1,6 +1,8 @@
-import SwiftUI
-import SwiftData
+import os.log
+import PhotosUI
 import NukeUI
+import SwiftData
+import SwiftUI
 
 #if os(macOS)
 private struct ArtistBlurredBackground: View {
@@ -75,6 +77,9 @@ struct ArtistDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var isStarred = false
+    @State private var showImagePicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isUploadingImage = false
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "artist")
     @State private var showFullBio = false
@@ -306,7 +311,34 @@ struct ArtistDetailView: View {
             .accessibilityLabel(isStarred ? "Unfavorite Artist" : "Favorite Artist")
             .accessibilityIdentifier("artistFavoriteButton")
 
+            if appState.navidromeClient?.isAvailable == true {
+                artistImagePickerButton
+            }
+
             artistExternalLinks(artist)
+        }
+    }
+
+    @ViewBuilder
+    private var artistImagePickerButton: some View {
+        PhotosPicker(
+            selection: $selectedPhotoItem,
+            matching: .images,
+            photoLibrary: .shared()
+        ) {
+            Image(systemName: isUploadingImage ? "arrow.triangle.2.circlepath" : "photo.badge.arrow.down")
+                .fontWeight(.semibold)
+                .padding(.vertical, 10)
+                .padding(.horizontal, 18)
+                .background(.ultraThinMaterial, in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .disabled(isUploadingImage)
+        .help("Change Artist Image")
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else { return }
+            Task { await uploadArtistImage(from: item) }
         }
     }
 
@@ -611,6 +643,16 @@ struct ArtistDetailView: View {
                 }
             }
         }
+        .photosPicker(
+            isPresented: $showImagePicker,
+            selection: $selectedPhotoItem,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else { return }
+            Task { await uploadArtistImage(from: item) }
+        }
         .toolbar {
             if artist != nil {
                 ToolbarItem(placement: .primaryAction) {
@@ -632,6 +674,16 @@ struct ArtistDetailView: View {
                         Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                     }
                     .accessibilityIdentifier("startRadioButton")
+                }
+            }
+            if appState.navidromeClient?.isAvailable == true {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showImagePicker = true
+                    } label: {
+                        Label("Change Image", systemImage: "photo.badge.arrow.down")
+                    }
+                    .disabled(isUploadingImage)
                 }
             }
         }
@@ -726,6 +778,23 @@ struct ArtistDetailView: View {
             } catch {
                 isStarred = wasStarred
             }
+        }
+    }
+
+    private func uploadArtistImage(from item: PhotosPickerItem) async {
+        guard let client = appState.navidromeClient else { return }
+        isUploadingImage = true
+        defer {
+            isUploadingImage = false
+            selectedPhotoItem = nil
+        }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return }
+            try await client.uploadImage(resourceType: "artist", id: artistId, imageData: data, mimeType: "image/jpeg")
+            await loadArtist()
+        } catch {
+            Logger(subsystem: "com.vibrdrome.app", category: "ArtistDetail")
+                .error("Failed to upload artist image: \(error)")
         }
     }
 }
