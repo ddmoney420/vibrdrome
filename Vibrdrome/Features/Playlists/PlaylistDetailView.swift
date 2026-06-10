@@ -27,6 +27,7 @@ struct PlaylistDetailView: View {
     @State private var isLoadingSmartRules = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isUploadingImage = false
+    @State private var isCreatingShare = false
     @AppStorage("playlistDetailViewMode") private var viewModeRaw: String = PlaylistViewMode.songs.rawValue
     @Query private var downloadedSongs: [DownloadedSong]
     #if os(macOS)
@@ -156,6 +157,31 @@ struct PlaylistDetailView: View {
                             ShareLink(item: shareText) {
                                 Label("Share", systemImage: "square.and.arrow.up")
                             }
+
+                            Button {
+                                guard !isCreatingShare else { return }
+                                let songIds = playlist.entry?.map(\.id) ?? []
+                                guard !songIds.isEmpty else { return }
+                                isCreatingShare = true
+                                Task {
+                                    defer { isCreatingShare = false }
+                                    do {
+                                        let share = try await appState.subsonicClient.createShare(ids: songIds)
+                                        #if os(macOS)
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(share.url, forType: .string)
+                                        #else
+                                        UIPasteboard.general.string = share.url
+                                        #endif
+                                    } catch {}
+                                }
+                            } label: {
+                                Label(
+                                    isCreatingShare ? "Creating Share…" : "Copy Navidrome Share Link",
+                                    systemImage: "link"
+                                )
+                            }
+                            .disabled(isCreatingShare)
                         }
 
                         Button {
