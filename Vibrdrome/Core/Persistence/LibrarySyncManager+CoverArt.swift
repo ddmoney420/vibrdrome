@@ -65,6 +65,9 @@ extension LibrarySyncManager {
             syncLog.info("Prefetching \(uncachedUrls.count) cover art images (\(alreadyCached) already cached)")
             let fetched = await prefetchBatches(uncachedUrls: uncachedUrls, total: total, alreadyCached: alreadyCached, client: client)
             syncLog.info("Cover art prefetch complete: \(fetched)/\(total) processed")
+            // Flush staging area to disk synchronously so files survive if the app quits
+            // before Nuke's async 1-second flush fires — prevents re-fetching on next launch.
+            dataCache?.flush()
         } else {
             syncLog.info("Cover art prefetch skipped — all \(total) images already on disk")
         }
