@@ -376,6 +376,8 @@ struct SidebarContentView: View {
             LibraryFilterSidebarView(context: .artist)
         case .songFilters:
             LibraryFilterSidebarView(context: .song)
+        case .similarTracks:
+            SimilarTracksPanelView()
         }
     }
     #endif

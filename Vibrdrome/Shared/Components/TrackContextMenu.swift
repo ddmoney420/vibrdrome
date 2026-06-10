@@ -114,6 +114,15 @@ private struct TrackContextMenuContent: View {
             }
         }
 
+        #if os(macOS)
+        Button {
+            appState.similarTracksSeed = song
+            appState.activeSidePanel = .similarTracks
+        } label: {
+            Label("Show Similar Tracks", systemImage: "waveform.path")
+        }
+        #endif
+
         Button {
             DownloadManager.shared.download(
                 song: song,

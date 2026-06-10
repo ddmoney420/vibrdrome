@@ -361,7 +361,7 @@ final class SubsonicClient {
             isConnected = body.status == "ok"
             if let sv = body.serverVersion { serverVersion = sv }
             if isConnected && (body.openSubsonic == true) {
-                Task { await probeExtensions() }
+                await probeExtensions()
             }
             return isConnected
         } catch {
