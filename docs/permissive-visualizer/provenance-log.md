@@ -653,6 +653,26 @@ transitions); always-on (code constant). Count tuned 120→80 to keep heavy scen
 at 60fps; sub-60 readings during back-to-back long runs were thermal (crystal read 52 hot → 60 cooled).
 Preset count stays 76, sceneMode range 0–26.
 
+## Research Step 43 — wireframe terrain (scene 27, first real Metal line mesh) (2026-06-09)
+
+DEBUG-only. Adds `sceneMode 27` — the first vertex-geometry scene (all others are fragment raymarch/
+screen-space). General-CG; our own grid/deform/projection/audio; **no projectM / `.milk`**.
+
+| Item | Source category | Notes (our words) |
+|---|---|---|
+| wireframe heightfield + line-primitive draw + perspective projection | general-cg-concept | static grid of `MTLPrimitiveType.line` segments, vertex-shader perspective projection + depth fog; standard, our implementation (line pipeline mirrors the existing waveform line pass) |
+| spectrum-terrain deform + flow + audio | our-own-code | per-x ridge heights from the spectrum bands + forward-flowing `sin` ripple (fixed worldZ per row → no scroll-wrap streaks), additive lines over a dark sky; bass=amplitude/flow, mid=ripple, treble=brightness, beat=ridge pulse (no full-screen flash) |
+
+**Renderer integration:** a `sceneMode==27` branch in `render()` clears a dark sky + draws the static
+wire mesh (vertex-shader deformed from `bandsBuffer`) straight to the drawable, **bypassing** the
+raymarch/feedback/bloom/present path. Scenes 0–26 are byte-for-byte unchanged. New: `wirePSO` +
+`wireVertexBuffer`/`wireIndexBuffer` (static) + inline `pv_wire_vertex`/`pv_wire_fragment`. No depth
+buffer, no per-frame buffer update, no imported models, no mesh framework.
+
+**Guardrails intact:** `sceneMode` stays an optional `Int` (`decodeIfPresent → 0`); the 50 2D presets and
+scenes 1–26 are unchanged (wire-terrain lives behind `sceneMode 27` + `vibrdrome_wireterrain`). DEBUG-only
+inline shader; nothing bundled. No projectM/Classic/Shaders.metal/CI/Vendor/release changes.
+
 ## Third-party dependencies considered
-None in Steps 1–42. (Any future permissive dependency must have its license recorded
+None in Steps 1–43. (Any future permissive dependency must have its license recorded
 here before use.)

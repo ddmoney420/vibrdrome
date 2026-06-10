@@ -75,7 +75,7 @@ Original Vibrdrome format — **not** `.milk`, no projectM/Butterchurn lineage.
 | `ripple` | float? | (Phase 13) multi-source wave-interference ripples. `decodeIfPresent` → 0 |
 | `hex` | float? | (Phase 13) hexagonal honeycomb grid. `decodeIfPresent` → 0 |
 | `chroma` | float? | (Phase 13) chromatic aberration (RGB channel split on the field sample). `decodeIfPresent` → 0 |
-| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35), 23 = truchet circuit (Phase 36), 24 = torus-knot surface (Phase 37), 25 = caustic pool (Phase 38), 26 = interior cathedral (Phase 39). `decodeIfPresent` → 0 |
+| `sceneMode` | int? | render engine: 0 = 2D feedback engine; 3D scenes — 1 = tunnel, 2 = orbs, 3 = warp starfield, 4 = gyroid, 5 = ocean, 6 = synthwave highway, 7 = Voronoi fracture, 8 = crystal cluster, 9 = kaleido mirror chamber (Phase 22), 10 = spiraling endless elevator (Phase 23), 11 = Perlin blob (Phase 24), 12 = fault terrain (Phase 25), 13 = cymatic plate (Phase 26), 14 = horizon dome (Phase 27), 15 = vortex tornado (Phase 28), 16 = supernova shockwave (Phase 29), 17 = menger sponge (Phase 30), 18 = urban canyon (Phase 31), 19 = liquid chrome (Phase 32), 20 = apollonian gasket (Phase 33), 21 = reaction membrane (Phase 34), 22 = hex honeycomb (Phase 35), 23 = truchet circuit (Phase 36), 24 = torus-knot surface (Phase 37), 25 = caustic pool (Phase 38), 26 = interior cathedral (Phase 39), 27 = wireframe terrain (Phase 40, real Metal line mesh). `decodeIfPresent` → 0 |
 
 `bloomStrength`, `waveformStrength`, `flow`, `beatFlow`, `beatBloom`, and `hueDrift` are
 **optional** and default to `0` when absent; `flowScale` defaults to `2.5`. Older
@@ -441,6 +441,18 @@ near-exact so the march uses a `d·0.9` step. Audio: `bass`→glide speed + shaf
 `mid`→bay spacing/arch height, `treble`→stone detail + shaft shimmer, `beatPulse`→light beams only (no
 full-screen flash). Verified iPhone 60fps @0.25 / mac 59–60 full-res (avgSteps≈32–35). Preset:
 `vibrdrome_cathedral`.
+
+### Phase 40 — wireframe terrain (sceneMode 27) — **first real Metal line-mesh scene**
+`sceneMode 27` is the only scene **not** drawn by the fragment raymarch dispatcher — it's a real Metal
+**line mesh**. A static 40×40 grid (~3,200 line segments, `MTLPrimitiveType.line`, generated once) is
+deformed in the **vertex shader** (`pv_wire_vertex`): each ridge height = a spectrum band (by x) + a
+forward-flowing `sin` ripple, then perspective-projected (`worldZ` fixed per row → no scroll-wrap
+streaks). `render()` branches on `sceneMode==27` to clear a dark sky + draw the lines additively straight
+to the drawable, **bypassing** the raymarch/feedback/bloom/present path (scenes 0–26 untouched). Fragment
+(`pv_wire_fragment`) tints by cosine palette + depth fog + treble. Audio: spectrum bands→ridge heights,
+`bass`→amplitude + flow speed, `mid`→rolling ripple, `treble`→brightness, `beatPulse`→ridge pulse (no
+full-screen flash). Renders at full drawable res (lines are cheap). Preset: `vibrdrome_wireterrain`.
+*(The renderer's first vertex-geometry scene; a static buffer + vertex-shader deform, no per-frame update.)*
 
 ### Future hooks (designed, NOT implemented in Phase 1)
 - **2D-over-3D overlay compositing:** a future overlay pass would render a chosen 2D preset into

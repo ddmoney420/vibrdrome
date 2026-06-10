@@ -103,6 +103,10 @@ final class PermissiveFeedbackRenderer {
     private let wavePSO: MTLRenderPipelineState       // Phase 7 — waveform line geometry
     private let raymarchPSO: MTLRenderPipelineState   // Phase 14 — 3D raymarch tunnel
     private let presentPSO: MTLRenderPipelineState
+    private let wirePSO: MTLRenderPipelineState        // A15 — wireframe terrain line mesh (sceneMode 27)
+    private let wireVertexBuffer: MTLBuffer            // static grid positions (gx, row)
+    private let wireIndexBuffer: MTLBuffer             // static line-segment index pairs
+    private let wireIndexCount: Int
 
     static let marchSteps = 64                        // bounded raymarch cap (mirrors MAXS in pv_raymarch)
     // 3D raymarch internal resolution. The march (per-step orb/tunnel SDF) is the 3D cost, and on
@@ -136,6 +140,7 @@ final class PermissiveFeedbackRenderer {
 
     static let feedbackFormat: MTLPixelFormat = .rgba16Float
 
+    // swiftlint:disable:next function_body_length
     init?(device: MTLDevice) {
         self.device = device
         guard let q = device.makeCommandQueue(),
@@ -146,6 +151,17 @@ final class PermissiveFeedbackRenderer {
         queue = q
         bandsBuffer = bands
         waveBuffer = wave
+        // A15 — static wireframe-terrain grid (CPU-generated once; vertex shader deforms it from audio).
+        let grid = Self.makeWireGrid()
+        guard let wvb = device.makeBuffer(bytes: grid.verts,
+                                          length: grid.verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                                          options: .storageModeShared),
+              let wib = device.makeBuffer(bytes: grid.indices,
+                                          length: grid.indices.count * MemoryLayout<UInt16>.stride,
+                                          options: .storageModeShared) else { return nil }
+        wireVertexBuffer = wvb
+        wireIndexBuffer = wib
+        wireIndexCount = grid.indices.count
         do {
             let lib = try device.makeLibrary(source: Self.shaderSource, options: nil)
             let fd = MTLRenderPipelineDescriptor()
@@ -187,6 +203,20 @@ final class PermissiveFeedbackRenderer {
             pd.fragmentFunction = lib.makeFunction(name: "pv_present")
             pd.colorAttachments[0].pixelFormat = .bgra8Unorm
             presentPSO = try device.makeRenderPipelineState(descriptor: pd)
+
+            // A15 — wireframe terrain line pipeline (additive lines straight to the drawable).
+            let ld = MTLRenderPipelineDescriptor()
+            ld.vertexFunction = lib.makeFunction(name: "pv_wire_vertex")
+            ld.fragmentFunction = lib.makeFunction(name: "pv_wire_fragment")
+            ld.colorAttachments[0].pixelFormat = .bgra8Unorm
+            ld.colorAttachments[0].isBlendingEnabled = true
+            ld.colorAttachments[0].rgbBlendOperation = .add
+            ld.colorAttachments[0].alphaBlendOperation = .add
+            ld.colorAttachments[0].sourceRGBBlendFactor = .one
+            ld.colorAttachments[0].destinationRGBBlendFactor = .one
+            ld.colorAttachments[0].sourceAlphaBlendFactor = .one
+            ld.colorAttachments[0].destinationAlphaBlendFactor = .one
+            wirePSO = try device.makeRenderPipelineState(descriptor: ld)
         } catch {
             return nil
         }
@@ -245,6 +275,26 @@ final class PermissiveFeedbackRenderer {
         clearNext = true
     }
 
+    /// A15 — static 40×40 wireframe grid (positions + line-segment indices), generated once.
+    private static func makeWireGrid() -> (verts: [SIMD2<Float>], indices: [UInt16]) {
+        let n = 40
+        var verts = [SIMD2<Float>](); verts.reserveCapacity(n * n)
+        for j in 0..<n {
+            for i in 0..<n {
+                verts.append(SIMD2(Float(i) / Float(n - 1) * 2 - 1, Float(j) / Float(n - 1)))
+            }
+        }
+        var indices = [UInt16](); indices.reserveCapacity(n * n * 4)
+        for j in 0..<n {
+            for i in 0..<n {
+                let v = UInt16(j * n + i)
+                if i < n - 1 { indices.append(v); indices.append(UInt16(j * n + i + 1)) }   // horizontal
+                if j < n - 1 { indices.append(v); indices.append(UInt16((j + 1) * n + i)) } // vertical
+            }
+        }
+        return (verts, indices)
+    }
+
     @MainActor
     // swiftlint:disable:next function_body_length
     func render(in view: MTKView, uniforms: PermissiveUniforms) {
@@ -253,6 +303,29 @@ final class PermissiveFeedbackRenderer {
               let presentRPD = view.currentRenderPassDescriptor,
               let cb = queue.makeCommandBuffer() else { return }
         var u = uniforms
+
+        // A15 — sceneMode 27 = Wireframe Terrain: a real Metal line mesh straight to the drawable,
+        // bypassing the raymarch/feedback path entirely (scenes 0–26 are untouched below).
+        if u.sceneMode > 26.5 {
+            presentRPD.colorAttachments[0].loadAction = .clear
+            presentRPD.colorAttachments[0].clearColor = MTLClearColorMake(0.01, 0.012, 0.03, 1.0)  // dark sky
+            if let enc = cb.makeRenderCommandEncoder(descriptor: presentRPD) {
+                enc.setRenderPipelineState(wirePSO)
+                enc.setVertexBuffer(wireVertexBuffer, offset: 0, index: 0)
+                enc.setVertexBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 1)
+                enc.setVertexBuffer(bandsBuffer, offset: 0, index: 2)
+                enc.setFragmentBytes(&u, length: MemoryLayout<PermissiveUniforms>.stride, index: 0)
+                enc.drawIndexedPrimitives(type: .line, indexCount: wireIndexCount, indexType: .uint16,
+                                          indexBuffer: wireIndexBuffer, indexBufferOffset: 0)
+                enc.endEncoding()
+            }
+            cb.present(drawable)
+            cb.commit()
+            lastWritten = nil       // proof center_px → (0,0,0) for the wire scene (no scene texture)
+            clearNext = true        // the next non-wire scene clears the stale feedback field
+            return
+        }
+
         let is3D = u.sceneMode > 0.5
         let read = readIsA ? texA : texB
         let write = readIsA ? texB : texA
@@ -712,6 +785,43 @@ final class PermissiveFeedbackRenderer {
         float3 tint = pv_cospalette(in.uv.x * 0.5 + u.time * 0.05 + u.paletteShift, int(u.paletteIndex));
         float3 col = mix(float3(1.0), tint, 0.45) * b;
         return float4(col, b);
+    }
+
+    // ── Wireframe Terrain (sceneMode 27) — real Metal line mesh. A static 40×40 grid; the vertex
+    // shader sets each ridge height from the spectrum bands + a forward-flowing ripple, then projects
+    // with perspective (fixed worldZ per row → no scroll-wrap streaks). Drawn as lines over a dark sky.
+    vertex VSOut pv_wire_vertex(uint vid [[vertex_id]],
+                                constant float2* grid [[buffer(0)]],
+                                constant Uniforms& u [[buffer(1)]],
+                                constant float* bands [[buffer(2)]]) {
+        float2 g = grid[vid];
+        float gx = g.x;                                  // -1..1 (across)
+        float row = g.y;                                 // 0..1 (near→far)
+        float worldZ = 0.4 + row * 10.0;                 // fixed per row → continuous, no wrap artifacts
+        int bi = clamp(int((gx * 0.5 + 0.5) * 31.0), 0, 31);
+        float spec = bands[bi];                          // spectrum ridge height by x
+        float sz = worldZ - u.time * 0.35 - u.camZ * 0.06;   // SMOOTH monotonic flow (no time×bass jump), slow
+        float ridge = spec * (0.5 + 0.9 * u.bass);
+        ridge += 0.18 * sin(sz * 0.8) * (0.4 + 0.7 * u.mid);     // rolling hills (mid)
+        ridge *= (1.0 + 0.4 * u.beatPulse);              // gentle localized beat pulse
+        float worldX = gx * 3.6;
+        float viewY = ridge - 1.5;                       // camera ~1.5 above the terrain
+        float aspect = u.resolution.x / max(u.resolution.y, 1.0);
+        float focal = 1.6;
+        VSOut o;
+        o.position = float4((worldX / worldZ) * focal / aspect, (viewY / worldZ) * focal + 0.30, 0.0, 1.0);
+        o.uv = float2(clamp(1.0 - (worldZ - 0.4) / 7.0, 0.0, 1.0), spec);   // .x = depth fog (faster fade), .y = ridge
+        return o;
+    }
+    fragment float4 pv_wire_fragment(VSOut in [[stage_in]],
+                                     constant Uniforms& u [[buffer(0)]]) {
+        int idx = int(u.paletteIndex);
+        float energy = (u.bass + u.mid + u.treble) * 0.33333;
+        float fog = in.uv.x * in.uv.x * in.uv.x;         // cubic → clear depth: near bright, far dissolves into sky
+        float3 col = pv_cospalette(0.2 + in.uv.y * 0.5 + u.paletteShift + u.time * 0.02, idx);
+        float bright = fog * (0.6 + 0.9 * u.treble) * (0.6 + 0.7 * energy);
+        col = max(col * bright * u.vibrance, 0.0);
+        return float4(col, 1.0);                          // additive blend
     }
 
     // Voronoi liquid cells: animated feature points; returns cell-border closeness (.x, small

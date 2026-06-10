@@ -60,7 +60,7 @@ struct PermissiveVisualizerView: View {
     private static let familyByScene: [Int: Int] = [
         1: 0, 10: 0, 2: 1, 11: 1, 3: 2, 4: 3, 24: 3, 5: 4, 12: 4,
         6: 5, 9: 5, 14: 5, 7: 6, 8: 6, 13: 7, 15: 8, 16: 8, 17: 9, 20: 9,
-        18: 10, 26: 10, 19: 11, 25: 11, 21: 12, 22: 13, 23: 14
+        18: 10, 26: 10, 19: 11, 25: 11, 21: 12, 22: 13, 23: 14, 27: 15
     ]
     private func family(_ idx: Int) -> Int {
         Self.familyByScene[presets[idx].sceneMode] ?? -1   // -1 = 2D feedback presets
