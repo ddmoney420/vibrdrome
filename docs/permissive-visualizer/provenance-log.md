@@ -618,6 +618,17 @@ presets and scenes 1–24 are unchanged (caustic/cathedral live behind `sceneMod
 `vibrdrome_caustic`/`vibrdrome_cathedral`). Parameters-only; DEBUG-only inline shader; nothing
 bundled. No projectM/Classic/CI/Vendor/release changes. Overlays/transitions remain documented-only.
 
+## Step 40 — auto-transitions v1 (host-side debug behavior) (2026-06-09)
+
+DEBUG-only. **No scene/shader/preset/JSON change** — purely a host-side behavior in
+`PermissiveVisualizerView.swift`: a shuffle-bag over the native scenes (`sceneMode ≥ 1`) with a
+**fade-to-black** between them (a SwiftUI black-overlay tween — no extra Metal target/buffer). The
+dwell/fade state machine is driven by a Combine timer + **elapsed time** (not async tasks or
+animation-completion callbacks, both of which dropped → scenes got stuck in earlier attempts).
+Family-skip avoids same-family back-to-back. Code-level toggles only (`heroOnly`/`includeAll76`
+default false; long-press the debug pill toggles auto). No new families, no third-party code, no
+renderer/preset changes. Preset count stays 76, sceneMode range 0–26.
+
 ## Third-party dependencies considered
-None in Steps 1–39. (Any future permissive dependency must have its license recorded
+None in Steps 1–40. (Any future permissive dependency must have its license recorded
 here before use.)

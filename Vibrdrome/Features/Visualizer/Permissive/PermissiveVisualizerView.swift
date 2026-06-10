@@ -1,4 +1,5 @@
 #if DEBUG
+import Combine
 import MetalKit
 import QuartzCore
 import SwiftUI
@@ -13,17 +14,118 @@ struct PermissiveVisualizerView: View {
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
 
+    // ── Auto-Transitions v1 (DEBUG-only, host-side; A12). Shuffle-bag over the native scenes
+    // (sceneMode ≥ 1), fade-to-black between them. All logic lives in this View — no renderer,
+    // shader, uniform, preset, or test changes. ──────────────────────────────────────────────
+    private static let dwellSeconds = 18.0          // base dwell per scene
+    private static let dwellJitter = 2.0            // ±jitter so it isn't metronomic
+    private static let fadeSeconds = 0.35           // fade-to-black each way
+    private static let heroOnly = false             // code-level constant (curated demo lane)
+    private static let includeAll76 = false         // code-level constant (else native sceneMode ≥ 1)
+    private static let heroModes: Set<Int> = [11, 20, 9, 13, 19, 22, 12, 18, 7, 4]
+
+    @State private var autoEnabled = true
+    @State private var bag: [Int] = []
+    @State private var lastFamily = -1
+    @State private var fadeOpacity = 0.0
+    @State private var transitionStart: Date?     // non-nil while a fade is in progress
+    @State private var didSwitch = false          // whether the scene was already swapped (at full black)
+    @State private var dwellDeadline = Date()
+    // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME — it can't die and
+    // never depends on animation-completion callbacks (those were dropping → scenes got stuck).
+    private let autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+
+    /// Preset indices eligible for the auto-rotation bag.
+    private var eligibleIndices: [Int] {
+        let native = presets.indices.filter { Self.includeAll76 ? true : presets[$0].sceneMode >= 1 }
+        if Self.heroOnly { return native.filter { Self.heroModes.contains(presets[$0].sceneMode) } }
+        return native
+    }
+
+    /// Coarse visual family (health-pass taxonomy) keyed by sceneMode, for the same-family-skip rule.
+    /// 0 tunnels · 1 blobs · 2 star/space · 3 math-surface · 4 terrain · 5 grids/arch · 6 fracture ·
+    /// 7 cymatics · 8 energy · 9 fractals · 10 interior/city · 11 liquid · 12 reaction · 13 hex · 14 circuit.
+    private static let familyByScene: [Int: Int] = [
+        1: 0, 10: 0, 2: 1, 11: 1, 3: 2, 4: 3, 24: 3, 5: 4, 12: 4,
+        6: 5, 9: 5, 14: 5, 7: 6, 8: 6, 13: 7, 15: 8, 16: 8, 17: 9, 20: 9,
+        18: 10, 26: 10, 19: 11, 25: 11, 21: 12, 22: 13, 23: 14
+    ]
+    private func family(_ idx: Int) -> Int {
+        Self.familyByScene[presets[idx].sceneMode] ?? -1   // -1 = 2D feedback presets
+    }
+
+    private func refillBag() {
+        var b = eligibleIndices.shuffled()
+        if let first = b.first, first == presetIndex, b.count > 1 { b.swapAt(0, b.count - 1) }  // no seam-repeat
+        bag = b
+    }
+
+    /// Pop the next scene; if it's the same family as the last, swap in a different-family one.
+    private func advanceToNext() {
+        if bag.isEmpty { refillBag() }
+        guard !bag.isEmpty else { return }
+        var idx = bag.removeFirst()
+        if family(idx) == lastFamily, let altPos = bag.firstIndex(where: { family($0) != lastFamily }) {
+            let alt = bag.remove(at: altPos)
+            bag.insert(idx, at: 0)        // keep the same-family one for later
+            idx = alt
+        }
+        presetIndex = idx
+        lastFamily = family(idx)
+    }
+
+    private func nextDwell() -> Double {
+        Self.dwellSeconds + Double.random(in: -Self.dwellJitter...Self.dwellJitter)
+    }
+
+    /// Start a fade-to-black. The visual tween is `withAnimation`; the *switch* and *reset* are
+    /// decided by elapsed time in tick(), so a dropped animation completion can never strand it.
+    @MainActor private func beginTransition() {
+        guard transitionStart == nil else { return }
+        transitionStart = Date()
+        didSwitch = false
+        withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 1.0 }
+    }
+
+    /// Combine tick (~0.1s): advances any in-flight transition by elapsed time, else auto-advances
+    /// when the dwell deadline passes. Purely time-driven → cannot get stuck.
+    private func tick() {
+        if let start = transitionStart {
+            let elapsed = Date().timeIntervalSince(start)
+            if elapsed >= Self.fadeSeconds, !didSwitch {
+                advanceToNext()                           // switch only at full black
+                didSwitch = true
+                withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 0.0 }
+            }
+            if elapsed >= 2 * Self.fadeSeconds {          // fade-in done → transition complete
+                transitionStart = nil
+                didSwitch = false
+                fadeOpacity = 0.0
+            }
+            return
+        }
+        if autoEnabled, Date() >= dwellDeadline {
+            beginTransition()
+            dwellDeadline = Date().addingTimeInterval(nextDwell())
+        }
+    }
+
+    private func manualNext() {
+        dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual tap restarts the dwell
+        beginTransition()
+    }
+
     var body: some View {
         PermissiveMetalContainer(presetIndex: presetIndex)
             .ignoresSafeArea()
+            // Deliberate fade-to-black between scenes (no extra Metal targets; cheap layer composite).
+            .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
             // Top placement: the mini-player floats over the bottom of the app, so
             // a bottom control would be blocked.
             .overlay(alignment: .top) {
                 if !presets.isEmpty {
-                    Button {
-                        presetIndex = (presetIndex + 1) % presets.count
-                    } label: {
-                        Text("\(presets[presetIndex].name) — tap to switch")
+                    Button(action: manualNext) {
+                        Text("\(presets[presetIndex].name)  ·  \(autoEnabled ? "auto ⏵" : "paused ⏸")  (hold = toggle)")
                             .font(.caption.bold())
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -31,10 +133,27 @@ struct PermissiveVisualizerView: View {
                             .foregroundStyle(.white)
                     }
                     .accessibilityIdentifier("permissivePresetSwitch")
+                    // Long-press toggles auto-rotation on/off (debug-only; not a Settings control).
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            autoEnabled.toggle()
+                            dwellDeadline = Date().addingTimeInterval(nextDwell())
+                        }
+                    )
                     .padding(.top, 10)
                 }
             }
             .navigationTitle("Native Visualizer Test")
+            // Seed the bag + jump into the native rotation when the screen appears.
+            .onAppear {
+                if bag.isEmpty {
+                    refillBag()
+                    if autoEnabled { advanceToNext() }    // jump into the native rotation at startup
+                }
+                dwellDeadline = Date().addingTimeInterval(nextDwell())
+            }
+            // Combine timer drives the dwell check — robust (auto-cancels on disappear, never "exits").
+            .onReceive(autoTicker) { _ in tick() }
     }
 }
 
