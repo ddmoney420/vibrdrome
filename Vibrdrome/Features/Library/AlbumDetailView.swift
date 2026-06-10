@@ -17,6 +17,7 @@ struct AlbumDetailView: View {
     @State private var isSelecting = false
     @State private var showAddToPlaylist = false
     @State private var isStarred = false
+    @State private var isCreatingAlbumShare = false
     // Single query for all completed downloads — passed into track rows to avoid per-row
     // SwiftData fetchCount calls on the main actor during the push/pop animation.
     @Query(filter: #Predicate<DownloadedSong> { $0.isComplete == true })
@@ -607,6 +608,10 @@ struct AlbumDetailView: View {
                     DownloadManager.shared.downloadAlbum(songs: songs, client: appState.subsonicClient)
                 }
             } label: { SwiftUI.Label("Download", systemImage: "arrow.down.circle") }
+
+            Divider()
+
+            albumShareActions(album)
         } label: {
             label()
         }
@@ -873,5 +878,42 @@ struct AlbumDetailView: View {
                 isStarred = wasStarred
             }
         }
+    }
+}
+
+// MARK: - Share Actions
+
+private extension AlbumDetailView {
+    @ViewBuilder
+    func albumShareActions(_ album: Album) -> some View {
+        let shareText = "💿 \(album.name)\(album.artist.map { " — \($0)" } ?? "")\nvibrdrome://album/\(album.id)"
+        ShareLink(item: shareText) {
+            SwiftUI.Label("Share", systemImage: "square.and.arrow.up")
+        }
+
+        Button {
+            guard !isCreatingAlbumShare else { return }
+            let songIds = album.song?.map(\.id) ?? []
+            guard !songIds.isEmpty else { return }
+            isCreatingAlbumShare = true
+            Task {
+                defer { isCreatingAlbumShare = false }
+                do {
+                    let share = try await appState.subsonicClient.createShare(ids: songIds)
+                    #if os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(share.url, forType: .string)
+                    #else
+                    UIPasteboard.general.string = share.url
+                    #endif
+                } catch {}
+            }
+        } label: {
+            SwiftUI.Label(
+                isCreatingAlbumShare ? "Creating Share…" : "Copy Navidrome Share Link",
+                systemImage: "link"
+            )
+        }
+        .disabled(isCreatingAlbumShare)
     }
 }
