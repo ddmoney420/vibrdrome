@@ -173,10 +173,13 @@ struct SidebarContentView: View {
                         switch route {
                         case .album(let id):
                             AlbumDetailView(albumId: id)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         case .artist(let id):
                             ArtistDetailView(artistId: id)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         case .song(let id):
                             SongDetailView(songId: id)
+                                .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         case .genre(let name):
                             AlbumsView(listType: .alphabeticalByName,
                                        title: name.cleanedGenreDisplay, initialGenreFilter: name)
