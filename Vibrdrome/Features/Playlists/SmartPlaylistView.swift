@@ -15,6 +15,10 @@ struct SmartPlaylistView: View {
     @State private var selectedGenre: Genre?
     @State private var searchTask: Task<Void, Never>?
 
+    // Sonic Path state
+    @State private var sonicPathStartSong: Song?
+    @State private var sonicPathEndSong: Song?
+
     enum GeneratorType: String, CaseIterable, Identifiable {
         case artist = "Artist Mix"
         case genre = "Genre Mix"
@@ -22,6 +26,7 @@ struct SmartPlaylistView: View {
         case random = "Random Mix"
         case bsides = "B-Sides & Obscure"
         case curated = "Curated Weekly"
+        case sonicPath = "Sonic Path"
 
         var id: String { rawValue }
         var icon: String {
@@ -32,6 +37,7 @@ struct SmartPlaylistView: View {
             case .random: "dice.fill"
             case .bsides: "record.circle"
             case .curated: "sparkles"
+            case .sonicPath: "point.topright.arrow.triangle.backward.to.point.bottomleft.filled"
             }
         }
         var color: Color {
@@ -42,6 +48,7 @@ struct SmartPlaylistView: View {
             case .random: .indigo
             case .bsides: .teal
             case .curated: .pink
+            case .sonicPath: .green
             }
         }
         var description: String {
@@ -52,7 +59,14 @@ struct SmartPlaylistView: View {
             case .random: "A random mix of your library"
             case .bsides: "Deep cuts and hidden gems"
             case .curated: "Mix of favorites, random, and recent"
+            case .sonicPath: "A journey between two songs"
             }
+        }
+    }
+
+    private var visibleGeneratorTypes: [GeneratorType] {
+        GeneratorType.allCases.filter { type in
+            type != .sonicPath || appState.subsonicClient.supportsSonicSimilarity
         }
     }
 
@@ -65,7 +79,7 @@ struct SmartPlaylistView: View {
                         GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12)
                     ], spacing: 12) {
-                        ForEach(GeneratorType.allCases) { type in
+                        ForEach(visibleGeneratorTypes) { type in
                             generatorCard(type)
                         }
                     }
@@ -166,6 +180,8 @@ struct SmartPlaylistView: View {
             generateButton("Generate Curated Weekly") {
                 await generateCurated()
             }
+        case .sonicPath:
+            sonicPathSelectionView
         }
     }
 
@@ -297,6 +313,20 @@ struct SmartPlaylistView: View {
                     .padding(.horizontal, 16)
             }
         }
+    }
+
+    // Sonic Path selection view
+    private var sonicPathSelectionView: some View {
+        VStack(spacing: 16) {
+            SonicPathSongPicker(label: "Start Song", selected: $sonicPathStartSong)
+            SonicPathSongPicker(label: "End Song", selected: $sonicPathEndSong)
+            if sonicPathStartSong != nil && sonicPathEndSong != nil {
+                generateButton("Generate Sonic Path") {
+                    await generateSonicPath()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     // Generate button helper
@@ -446,6 +476,28 @@ struct SmartPlaylistView: View {
         }
     }
 
+    private func generateSonicPath() async {
+        guard let startSong = sonicPathStartSong, let endSong = sonicPathEndSong else { return }
+        isGenerating = true
+        error = nil
+        defer { isGenerating = false }
+        do {
+            let matches = try await appState.subsonicClient.findSonicPath(
+                startSongId: startSong.id, endSongId: endSong.id, count: 25
+            )
+            guard !matches.isEmpty else {
+                error = "No sonic path found between those songs"
+                return
+            }
+            let ids = matches.map(\.entry.id)
+            let name = "Sonic Path: \(startSong.title.prefix(20)) → \(endSong.title.prefix(20))"
+            try await appState.subsonicClient.createPlaylist(name: String(name.prefix(60)), songIds: ids)
+            dismiss()
+        } catch {
+            self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+
     private func generateCurated() async {
         isGenerating = true
         error = nil
@@ -492,6 +544,84 @@ struct SmartPlaylistView: View {
             dismiss()
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+}
+
+// MARK: - Sonic Path Song Picker
+
+private struct SonicPathSongPicker: View {
+    let label: String
+    @Binding var selected: Song?
+
+    @Environment(AppState.self) private var appState
+    @State private var query = ""
+    @State private var results: [Song] = []
+    @State private var searchTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let song = selected {
+                HStack(spacing: 10) {
+                    AlbumArtView(coverArtId: song.coverArt, size: 36, cornerRadius: 6)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(label).font(.caption).foregroundStyle(.secondary)
+                        Text(song.title).font(.body).fontWeight(.medium)
+                        Text(song.displayArtist ?? "").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { selected = nil; query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+            } else {
+                TextField("\(label)...", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .onChange(of: query) { _, newValue in
+                        searchTask?.cancel()
+                        guard newValue.count >= 2 else { results = []; return }
+                        searchTask = Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard !Task.isCancelled else { return }
+                            let result = try? await appState.subsonicClient.search(
+                                query: newValue, artistCount: 0, albumCount: 0, songCount: 8)
+                            results = result?.song ?? []
+                        }
+                    }
+                if !results.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(results) { song in
+                            Button {
+                                selected = song
+                                results = []
+                            } label: {
+                                HStack(spacing: 10) {
+                                    AlbumArtView(coverArtId: song.coverArt, size: 32, cornerRadius: 4)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(song.title).font(.subheadline).foregroundColor(.primary)
+                                        Text(song.displayArtist ?? "").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                            }
+                            .buttonStyle(.plain)
+                            if song.id != results.last?.id {
+                                Divider().padding(.leading, 54)
+                            }
+                        }
+                    }
+                    .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
         }
     }
 }

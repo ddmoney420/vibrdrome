@@ -37,6 +37,8 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
     case bitDepth
     case sampleRate
     case bpm
+    case replayGainTrackGain  // dB
+    case replayGainAlbumGain  // dB
     case playCount
     case rating         // 1-5 stars (0 = unrated)
     case averageRating  // average across all users
@@ -67,6 +69,7 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
     case hasCoverArt
     case isCompilation
     case isMissing
+    case isPresent
     case isDownloaded
 
     // Playlist membership (value = playlist ID string)
@@ -105,6 +108,8 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
         case .bitDepth:        "Bit Depth"
         case .sampleRate:      "Sample Rate"
         case .bpm:             "BPM"
+        case .replayGainTrackGain: "ReplayGain Track (dB)"
+        case .replayGainAlbumGain: "ReplayGain Album (dB)"
         case .playCount:       "Play Count"
         case .averageRating:   "Avg Rating"
         case .rating:          "Rating"
@@ -131,6 +136,7 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
         case .hasCoverArt:     "Has Cover Art"
         case .isCompilation:   "Compilation"
         case .isMissing:       "File Missing"
+        case .isPresent:       "File Present"
         case .isDownloaded:    "Is Downloaded"
         case .inPlaylist:      "In Playlist"
         case .notInPlaylist:   "Not In Playlist"
@@ -146,6 +152,7 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
              .mbzReleaseTrackId, .mbzReleaseGroupId:
             return .text
         case .year, .duration, .size, .channels, .bitRate, .bitDepth, .sampleRate, .bpm,
+             .replayGainTrackGain, .replayGainAlbumGain,
              .playCount, .rating, .averageRating, .albumRating, .albumPlayCount,
              .artistRating, .artistPlayCount, .trackNumber, .discNumber:
             return .numeric
@@ -154,7 +161,7 @@ enum FilterField: String, CaseIterable, Codable, Sendable {
              .artistLastPlayed, .artistDateLoved, .artistDateRated:
             return .days
         case .isFavorited, .albumFavorited, .artistFavorited,
-             .hasCoverArt, .isCompilation, .isMissing, .isDownloaded:
+             .hasCoverArt, .isCompilation, .isMissing, .isPresent, .isDownloaded:
             return .boolean
         case .inPlaylist, .notInPlaylist:
             return .playlist
@@ -437,6 +444,7 @@ extension FilterField {
         .title, .artist, .albumTitle, .genre, .label, .suffix, .contentType, .comment,
         // Numeric
         .year, .duration, .size, .channels, .bitRate, .bitDepth, .sampleRate, .bpm,
+        .replayGainTrackGain, .replayGainAlbumGain,
         .playCount, .rating, .averageRating, .albumRating, .albumPlayCount,
         .artistRating, .artistPlayCount, .trackNumber, .discNumber,
         // Date-relative
@@ -445,7 +453,7 @@ extension FilterField {
         .artistLastPlayed, .artistDateLoved, .artistDateRated,
         // Boolean
         .isFavorited, .albumFavorited, .artistFavorited,
-        .hasCoverArt, .isCompilation, .isMissing, .isDownloaded,
+        .hasCoverArt, .isCompilation, .isMissing, .isPresent, .isDownloaded,
     ]
     static let albumFields: [FilterField] = [
         .albumTitle, .artist, .genre, .label,
@@ -468,6 +476,7 @@ extension FilterField {
         .mbzReleaseTrackId, .mbzReleaseGroupId,
         // Numeric
         .year, .duration, .size, .channels, .bitRate, .bitDepth, .sampleRate, .bpm,
+        .replayGainTrackGain, .replayGainAlbumGain,
         .playCount, .rating, .averageRating, .albumRating, .albumPlayCount,
         .artistRating, .artistPlayCount, .trackNumber, .discNumber,
         // Date-relative
@@ -476,7 +485,7 @@ extension FilterField {
         .artistLastPlayed, .artistDateLoved, .artistDateRated,
         // Boolean
         .isFavorited, .albumFavorited, .artistFavorited,
-        .hasCoverArt, .isCompilation, .isMissing,
+        .hasCoverArt, .isCompilation, .isMissing, .isPresent,
         // Playlist membership
         .inPlaylist, .notInPlaylist,
     ]

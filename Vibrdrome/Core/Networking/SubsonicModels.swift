@@ -43,6 +43,8 @@ struct SubsonicResponseBody: Decodable {
     let indexes: IndexesResponse?
     let jukeboxStatus: JukeboxStatus?
     let jukeboxPlaylist: JukeboxPlaylist?
+    let sonicMatch: [SonicMatchEntry]?
+    let openSubsonicExtensions: [OpenSubsonicExtension]?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
@@ -52,6 +54,7 @@ struct SubsonicResponseBody: Decodable {
         case artistInfo2, albumInfo, similarSongs2, topSongs
         case musicFolders, directory, indexes
         case jukeboxStatus, jukeboxPlaylist
+        case sonicMatch, openSubsonicExtensions
     }
 
     init(from decoder: Decoder) throws {
@@ -86,6 +89,8 @@ struct SubsonicResponseBody: Decodable {
         indexes = try container.decodeIfPresent(IndexesResponse.self, forKey: .indexes)
         jukeboxStatus = try container.decodeIfPresent(JukeboxStatus.self, forKey: .jukeboxStatus)
         jukeboxPlaylist = try container.decodeIfPresent(JukeboxPlaylist.self, forKey: .jukeboxPlaylist)
+        sonicMatch = try container.decodeIfPresent([SonicMatchEntry].self, forKey: .sonicMatch)
+        openSubsonicExtensions = try container.decodeIfPresent([OpenSubsonicExtension].self, forKey: .openSubsonicExtensions)
     }
 }
 
@@ -269,6 +274,20 @@ struct SimilarSongs2Response: Decodable, Sendable {
 
 struct TopSongsResponse: Decodable, Sendable {
     let song: [Song]?
+}
+
+struct OpenSubsonicExtension: Decodable, Sendable {
+    let name: String
+    let versions: [Int]
+}
+
+struct SonicMatchEntry: Decodable, Sendable {
+    let entry: Song
+    let similarity: Double
+}
+
+struct SonicMatchResponse: Decodable, Sendable {
+    let sonicMatch: [SonicMatchEntry]?
 }
 
 // MARK: - Song Model

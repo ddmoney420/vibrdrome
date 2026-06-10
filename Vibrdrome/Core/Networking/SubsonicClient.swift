@@ -22,6 +22,8 @@ final class SubsonicClient {
     var isConnected: Bool = false
     /// Navidrome serverVersion string from the last successful ping (e.g. "0.52.5").
     private(set) var serverVersion: String?
+    /// True when the server advertises the `sonicSimilarity` OpenSubsonic extension.
+    private(set) var supportsSonicSimilarity: Bool = false
 
     /// WebP cover art requires Navidrome ≥ 0.49.0. Older servers and non-Navidrome
     /// Subsonic implementations don't support the `format` parameter on getCoverArt.
@@ -358,11 +360,21 @@ final class SubsonicClient {
             let body = try await request(.ping)
             isConnected = body.status == "ok"
             if let sv = body.serverVersion { serverVersion = sv }
+            if isConnected && (body.openSubsonic == true) {
+                Task { await probeExtensions() }
+            }
             return isConnected
         } catch {
             isConnected = false
             throw error
         }
+    }
+
+    private func probeExtensions() async {
+        guard let body = try? await request(.getOpenSubsonicExtensions) else { return }
+        let extensions = body.openSubsonicExtensions ?? []
+        supportsSonicSimilarity = extensions.contains { $0.name == "sonicSimilarity" }
+        networkLog.info("OpenSubsonic extensions probed — sonicSimilarity: \(self.supportsSonicSimilarity)")
     }
 
     func getArtists(musicFolderId: String? = nil) async throws -> [ArtistIndex] {
@@ -449,6 +461,24 @@ final class SubsonicClient {
 
     func scrobble(id: String, submission: Bool = true) async throws {
         try await performAction(.scrobble(id: id, submission: submission))
+    }
+
+    func reportPlayback(mediaId: String, positionMs: Int, state: String,
+                        playbackRate: Double = 1.0, ignoreScrobble: Bool = false) async throws {
+        try await performAction(.reportPlayback(
+            mediaId: mediaId, mediaType: "song", positionMs: positionMs,
+            state: state, playbackRate: playbackRate, ignoreScrobble: ignoreScrobble
+        ))
+    }
+
+    func getSonicSimilarTracks(id: String, count: Int = 10) async throws -> [SonicMatchEntry] {
+        let body = try await request(.getSonicSimilarTracks(id: id, count: count))
+        return body.sonicMatch ?? []
+    }
+
+    func findSonicPath(startSongId: String, endSongId: String, count: Int = 25) async throws -> [SonicMatchEntry] {
+        let body = try await request(.findSonicPath(startSongId: startSongId, endSongId: endSongId, count: count))
+        return body.sonicMatch ?? []
     }
 
     func getPlaylists() async throws -> [Playlist] {

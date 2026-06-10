@@ -93,9 +93,8 @@ extension AudioEngine {
     }
 
     /// Play a mix of songs similar to the given track, independent of the
-    /// artist-radio path. Uses `getSimilarSongs` directly so the result is a
-    /// song-level similarity queue, matching what "Instant Mix" / "Radio Mix"
-    /// means in Apple Music / Spotify.
+    /// artist-radio path. Prefers audio-based sonicSimilarity when the server
+    /// supports it, falling back to metadata-based getSimilarSongs2.
     func startSongSimilarityMix(_ song: Song) {
         stopRadioMode()
         isRadioMode = true
@@ -104,7 +103,14 @@ extension AudioEngine {
         setRadioRefillTask(Task { [weak self] in
             guard let self else { return }
             let client = AppState.shared.subsonicClient
-            var songs = (try? await client.getSimilarSongs(id: song.id, count: 30)) ?? []
+            var songs: [Song]
+            if client.supportsSonicSimilarity {
+                let matches = (try? await client.getSonicSimilarTracks(id: song.id, count: 30)) ?? []
+                songs = matches.map(\.entry)
+                radioLog.info("SongMix: sonicSimilarity returned \(songs.count) tracks for \(song.id)")
+            } else {
+                songs = (try? await client.getSimilarSongs(id: song.id, count: 30)) ?? []
+            }
             if songs.isEmpty {
                 songs = (try? await client.getRandomSongs(size: 20)) ?? []
             }
@@ -144,9 +150,12 @@ extension AudioEngine {
 
             var newSongs: [Song] = []
             if let currentId = self.currentSong?.id {
-                newSongs = (try? await client.getSimilarSongs(
-                    id: currentId, count: 30
-                )) ?? []
+                if client.supportsSonicSimilarity {
+                    let matches = (try? await client.getSonicSimilarTracks(id: currentId, count: 30)) ?? []
+                    newSongs = matches.map(\.entry)
+                } else {
+                    newSongs = (try? await client.getSimilarSongs(id: currentId, count: 30)) ?? []
+                }
             }
 
             if newSongs.isEmpty {

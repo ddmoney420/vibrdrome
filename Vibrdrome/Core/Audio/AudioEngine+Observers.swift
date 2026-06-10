@@ -384,5 +384,23 @@ extension AudioEngine {
             Task { await ListenBrainzClient.shared.submitNowPlaying(song: song) }
             Task { await LastFmClient.shared.updateNowPlaying(song: song) }
         }
+        reportPlaybackState("starting", songId: songId, positionMs: 0)
+    }
+
+    /// Fire-and-forget OpenSubsonic playbackReport state update.
+    func reportPlaybackState(_ state: String, songId: String? = nil, positionMs: Int? = nil) {
+        guard UserDefaults.standard.bool(forKey: UserDefaultsKeys.playbackReportEnabled) else { return }
+        let id = songId ?? currentSong?.id
+        guard let id else { return }
+        let posMs = positionMs ?? Int(currentTime * 1000)
+        Task {
+            do {
+                try await AppState.shared.subsonicClient.reportPlayback(
+                    mediaId: id, positionMs: posMs, state: state
+                )
+            } catch {
+                observerLog.debug("reportPlayback(\(state)) failed: \(error)")
+            }
+        }
     }
 }

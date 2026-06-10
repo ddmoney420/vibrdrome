@@ -40,6 +40,7 @@ struct PlayerSettingsView: View {
 
     // Scrobbling
     @AppStorage(UserDefaultsKeys.scrobblingEnabled) private var scrobblingEnabled: Bool = true
+    @AppStorage(UserDefaultsKeys.playbackReportEnabled) private var playbackReportEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.listenBrainzEnabled) private var listenBrainzEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.lastFmEnabled) private var lastFmEnabled: Bool = false
     @AppStorage(UserDefaultsKeys.lastFmUsername) private var lastFmUsername: String = ""
@@ -281,6 +282,12 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("scrobblingToggle")
+
+            Toggle(isOn: $playbackReportEnabled) {
+                Label("Playback Report (OpenSubsonic)", systemImage: "waveform.and.mic")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("playbackReportToggle")
 
             Toggle(isOn: $listenBrainzEnabled) {
                 Label("ListenBrainz", systemImage: "dot.radiowaves.right")
