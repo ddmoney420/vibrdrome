@@ -36,6 +36,10 @@ struct DebugView: View {
             row("URL", value: appState.serverURL)
             row("Username", value: appState.username)
             row("Connected", value: appState.subsonicClient.isConnected ? "Yes" : "No")
+            if let sv = appState.subsonicClient.serverVersion {
+                row("Server Version", value: sv)
+            }
+            row("sonicSimilarity", value: appState.subsonicClient.supportsSonicSimilarity ? "✓ supported" : "✗ not available")
             row("Servers", value: "\(appState.servers.count)")
             if let activeId = appState.activeServerId {
                 row("Active ID", value: String(activeId.prefix(8)) + "...")
@@ -224,6 +228,8 @@ struct DebugView: View {
         lines.append("Server URL: \(appState.serverURL)")
         lines.append("Username: \(appState.username)")
         lines.append("Connected: \(appState.subsonicClient.isConnected)")
+        lines.append("Server Version: \(appState.subsonicClient.serverVersion ?? "unknown")")
+        lines.append("sonicSimilarity: \(appState.subsonicClient.supportsSonicSimilarity)")
         lines.append("Servers: \(appState.servers.count)")
         lines.append("")
         let engine = AudioEngine.shared

@@ -40,6 +40,7 @@ enum UserDefaultsKeys {
     static func lyricsOffset(songId: String) -> String { "lyricsOffset.\(songId)" }
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
+    static let playbackReportEnabled = "playbackReportEnabled"
     static let preloadSongs = "preloadSongs"
     static let keepSongsInCacheAfterPlayback = "keepSongsInCacheAfterPlayback"
     static let autoSuggestEnabled = "autoSuggestEnabled"
