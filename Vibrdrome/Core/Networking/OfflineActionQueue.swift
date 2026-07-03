@@ -12,6 +12,10 @@ final class OfflineActionQueue {
 
     var pendingCount: Int = 0
     var failedCount: Int = 0
+    /// Bumped on every local star/unstar. A stable scalar (never a @Model array) that
+    /// `FavoritesView` observes to re-fetch its snapshot — avoids the infinite SwiftUI
+    /// update loop caused by observing live SwiftData `@Query` arrays.
+    var favoritesRevision: Int = 0
 
     private let networkMonitor = NWPathMonitor()
     private var isConnected = true
@@ -41,6 +45,9 @@ final class OfflineActionQueue {
 
     /// Star a song, album, or artist — queues offline if no network
     func star(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
+        // Persist the favorite locally first, independent of network, so Favorites reflects it
+        // immediately (offline too). Safe now that FavoritesView reads a snapshot, not a live @Query.
+        setLocalStarred(true, id: id, albumId: albumId, artistId: artistId)
         let client = AppState.shared.subsonicClient
         if isConnected {
             do {
@@ -58,6 +65,8 @@ final class OfflineActionQueue {
 
     /// Unstar a song, album, or artist — queues offline if no network
     func unstar(id: String? = nil, albumId: String? = nil, artistId: String? = nil) async throws {
+        // Optimistic local write first (see `star`) so the item leaves Favorites immediately.
+        setLocalStarred(false, id: id, albumId: albumId, artistId: artistId)
         let client = AppState.shared.subsonicClient
         if isConnected {
             do {
@@ -70,6 +79,36 @@ final class OfflineActionQueue {
         let targetId = id ?? albumId ?? artistId ?? ""
         let actionType = id != nil ? "unstar" : albumId != nil ? "unstarAlbum" : "unstarArtist"
         enqueue(actionType: actionType, targetId: targetId)
+    }
+
+    // MARK: - Optimistic Local Persistence
+
+    /// Immediately reflect a star/unstar in the local cache so Favorites updates right away —
+    /// independent of `isConnected`, so it stays correct offline or when the network looks
+    /// connected but packets are dead. No-ops if the item isn't cached yet (the queued action
+    /// still syncs it). Bumps `favoritesRevision` so `FavoritesView` re-fetches its snapshot.
+    /// A later library sync reconciles with authoritative server state.
+    private func setLocalStarred(_ starred: Bool, id: String?, albumId: String?, artistId: String?) {
+        let context = PersistenceController.shared.container.mainContext
+        do {
+            if let id {
+                var d = FetchDescriptor<CachedSong>(predicate: #Predicate { $0.id == id })
+                d.fetchLimit = 1
+                if let m = try context.fetch(d).first { m.isStarred = starred }
+            } else if let albumId {
+                var d = FetchDescriptor<CachedAlbum>(predicate: #Predicate { $0.id == albumId })
+                d.fetchLimit = 1
+                if let m = try context.fetch(d).first { m.isStarred = starred }
+            } else if let artistId {
+                var d = FetchDescriptor<CachedArtist>(predicate: #Predicate { $0.id == artistId })
+                d.fetchLimit = 1
+                if let m = try context.fetch(d).first { m.isStarred = starred }
+            }
+            if context.hasChanges { try context.save() }
+            favoritesRevision &+= 1
+        } catch {
+            offlineLog.error("Optimistic local star update failed: \(error.localizedDescription)")
+        }
     }
 
     /// Scrobble a song — queues offline if no network
