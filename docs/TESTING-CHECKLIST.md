@@ -116,3 +116,5 @@ A lightweight smoke list. For the full build-by-build regression list, see [TEST
 - [ ] Kill the app mid-song, reopen -- does it remember state?
 - [ ] Poor Wi-Fi / switch between Wi-Fi and cellular
 - [ ] Incoming phone call during playback
+
+<!-- Build 55 (July 3, 2026): no content change for this file — minimal patch release (Favorites hang/crash fix + audio stall recovery). Doc touched per release version-bump policy. -->

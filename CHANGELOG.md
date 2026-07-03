@@ -4,6 +4,12 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 55 -- July 3, 2026
+
+**Bug fixes:**
+- Fixed a hang/crash in Favorites: opening an album from Favorites and unfavoriting it no longer freezes the app (an infinite SwiftUI update loop that pegged the main thread until the watchdog terminated the app). Favorites now loads its lists as point-in-time snapshots refreshed on appear and after favorite changes, and a favorite/unfavorite is reflected locally right away (including offline).
+- Fixed audio that could stay silently stuck after a network stall: once the buffer refills, playback now auto-recovers instead of remaining paused.
+
 ### Build 54 -- June 1, 2026
 
 **Library & Metadata (OpenSubsonic):**

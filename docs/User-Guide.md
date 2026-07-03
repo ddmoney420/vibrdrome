@@ -144,3 +144,5 @@ Vibrdrome supports multiple Navidrome servers:
 1. Go to **Settings** and tap **Add Server** to add additional servers.
 2. Switch between servers from the server list in Settings.
 3. Each server maintains its own library, playlists, and favorites.
+
+<!-- Build 55 (July 3, 2026): no content change for this file — minimal patch release (Favorites hang/crash fix + audio stall recovery). Doc touched per release version-bump policy. -->

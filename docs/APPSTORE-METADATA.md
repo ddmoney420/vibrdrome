@@ -135,3 +135,5 @@ https://vibrdrome.io
 7. Visualizer -- full-screen audio visualizer
 8. Lyrics -- synced lyrics during playback
 9. Search -- search results with artists, albums, songs
+
+<!-- Build 55 (July 3, 2026): no content change for this file — minimal patch release (Favorites hang/crash fix + audio stall recovery). Doc touched per release version-bump policy. -->

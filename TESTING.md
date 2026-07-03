@@ -364,3 +364,5 @@ Run through this checklist before every TestFlight build. Each item should be ve
 - [ ] HTTPS server connection works
 - [ ] Adaptive Bitrate adjusts quality on constrained networks (iOS)
 - [ ] No white flash when returning from background
+
+<!-- Build 55 (July 3, 2026): no content change for this file — minimal patch release (Favorites hang/crash fix + audio stall recovery). Doc touched per release version-bump policy. -->
