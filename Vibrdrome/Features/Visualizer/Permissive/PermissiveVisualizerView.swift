@@ -571,9 +571,13 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         beatPulse *= 0.86
 
         // Band punches: peak-hold the scaled group flux, decay each frame (VU-meter feel).
+        // Slice 2B: mid/treble scale 1.5→1.8 (more ripple/swirl/bloom/grid/color snap) with a
+        // snappier 0.82→0.78 snap-back. BASS punch is left byte-for-byte unchanged — it feeds
+        // several 3D scenes' forward speed via u.bassPunch (Warpfield/Highway/Menger/Urban Canyon/
+        // calm-glide) plus camZ, so touching it would risk faster 3D plunge. Bass stays as-is.
         bassPunchEnv = max(bassPunchEnv * 0.82, min(1.0, bF * 2.5))
-        midPunchEnv = max(midPunchEnv * 0.82, min(1.0, mF * 1.5))
-        treblePunchEnv = max(treblePunchEnv * 0.82, min(1.0, tF * 1.5))
+        midPunchEnv = max(midPunchEnv * 0.78, min(1.0, mF * 1.8))
+        treblePunchEnv = max(treblePunchEnv * 0.78, min(1.0, tF * 1.8))
         lastPunch = SIMD3(bassPunchEnv, midPunchEnv, treblePunchEnv)
         punchPeak = max(punchPeak, lastPunch)
         return (beatPulse, lastPunch)
