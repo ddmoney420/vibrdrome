@@ -563,10 +563,12 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         }
         prevBands = bands
 
-        // Beat onset (adaptive threshold on the overall flux).
+        // Beat onset (adaptive threshold on the overall flux). Slice 2A: threshold
+        // 1.5→1.35 so more beats register on busy/dense tracks; decay 0.88→0.86 for a
+        // slightly snappier envelope. The `>0.04` floor stays as an over-trigger guard.
         fluxAvg = fluxAvg * 0.93 + total * 0.07
-        if total > fluxAvg * 1.5 && total > 0.04 { beatPulse = min(1.0, beatPulse + 0.9) }
-        beatPulse *= 0.88
+        if total > fluxAvg * 1.35 && total > 0.04 { beatPulse = min(1.0, beatPulse + 0.9) }
+        beatPulse *= 0.86
 
         // Band punches: peak-hold the scaled group flux, decay each frame (VU-meter feel).
         bassPunchEnv = max(bassPunchEnv * 0.82, min(1.0, bF * 2.5))
