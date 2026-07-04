@@ -92,33 +92,31 @@ enum VisualizerPreset: String, CaseIterable, Identifiable {
 // MARK: - Visualizer Mode
 
 /// The two visualizer backends. Classic = SwiftUI Metal shaders (default);
-/// MilkDrop = projectM (Phase 2). Persisted via `UserDefaultsKeys.visualizerMode`.
+/// Native = the in-house Metal feedback engine (`NativeVisualizerSurface`).
+/// Persisted via `UserDefaultsKeys.visualizerMode`.
 enum VisualizerMode: String, CaseIterable, Identifiable {
     case classic
-    case milkdrop
+    case native
     var id: String { rawValue }
-    var title: String { self == .classic ? "Classic" : "MilkDrop" }
-    var icon: String { self == .classic ? "waveform" : "waveform.circle" }
+    var title: String { self == .classic ? "Classic" : "Native" }
+    var icon: String { self == .classic ? "waveform" : "sparkles" }
 }
 
 /// Pure mode-gating logic, factored out of the view so it is unit-testable
-/// without UI or a GL context (see `VisualizerModeResolverTests`).
+/// without UI or a GPU context (see `VisualizerModeResolverTests`).
 enum VisualizerModeResolver {
-    /// Whether MilkDrop may be chosen right now. MilkDrop is hard-gated off on the
-    /// iOS simulator (ANGLE GLES-on-Metal is unreliable there) and suppressed by
-    /// Reduce Motion / Disable Visualizer.
-    static func milkdropSelectable(reduceMotion: Bool, disableVisualizer: Bool, isSimulator: Bool) -> Bool {
-        if isSimulator { return false }
-        return !reduceMotion && !disableVisualizer
+    /// Whether Native may be chosen right now. Native runs on both device and simulator;
+    /// it is suppressed only by Reduce Motion / Disable Visualizer.
+    static func nativeSelectable(reduceMotion: Bool, disableVisualizer: Bool) -> Bool {
+        !reduceMotion && !disableVisualizer
     }
 
-    /// What actually renders: MilkDrop only if selected AND currently selectable;
-    /// otherwise Classic (covers "MilkDrop was chosen earlier but is now gated").
+    /// What actually renders: Native only if selected AND currently selectable;
+    /// otherwise Classic (covers "Native was chosen earlier but is now gated").
     static func effectiveMode(selected: VisualizerMode, reduceMotion: Bool,
-                              disableVisualizer: Bool, isSimulator: Bool) -> VisualizerMode {
-        let selectable = milkdropSelectable(
-            reduceMotion: reduceMotion, disableVisualizer: disableVisualizer, isSimulator: isSimulator)
-        return (selected == .milkdrop && selectable) ? .milkdrop : .classic
+                              disableVisualizer: Bool) -> VisualizerMode {
+        let selectable = nativeSelectable(reduceMotion: reduceMotion, disableVisualizer: disableVisualizer)
+        return (selected == .native && selectable) ? .native : .classic
     }
 }
 
@@ -145,10 +143,6 @@ struct VisualizerView: View {
     @AppStorage(UserDefaultsKeys.visualizerWarningShown) private var warningShown = false
     @AppStorage(UserDefaultsKeys.disableVisualizer) private var disableVisualizer = false
     @AppStorage(UserDefaultsKeys.visualizerMode) private var selectedModeRaw = VisualizerMode.classic.rawValue
-    @AppStorage(UserDefaultsKeys.visualizerMilkdropWarningShown) private var milkdropWarningShown = false
-    @AppStorage(UserDefaultsKeys.milkdropPresetName) private var milkdropPresetName = "vibrdrome_plasma"
-    @AppStorage(UserDefaultsKeys.milkdropShuffle) private var milkdropShuffle = true
-    @AppStorage(UserDefaultsKeys.milkdropPresetDuration) private var milkdropPresetDuration = 20
 
     @State private var time: Float = 0
     @State private var energy: Float = 0.5
@@ -161,8 +155,8 @@ struct VisualizerView: View {
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var showPresetPicker = false
     @State private var showWarning = false
-    @State private var showMilkdropWarning = false
-    @State private var milkdropElapsed: Double = 0
+    /// Bumped on a horizontal swipe to advance the Native visualizer to its next scene.
+    @State private var nativeAdvanceToken = 0
     #if os(macOS)
     @State private var nsWindow: NSWindow?
     #endif
@@ -174,34 +168,23 @@ struct VisualizerView: View {
         VisualizerPreset(rawValue: presetName) ?? .plasma
     }
 
-    private var selectedMode: VisualizerMode { VisualizerMode(rawValue: selectedModeRaw) ?? .classic }
-
-    private let milkdropLibrary = ProjectMPresetLibrary()
-    private var currentMilkdropPreset: ProjectMPreset? {
-        milkdropLibrary.preset(id: milkdropPresetName) ?? milkdropLibrary.presets.first
+    /// Reads the persisted mode, migrating any legacy `"milkdrop"` value to Native.
+    private var selectedMode: VisualizerMode {
+        VisualizerMode(rawValue: selectedModeRaw) ?? (selectedModeRaw == "milkdrop" ? .native : .classic)
     }
 
-    private var isSimulatorBuild: Bool {
-        #if targetEnvironment(simulator)
-        true
-        #else
-        false
-        #endif
-    }
-
-    private var milkdropSelectable: Bool {
-        VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: reduceMotion, disableVisualizer: disableVisualizer, isSimulator: isSimulatorBuild)
+    private var nativeSelectable: Bool {
+        VisualizerModeResolver.nativeSelectable(
+            reduceMotion: reduceMotion, disableVisualizer: disableVisualizer)
     }
 
     private var effectiveMode: VisualizerMode {
         VisualizerModeResolver.effectiveMode(
             selected: selectedMode, reduceMotion: reduceMotion,
-            disableVisualizer: disableVisualizer, isSimulator: isSimulatorBuild)
+            disableVisualizer: disableVisualizer)
     }
 
-    private var milkdropUnavailableReason: String? {
-        if isSimulatorBuild { return "Device only (not in Simulator)" }
+    private var nativeUnavailableReason: String? {
         if disableVisualizer { return "Visualizer is disabled in Settings" }
         if reduceMotion { return "Unavailable with Reduce Motion" }
         return nil
@@ -212,9 +195,9 @@ struct VisualizerView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Visualizer canvas — Classic (Metal shaders) or MilkDrop (projectM).
-                if effectiveMode == .milkdrop {
-                    ProjectMVisualizerSurface(presetURL: currentMilkdropPreset?.url)
+                // Visualizer canvas — Classic (Metal shaders) or Native (feedback engine).
+                if effectiveMode == .native {
+                    NativeVisualizerSurface(advanceToken: nativeAdvanceToken)
                         .ignoresSafeArea()
                 } else {
                     TimelineView(.animation(paused: !engine.isPlaying && energy < 0.01)) { _ in
@@ -236,7 +219,7 @@ struct VisualizerView: View {
                 }
             }
             #if os(macOS)
-            // Capture the window in both modes (Classic + MilkDrop) for the
+            // Capture the window in both modes (Classic + Native) for the
             // fullscreen toggle.
             .background { WindowReader { nsWindow = $0 }.allowsHitTesting(false) }
             #endif
@@ -245,16 +228,8 @@ struct VisualizerView: View {
         .statusBarHidden(true)
         #endif
         .onReceive(timer) { _ in
-            if effectiveMode == .milkdrop {
-                // Swift-managed preset auto-advance. Only while playing; duration 0 = off.
-                guard milkdropPresetDuration > 0, engine.isPlaying else { return }
-                milkdropElapsed += 1.0 / 60.0
-                if milkdropElapsed >= Double(milkdropPresetDuration) {
-                    milkdropElapsed = 0
-                    advanceMilkdropPreset()
-                }
-            } else if !reduceMotion {
-                // MilkDrop drives its own PCM ring; only Classic needs the FFT/time pump.
+            // Native drives its own PCM ring + scene rotation; only Classic needs the FFT/time pump.
+            if effectiveMode == .classic, !reduceMotion {
                 updateTime()
                 updateSpectrum()
             }
@@ -279,7 +254,7 @@ struct VisualizerView: View {
                         if effectiveMode == .classic {
                             cyclePreset(forward: value.translation.width < 0)
                         } else {
-                            cycleMilkdropPreset(forward: value.translation.width < 0)
+                            nativeAdvanceToken += 1   // advance the Native visualizer to its next scene
                         }
                     }
                 }
@@ -305,20 +280,6 @@ struct VisualizerView: View {
             that may cause discomfort or trigger seizures in people with \
             photosensitive epilepsy. You can disable the visualizer in \
             Settings > Accessibility.
-            """)
-        }
-        .alert("MilkDrop Visualizer", isPresented: $showMilkdropWarning) {
-            Button("Enable MilkDrop") {
-                milkdropWarningShown = true
-                selectedModeRaw = VisualizerMode.milkdrop.rawValue
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("""
-            MilkDrop renders intense, rapidly-changing visuals that may be more \
-            likely to trigger discomfort or seizures in people with photosensitive \
-            epilepsy. You can switch back to Classic anytime, or disable the \
-            visualizer in Settings > Accessibility.
             """)
         }
         .onChange(of: showPresetPicker) { _, isOpen in
@@ -352,8 +313,8 @@ struct VisualizerView: View {
 
                 Button { showPresetPicker.toggle() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: effectiveMode == .milkdrop ? VisualizerMode.milkdrop.icon : preset.icon)
-                        Text(effectiveMode == .milkdrop ? "MilkDrop" : preset.rawValue)
+                        Image(systemName: effectiveMode == .native ? VisualizerMode.native.icon : preset.icon)
+                        Text(effectiveMode == .native ? VisualizerMode.native.title : preset.rawValue)
                             .fontWeight(.medium)
                     }
                     .font(.subheadline)
@@ -442,12 +403,12 @@ struct VisualizerView: View {
     private var presetPickerContent: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Mode section (Classic / MilkDrop)
+                // Mode section (Classic / Native)
                 modeRow(.classic)
-                modeRow(.milkdrop)
+                modeRow(.native)
                 Divider().padding(.leading, 52)
 
-                // Preset list (Classic) or a MilkDrop note (single preset in 2C)
+                // Preset list (Classic) or the Native info note.
                 if effectiveMode == .classic {
                     ForEach(VisualizerPreset.allCases) { p in
                         Button {
@@ -475,7 +436,7 @@ struct VisualizerView: View {
                         }
                     }
                 } else {
-                    milkdropControls
+                    nativeInfo
                 }
             }
         }
@@ -485,7 +446,7 @@ struct VisualizerView: View {
     }
 
     private func modeRow(_ mode: VisualizerMode) -> some View {
-        let disabled = (mode == .milkdrop) && !milkdropSelectable
+        let disabled = (mode == .native) && !nativeSelectable
         return Button {
             selectMode(mode)
         } label: {
@@ -496,7 +457,7 @@ struct VisualizerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(mode.title)
                         .foregroundColor(disabled ? .secondary : .primary)
-                    if disabled, let reason = milkdropUnavailableReason {
+                    if disabled, let reason = nativeUnavailableReason {
                         Text(reason)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -513,106 +474,38 @@ struct VisualizerView: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
-        .accessibilityIdentifier(mode == .milkdrop ? "visualizerModeMilkDrop" : "visualizerModeClassic")
+        .accessibilityIdentifier(mode == .native ? "visualizerModeNative" : "visualizerModeClassic")
     }
 
-    /// Switch visualizer mode. The first MilkDrop selection routes through the
-    /// photosensitivity re-warning; subsequent selections switch directly.
+    /// Switch visualizer mode. Native is selectable unless suppressed by Reduce Motion
+    /// or Disable Visualizer (a disabled row can't reach here anyway).
     private func selectMode(_ mode: VisualizerMode) {
         guard mode != selectedMode else { showPresetPicker = false; return }
-        if mode == .milkdrop {
-            guard milkdropSelectable else { return }   // disabled row can't reach here anyway
-            if !milkdropWarningShown {
-                showPresetPicker = false
-                showMilkdropWarning = true             // gate the FIRST switch
-                return
-            }
-            selectedModeRaw = VisualizerMode.milkdrop.rawValue
+        if mode == .native {
+            guard nativeSelectable else { return }
+            selectedModeRaw = VisualizerMode.native.rawValue
         } else {
             selectedModeRaw = VisualizerMode.classic.rawValue
         }
         showPresetPicker = false
     }
 
-    // MARK: - MilkDrop preset controls (Phase 2D)
+    // MARK: - Native visualizer info
 
-    @ViewBuilder
-    private var milkdropControls: some View {
-        Toggle("Shuffle", isOn: $milkdropShuffle)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .accessibilityIdentifier("milkdropShuffleToggle")
-
-        HStack {
-            Text("Duration")
-            Spacer()
-            Picker("Duration", selection: $milkdropPresetDuration) {
-                Text("Off").tag(0)
-                Text("10s").tag(10)
-                Text("20s").tag(20)
-                Text("30s").tag(30)
-                Text("60s").tag(60)
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
+    /// The Native visualizer rotates through its own scenes automatically; there are no
+    /// per-preset controls. This popover section just explains the gestures.
+    private var nativeInfo: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Scenes rotate automatically", systemImage: "sparkles")
+                .font(.subheadline)
+            Text("Swipe left or right to jump to the next scene. Swipe down to close.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .accessibilityIdentifier("milkdropDurationPicker")
-
-        Divider().padding(.leading, 52)
-
-        VStack(spacing: 0) {
-            ForEach(milkdropLibrary.presets) { p in
-                Button {
-                    selectMilkdropPreset(p.id)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "waveform.circle")
-                            .frame(width: 24)
-                            .foregroundColor(.accentColor)
-                        Text(p.displayName)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if p.id == currentMilkdropPreset?.id {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(.accentColor)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
-                if p != milkdropLibrary.presets.last {
-                    Divider().padding(.leading, 52)
-                }
-            }
-        }
-        .accessibilityIdentifier("milkdropPresetList")
-    }
-
-    private func selectMilkdropPreset(_ id: String) {
-        milkdropPresetName = id
-        milkdropElapsed = 0          // reset the auto-advance clock on manual choice
-        showPresetPicker = false
-    }
-
-    /// Auto-advance target: random (shuffle) or sequential next.
-    private func advanceMilkdropPreset() {
-        let nextPreset = milkdropShuffle
-            ? milkdropLibrary.random(excluding: milkdropPresetName)
-            : milkdropLibrary.next(after: milkdropPresetName)
-        if let nextPreset { milkdropPresetName = nextPreset.id }
-    }
-
-    /// Manual swipe cycle — always sequential (predictable direction), regardless
-    /// of shuffle. Resets the auto-advance clock.
-    private func cycleMilkdropPreset(forward: Bool) {
-        let target = forward
-            ? milkdropLibrary.next(after: milkdropPresetName)
-            : milkdropLibrary.previous(before: milkdropPresetName)
-        if let target { milkdropPresetName = target.id }
-        milkdropElapsed = 0
+        .padding(.vertical, 12)
+        .accessibilityIdentifier("nativeVisualizerInfo")
     }
 
     // MARK: - Animation

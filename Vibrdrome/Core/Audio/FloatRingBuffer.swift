@@ -2,9 +2,8 @@ import Synchronization
 
 /// Lock-free single-producer / single-consumer (SPSC) ring buffer of
 /// interleaved Float32 audio frames. Used to hand real-time PCM from the audio
-/// render thread to a non-real-time consumer (the future projectM render/debug
-/// path). Phase 1A: the type exists and is unit-tested, but nothing in the app
-/// feeds or drains it yet.
+/// render thread to a non-real-time consumer (the visualizer render/debug path):
+/// the EQ tap feeds it and the native visualizer drains it.
 ///
 /// **Concurrency contract (SPSC):** exactly ONE producer thread calls the
 /// `write*` methods and exactly ONE consumer thread calls `read(into:maxFrames:)`.

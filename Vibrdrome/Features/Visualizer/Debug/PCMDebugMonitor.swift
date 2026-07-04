@@ -40,7 +40,7 @@ final class PCMDebugMonitor {
     private let log = Logger(subsystem: "com.vibrdrome.app", category: "PCMDebug")
 
     func start() {
-        // If a projectM renderer is already the consumer, observe only — do NOT
+        // If a visualizer renderer is already the consumer, observe only — do NOT
         // activate or drain (single-consumer SPSC). Otherwise own activation (1D).
         owningActivation = !source.hasActiveConsumer
         if owningActivation { source.setActiveForTesting(true) }

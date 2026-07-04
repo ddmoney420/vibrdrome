@@ -95,13 +95,6 @@ targets:
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CARPLAY_ENABLED"
         ENABLE_HARDENED_RUNTIME: "YES"
-        # projectM/MilkDrop visualizer (Phase 2A): embedded MetalANGLE + projectM
-        # frameworks load from the app bundle's Frameworks dir at runtime.
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks @loader_path/../Frameworks"
-        # MetalANGLE provides its own GLES (not Apple's), so silence Apple's
-        # "OpenGLES API deprecated" warnings on the gl* calls — matches the
-        # define MGLLayer.h already makes for itself.
-        GCC_PREPROCESSOR_DEFINITIONS: "$(inherited) GLES_SILENCE_DEPRECATION=1 GL_SILENCE_DEPRECATION=1"
       configs:
         debug:
           INFOPLIST_FILE[sdk=macosx*]: Vibrdrome/Info-macOS.plist
@@ -111,15 +104,6 @@ targets:
       - package: Nuke
         product: NukeUI
       - package: KeychainAccess
-      # projectM/MilkDrop visualizer (Phase 2A) — prebuilt, fetched via
-      # scripts/fetch-vendor.sh (Vendor/ is gitignored). Linked + embedded on
-      # the app target ONLY; the Widget/Watch targets do not use them.
-      - framework: Vendor/MetalANGLE/MetalANGLE.xcframework
-        embed: true
-        codeSign: true
-      - framework: Vendor/projectM/projectM.xcframework
-        embed: true
-        codeSign: true
       - target: VibrdromeWidget
         platformFilter: iOS
       - target: VibrdromeWatch

@@ -1,67 +1,56 @@
 import XCTest
 @testable import Vibrdrome
 
-/// Phase 2C: pure gating logic for the Classic/MilkDrop mode picker. MilkDrop is
-/// suppressed by Reduce Motion, Disable Visualizer, and the iOS simulator; the
-/// effective mode falls back to Classic whenever MilkDrop is selected but not
-/// currently selectable.
+/// Pure gating logic for the Classic/Native mode picker. Native is suppressed by
+/// Reduce Motion and Disable Visualizer (it runs on both device and simulator); the
+/// effective mode falls back to Classic whenever Native is selected but not currently
+/// selectable.
 final class VisualizerModeResolverTests: XCTestCase {
 
-    // MARK: - milkdropSelectable
+    // MARK: - nativeSelectable
 
     func testSelectableWhenAllClear() {
-        XCTAssertTrue(VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: false, disableVisualizer: false, isSimulator: false))
+        XCTAssertTrue(VisualizerModeResolver.nativeSelectable(
+            reduceMotion: false, disableVisualizer: false))
     }
 
     func testNotSelectableUnderReduceMotion() {
-        XCTAssertFalse(VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: true, disableVisualizer: false, isSimulator: false))
+        XCTAssertFalse(VisualizerModeResolver.nativeSelectable(
+            reduceMotion: true, disableVisualizer: false))
     }
 
     func testNotSelectableWhenVisualizerDisabled() {
-        XCTAssertFalse(VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: false, disableVisualizer: true, isSimulator: false))
+        XCTAssertFalse(VisualizerModeResolver.nativeSelectable(
+            reduceMotion: false, disableVisualizer: true))
     }
 
-    func testNotSelectableOnSimulator() {
-        XCTAssertFalse(VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: false, disableVisualizer: false, isSimulator: true))
-    }
-
-    func testSimulatorGateBeatsOtherwiseClear() {
-        // Simulator hard-gate wins even with everything else permitting.
-        XCTAssertFalse(VisualizerModeResolver.milkdropSelectable(
-            reduceMotion: false, disableVisualizer: false, isSimulator: true))
+    func testBothGatesSuppress() {
+        XCTAssertFalse(VisualizerModeResolver.nativeSelectable(
+            reduceMotion: true, disableVisualizer: true))
     }
 
     // MARK: - effectiveMode
 
-    func testEffectiveMilkdropWhenSelectedAndClear() {
+    func testEffectiveNativeWhenSelectedAndClear() {
         XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .milkdrop, reduceMotion: false, disableVisualizer: false, isSimulator: false), .milkdrop)
+            selected: .native, reduceMotion: false, disableVisualizer: false), .native)
     }
 
     func testEffectiveFallsBackUnderReduceMotion() {
         XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .milkdrop, reduceMotion: true, disableVisualizer: false, isSimulator: false), .classic)
-    }
-
-    func testEffectiveFallsBackOnSimulator() {
-        XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .milkdrop, reduceMotion: false, disableVisualizer: false, isSimulator: true), .classic)
+            selected: .native, reduceMotion: true, disableVisualizer: false), .classic)
     }
 
     func testEffectiveFallsBackWhenVisualizerDisabled() {
         XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .milkdrop, reduceMotion: false, disableVisualizer: true, isSimulator: false), .classic)
+            selected: .native, reduceMotion: false, disableVisualizer: true), .classic)
     }
 
     func testEffectiveClassicAlwaysClassic() {
         // Classic selection is unaffected by any gate.
         XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .classic, reduceMotion: true, disableVisualizer: true, isSimulator: true), .classic)
+            selected: .classic, reduceMotion: true, disableVisualizer: true), .classic)
         XCTAssertEqual(VisualizerModeResolver.effectiveMode(
-            selected: .classic, reduceMotion: false, disableVisualizer: false, isSimulator: false), .classic)
+            selected: .classic, reduceMotion: false, disableVisualizer: false), .classic)
     }
 }

@@ -9,7 +9,7 @@ struct Acknowledgement: Identifiable {
     let license: String
     let linkage: String
     let resource: String      // bundled .txt basename
-    let note: String?         // shown above the license text (e.g. projectM LGPL/source/relink)
+    let note: String?         // optional context shown above the license text
 
     init(_ title: String, license: String, linkage: String, resource: String, note: String? = nil) {
         self.title = title
@@ -23,37 +23,12 @@ struct Acknowledgement: Identifiable {
 /// Settings ▸ About ▸ Acknowledgements. Lists all bundled third-party code and
 /// opens each component's verbatim license text. Phase 2E.
 struct AcknowledgementsView: View {
-    private let projectMNote = """
-    Vibrdrome uses projectM under the GNU Lesser General Public License v2.1, \
-    dynamically linked (the engine is a separate, replaceable @rpath dynamic \
-    library). projectM source: https://github.com/projectM-visualizer/projectm \
-    (pinned commit 4d28493). The build — including the GLES compatibility patch — \
-    is reproducible via scripts/build-projectm.sh in the public Vibrdrome \
-    repository, satisfying the LGPL relink/source provisions.
-    """
-
     private var acknowledgements: [Acknowledgement] {
         [
-            Acknowledgement("projectM", license: "LGPL-2.1", linkage: "Dynamically linked",
-                            resource: "projectM-LGPL-2.1", note: projectMNote),
-            Acknowledgement("MetalANGLE / ANGLE", license: "BSD-3-Clause", linkage: "Dynamically linked",
-                            resource: "ANGLE-BSD"),
-            Acknowledgement("GLM", license: "MIT / Happy Bunny", linkage: "Bundled in projectM",
-                            resource: "glm"),
-            Acknowledgement("glad", license: "WTFPL / CC0-1.0 / Apache-2.0", linkage: "Bundled in projectM",
-                            resource: "glad"),
-            Acknowledgement("stb_image", license: "MIT / Public Domain", linkage: "Bundled in projectM",
-                            resource: "stb_image"),
-            Acknowledgement("projectM-eval", license: "MIT", linkage: "Bundled in projectM",
-                            resource: "projectm-eval-MIT"),
-            Acknowledgement("hlslparser", license: "MIT", linkage: "Bundled in projectM",
-                            resource: "hlslparser-MIT"),
             Acknowledgement("Nuke", license: "MIT", linkage: "Swift Package",
                             resource: "Nuke-MIT"),
             Acknowledgement("KeychainAccess", license: "MIT", linkage: "Swift Package",
                             resource: "KeychainAccess-MIT"),
-            Acknowledgement("Vibrdrome MilkDrop presets", license: "Original (Vibrdrome)", linkage: "Bundled resources",
-                            resource: "Vibrdrome-presets"),
         ]
     }
 
