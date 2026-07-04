@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // The 50-preset inline DEBUG library is a long parameters-only data table (no logic), so the
@@ -37,7 +36,7 @@ struct PermissivePreset: Identifiable, Codable {
     let beatFlow: Float    // beatPulse → flow acceleration
     let beatBloom: Float   // beatPulse → bloom kick
     let hueDrift: Float    // colour drift speed (cosine-palette path)
-    // Step 7 — waveform-into-feedback (the fine-line MilkDrop look). The audio waveform is
+    // Step 7 — waveform-into-feedback (the fine-line oscilloscope look). The audio waveform is
     // drawn as thin bright geometry into the feedback texture; the warp/flow/tunnel loop
     // then pulls it into filaments. All optional/defaulted, version stays 1.
     let waveStyle: Int     // 0 = off, 1 = circular, 2 = horizontal scope
@@ -2161,4 +2160,3 @@ enum PermissivePresetLibrary {
     }()
 }
 // swiftlint:enable type_body_length
-#endif

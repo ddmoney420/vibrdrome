@@ -1,4 +1,3 @@
-#if DEBUG
 import Metal
 import MetalKit
 import simd
@@ -2726,4 +2725,3 @@ final class PermissiveFeedbackRenderer {
     """
 }
 // swiftlint:enable type_body_length
-#endif

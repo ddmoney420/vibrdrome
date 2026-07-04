@@ -1,4 +1,3 @@
-#if DEBUG
 import Combine
 import MetalKit
 import QuartzCore
@@ -6,11 +5,16 @@ import SwiftUI
 import os
 import simd
 
-/// Research Step 2 — DEBUG-only host for the native Metal feedback prototype. Reached
-/// via Settings ▸ About ▸ Debug Tools ▸ Developer ▸ "Native Visualizer Test". Reads
-/// `AudioSpectrum` scalar bass/mid/treble (with a synthesized fallback when nothing is
-/// playing) and writes a proof file once per second.
-struct PermissiveVisualizerView: View {
+/// Production host for the native Metal feedback visualizer. Embedded as the "Native"
+/// mode inside `VisualizerView`, which supplies the close/playback controls. Auto-rotates
+/// through the native scenes with a fade-to-black transition and layers a music-reactive
+/// spectrum ribbon + particle swarm over the Metal field. Reads `AudioSpectrum` scalar
+/// bass/mid/treble (with a synthesized fallback when nothing is playing). A horizontal
+/// swipe in the host bumps `advanceToken` to jump to the next scene.
+struct NativeVisualizerSurface: View {
+    /// Incremented by the host (VisualizerView) on a manual "next scene" gesture.
+    var advanceToken: Int = 0
+
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
 
@@ -35,7 +39,6 @@ struct PermissiveVisualizerView: View {
     // ── Overlay/Compositing v1 (A13): one fixed audio-reactive spectrum ribbon, SwiftUI-only,
     // reading AudioSpectrum.shared.bands. Sits UNDER the A12 fade so transitions cover it. ──────
     @State private var overlayEnabled = true
-    @State private var pendingTap: DispatchWorkItem?   // for manual single/double-tap disambiguation
     private static let overlayIntensity = 0.45    // subtle opacity / glow scale
 
     // ── Particles v1 (A14): a sparse music-reactive star/spark swarm (SwiftUI Canvas, additive).
@@ -123,25 +126,8 @@ struct PermissiveVisualizerView: View {
     }
 
     private func manualNext() {
-        dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual tap restarts the dwell
+        dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual swipe restarts the dwell
         beginTransition()
-    }
-
-    /// Manual single/double-tap disambiguation (SwiftUI's count resolver was unreliable here).
-    /// A 2nd tap within the window cancels the pending single (= next) and toggles the overlay.
-    private func handlePillTap() {
-        if let pending = pendingTap {
-            pending.cancel()
-            pendingTap = nil
-            overlayEnabled.toggle()                                  // double-tap → toggle spectrum
-            return
-        }
-        let work = DispatchWorkItem {
-            pendingTap = nil
-            manualNext()                                            // single-tap → next scene
-        }
-        pendingTap = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: work)
     }
 
     var body: some View {
@@ -161,39 +147,16 @@ struct PermissiveVisualizerView: View {
             }
             // Deliberate fade-to-black between scenes (no extra Metal targets; cheap layer composite).
             .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
-            // Top placement: the mini-player floats over the bottom of the app, so
-            // a bottom control would be blocked.
-            .overlay(alignment: .top) {
-                if !presets.isEmpty {
-                    Text("\(presets[presetIndex].name)  ·  \(autoEnabled ? "auto ⏵" : "paused ⏸")  ·  spec \(overlayEnabled ? "⏵" : "⏷")")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.55), in: Capsule())
-                        .foregroundStyle(.white)
-                        .contentShape(Capsule())
-                        .accessibilityIdentifier("permissivePresetSwitch")
-                        // single tap = next, double tap = toggle spectrum (disambiguated in code).
-                        .onTapGesture { handlePillTap() }
-                        // long-press (simultaneous) toggles auto-rotation (debug-only).
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                                autoEnabled.toggle()
-                                dwellDeadline = Date().addingTimeInterval(nextDwell())
-                            }
-                        )
-                        .padding(.top, 10)
-                }
-            }
-            .navigationTitle("Native Visualizer Test")
-            // Seed the bag + jump into the native rotation when the screen appears.
+            // Seed the bag + jump into the native rotation when the surface appears.
             .onAppear {
                 if bag.isEmpty {
                     refillBag()
-                    if autoEnabled { advanceToNext() }    // jump into the native rotation at startup
+                    advanceToNext()    // jump into the native rotation at startup
                 }
                 dwellDeadline = Date().addingTimeInterval(nextDwell())
             }
+            // Host (VisualizerView) horizontal swipe → advance to the next scene.
+            .onChange(of: advanceToken) { _, _ in manualNext() }
             // Combine timer drives the dwell check — robust (auto-cancels on disappear, never "exits").
             .onReceive(autoTicker) { _ in tick() }
     }
@@ -350,9 +313,13 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
 
     private let startTime = CACurrentMediaTime()
     private var frames = 0
+    #if DEBUG
+    // Proof scaffolding — dev-only. Never runs in Release (the 1×1 GPU readback would
+    // otherwise cost a per-second pipeline sync in a shipping build).
     private var lastProofTime: CFTimeInterval = 0
     private var lastProofFrames = 0
     private let log = Logger(subsystem: "com.vibrdrome.app", category: "PermissiveViz")
+    #endif
 
     // Spectral-flux onset detector state (Step 6). `beatPulse` is a 0..1 envelope that
     // punches to ~1 on a transient and decays — the primary reactivity signal.
@@ -374,8 +341,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private var camZ: Float = 0
     private var lastFrameTime: CFTimeInterval = 0
 
-    // Step 7 — raw-PCM waveform geometry (DEBUG-only). We enable the PCM ring's tap only
-    // while this screen is visible (and never while projectM owns the ring), drain it into
+    // Step 7 — raw-PCM waveform geometry. We enable the PCM ring's tap only
+    // while this surface is visible (and never while another consumer owns the ring), drain it into
     // a rolling mono window, and build a circular/scope line that the renderer draws into
     // the feedback field.
     static let waveWindow = 256
@@ -386,23 +353,22 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private var lastPcmOn = false
     private var lastSampleCount = 0
 
-    /// Enable the PCM tap for the duration this DEBUG screen is visible. No-op (and leaves
-    /// `pcmEnabledByMe == false`) if projectM already owns the ring, so the two renderers
-    /// never consume it at once.
+    /// Become the PCM render consumer for as long as this surface is visible. No-op (and
+    /// leaves `pcmEnabledByMe == false`) if another consumer already owns the ring, so two
+    /// renderers never drain the single-producer/single-consumer ring at once.
     func enablePCM() {
         let src = VisualizerPCMSource.shared
         guard !src.hasActiveConsumer else { pcmEnabledByMe = false; return }
-        src.setActiveForTesting(true)
+        src.beginRenderConsumer()
         pcmEnabledByMe = true
     }
 
     func disablePCM() {
         guard pcmEnabledByMe else { return }
-        // Clear the active flag so the tap's next write is a no-op. Deliberately do NOT
-        // call reset() — the audio-tap producer may still be running, and reset() is not
-        // producer-quiesce-safe (mirrors VisualizerPCMSource.endRenderConsumer). Leftover
-        // ring data is harmless; the next consumer drains it.
-        VisualizerPCMSource.shared.setActiveForTesting(false)
+        // Release ownership + turn the tap write off. endRenderConsumer() deliberately does
+        // NOT reset() — the audio-tap producer may still be running, and reset() is not
+        // producer-quiesce-safe. Leftover ring data is harmless; the next consumer drains it.
+        VisualizerPCMSource.shared.endRenderConsumer()
         pcmEnabledByMe = false
     }
 
@@ -424,7 +390,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         return any
     }
 
-    /// Build the waveform line in NDC. `style` 1 = circular (classic MilkDrop ring),
+    /// Build the waveform line in NDC. `style` 1 = circular (classic oscilloscope ring),
     /// 2 = horizontal scope. When PCM isn't live we synthesize a moving line so the idle
     /// screen still animates (the real test is with music).
     private func buildWave(style: Int, amp: Float, aspect: Float, live: Bool, time: Float) -> [SIMD2<Float>] {
@@ -470,12 +436,14 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         presetIndex = ((index % presets.count) + presets.count) % presets.count
     }
 
+    #if DEBUG
     private lazy var proofURL: URL = {
         if let override = ProcessInfo.processInfo.environment["VIBRDROME_PERMISSIVE_PROOF"] {
             return URL(fileURLWithPath: override)
         }
         return FileManager.default.temporaryDirectory.appendingPathComponent("permissive_proof.txt")
     }()
+    #endif
 
     override init() {
         let dev = MTLCreateSystemDefaultDevice()
@@ -544,7 +512,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         renderer.render(in: view, uniforms: u)
         frames += 1
 
-        // Proof + 1×1 center readback ONCE PER SECOND (never per frame).
+        #if DEBUG
+        // Proof + 1×1 center readback ONCE PER SECOND (never per frame). Dev-only.
         if now - lastProofTime >= 1.0 {
             let fps = frames - lastProofFrames
             let px = renderer.readCenter()
@@ -552,6 +521,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
             lastProofTime = now
             lastProofFrames = frames
         }
+        #endif
     }
 
     private struct AudioFrame {
@@ -607,6 +577,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         return (beatPulse, lastPunch)
     }
 
+    #if DEBUG
     private func writeProof(fps: Int, audio: AudioFrame, px: (UInt8, UInt8, UInt8)) {
         let text = """
         engine=PermissiveFeedback
@@ -646,6 +617,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         log.notice("PermissiveFeedback fps=\(fps) src=\(audio.real ? "real" : "fallback", privacy: .public) px=(\(px.0),\(px.1),\(px.2))")
         punchPeak = .zero   // reset the per-window peak after each proof write
     }
+    #endif
 }
 
 #if canImport(UIKit)
@@ -694,5 +666,4 @@ struct PermissiveMetalContainer: NSViewRepresentable {
         coordinator.disablePCM()
     }
 }
-#endif
 #endif

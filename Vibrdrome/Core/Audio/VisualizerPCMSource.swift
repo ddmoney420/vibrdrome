@@ -1,13 +1,13 @@
 import Synchronization
 
-/// App-facing entry point for the projectM visualizer's PCM feed. A single
+/// App-facing entry point for the native visualizer's PCM feed. A single
 /// shared instance owns one interleaved-stereo `FloatRingBuffer`.
 ///
 /// Phase 1A establishes only the type, capacity, and API. Nothing feeds or
 /// drains it yet:
 /// - the EQ-tap producer is wired in Phase 1B (and gated by an `isActive` flag
 ///   added there);
-/// - the projectM render consumer arrives in Phase 2.
+/// - the native visualizer is the render consumer.
 ///
 /// See `FloatRingBuffer` for the SPSC real-time-safety contract. Mirrors the
 /// existing `AudioSpectrum.shared` pattern.
@@ -30,7 +30,7 @@ final class VisualizerPCMSource: @unchecked Sendable {
 
     /// Whether the EQ tap should feed PCM into the ring. Defaults to `false`, so
     /// the tap's write is a no-op (one relaxed atomic load + an untaken branch)
-    /// until the projectM visualizer turns it on (Phase 2). Real-time safe to
+    /// until the native visualizer turns it on. Real-time safe to
     /// read from the audio callback.
     ///
     /// In Phase 1B nothing in shipping code sets this; it stays `false`. Tests /
@@ -62,14 +62,14 @@ final class VisualizerPCMSource: @unchecked Sendable {
 
     // MARK: - Render consumer lifecycle (shipping; Phase 2B)
 
-    /// True while a projectM renderer is the live consumer. The DEBUG PCM overlay
+    /// True while a visualizer renderer is the live consumer. The DEBUG PCM overlay
     /// reads this to stay stats-only — it must not drain the SPSC ring while the
     /// renderer drains it.
     var hasActiveConsumer: Bool {
         consumerAttached.load(ordering: .relaxed)
     }
 
-    /// The projectM renderer became the consumer: turn on the EQ-tap PCM write and
+    /// The visualizer renderer became the consumer: turn on the EQ-tap PCM write and
     /// mark the ring owned. Called on the main thread when the renderer appears.
     func beginRenderConsumer() {
         consumerAttached.store(true, ordering: .relaxed)
@@ -80,7 +80,7 @@ final class VisualizerPCMSource: @unchecked Sendable {
     /// Deliberately does NOT call `reset()` — the producer (audio tap) may still be
     /// running, and `reset()` is not producer-quiesce-safe. Clearing `isActive`
     /// makes the tap's next callback a no-op; any leftover ring data is harmless
-    /// (the next consumer drains it on its first frame, and projectM keeps only the
+    /// (the next consumer drains it on its first frame, and the native visualizer keeps only the
     /// most recent samples from its rolling window).
     func endRenderConsumer() {
         isActive.store(false, ordering: .relaxed)
@@ -104,7 +104,7 @@ final class VisualizerPCMSource: @unchecked Sendable {
         ring.writePlanarStereo(left: src, right: src, frameCount: frameCount)
     }
 
-    // MARK: - Consumer — wired to the projectM render path in Phase 2
+    // MARK: - Consumer — wired to the native visualizer render path
 
     func read(into dst: UnsafeMutablePointer<Float>, maxFrames: Int) -> Int {
         ring.read(into: dst, maxFrames: maxFrames)
