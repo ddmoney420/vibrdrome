@@ -84,11 +84,9 @@ enum UserDefaultsKeys {
     static let visualizerWarningShown = "visualizerWarningShown"
     static let showAlbumArtInLists = "showAlbumArtInLists"
     static let visualizerPreset = "visualizerPreset"
+    /// Selected visualizer backend: "classic" or "native". (Legacy "milkdrop" values are
+    /// migrated to "native" at launch — see Vibrdrome.migrateVisualizerMode().)
     static let visualizerMode = "visualizerMode"
-    static let visualizerMilkdropWarningShown = "visualizerMilkdropWarningShown"
-    static let milkdropPresetName = "milkdropPresetName"
-    static let milkdropShuffle = "milkdropShuffle"
-    static let milkdropPresetDuration = "milkdropPresetDuration"
 
     // MARK: - Now Playing Toolbar
 

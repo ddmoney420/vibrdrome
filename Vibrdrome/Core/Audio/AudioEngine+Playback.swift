@@ -222,6 +222,7 @@ extension AudioEngine {
         if isUITesting { isPlaying = false; return }
         activePlayer?.pause()
         isPlaying = false
+        disarmStallRecovery(reason: "userPause")   // a user/interruption pause is not a stall
         NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
     }
 

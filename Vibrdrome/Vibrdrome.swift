@@ -78,6 +78,7 @@ struct VibrdromeApp: App {
 
     init() {
         Self.migrateCredentialsToKeychain()
+        Self.migrateVisualizerMode()
         Self.pruneLegacyWidgetCoverArtKeys()
         // BGTaskScheduler.register() MUST run synchronously during app initialization,
         // before UIApplication finishes launching. If iOS launches the app specifically to
@@ -141,6 +142,20 @@ struct VibrdromeApp: App {
                 m.keychain[m.keychainKey] = value
                 defaults.removeObject(forKey: m.key)
             }
+        }
+    }
+
+    /// One-time migration: the legacy projectM "milkdrop" visualizer mode was replaced by
+    /// the in-house "native" engine. Anyone who had MilkDrop selected is moved to Native.
+    /// Safe to call repeatedly. Also clears the now-defunct milkdrop preference keys.
+    private static func migrateVisualizerMode() {
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: UserDefaultsKeys.visualizerMode) == "milkdrop" {
+            defaults.set(VisualizerMode.native.rawValue, forKey: UserDefaultsKeys.visualizerMode)
+        }
+        for key in ["visualizerMilkdropWarningShown", "milkdropPresetName",
+                    "milkdropShuffle", "milkdropPresetDuration"] {
+            defaults.removeObject(forKey: key)
         }
     }
 
@@ -221,9 +236,6 @@ struct VibrdromeApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
-                #if DEBUG
-                .debugGLTestProof()
-                #endif
             #else // iOS
             ContentView()
                 .environment(appState)
@@ -270,9 +282,6 @@ struct VibrdromeApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
-                #if DEBUG
-                .debugGLTestProof()
-                #endif
             #endif
         }
         #if os(macOS)

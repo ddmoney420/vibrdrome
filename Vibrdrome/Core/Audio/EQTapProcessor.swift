@@ -322,7 +322,7 @@ enum EQTapProcessor {
             AudioSpectrum.shared.processPCM(samples, count: frameCount, sampleRate: sampleRate)
         }
 
-        // Feed the projectM visualizer PCM ring (post-EQ / post-effects, same as
+        // Feed the visualizer PCM ring (post-EQ / post-effects, same as
         // the spectrum above). DOUBLY GATED: the visualizer must be on AND this
         // tap must be the designated single audible source (so crossfade overlap
         // never double-feeds). Both are relaxed atomic loads — no registry access,

@@ -55,6 +55,7 @@ extension AudioEngine {
             .sink { [weak self] empty in
                 guard let self, self.generationValue == observerGeneration else { return }
                 self.isBuffering = empty
+                if empty { self.armStallRecovery(reason: "bufferEmpty") }
             })
 
         setStatusObserver(item.publisher(for: \.status)
@@ -82,6 +83,8 @@ extension AudioEngine {
                     }
                 }
             })
+
+        setupStallRecoveryObservers(for: item, generation: observerGeneration)
     }
 
     func setupTrackEndObserver(
@@ -140,7 +143,181 @@ extension AudioEngine {
     }
 
     func tearDownPropertyObservers() {
+        disarmStallRecovery(reason: "teardown")
         clearPropertyObservers()
+    }
+
+    // MARK: - Stalled-Stream Auto-Recovery
+    //
+    // A network stall can park the player at `paused`/rate-0 even after the buffer refills,
+    // leaving playback silently stuck (proven via diagnostics: WAITING → stalled → paused →
+    // 40s buffered, playhead frozen). We re-issue playback ONLY when the app still intends to
+    // play (`isPlaying`), the player is genuinely parked (`.paused`, not still `WAITING`), and
+    // the buffer has recovered — never on a user/interruption pause (those clear `isPlaying`).
+    // Shared `activePlayer` path → covers gapless and crossfade. Action is kill-switchable.
+
+    /// Attach time-control / buffer-recovery observers to the active player+item.
+    func setupStallRecoveryObservers(for item: AVPlayerItem, generation gen: Int) {
+        guard let player = activePlayer else { return }
+        stallItemHasPlayed = false   // fresh item — wait until it actually plays before arming
+
+        player.publisher(for: \.timeControlStatus)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self, self.generationValue == gen else { return }
+                self.handleTimeControlStatus(status)
+            }.store(in: &stallObservers)
+
+        item.publisher(for: \.isPlaybackLikelyToKeepUp)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] likely in
+                guard let self, self.generationValue == gen else { return }
+                if likely, self.stallRecoveryArmed { self.scheduleStallRecoveryCheck() }
+            }.store(in: &stallObservers)
+
+        item.publisher(for: \.loadedTimeRanges)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.generationValue == gen else { return }
+                if self.stallRecoveryArmed { self.scheduleStallRecoveryCheck() }
+            }.store(in: &stallObservers)
+
+        stallNotifToken = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled, object: item, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.generationValue == gen else { return }
+                self.armStallRecovery(reason: "stalled")
+            }
+        }
+    }
+
+    private func handleTimeControlStatus(_ status: AVPlayer.TimeControlStatus) {
+        switch status {
+        case .waitingToPlayAtSpecifiedRate:
+            // Persistent waiting with ample buffer is a stuck state we override after a grace.
+            if isPlaying { armStallRecovery(reason: "waiting"); scheduleStallRecoveryCheck() }
+        case .paused:
+            // Involuntary pause (a user pause clears `isPlaying` + disarms before this fires).
+            if isPlaying { armStallRecovery(reason: "pausedAfterStall"); scheduleStallRecoveryCheck() }
+        case .playing:
+            stallItemHasPlayed = true   // a later not-playing transition is now a real stall
+            if stallRecoveryArmed {
+                if stallRecoveryAttempts > 0 {
+                    recoveryEvent("RECOVERY.success after \(self.stallRecoveryAttempts) attempt(s)")
+                } else {
+                    recoveryEvent("RECOVERY.selfRecovered")   // short waiting resolved on its own
+                }
+                disarmStallRecovery(reason: "playing", silent: true)
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    /// Lightweight production `RECOVERY.*` event (ships in Release) for diagnosing future stalls.
+    func recoveryEvent(_ message: String) {
+        observerLog.info("\(message, privacy: .public)")
+    }
+
+    func armStallRecovery(reason: String) {
+        // Only a stall of an already-playing item — never initial buffering at track start.
+        guard isPlaying, !stallRecoveryArmed, stallItemHasPlayed else { return }
+        stallRecoveryArmed = true
+        stallRecoveryAttempts = 0
+        stallBufferAmpleSince = nil
+        recoveryEvent("RECOVERY.armed reason=\(reason)")
+    }
+
+    /// (Re)schedule a recovery evaluation. Short debounce by default; the grace path reschedules
+    /// with the remaining grace so a stuck WAITING is re-checked even if buffer updates stop.
+    func scheduleStallRecoveryCheck(after delay: TimeInterval = 0.3) {
+        pendingStallRecovery?.cancel()
+        let gen = generationValue
+        pendingStallRecovery = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(delay, 0.05)))
+            guard let self, !Task.isCancelled, self.generationValue == gen else { return }
+            self.attemptStallRecovery(generation: gen)
+        }
+    }
+
+    private func attemptStallRecovery(generation gen: Int) {
+        guard generationValue == gen, isPlaying, stallRecoveryArmed,
+              let player = activePlayer, let item = player.currentItem else { return }
+        // Act while genuinely not playing — either parked at .paused OR stuck WAITING. If it
+        // resumed, the .playing handler already disarmed us.
+        let status = player.timeControlStatus
+        guard status == .paused || status == .waitingToPlayAtSpecifiedRate else { return }
+
+        // Buffer must be clearly healthy before we override AVPlayer.
+        let ahead = AudioEngine.bufferedAhead(in: item, current: player.currentTime().seconds)
+        let ample = ahead >= AudioEngine.stallRecoveryBufferThreshold || item.isPlaybackLikelyToKeepUp
+        guard ample else { stallBufferAmpleSince = nil; return }   // wait for the buffer to fill
+
+        // Grace: give AVPlayer's normal short waiting time to self-recover before we force play.
+        let now = Date()
+        if stallBufferAmpleSince == nil { stallBufferAmpleSince = now }
+        let ampleFor = now.timeIntervalSince(stallBufferAmpleSince ?? now)
+        guard ampleFor >= AudioEngine.stallRecoveryGrace else {
+            scheduleStallRecoveryCheck(after: AudioEngine.stallRecoveryGrace - ampleFor + 0.1)
+            return
+        }
+
+        // Bound retries.
+        guard stallRecoveryAttempts < AudioEngine.stallRecoveryMaxAttempts else {
+            recoveryEvent("RECOVERY.giveUp after \(stallRecoveryAttempts) attempt(s)")
+            disarmStallRecovery(reason: "giveUp", silent: true)
+            return
+        }
+        // Anti-thrash throttle.
+        if let last = lastStallRecoveryTime,
+           now.timeIntervalSince(last) < AudioEngine.stallRecoveryMinInterval {
+            scheduleStallRecoveryCheck(after: AudioEngine.stallRecoveryMinInterval)
+            return
+        }
+        // Kill switch gates the ACTION, not the logging.
+        guard stallAutoRecoveryEnabled else {
+            recoveryEvent("RECOVERY.attempt suppressed (stallAutoRecoveryEnabled=false)")
+            return
+        }
+        stallRecoveryAttempts += 1
+        lastStallRecoveryTime = now
+        let reason = status == .waitingToPlayAtSpecifiedRate ? "persistentWaiting" : "pausedAfterStall"
+        recoveryEvent("RECOVERY.attempt #\(stallRecoveryAttempts) reason=\(reason) "
+            + "aheadSec=\(String(format: "%.1f", ahead))")
+        player.playImmediately(atRate: playbackRate)
+        scheduleStallRecoveryWatchdog(generation: gen)
+    }
+
+    private func scheduleStallRecoveryWatchdog(generation gen: Int) {
+        pendingStallRecovery?.cancel()
+        pendingStallRecovery = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled, self.generationValue == gen,
+                  self.stallRecoveryArmed else { return }
+            if self.activePlayer?.timeControlStatus == .playing {
+                recoveryEvent("RECOVERY.success after \(self.stallRecoveryAttempts) attempt(s)")
+                self.disarmStallRecovery(reason: "success", silent: true)
+            } else if self.stallRecoveryAttempts < AudioEngine.stallRecoveryMaxAttempts {
+                self.scheduleStallRecoveryCheck()   // retry/backoff
+            } else {
+                recoveryEvent("RECOVERY.giveUp after \(self.stallRecoveryAttempts) attempt(s)")
+                self.disarmStallRecovery(reason: "giveUp", silent: true)
+            }
+        }
+    }
+
+    func disarmStallRecovery(reason: String, silent: Bool = false) {
+        let wasArmed = stallRecoveryArmed
+        stallRecoveryArmed = false
+        stallRecoveryAttempts = 0
+        lastStallRecoveryTime = nil
+        stallBufferAmpleSince = nil
+        pendingStallRecovery?.cancel()
+        pendingStallRecovery = nil
+        if wasArmed && !silent {
+            recoveryEvent("RECOVERY.disarmed reason=\(reason)")
+        }
     }
 
     // MARK: - Scrobbling

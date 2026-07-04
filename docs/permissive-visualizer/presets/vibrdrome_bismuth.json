@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "zoom": 0.0,
+  "rotate": 0.0,
+  "paletteShift": 0.0,
+  "pulseScale": 0.2,
+  "zoomBass": 0.0,
+  "rotateTreble": 0.0,
+  "pulseBass": 0.0,
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "id": "vibrdrome_bismuth",
+  "name": "Bismuth",
+  "decay": 0.9,
+  "paletteIndex": 10,
+  "bloomStrength": 0.45,
+  "vibrance": 1.6,
+  "symmetry": 1,
+  "hex": 0.9,
+  "plasma": 0.5
+}

@@ -3,12 +3,15 @@ import SwiftData
 
 struct FavoritesView: View {
     @Environment(AppState.self) private var appState
-    @Query(filter: #Predicate<CachedArtist> { $0.isStarred }, sort: \CachedArtist.name)
-    private var starredArtists: [CachedArtist]
-    @Query(filter: #Predicate<CachedAlbum> { $0.isStarred }, sort: \CachedAlbum.name)
-    private var starredAlbums: [CachedAlbum]
-    @Query(filter: #Predicate<CachedSong> { $0.isStarred }, sort: \CachedSong.title)
-    private var starredSongs: [CachedSong]
+    @Environment(\.modelContext) private var modelContext
+    // Point-in-time snapshots loaded via FetchDescriptor (see `loadFavorites`) — NOT live @Query.
+    // A live @Query here fed `.onChange(of:)` on SwiftData @Model arrays; each store change handed
+    // back fresh object identities, so `.onChange` re-fired every update cycle → body re-ran →
+    // recompute wrote @State → body re-ran … an infinite loop that pegged the main thread and got
+    // watchdog-killed (0x8BADF00D). Snapshots are only refreshed outside `body`, breaking the loop.
+    @State private var starredArtists: [CachedArtist] = []
+    @State private var starredAlbums: [CachedAlbum] = []
+    @State private var starredSongs: [CachedSong] = []
     @State private var searchText = ""
     @State private var searchIsActive = false
     @State private var selectedSongs = Set<String>()
@@ -146,12 +149,13 @@ struct FavoritesView: View {
             AddToPlaylistView(songIds: Array(selectedSongs))
                 .environment(appState)
         }
-        .refreshable { await LibrarySyncManager.shared.syncIfStale() }
+        .refreshable { await LibrarySyncManager.shared.syncIfStale(); loadFavorites() }
         .onChange(of: searchText) { recomputeFilteredLists() }
-        .onChange(of: starredArtists) { recomputeFilteredLists() }
-        .onChange(of: starredAlbums) { recomputeFilteredLists() }
-        .onChange(of: starredSongs) { recomputeFilteredLists() }
-        .onAppear { recomputeFilteredLists() }
+        // Re-fetch the snapshot when a favorite is added/removed anywhere (a stable Int signal —
+        // never a @Model array) and whenever the view (re)appears. No live @Query observation, so
+        // no query/body/state feedback loop.
+        .onChange(of: OfflineActionQueue.shared.favoritesRevision) { loadFavorites() }
+        .onAppear { loadFavorites() }
     }
 
     // MARK: - Category picker
@@ -360,6 +364,25 @@ struct FavoritesView: View {
         } description: {
             Text("Star items to see them here")
         }
+    }
+
+    /// Fetch starred items via FetchDescriptor (a point-in-time snapshot) and refresh the filtered
+    /// lists. Called on appear, when `favoritesRevision` changes (a star/unstar happened), and after
+    /// a manual sync — always OUTSIDE `body`, so there is no query/body/state feedback loop.
+    private func loadFavorites() {
+        let artistDesc = FetchDescriptor<CachedArtist>(
+            predicate: #Predicate { $0.isStarred }, sortBy: [SortDescriptor(\.name)])
+        starredArtists = (try? modelContext.fetch(artistDesc)) ?? []
+
+        let albumDesc = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate { $0.isStarred }, sortBy: [SortDescriptor(\.name)])
+        starredAlbums = (try? modelContext.fetch(albumDesc)) ?? []
+
+        let songDesc = FetchDescriptor<CachedSong>(
+            predicate: #Predicate { $0.isStarred }, sortBy: [SortDescriptor(\.title)])
+        starredSongs = (try? modelContext.fetch(songDesc)) ?? []
+
+        recomputeFilteredLists()
     }
 
     private func recomputeFilteredLists() {

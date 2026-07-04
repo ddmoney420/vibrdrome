@@ -2,7 +2,7 @@
 import XCTest
 @testable import Vibrdrome
 
-/// Phase 2B: the projectM renderer owns `VisualizerPCMSource` activation, and the
+/// A visualizer render consumer owns `VisualizerPCMSource` activation, and the
 /// DEBUG PCM overlay must defer to it — stats-only, with NO second drain on the
 /// single-producer/single-consumer ring. These tests exercise that coordination
 /// through the public API (`active` / `hasActiveConsumer`); the overlay's private

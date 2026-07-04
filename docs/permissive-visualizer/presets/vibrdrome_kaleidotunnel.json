@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "zoom": 0.0,
+  "rotate": 0.0,
+  "paletteShift": 0.0,
+  "pulseScale": 0.2,
+  "zoomBass": 0.0,
+  "rotateTreble": 0.0,
+  "pulseBass": 0.0,
+  "author": "Vibrdrome",
+  "license": "permissive-tbd",
+  "id": "vibrdrome_kaleidotunnel",
+  "name": "Kaleidotunnel",
+  "decay": 0.9,
+  "paletteIndex": 6,
+  "bloomStrength": 0.55,
+  "vibrance": 1.55,
+  "symmetry": 2,
+  "kaleido": 6,
+  "tunnel3d": 0.8,
+  "chroma": 0.3
+}
