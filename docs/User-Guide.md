@@ -131,11 +131,12 @@ When your iPhone is connected to CarPlay, Vibrdrome shows a dedicated CarPlay in
 
 ## Visualizer
 
-Open the visualizer from the Now Playing screen (waveform icon). Swipe sideways to cycle presets, swipe down to dismiss, tap once to toggle controls.
+Open the visualizer from the Now Playing screen (waveform icon). Swipe down to dismiss, tap once to toggle controls. The visualizer has two modes, chosen from the mode button at the top of the visualizer:
 
-- **Spectrum / Waveform / Aurora** react to the real frequency content of the audio: bass on the left of the screen, treble on the right. Spectrum shows classic peak-hold caps floating above each bar.
-- Other presets animate from an overall energy curve and still pulse with the music.
-- See **Settings > Accessibility** for photosensitivity controls.
+- **Classic** (default) — Metal shader presets. **Spectrum / Waveform / Aurora** react to the real frequency content of the audio: bass on the left of the screen, treble on the right. Spectrum shows classic peak-hold caps floating above each bar. Other presets animate from an overall energy curve and still pulse with the music. Swipe sideways to cycle presets.
+- **Native Visualizer** — an in-house GPU Metal engine with dozens of music-reactive scenes that rotate automatically, responding to the beat, bass, mids, and treble of the track. Swipe sideways to jump to the next scene.
+
+See **Settings > Accessibility** for photosensitivity controls (Reduce Motion, Disable Visualizer).
 
 ## Multi-Server Support
 
