@@ -101,4 +101,49 @@ struct AudioSpectrumTests {
         #expect(size > 0)
         #expect(size & (size - 1) == 0) // Power of 2 check
     }
+
+    // MARK: - Fast (native-only) band set — Slice 3
+
+    @Test func bandsFastInitialZeroAndReset() {
+        let spectrum = AudioSpectrum.shared
+        spectrum.reset()
+        #expect(spectrum.bandsFast.count == AudioSpectrum.bandCount)
+        #expect(spectrum.bandsFast.allSatisfy { $0 == 0 })
+    }
+
+    @Test func bandsFastClampedToUnitRange() {
+        let spectrum = AudioSpectrum.shared
+        spectrum.reset()
+        var samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
+        samples.withUnsafeBufferPointer { buf in
+            spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
+        }
+        #expect(spectrum.bandsFast.allSatisfy { $0 >= 0 && $0 <= 1 })
+    }
+
+    /// The fast band set uses a quicker EMA (0.5/0.35) than the smoothed `bands` (0.4/0.12),
+    /// so it rises faster on a transient and fades faster on silence.
+    @Test func bandsFastRespondsFasterThanSmoothedBands() {
+        let spectrum = AudioSpectrum.shared
+        spectrum.reset()
+
+        // One loud frame from zero → fast attack (0.5) should exceed the smoothed attack (0.4).
+        var tone = [Float](repeating: 0, count: AudioSpectrum.fftSize)
+        let sr: Float = 44100, freq: Float = 440
+        for i in 0..<AudioSpectrum.fftSize { tone[i] = sin(2.0 * .pi * freq * Float(i) / sr) }
+        tone.withUnsafeBufferPointer { buf in
+            spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: sr)
+        }
+        let sumBands = spectrum.bands.reduce(0, +)
+        let sumFast = spectrum.bandsFast.reduce(0, +)
+        #expect(sumBands > 0)        // sanity: the tone produced signal
+        #expect(sumFast > sumBands)  // faster attack
+
+        // One silent frame → fast decay (retains 0.65) should fall below the smoothed (retains 0.88).
+        let silence = [Float](repeating: 0, count: AudioSpectrum.fftSize)
+        silence.withUnsafeBufferPointer { buf in
+            spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: sr)
+        }
+        #expect(spectrum.bandsFast.reduce(0, +) < spectrum.bands.reduce(0, +))  // faster fade
+    }
 }
