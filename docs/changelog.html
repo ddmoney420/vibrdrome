@@ -351,8 +351,16 @@
             <div class="timeline-item" data-animate>
                 <div class="build-card">
                     <div class="build-header">
-                        <span class="build-badge">Unreleased</span>
-                        <span class="build-date">In development</span>
+                        <span class="build-badge">Build 56</span>
+                        <span class="build-date">July 5, 2026</span>
+                    </div>
+                    <div class="build-section">
+                        <h3 class="build-section-title">Visualizer</h3>
+                        <ul class="build-list">
+                            <li>New <strong>Native Visualizer</strong> &mdash; an in-house, GPU-accelerated Metal visualizer with dozens of music-reactive scenes. Pick it from the visualizer's mode selector. <strong>Classic (Metal shader presets) remains the default</strong>; Native is opt-in.</li>
+                            <li>Native Visualizer reactivity improvements: stronger beat and bass pulse, better kick response, stronger mid/treble snap, and a faster beat/mid/treble response.</li>
+                            <li>The iOS app does not bundle the MilkDrop/projectM engine &mdash; its visualizer is entirely in-house (Classic Metal shaders plus the new Native engine). Classic is unchanged.</li>
+                        </ul>
                     </div>
                     <div class="build-section">
                         <h3 class="build-section-title">Security</h3>
@@ -363,6 +371,8 @@
                     <div class="build-section">
                         <h3 class="build-section-title">Bug fixes</h3>
                         <ul class="build-list">
+                            <li>Favorites: unfavoriting a song (including the currently-playing track, and while the list is scrolling) no longer freezes or crashes the app.</li>
+                            <li>Audio: playback now recovers automatically after a stream stall or buffer underrun instead of going silent.</li>
                             <li>Fixed the progress slider and time display on tracks whose duration is under-reported by the player: elapsed time no longer counts past the end of the slider, the total reflects the longer of the player and server durations, and seeking can reach the true end of the track (#58).</li>
                             <li>Fixed the mini player overlapping the tab bar on small iPhones without a home-indicator inset (iPhone SE, mini): the player now clears the taller iOS 26 tab bar, while notched phones are unchanged (#69).</li>
                             <li>Quick Settings (Now Playing &rarr; gear) now opens at full height so the Download and Share rows are reachable on smaller iPhones, where they were previously clipped below the sheet; the sheet can still be dragged down to the medium size (#72).</li>

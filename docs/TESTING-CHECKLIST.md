@@ -1,5 +1,15 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 56 — Native Visualizer & reactivity
+
+- [ ] Visualizer opens from Now Playing; **Classic is the default** and renders
+- [ ] Native Visualizer is selectable from the visualizer's mode picker (not only under Debug)
+- [ ] Native renders through the production UI (shared close/playback controls), auto-rotates scenes, and swipe advances to the next scene
+- [ ] Mode selection (Classic ↔ Native) persists across app restart
+- [ ] Reactivity: on bass-heavy and busy tracks the beat/bass pulse, kick, and mid/treble snap feel tied to the music; 3D scenes stay calm (no fast plunge); no flicker
+- [ ] Reduce Motion and Disable Visualizer still gate correctly (Native → Classic / hidden)
+- [ ] No MilkDrop/projectM option or acknowledgement appears anywhere on iOS; Acknowledgements shows only Nuke and KeychainAccess
+
 ## Unreleased — Small-iPhone layout & navigation (#69, #72, #70)
 
 - [ ] **#69:** on a small iPhone (SE / 13 mini), the mini player clears the tab bar — icons and labels fully visible and tappable; notched phones unchanged
