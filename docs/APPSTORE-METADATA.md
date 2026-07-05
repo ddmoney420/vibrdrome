@@ -1,5 +1,14 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 56)
+
+- New Native Visualizer: an in-house, GPU-accelerated Metal visualizer with dozens of music-reactive scenes. Open the visualizer from Now Playing and pick it from the mode selector. Classic (Metal shader presets) remains the default; Native is opt-in.
+- Native Visualizer reactivity: stronger beat and bass pulse, better kick response, stronger mid/treble snap, and a faster beat/mid/treble response so the visuals track the music more tightly.
+- Favorites: unfavoriting a song (including the one currently playing) no longer freezes or crashes the app.
+- Audio: playback now recovers automatically after a stream stall instead of going silent.
+- Small-iPhone layout fixes: the mini player clears the tab bar, Quick Settings opens tall enough to reach Download and Share, and the "More" tab keeps a single back button.
+- Fixed progress/seek on tracks whose duration is under-reported by the player.
+
 ## What's New (v1.0.0 Beta Build 54)
 
 - Internet lyrics: when your server has no lyrics for a track, look them up on LRCLIB (synced when available). Toggle in Settings → Player.

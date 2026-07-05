@@ -4,12 +4,19 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
-### Unreleased
+### Build 56 -- July 5, 2026
+
+**Visualizer:**
+- New **Native Visualizer** -- an in-house, GPU-accelerated Metal visualizer with dozens of music-reactive scenes. Open the visualizer from Now Playing and pick it from the mode selector. **Classic (Metal shader presets) remains the default**; Native is opt-in.
+- Native Visualizer reactivity improvements: stronger beat and bass pulse, better kick response, stronger mid/treble snap, and a faster beat/mid/treble response so the visuals track the music more tightly.
+- The iOS app does not bundle the MilkDrop/projectM engine -- its visualizer is entirely in-house (Classic Metal shaders plus the new Native engine). Classic is unchanged.
 
 **Security:**
 - Added an explicit confirmation when saving a public, non-local HTTP server connection. Local/LAN HTTP servers and HTTPS connections are unchanged.
 
 **Bug fixes:**
+- Favorites: unfavoriting a song (including the currently-playing track, and while the list is scrolling) no longer freezes or crashes the app.
+- Audio: playback now recovers automatically after a stream stall or buffer underrun instead of going silent.
 - Fixed the progress slider and time display on tracks whose duration is under-reported by the player: the elapsed time no longer counts past the end of the slider, the total reflects the longer of the player and server durations, and seeking can reach the true end of the track (#58).
 - Fixed the mini player overlapping the tab bar on small iPhones without a home-indicator inset (iPhone SE, mini): the player now clears the taller iOS 26 tab bar, while notched phones are unchanged (#69).
 - Quick Settings (Now Playing -> gear) now opens at full height so the Download and Share rows are reachable on smaller iPhones, where they were previously clipped below the sheet; the sheet can still be dragged down to the medium size (#72).

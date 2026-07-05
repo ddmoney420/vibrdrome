@@ -1,5 +1,16 @@
 # Regression Testing Checklist
 
+## Build 56 — Native Visualizer, reactivity, projectM removal
+
+- [ ] Classic visualizer is the default and opens/renders from Now Playing
+- [ ] Native Visualizer selectable from the production mode picker; renders via the shared controls (not the old debug HUD); auto-rotates; swipe advances scenes
+- [ ] Native reactivity feels tied to the music (beat/bass pulse, kick, mid/treble snap); 3D/raymarch scenes stay calm; no flicker/twitch
+- [ ] Mode choice persists across restart; a stored legacy "milkdrop" value migrates to Native
+- [ ] Reduce Motion / Disable Visualizer behave correctly
+- [ ] Classic behaviour unchanged from prior builds
+- [ ] No projectM/MilkDrop UI, acknowledgements, or license text on iOS
+- [ ] Release archive is zero-footprint (no projectM/MetalANGLE frameworks/symbols, no .milk/LGPL files)
+
 ## Unreleased — Public HTTP server confirmation
 
 - [ ] Public (non-local) HTTP server prompts once per host on save
