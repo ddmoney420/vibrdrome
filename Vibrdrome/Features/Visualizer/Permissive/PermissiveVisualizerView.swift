@@ -324,6 +324,9 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     // Spectral-flux onset detector state (Step 6). `beatPulse` is a 0..1 envelope that
     // punches to ~1 on a transient and decays — the primary reactivity signal.
     private var prevBands = [Float](repeating: 0, count: AudioSpectrum.bandCount)
+    // Slice 3: previous FAST (less-smoothed) bands. Beat + mid/treble punch flux is measured
+    // against these; bass punch stays on `prevBands` (smoothed) so u.bassPunch / 3D stay calm.
+    private var prevFastBands = [Float](repeating: 0, count: AudioSpectrum.bandCount)
     private var fluxAvg: Float = 0
     private var beatPulse: Float = 0
 
@@ -469,7 +472,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let time = Float(now - startTime)
         let audio = Self.sampleAudio(time: time)
         let p = activePreset
-        let (pulse, punch) = updateAudio(bands: audio.bands)
+        let (pulse, punch) = updateAudio(bands: audio.bands, fastBands: audio.fastBands)
 
         // 3D tunnel: integrate forward camera position from speed (bass + bass-punch surge).
         let dt = lastFrameTime == 0 ? 0 : Float(now - lastFrameTime)
@@ -527,6 +530,7 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
     private struct AudioFrame {
         let real: Bool; let energy: Float; let bass: Float; let mid: Float; let treble: Float
         let bands: [Float]
+        let fastBands: [Float]   // Slice 3: less-smoothed bands for beat + mid/treble flux
     }
 
     /// Use the real audio signal (AudioSpectrum, fed by the EQ tap) when energy is
@@ -536,7 +540,8 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
         let s = AudioSpectrum.shared
         let energy = s.energy
         if energy > 0.02 {
-            return AudioFrame(real: true, energy: energy, bass: s.bass, mid: s.mid, treble: s.treble, bands: s.bands)
+            return AudioFrame(real: true, energy: energy, bass: s.bass, mid: s.mid, treble: s.treble,
+                              bands: s.bands, fastBands: s.bandsFast)
         }
         // Fallback: synthesized beat + a moving 32-band pattern so the overlay animates.
         let bands = (0..<AudioSpectrum.bandCount).map { i in
@@ -546,22 +551,29 @@ final class PermissiveCoordinator: NSObject, MTKViewDelegate {
                           bass: 0.35 + 0.30 * sinf(time * 2.1),
                           mid: 0.30 + 0.25 * sinf(time * 1.6 + 1.0),
                           treble: 0.25 + 0.25 * sinf(time * 2.7 + 2.0),
-                          bands: bands)
+                          bands: bands, fastBands: bands)
     }
 
     /// Combined audio reactivity from one pass over the band deltas. The overall positive
     /// spectral flux drives the beat onset (adaptive threshold → attack/decay `beatPulse`);
     /// band-grouped flux drives bass/mid/treble PUNCH envelopes (peak-hold + decay). Using
     /// per-frame flux (RISES, not absolute level) keeps punch alive on loud/clipped audio.
-    private func updateAudio(bands: [Float]) -> (beat: Float, punch: SIMD3<Float>) {
-        let n = min(bands.count, prevBands.count)
-        var total: Float = 0, bF: Float = 0, mF: Float = 0, tF: Float = 0
-        for i in 0..<n {
-            let d = max(0, bands[i] - prevBands[i])
-            total += d
-            if i < 6 { bF += d } else if i < 17 { mF += d } else { tF += d }   // bass / mid / treble
-        }
+    private func updateAudio(bands: [Float], fastBands: [Float]) -> (beat: Float, punch: SIMD3<Float>) {
+        // Slice 3: bass punch flux from the SMOOTHED bands (keeps u.bassPunch magnitude → calm 3D).
+        var bF: Float = 0
+        let nb = min(bands.count, prevBands.count)
+        for i in 0..<min(6, nb) { bF += max(0, bands[i] - prevBands[i]) }
         prevBands = bands
+
+        // Slice 3: beat (total) + mid/treble punch flux from the FAST (less-smoothed) bands.
+        var total: Float = 0, mF: Float = 0, tF: Float = 0
+        let nf = min(fastBands.count, prevFastBands.count)
+        for i in 0..<nf {
+            let d = max(0, fastBands[i] - prevFastBands[i])
+            total += d
+            if i >= 6 && i < 17 { mF += d } else if i >= 17 { tF += d }   // mid / treble
+        }
+        prevFastBands = fastBands
 
         // Beat onset (adaptive threshold on the overall flux). Slice 2A: threshold
         // 1.5→1.35 so more beats register on busy/dense tracks; decay 0.88→0.86 for a

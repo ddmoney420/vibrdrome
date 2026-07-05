@@ -27,6 +27,11 @@ final class AudioSpectrum: @unchecked Sendable {
     private var _energy: Float = 0
     private var _bands: [Float] = Array(repeating: 0, count: bandCount)
 
+    // Slice 3: a second, LESS-smoothed copy of the bands for the native visualizer only.
+    // Faster asymmetric EMA (attack 0.5 / decay 0.35) → sharper flux for beat + mid/treble
+    // punch. The Classic path never reads this; the smoothed `_bands`/scalars above are unchanged.
+    private var _bandsFast: [Float] = Array(repeating: 0, count: bandCount)
+
     // Diagnostic counters so we can tell why the visualizer falls back to
     // the simulated beat. All updated on the audio render thread, so int
     // writes are atomic on 64-bit. Read + logged every ~1s from the tap.
@@ -64,12 +69,17 @@ final class AudioSpectrum: @unchecked Sendable {
     var treble: Float { lock.withLock { _treble } }
     var energy: Float { lock.withLock { _energy } }
     var bands: [Float] { lock.withLock { _bands } }
+    /// Native-only, less-smoothed band set (Slice 3). Same 32 bands as `bands`, but with a
+    /// faster EMA (0.5/0.35) so the native visualizer's flux/punch onsets stay sharp. Classic
+    /// reads `bands`; nothing about `bands`/`bass`/`mid`/`treble`/`energy` is affected by this.
+    var bandsFast: [Float] { lock.withLock { _bandsFast } }
 
     /// Reset all values to zero (e.g. when playback stops)
     func reset() {
         lock.withLock {
             _bass = 0; _mid = 0; _treble = 0; _energy = 0
             _bands = Array(repeating: 0, count: Self.bandCount)
+            _bandsFast = Array(repeating: 0, count: Self.bandCount)
         }
         _accumFill = 0
     }
@@ -200,12 +210,25 @@ final class AudioSpectrum: @unchecked Sendable {
             for i in 0..<Self.bandCount {
                 _bands[i] = smooth(old: _bands[i], new: newBands[i])
             }
+            // Slice 3 (native-only): the same new bands through a faster EMA. Additive —
+            // does not touch the smoothed `_bands`/scalars above.
+            for i in 0..<Self.bandCount {
+                _bandsFast[i] = smoothFast(old: _bandsFast[i], new: newBands[i])
+            }
         }
         _lastEnergy = newEnergy
     }
 
     private func smooth(old: Float, new: Float) -> Float {
         let factor: Float = new > old ? 0.4 : 0.12
+        return old + (new - old) * factor
+    }
+
+    /// Native-only faster EMA (Slice 3): fast attack (0.5), moderate decay (0.35) — much less
+    /// lingering than `smooth()`, so the native flux/punch onsets stay sharp. Used only for
+    /// `_bandsFast`; the Classic-facing `smooth()` above is unchanged.
+    private func smoothFast(old: Float, new: Float) -> Float {
+        let factor: Float = new > old ? 0.5 : 0.35
         return old + (new - old) * factor
     }
 }
