@@ -613,9 +613,11 @@ struct NowPlayingView: View {
     // MARK: - Progress
 
     private var progressSlider: some View {
-        // Larger of the AVPlayer/server durations, floored by currentTime so the elapsed
-        // timer can never outrun the progress total on short-duration tracks (#58).
-        let songDuration = max(engine.effectiveDuration, engine.currentTime)
+        // #58: the server's scanned duration is the authoritative total; the displayed position is
+        // clamped to it (below) so the elapsed can't outrun the end (under-reported streams) and the
+        // countdown can't show phantom remaining time (over-reported streams). Playback still ends
+        // on the real end-of-track event regardless of this total.
+        let songDuration = engine.effectiveDuration
         return VStack(spacing: 4) {
             #if os(iOS)
             GeometryReader { geo in
@@ -655,7 +657,7 @@ struct NowPlayingView: View {
             .frame(height: 20)
             .accessibilityLabel("Track Progress")
             .onChange(of: engine.currentTime) { _, newTime in
-                if !isDragging { sliderValue = newTime }
+                if !isDragging { sliderValue = min(newTime, songDuration) }   // #58: clamp to authoritative total
             }
             #else
             Slider(
@@ -668,7 +670,7 @@ struct NowPlayingView: View {
             .tint(.white)
             .accessibilityLabel("Track Progress")
             .onChange(of: engine.currentTime) { _, newTime in
-                if !isDragging { sliderValue = newTime }
+                if !isDragging { sliderValue = min(newTime, songDuration) }   // #58: clamp to authoritative total
             }
             #endif
 
