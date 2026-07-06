@@ -40,11 +40,12 @@ final class AudioEngine {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
 
-    /// Best-known total track duration: the larger of the AVPlayer item duration and
-    /// the server's reported duration. Display/seek-clamp only — it does not affect
-    /// playback and does not modify `duration` itself. Used so tracks whose AVPlayer
-    /// item under-reports duration still show a correct total and can be seeked to the
-    /// real end (#58).
+    /// Best-known total track duration for display/seek-clamp (#58): the larger of the AVPlayer item
+    /// duration and the server's scanned duration. For a *directly-played streamed FLAC* the AVPlayer
+    /// item is created with precise duration/timing (see `makePlayerItem`), so its duration is the
+    /// real decoded length — which corrects both server metadata that under-reports (audio would
+    /// otherwise play past 0:00) and AVPlayer's own bitrate estimate that over-reports. The display
+    /// position is additionally clamped to this total in the player views. Display/seek-clamp only.
     var effectiveDuration: TimeInterval {
         max(duration, Double(currentSong?.duration ?? 0))
     }
@@ -616,10 +617,19 @@ final class AudioEngine {
 
     /// Create an AVPlayerItem with HTTP headers that improve reverse proxy compatibility.
     /// Prevents proxies from gzip-compressing audio streams, which corrupts transcoded audio.
-    static func makePlayerItem(url: URL) -> AVPlayerItem {
-        let asset = AVURLAsset(url: url, options: [
+    static func makePlayerItem(url: URL, preferPreciseTiming: Bool = false) -> AVPlayerItem {
+        var options: [String: Any] = [
             "AVURLAssetHTTPHeaderFieldsKey": ["Accept-Encoding": "identity"],
-        ])
+        ]
+        if preferPreciseTiming {
+            // #58: parse a precise duration + seek index. Without this, AVPlayer estimates the
+            // duration and seek byte-offsets from bitrate for streamed FLAC, so a seek lands at the
+            // wrong real position and desyncs the progress UI. It costs extra parsing up front, so it
+            // is applied ONLY to the directly-played current item — NEVER to the gapless lookahead or
+            // crossfade preloads (which default to false), to keep those transitions gap-free.
+            options[AVURLAssetPreferPreciseDurationAndTimingKey] = true
+        }
+        let asset = AVURLAsset(url: url, options: options)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 30
         return item
@@ -633,7 +643,12 @@ final class AudioEngine {
         // Stop current playback before replacing to prevent audio overlap
         gaplessPlayer?.pause()
 
-        let item = Self.makePlayerItem(url: url)
+        // #58: only the directly-played current item gets precise timing, and only for a STREAMED
+        // FLAC — the format whose AVPlayer duration/seek is a bitrate estimate. Local/downloaded
+        // files and other formats (MP3/AAC/Opus) load normally; gapless-lookahead and crossfade
+        // preloads never request it (continuity > seek precision for transition items).
+        let preferPrecise = !url.isFileURL && (currentSong?.suffix?.lowercased() == "flac")
+        let item = Self.makePlayerItem(url: url, preferPreciseTiming: preferPrecise)
         applyEQTapIfNeeded(to: item)
         // This item is the audible one — make it the visualizer PCM source. Records
         // intent now; the async tap converges to it on registration.
