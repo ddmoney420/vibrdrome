@@ -323,9 +323,13 @@ extension AudioEngine {
     // MARK: - Scrobbling
 
     func autoScrobbleIfNeeded() {
+        // #90: use effectiveDuration (max of AVPlayer/server durations) for the 50% threshold. The
+        // raw AVPlayer duration under-reports on some VBR/FLAC files, firing the scrobble a few
+        // seconds early; effectiveDuration >= duration so the half-played point can only move later,
+        // matching the "played >= half" rule more accurately. `duration > 0` still gates a loaded item.
         guard !isScrobbleSubmitted,
               duration > 0,
-              currentTime > duration * 0.5,
+              currentTime > effectiveDuration * 0.5,
               let song = currentSong else { return }
         markScrobbleSubmitted()
         PersistenceController.shared.recordPlay(song: song)
@@ -347,7 +351,9 @@ extension AudioEngine {
     func submitScrobbleIfNeeded() {
         guard let song = currentSong, !isScrobbleSubmitted, duration > 0 else { return }
         let played = activePlayer?.currentTime().seconds ?? currentTime
-        let threshold = min(240, duration * 0.5)
+        // #90: effectiveDuration for the 50% threshold (see autoScrobbleIfNeeded). The 240s cap is
+        // preserved unchanged.
+        let threshold = min(240, effectiveDuration * 0.5)
         if played >= threshold {
             markScrobbleSubmitted()
             PersistenceController.shared.recordPlay(song: song)
