@@ -129,6 +129,37 @@ struct AudioSpectrumTests {
         #expect(AudioSpectrum.hopSize == AudioSpectrum.fftSize / 2)
     }
 
+    // MARK: - Soft-knee de-saturation (#112 Slice B)
+
+    /// Below the knee (0.6) the curve is identity — quiet/medium content is untouched, so derived
+    /// energy (and the idle thresholds that read it) is preserved.
+    @Test func softKneeIsIdentityBelowKnee() {
+        #expect(AudioSpectrum.softKnee(0.0) == 0.0)
+        #expect(AudioSpectrum.softKnee(0.3) == 0.3)
+        #expect(AudioSpectrum.softKnee(0.6) == 0.6)
+    }
+
+    /// A medium-hot value that the old hard clamp would have pinned at exactly 1.0 now keeps
+    /// gradation (strictly between the knee and the ceiling) — the actual de-saturation win. Only
+    /// genuinely extreme input approaches the ceiling (and may reach 1.0 at Float precision).
+    @Test func softKneeCompressesMediumHotBelowCeiling() {
+        let mediumHot = AudioSpectrum.softKnee(1.5)   // hard clamp would have pinned this to 1.0
+        #expect(mediumHot > 0.6 && mediumHot < 1.0)
+        let veryHot = AudioSpectrum.softKnee(8.0)
+        #expect(veryHot >= mediumHot && veryHot <= 1.0)  // monotonic, capped at the ceiling
+    }
+
+    /// Monotonic increasing and always within [0, 1] across the range.
+    @Test func softKneeIsMonotonicAndInUnitRange() {
+        var previous = AudioSpectrum.softKnee(0)
+        for step in 1...200 {
+            let value = AudioSpectrum.softKnee(Float(step) * 0.05)  // 0.05 … 10.0
+            #expect(value >= 0 && value <= 1)
+            #expect(value >= previous)  // non-decreasing
+            previous = value
+        }
+    }
+
     // MARK: - Fast (native-only) band set — Slice 3
 
     @Test func bandsFastInitialZeroAndReset() {

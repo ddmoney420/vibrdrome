@@ -212,9 +212,22 @@ final class AudioSpectrum: @unchecked Sendable {
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
-            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
+            // #112 Slice B: soft-knee de-saturation instead of a hard min(1.0, …). Medium-volume
+            // bands used to slam to 1.0 and stick; the knee keeps values identity below 0.6 and
+            // gently compresses the hot end toward (but never reaching) 1.0, so mids keep gradation.
+            bands[band] = Self.softKnee(sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
         }
         return bands
+    }
+
+    /// Soft-knee compression for band magnitudes (#112 Slice B). Identity below `knee` (0.6), then a
+    /// smooth exponential roll-off above it toward 1.0. Replaces the old hard `min(1.0, …)` clamp:
+    /// medium-volume bands now keep gradation instead of pinning at the ceiling, while only genuinely
+    /// hot input approaches (and, at Float precision, reaches) 1.0. Input assumed >= 0; output in [0, 1].
+    static func softKnee(_ value: Float) -> Float {
+        let knee: Float = 0.6
+        if value <= knee { return max(0, value) }
+        return knee + (1 - knee) * (1 - exp(-(value - knee) / (1 - knee)))
     }
 
     private func smoothAndStore(_ newBands: [Float]) {
