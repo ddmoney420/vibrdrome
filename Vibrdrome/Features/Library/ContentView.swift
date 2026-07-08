@@ -56,6 +56,30 @@ struct ContentView: View {
         }
     }
 
+    /// Attach the mini player to a tab view. On iOS 26+ it becomes a system `tabViewBottomAccessory`,
+    /// auto-positioned above the tab bar on every device (#91, follow-up to #69). On iOS 18–25 (and
+    /// macOS) it stays the existing safe-area-aware bottom overlay — that fallback path is unchanged.
+    @ViewBuilder
+    private func withMiniPlayer(_ tabView: some View) -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            // Attach the accessory ONLY while something is playing — an accessory with empty content
+            // still renders an empty container strip above the tab bar, so we omit it when idle. The
+            // selection binding ($selectedTab) lives in ContentView, so toggling the modifier doesn't
+            // lose the active tab.
+            if engine.currentSong != nil || engine.currentRadioStation != nil {
+                tabView.tabViewBottomAccessory { MiniPlayerView() }
+            } else {
+                tabView
+            }
+        } else {
+            tabView.overlay(alignment: .bottom) { miniPlayerOverlay }
+        }
+        #else
+        tabView.overlay(alignment: .bottom) { miniPlayerOverlay }
+        #endif
+    }
+
     var body: some View {
         Group {
             if appState.isConfigured {
@@ -219,7 +243,7 @@ struct ContentView: View {
         var validValues = Set(["library", "more"])
         validValues.formUnion(primarySecondary)
 
-        return TabView(selection: $selectedTab) {
+        let configuredTabView = TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: "library") {
                 LibraryView(navPath: $libraryNavPath)
             }
@@ -246,9 +270,8 @@ struct ContentView: View {
         // so the TabView always has a valid selection.
         .onAppear { normalizeSelectedTab(valid: validValues) }
         .onChange(of: tabBarOrderJSON) { _, _ in normalizeSelectedTab(valid: validValues) }
-        .overlay(alignment: .bottom) {
-            miniPlayerOverlay
-        }
+
+        return withMiniPlayer(configuredTabView)
     }
 
     private func normalizeSelectedTab(valid: Set<String>) {
