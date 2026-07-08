@@ -64,7 +64,7 @@ struct AudioSpectrumTests {
         spectrum.reset()
 
         // Buffer smaller than fftSize should be ignored
-        var samples = [Float](repeating: 0.5, count: 100)
+        let samples = [Float](repeating: 0.5, count: 100)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }
@@ -78,7 +78,7 @@ struct AudioSpectrumTests {
         spectrum.reset()
 
         // Process a loud signal
-        var samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
+        let samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }
@@ -102,6 +102,33 @@ struct AudioSpectrumTests {
         #expect(size & (size - 1) == 0) // Power of 2 check
     }
 
+    // MARK: - FFT overlap (#112)
+
+    /// 50% overlap (hop = fftSize/2): a contiguous `2 * fftSize` sample stream should produce
+    /// ~3 FFT windows — landing at offsets 0, fftSize/2, and fftSize — instead of the 2
+    /// non-overlapping windows the old clear-on-complete behavior produced.
+    @Test func fftOverlapProducesThreeWindowsForDoubleLength() {
+        let spectrum = AudioSpectrum.shared
+        spectrum.reset()
+        let before = spectrum.fftComputeCountForTesting
+
+        let count = AudioSpectrum.fftSize * 2
+        var samples = [Float](repeating: 0, count: count)
+        let sr: Float = 44100, freq: Float = 440
+        for i in 0..<count { samples[i] = sin(2.0 * .pi * freq * Float(i) / sr) }
+        samples.withUnsafeBufferPointer { buf in
+            spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: sr)
+        }
+
+        let computed = spectrum.fftComputeCountForTesting - before
+        #expect(computed == 3)  // was 2 without overlap
+    }
+
+    /// hopSize is exactly half the FFT window (50% overlap).
+    @Test func hopSizeIsHalfFFTSize() {
+        #expect(AudioSpectrum.hopSize == AudioSpectrum.fftSize / 2)
+    }
+
     // MARK: - Fast (native-only) band set — Slice 3
 
     @Test func bandsFastInitialZeroAndReset() {
@@ -114,7 +141,7 @@ struct AudioSpectrumTests {
     @Test func bandsFastClampedToUnitRange() {
         let spectrum = AudioSpectrum.shared
         spectrum.reset()
-        var samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
+        let samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }
