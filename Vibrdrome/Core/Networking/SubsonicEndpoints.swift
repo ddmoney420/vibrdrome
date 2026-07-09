@@ -37,7 +37,7 @@ enum SubsonicEndpoint: Sendable {
     case stream(id: String, maxBitRate: Int? = nil, format: String? = nil)
     case download(id: String)
     case getCoverArt(id: String, size: Int? = nil)
-    case getLyricsBySongId(id: String)
+    case getLyricsBySongId(id: String, enhanced: Bool)
     case getInternetRadioStations
     case createInternetRadioStation(streamUrl: String, name: String, homepageUrl: String? = nil)
     case deleteInternetRadioStation(id: String)
@@ -230,8 +230,10 @@ enum SubsonicEndpoint: Sendable {
             if let size { items.append(URLQueryItem(name: "size", value: "\(size)")) }
             return items
 
-        case .getLyricsBySongId(let id):
-            return [URLQueryItem(name: "id", value: id)]
+        case .getLyricsBySongId(let id, let enhanced):
+            var items = [URLQueryItem(name: "id", value: id)]
+            if enhanced { items.append(URLQueryItem(name: "enhanced", value: "true")) }
+            return items
 
         case .createInternetRadioStation(let streamUrl, let name, let homepageUrl):
             var items = [

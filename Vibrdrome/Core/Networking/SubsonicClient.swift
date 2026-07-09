@@ -482,8 +482,11 @@ final class SubsonicClient {
         await invalidateCache(for: .getPlaylists)
     }
 
-    func getLyrics(songId: String) async throws -> LyricsList? {
-        let body = try await request(.getLyricsBySongId(id: songId))
+    /// Fetch structured lyrics. `enhanced` requests OpenSubsonic songLyrics v2 (word-level cues +
+    /// `kind`); servers that don't support it ignore the flag and return line-level v1, so it is
+    /// safe to leave on by default.
+    func getLyrics(songId: String, enhanced: Bool = true) async throws -> LyricsList? {
+        let body = try await request(.getLyricsBySongId(id: songId, enhanced: enhanced))
         return body.lyricsList
     }
 
