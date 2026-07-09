@@ -64,7 +64,7 @@ struct LibraryView: View {
     @State private var favoriteAlbums: [Album] = []
     @State private var featuredGenreAlbums: [Album] = []
     @State private var featuredGenreName: String = ""
-    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?)] = []
+    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?, artistId: String?)] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
     @State private var isLoadingRandomAlbum = false
@@ -743,9 +743,19 @@ struct LibraryView: View {
                 latestArt[artist] = art
             }
         }
+        // #117: resolve artistId from the local CachedArtist cache (case-insensitive, no network) so a
+        // Top Artist can open Artist Detail on tap. Artists missing from the cache resolve to nil —
+        // their item stays non-tappable but still supports the long-press "Start Artist Radio" action.
+        var idByName: [String: String] = [:]
+        if let artists = try? context.fetch(FetchDescriptor<CachedArtist>()) {
+            for artist in artists { idByName[artist.name.lowercased()] = artist.id }
+        }
         topArtistNames = counts.sorted { $0.value > $1.value }
             .prefix(10)
-            .map { (name: $0.key, count: $0.value, coverArtId: latestArt[$0.key]) }
+            .map { entry in
+                (name: entry.key, count: entry.value, coverArtId: latestArt[entry.key],
+                 artistId: idByName[entry.key.lowercased()])
+            }
     }
 
     private var topArtistsCarousel: some View {
@@ -758,34 +768,63 @@ struct LibraryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(topArtistNames, id: \.name) { artist in
-                        VStack(spacing: 6) {
-                            if let coverArtId = artist.coverArtId {
-                                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
-                            } else {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 80, height: 80)
-                                    .overlay {
-                                        Text(String(artist.name.prefix(1)).uppercased())
-                                            .font(.title)
-                                            .bold()
-                                            .foregroundStyle(.secondary)
-                                    }
-                            }
-
-                            Text(artist.name)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .frame(width: 80)
-
-                            Text("\(artist.count) plays")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        topArtistEntry(artist)
                     }
                 }
                 .padding(.horizontal, 16)
             }
+        }
+    }
+
+    /// A Top Artist item (#117): tap opens Artist Detail when the id resolved from CachedArtist
+    /// (value-based, consistent with the Home nav fix); long-press always offers "Start Artist Radio".
+    @ViewBuilder
+    private func topArtistEntry(
+        _ artist: (name: String, count: Int, coverArtId: String?, artistId: String?)
+    ) -> some View {
+        Group {
+            if let id = artist.artistId {
+                NavigationLink(value: ArtistNavItem(id: id)) {
+                    topArtistCard(name: artist.name, count: artist.count, coverArtId: artist.coverArtId)
+                }
+                .buttonStyle(.plain)
+            } else {
+                topArtistCard(name: artist.name, count: artist.count, coverArtId: artist.coverArtId)
+            }
+        }
+        .contextMenu {
+            Button {
+                AudioEngine.shared.startRadio(artistName: artist.name)
+            } label: {
+                Label("Start Artist Radio", systemImage: "antenna.radiowaves.left.and.right")
+            }
+        }
+    }
+
+    private func topArtistCard(name: String, count: Int, coverArtId: String?) -> some View {
+        VStack(spacing: 6) {
+            if let coverArtId {
+                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
+            } else {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 80, height: 80)
+                    .overlay {
+                        Text(String(name.prefix(1)).uppercased())
+                            .font(.title)
+                            .bold()
+                            .foregroundStyle(.secondary)
+                    }
+            }
+
+            Text(name)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: 80)
+
+            Text("\(count) plays")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }
