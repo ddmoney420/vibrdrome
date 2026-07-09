@@ -2,6 +2,56 @@ import SwiftData
 import SwiftUI
 import NukeUI
 
+// Shared library navigation destinations (fixes a duplicate-registration nav bug).
+//
+// SwiftUI requires each value type's `.navigationDestination(for:)` to be registered exactly ONCE
+// per NavigationStack. Panel views (AlbumsView, LibraryHomeView) used to register their own
+// `AlbumNavItem` destination AND get pushed into a stack (Home tab / iPad detail) that already
+// registered it — two registrations for one type in one stack, which makes a value-based push
+// render the intermediate panel back on top of the pushed detail ("tap album → bounces back").
+//
+// Fix: register the whole set ONCE here and apply it at each NavigationStack root; child/panel
+// views only use `NavigationLink(value:)` and inherit these destinations.
+extension View {
+    func libraryNavigationDestinations() -> some View {
+        self
+            .navigationDestination(for: ArtistNavItem.self) { item in
+                ArtistDetailView(artistId: item.id)
+            }
+            .navigationDestination(for: AlbumNavItem.self) { item in
+                AlbumDetailView(albumId: item.id)
+            }
+            .navigationDestination(for: SongNavItem.self) { item in
+                SongDetailView(songId: item.id)
+            }
+            .navigationDestination(for: GenreNavItem.self) { item in
+                AlbumsView(listType: .alphabeticalByName, title: item.name.cleanedGenreDisplay,
+                           initialGenreFilter: item.name)
+            }
+            .navigationDestination(for: GenreAlbumsNavItem.self) { item in
+                AlbumsView(listType: .byGenre, title: item.genre.cleanedGenreDisplay,
+                           genre: item.genre)
+            }
+            .navigationDestination(for: DecadeAlbumsNavItem.self) { item in
+                AlbumsView(listType: .byYear, title: item.title,
+                           fromYear: item.fromYear, toYear: item.toYear)
+            }
+            .navigationDestination(for: AlbumListNavItem.self) { item in
+                AlbumsView(listType: item.listType, title: item.title, genre: item.genre)
+            }
+            .navigationDestination(for: LabelNavItem.self) { item in
+                AlbumsView(listType: .alphabeticalByName, title: item.name,
+                           initialLabelFilter: item.name)
+            }
+            .navigationDestination(for: PlaylistNavItem.self) { item in
+                PlaylistDetailView(playlistId: item.id)
+            }
+            .navigationDestination(for: OfflineNavItem.self) { _ in
+                DownloadsView()
+            }
+    }
+}
+
 struct LibraryView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
@@ -14,7 +64,7 @@ struct LibraryView: View {
     @State private var favoriteAlbums: [Album] = []
     @State private var featuredGenreAlbums: [Album] = []
     @State private var featuredGenreName: String = ""
-    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?)] = []
+    @State private var topArtistNames: [(name: String, count: Int, coverArtId: String?, artistId: String?)] = []
     @State private var isLoaded = false
     @State private var isLoadingRandomMix = false
     @State private var isLoadingRandomAlbum = false
@@ -146,28 +196,9 @@ struct LibraryView: View {
                 await loadSections()
                 isLoaded = true
             }
-            .navigationDestination(for: ArtistNavItem.self) { item in
-                ArtistDetailView(artistId: item.id)
-            }
-            .navigationDestination(for: AlbumNavItem.self) { item in
-                AlbumDetailView(albumId: item.id)
-            }
-            .navigationDestination(for: SongNavItem.self) { item in
-                SongDetailView(songId: item.id)
-            }
-            .navigationDestination(for: GenreNavItem.self) { item in
-                AlbumsView(listType: .alphabeticalByName, title: item.name.cleanedGenreDisplay,
-                           initialGenreFilter: item.name)
-            }
-            .navigationDestination(for: LabelNavItem.self) { item in
-                AlbumsView(listType: .alphabeticalByName, title: item.name,
-                           initialLabelFilter: item.name)
-            }
-            .navigationDestination(for: PlaylistNavItem.self) { item in
-                PlaylistDetailView(playlistId: item.id)
-            }
-            .navigationDestination(for: OfflineNavItem.self) { _ in
-                DownloadsView()
+            .libraryNavigationDestinations()
+            .navigationDestination(for: LibraryPill.self) { pill in
+                pillDestination(for: pill)
             }
         }
     }
@@ -180,15 +211,13 @@ struct LibraryView: View {
         switch carousel {
         case .recentlyAdded:
             if !recentAlbums.isEmpty {
-                albumSection("Recently Added", albums: recentAlbums) {
-                    AlbumsView(listType: .newest, title: "Recently Added")
-                }
+                albumSection("Recently Added", albums: recentAlbums,
+                             seeAll: AlbumListNavItem(listType: .newest, title: "Recently Added"))
             }
         case .mostPlayed:
             if !frequentAlbums.isEmpty {
-                albumSection("Most Played", albums: frequentAlbums) {
-                    AlbumsView(listType: .frequent, title: "Most Played")
-                }
+                albumSection("Most Played", albums: frequentAlbums,
+                             seeAll: AlbumListNavItem(listType: .frequent, title: "Most Played"))
             }
         case .rediscover:
             if !starredSongs.isEmpty {
@@ -196,15 +225,13 @@ struct LibraryView: View {
             }
         case .randomPicks:
             if !randomAlbums.isEmpty {
-                albumSection("Random Picks", albums: randomAlbums) {
-                    AlbumsView(listType: .random, title: "Random")
-                }
+                albumSection("Random Picks", albums: randomAlbums,
+                             seeAll: AlbumListNavItem(listType: .random, title: "Random"))
             }
         case .recentlyPlayed:
             if !recentlyPlayedAlbums.isEmpty {
-                albumSection("Recently Played", albums: recentlyPlayedAlbums) {
-                    AlbumsView(listType: .recent, title: "Recently Played")
-                }
+                albumSection("Recently Played", albums: recentlyPlayedAlbums,
+                             seeAll: AlbumListNavItem(listType: .recent, title: "Recently Played"))
             }
         case .topArtists:
             if !topArtistNames.isEmpty {
@@ -212,15 +239,13 @@ struct LibraryView: View {
             }
         case .favoriteAlbums:
             if !favoriteAlbums.isEmpty {
-                albumSection("Favorite Albums", albums: favoriteAlbums) {
-                    FavoritesView()
-                }
+                albumSection("Favorite Albums", albums: favoriteAlbums, seeAll: LibraryPill.favorites)
             }
         case .featuredGenre:
             if !featuredGenreAlbums.isEmpty && !featuredGenreName.isEmpty {
-                albumSection("Featured: \(featuredGenreName)", albums: featuredGenreAlbums) {
-                    AlbumsView(listType: .byGenre, title: featuredGenreName, genre: featuredGenreName)
-                }
+                albumSection("Featured: \(featuredGenreName)", albums: featuredGenreAlbums,
+                             seeAll: AlbumListNavItem(listType: .byGenre, title: featuredGenreName,
+                                                      genre: featuredGenreName))
             }
         }
     }
@@ -255,7 +280,15 @@ struct LibraryView: View {
 
     @ViewBuilder
     private func pillNavLink(for pill: LibraryPill) -> some View {
-        quickAccessPill(pill) { pillDestination(for: pill) }
+        // Value-based navigation (#nav): push the pill onto navPath so the whole
+        // pill → panel → album-tile chain stays value-based. A *view-based* NavigationLink here
+        // conflicts with the bound `NavigationStack(path: $navPath)` — the panel re-renders on top
+        // of the pushed album detail. Destination is registered via `.navigationDestination(for:
+        // LibraryPill.self)` on the stack.
+        NavigationLink(value: pill) {
+            pillLabel(pill.title, icon: pill.icon, color: pillColor(pill.color))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -345,13 +378,6 @@ struct LibraryView: View {
         .disabled(isLoadingRandomAlbum)
     }
 
-    private func quickAccessPill<D: View>(
-        _ pill: LibraryPill,
-        @ViewBuilder destination: @escaping () -> D
-    ) -> some View {
-        quickAccessPill(pill.title, icon: pill.icon, color: pillColor(pill.color), destination: destination)
-    }
-
     private func pillColor(_ name: String) -> Color {
         switch name {
         case "pink": .pink
@@ -369,48 +395,40 @@ struct LibraryView: View {
         }
     }
 
-    private func quickAccessPill<D: View>(
-        _ title: String, icon: String, color: Color,
-        @ViewBuilder destination: @escaping () -> D
-    ) -> some View {
-        NavigationLink {
-            destination()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(color)
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+    private func pillLabel(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(color)
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+                .lineLimit(1)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Album Art Sections
 
-    private func albumSection<D: View>(
+    private func albumSection<V: Hashable>(
         _ title: String,
         albums: [Album],
-        @ViewBuilder destination: @escaping () -> D
+        seeAll: V
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Section header with "See All"
+            // Section header with "See All". Value-based (#nav): view-based NavigationLinks conflict
+            // with the Home tab's bound NavigationStack(path:) and bounce the destination behind the
+            // panel.
             HStack {
                 Text(title)
                     .font(.title3)
                     .bold()
                 Spacer()
-                NavigationLink {
-                    destination()
-                } label: {
+                NavigationLink(value: seeAll) {
                     Text("See All")
                         .font(.subheadline)
                         .foregroundColor(.accentColor)
@@ -422,9 +440,7 @@ struct LibraryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     ForEach(albums) { album in
-                        NavigationLink {
-                            AlbumDetailView(albumId: album.id)
-                        } label: {
+                        NavigationLink(value: AlbumNavItem(id: album.id)) {
                             albumCard(album)
                         }
                         .buttonStyle(.plain)
@@ -466,9 +482,7 @@ struct LibraryView: View {
                     .font(.title3)
                     .bold()
                 Spacer()
-                NavigationLink {
-                    FavoritesView()
-                } label: {
+                NavigationLink(value: LibraryPill.favorites) {
                     Text("See All")
                         .font(.subheadline)
                         .foregroundColor(.accentColor)
@@ -729,9 +743,19 @@ struct LibraryView: View {
                 latestArt[artist] = art
             }
         }
+        // #117: resolve artistId from the local CachedArtist cache (case-insensitive, no network) so a
+        // Top Artist can open Artist Detail on tap. Artists missing from the cache resolve to nil —
+        // their item stays non-tappable but still supports the long-press "Start Artist Radio" action.
+        var idByName: [String: String] = [:]
+        if let artists = try? context.fetch(FetchDescriptor<CachedArtist>()) {
+            for artist in artists { idByName[artist.name.lowercased()] = artist.id }
+        }
         topArtistNames = counts.sorted { $0.value > $1.value }
             .prefix(10)
-            .map { (name: $0.key, count: $0.value, coverArtId: latestArt[$0.key]) }
+            .map { entry in
+                (name: entry.key, count: entry.value, coverArtId: latestArt[entry.key],
+                 artistId: idByName[entry.key.lowercased()])
+            }
     }
 
     private var topArtistsCarousel: some View {
@@ -744,34 +768,63 @@ struct LibraryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(topArtistNames, id: \.name) { artist in
-                        VStack(spacing: 6) {
-                            if let coverArtId = artist.coverArtId {
-                                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
-                            } else {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 80, height: 80)
-                                    .overlay {
-                                        Text(String(artist.name.prefix(1)).uppercased())
-                                            .font(.title)
-                                            .bold()
-                                            .foregroundStyle(.secondary)
-                                    }
-                            }
-
-                            Text(artist.name)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .frame(width: 80)
-
-                            Text("\(artist.count) plays")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        topArtistEntry(artist)
                     }
                 }
                 .padding(.horizontal, 16)
             }
+        }
+    }
+
+    /// A Top Artist item (#117): tap opens Artist Detail when the id resolved from CachedArtist
+    /// (value-based, consistent with the Home nav fix); long-press always offers "Start Artist Radio".
+    @ViewBuilder
+    private func topArtistEntry(
+        _ artist: (name: String, count: Int, coverArtId: String?, artistId: String?)
+    ) -> some View {
+        Group {
+            if let id = artist.artistId {
+                NavigationLink(value: ArtistNavItem(id: id)) {
+                    topArtistCard(name: artist.name, count: artist.count, coverArtId: artist.coverArtId)
+                }
+                .buttonStyle(.plain)
+            } else {
+                topArtistCard(name: artist.name, count: artist.count, coverArtId: artist.coverArtId)
+            }
+        }
+        .contextMenu {
+            Button {
+                AudioEngine.shared.startRadio(artistName: artist.name)
+            } label: {
+                Label("Start Artist Radio", systemImage: "antenna.radiowaves.left.and.right")
+            }
+        }
+    }
+
+    private func topArtistCard(name: String, count: Int, coverArtId: String?) -> some View {
+        VStack(spacing: 6) {
+            if let coverArtId {
+                AlbumArtView(coverArtId: coverArtId, size: 80, cornerRadius: 40)
+            } else {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 80, height: 80)
+                    .overlay {
+                        Text(String(name.prefix(1)).uppercased())
+                            .font(.title)
+                            .bold()
+                            .foregroundStyle(.secondary)
+                    }
+            }
+
+            Text(name)
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: 80)
+
+            Text("\(count) plays")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }

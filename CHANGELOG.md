@@ -4,6 +4,23 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 57 -- July 8, 2026
+
+**Navigation:**
+- Home navigation fixes across pills and panels: selecting an album from a Home pill (Recently Added, Genres, Generations, ...) or a "See All" carousel now opens the album directly instead of bouncing back to the originating panel.
+
+**Library:**
+- The Home "Your Top Artists" carousel is now interactive: tap an artist to open Artist Detail, or long-press for "Start Artist Radio."
+
+**Player:**
+- On iOS 26, the mini-player now uses the system tab-bar accessory, so it sits correctly above the tab bar on every device (including small/zero-inset phones).
+
+**Visualizer:**
+- Fidelity improvements: smoother spectrum updates (FFT overlap) and less band saturation (soft-knee), so medium-volume bands keep gradation instead of maxing out.
+
+**Bug fixes:**
+- Completed streamed-FLAC duration/seek handling (follow-up to the interim fix in Build 56): directly-played streamed FLAC now reports its true length and seeks accurately, plus crossfade and half-played scrobble timing now use the corrected duration.
+
 ### Build 56 -- July 5, 2026
 
 **Visualizer:**

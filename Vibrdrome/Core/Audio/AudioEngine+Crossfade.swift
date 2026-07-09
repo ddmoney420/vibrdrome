@@ -67,8 +67,12 @@ extension AudioEngine {
               duration > 0,
               currentRadioStation == nil else { return }
 
-        let fadeDur = min(Double(crossfadeDuration), duration * 0.5)
-        let fadeStart = duration - fadeDur
+        // #89: base the fade point on effectiveDuration (max of AVPlayer/server durations), not the
+        // raw AVPlayer item duration, which under-reports on some VBR/FLAC files and would start the
+        // crossfade a few seconds early. effectiveDuration >= duration, so the fade can only move
+        // later toward the true end. The `duration > 0` guard above still gates on a loaded item.
+        let fadeDur = min(Double(crossfadeDuration), effectiveDuration * 0.5)
+        let fadeStart = effectiveDuration - fadeDur
         guard fadeStart > 0, fadeDur > 0, currentTime >= fadeStart else { return }
 
         guard repeatMode == .off else { return }

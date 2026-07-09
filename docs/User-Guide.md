@@ -27,6 +27,8 @@ Your credentials are stored securely in the iOS/macOS Keychain.
 
 ## Browsing Your Library
 
+On the **Home** tab, the **Your Top Artists** carousel is interactive: **tap** an artist to open their detail page, or **long-press** for **Start Artist Radio**. (Tap-through opens the artist when they're in your synced library; artist radio always works.)
+
 The **Library** tab is the main way to explore your music:
 
 - **Artists** -- Browse all artists alphabetically. On macOS, the artist detail page shows a hero header with biography, genre pills, top tracks, full discography, and customizable external links (Last.fm, MusicBrainz, Wikipedia, Google by default; configurable in **Settings > Artist External Links**).

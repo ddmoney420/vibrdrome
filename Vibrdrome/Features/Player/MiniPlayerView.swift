@@ -34,8 +34,8 @@ struct MiniPlayerView: View {
 
                             // Progress ring
                             Circle()
-                                .trim(from: 0, to: engine.duration > 0
-                                      ? engine.currentTime / engine.duration : 0)
+                                .trim(from: 0, to: engine.effectiveDuration > 0
+                                      ? min(1, engine.currentTime / engine.effectiveDuration) : 0)
                                 .stroke(.white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                                 .frame(width: 48, height: 48)
                                 .rotationEffect(.degrees(-90))
@@ -456,9 +456,10 @@ struct MacMiniPlayerView: View {
                     .accessibilityLabel("Repeat")
                 }
 
-                // Seek bar with timestamps. Larger of AVPlayer/server durations, floored
-                // by currentTime so the elapsed timer can't outrun the total (#58).
-                let duration = max(engine.effectiveDuration, engine.currentTime)
+                // Seek bar with timestamps. #58: the server's scanned duration is the authoritative
+                // total; the position is clamped to it so the elapsed can't outrun the end and the
+                // countdown can't show phantom remaining time on streams with a wrong reported duration.
+                let duration = engine.effectiveDuration
                 HStack(spacing: 6) {
                     Text(formatDuration(sliderValue))
                         .font(.caption2)
@@ -476,7 +477,7 @@ struct MacMiniPlayerView: View {
                     .tint(.primary)
                     .accessibilityLabel("Track Progress")
                     .onChange(of: engine.currentTime) { _, newTime in
-                        if !isDragging { sliderValue = newTime }
+                        if !isDragging { sliderValue = min(newTime, duration) }   // #58: clamp to total
                     }
                     .onChange(of: duration) { _, newDuration in
                         if sliderValue > newDuration { sliderValue = newDuration }

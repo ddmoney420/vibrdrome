@@ -1,5 +1,13 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 57)
+
+- Home navigation fixes across pills and panels: picking an album from a Home pill (Recently Added, Genres, Generations) or a "See All" carousel now opens it directly instead of bouncing back.
+- Your Top Artists carousel is now interactive: tap to open Artist Detail, or long-press to start artist radio.
+- iOS 26: the mini-player now uses the system tab-bar accessory, so it sits correctly above the tab bar on every device.
+- Visualizer fidelity: smoother spectrum updates and less band saturation.
+- Completed streamed-FLAC duration/seek handling, plus crossfade and scrobble timing fixes (finishing the Build 56 follow-up).
+
 ## What's New (v1.0.0 Beta Build 56)
 
 - New Native Visualizer: an in-house, GPU-accelerated Metal visualizer with dozens of music-reactive scenes. Open the visualizer from Now Playing and pick it from the mode selector. Classic (Metal shader presets) remains the default; Native is opt-in.

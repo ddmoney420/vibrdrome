@@ -187,6 +187,7 @@ struct SidebarContentView: View {
                                 .modifier(SidePanelInspector(sidePanelWidth: sidePanelWidth) { sidePanelView(for: $0) })
                         }
                     }
+                    .libraryNavigationDestinations()
             }
             #else
             NavigationStack(path: $detailPath) {
@@ -207,6 +208,7 @@ struct SidebarContentView: View {
                                        title: name, initialLabelFilter: name)
                         }
                     }
+                    .libraryNavigationDestinations()
             }
             #endif
         }

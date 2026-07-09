@@ -56,6 +56,30 @@ struct ContentView: View {
         }
     }
 
+    /// Attach the mini player to a tab view. On iOS 26+ it becomes a system `tabViewBottomAccessory`,
+    /// auto-positioned above the tab bar on every device (#91, follow-up to #69). On iOS 18–25 (and
+    /// macOS) it stays the existing safe-area-aware bottom overlay — that fallback path is unchanged.
+    @ViewBuilder
+    private func withMiniPlayer(_ tabView: some View) -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            // Attach the accessory ONLY while something is playing — an accessory with empty content
+            // still renders an empty container strip above the tab bar, so we omit it when idle. The
+            // selection binding ($selectedTab) lives in ContentView, so toggling the modifier doesn't
+            // lose the active tab.
+            if engine.currentSong != nil || engine.currentRadioStation != nil {
+                tabView.tabViewBottomAccessory { MiniPlayerView() }
+            } else {
+                tabView
+            }
+        } else {
+            tabView.overlay(alignment: .bottom) { miniPlayerOverlay }
+        }
+        #else
+        tabView.overlay(alignment: .bottom) { miniPlayerOverlay }
+        #endif
+    }
+
     var body: some View {
         Group {
             if appState.isConfigured {
@@ -219,7 +243,7 @@ struct ContentView: View {
         var validValues = Set(["library", "more"])
         validValues.formUnion(primarySecondary)
 
-        return TabView(selection: $selectedTab) {
+        let configuredTabView = TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: "library") {
                 LibraryView(navPath: $libraryNavPath)
             }
@@ -246,9 +270,8 @@ struct ContentView: View {
         // so the TabView always has a valid selection.
         .onAppear { normalizeSelectedTab(valid: validValues) }
         .onChange(of: tabBarOrderJSON) { _, _ in normalizeSelectedTab(valid: validValues) }
-        .overlay(alignment: .bottom) {
-            miniPlayerOverlay
-        }
+
+        return withMiniPlayer(configuredTabView)
     }
 
     private func normalizeSelectedTab(valid: Set<String>) {
@@ -318,6 +341,7 @@ struct ContentView: View {
     @ViewBuilder
     private func tabView(for id: String) -> some View {
         NavigationStack { tabRootContent(for: id) }
+            .libraryNavigationDestinations()
     }
 
     /// App-owned "More" menu. A single NavigationStack listing the overflow
@@ -486,6 +510,34 @@ struct AlbumNavItem: Hashable {
 
 struct GenreNavItem: Hashable {
     let name: String
+}
+
+/// Genre → its albums using the server-side `.byGenre` list (as GenresView shows them). Distinct
+/// from `GenreNavItem`, which uses `.alphabeticalByName + initialGenreFilter`. Value-based so the
+/// genre → albums → album-tile chain stays consistent under the Home tab's bound navigation path.
+struct GenreAlbumsNavItem: Hashable {
+    let genre: String
+}
+
+/// Decade → its albums (`.byYear` range), as GenerationsView shows them. Value-based so the
+/// decade → albums → album-tile chain stays consistent under the Home tab's bound navigation path.
+struct DecadeAlbumsNavItem: Hashable {
+    let title: String
+    let fromYear: Int
+    let toYear: Int
+}
+
+/// A configured album list (used by Home "See All" links). Value-based so the See All → albums →
+/// album-tile chain stays consistent under the Home tab's bound navigation path.
+struct AlbumListNavItem: Hashable {
+    let listType: AlbumListType
+    let title: String
+    let genre: String?
+    init(listType: AlbumListType, title: String, genre: String? = nil) {
+        self.listType = listType
+        self.title = title
+        self.genre = genre
+    }
 }
 
 struct PlaylistNavItem: Hashable {

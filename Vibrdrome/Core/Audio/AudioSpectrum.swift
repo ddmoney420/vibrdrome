@@ -17,6 +17,9 @@ final class AudioSpectrum: @unchecked Sendable {
     static let fftSize = 2048
     /// Number of output frequency bands for visualization
     static let bandCount = 32
+    /// FFT hop size for 50% overlap (#112). Consecutive FFT windows advance by half a window, so
+    /// the spectrum updates ~2x as often (~43 Hz vs ~21.5 Hz at 44.1 kHz) for smoother motion.
+    static let hopSize = fftSize / 2
 
     private let lock = OSAllocatedUnfairLock()
 
@@ -52,10 +55,16 @@ final class AudioSpectrum: @unchecked Sendable {
     // FFT setup (reusable, created once)
     private let fftSetup: FFTSetup?
     private let log2n: vDSP_Length
+    /// Hann window precomputed once (#112). computeFFT runs on the audio render thread and, with
+    /// overlap, is now called ~2x as often — so the window must not be rebuilt/allocated per call.
+    private let hannWindow: [Float]
 
     private init() {
         log2n = vDSP_Length(log2(Float(Self.fftSize)))
         fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
+        var window = [Float](repeating: 0, count: Self.fftSize)
+        vDSP_hann_window(&window, vDSP_Length(Self.fftSize), Int32(vDSP_HANN_NORM))
+        hannWindow = window
     }
 
     deinit {
@@ -73,6 +82,11 @@ final class AudioSpectrum: @unchecked Sendable {
     /// faster EMA (0.5/0.35) so the native visualizer's flux/punch onsets stay sharp. Classic
     /// reads `bands`; nothing about `bands`/`bass`/`mid`/`treble`/`energy` is affected by this.
     var bandsFast: [Float] { lock.withLock { _bandsFast } }
+
+    /// Test-only (#112): cumulative count of FFT windows computed since init, used to verify the
+    /// 50% overlap cadence. `_fftComputeCount` is written on the audio render thread; UInt64 writes
+    /// are atomic on 64-bit, and tests read it single-threaded after a synchronous processPCM call.
+    var fftComputeCountForTesting: UInt64 { _fftComputeCount }
 
     /// Reset all values to zero (e.g. when playback stops)
     func reset() {
@@ -122,7 +136,15 @@ final class AudioSpectrum: @unchecked Sendable {
                     smoothAndStore(newBands)
                     _fftComputeCount &+= 1
                 }
-                _accumFill = 0
+                // #112: 50% overlap — keep the second half of the window as the start of the next
+                // one (shift left by hopSize) instead of clearing, so the next FFT fires after only
+                // hopSize more samples. Single-writer (render thread), so no lock needed here.
+                _accumBuffer.withUnsafeMutableBufferPointer { buf in
+                    guard let base = buf.baseAddress else { return }
+                    let retain = Self.fftSize - Self.hopSize
+                    memmove(base, base + Self.hopSize, retain * MemoryLayout<Float>.size)
+                }
+                _accumFill = Self.fftSize - Self.hopSize
             }
         }
 
@@ -145,10 +167,12 @@ final class AudioSpectrum: @unchecked Sendable {
         let halfN = n / 2
 
         var windowed = [Float](repeating: 0, count: n)
-        var window = [Float](repeating: 0, count: n)
-        vDSP_hann_window(&window, vDSP_Length(n), Int32(vDSP_HANN_NORM))
-        windowed.withUnsafeMutableBufferPointer { dst in
-            vDSP_vmul(samples, 1, window, 1, dst.baseAddress!, 1, vDSP_Length(n))
+        // #112: multiply by the precomputed Hann window instead of rebuilding it every call —
+        // computeFFT is on the render thread and now runs ~2x as often with overlap.
+        hannWindow.withUnsafeBufferPointer { win in
+            windowed.withUnsafeMutableBufferPointer { dst in
+                vDSP_vmul(samples, 1, win.baseAddress!, 1, dst.baseAddress!, 1, vDSP_Length(n))
+            }
         }
 
         var realPart = [Float](repeating: 0, count: halfN)
@@ -188,9 +212,22 @@ final class AudioSpectrum: @unchecked Sendable {
 
             var sum: Float = 0
             for bin in lowBin...highBin { sum += magnitudes[bin] }
-            bands[band] = min(1.0, sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
+            // #112 Slice B: soft-knee de-saturation instead of a hard min(1.0, …). Medium-volume
+            // bands used to slam to 1.0 and stick; the knee keeps values identity below 0.6 and
+            // gently compresses the hot end toward (but never reaching) 1.0, so mids keep gradation.
+            bands[band] = Self.softKnee(sqrt(sum / Float(highBin - lowBin + 1)) * 8.0)
         }
         return bands
+    }
+
+    /// Soft-knee compression for band magnitudes (#112 Slice B). Identity below `knee` (0.6), then a
+    /// smooth exponential roll-off above it toward 1.0. Replaces the old hard `min(1.0, …)` clamp:
+    /// medium-volume bands now keep gradation instead of pinning at the ceiling, while only genuinely
+    /// hot input approaches (and, at Float precision, reaches) 1.0. Input assumed >= 0; output in [0, 1].
+    static func softKnee(_ value: Float) -> Float {
+        let knee: Float = 0.6
+        if value <= knee { return max(0, value) }
+        return knee + (1 - knee) * (1 - exp(-(value - knee) / (1 - knee)))
     }
 
     private func smoothAndStore(_ newBands: [Float]) {

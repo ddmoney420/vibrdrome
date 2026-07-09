@@ -43,9 +43,6 @@ struct LibraryHomeView: View {
         .navigationBarTitleDisplayMode(.large)
         .contentMargins(.bottom, 80)
         #endif
-        .navigationDestination(for: AlbumNavItem.self) { item in
-            AlbumDetailView(albumId: item.id)
-        }
         .task { await loadRecentlyAdded() }
     }
 

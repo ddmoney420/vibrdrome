@@ -1,5 +1,12 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 57 — Home navigation, Top Artists, mini-player accessory
+
+- [ ] Home pills + "See All" carousels: tapping an album opens it directly; one back returns to the panel
+- [ ] Your Top Artists: tap → Artist Detail; long-press → Start Artist Radio
+- [ ] iOS 26 mini-player above the tab bar on SE + notched; absent when nothing plays
+- [ ] Visualizer smoother / less saturated; streamed-FLAC total + seek correct; MP3/AAC/gapless/crossfade unchanged
+
 ## Build 56 — Native Visualizer & reactivity
 
 - [ ] Visualizer opens from Now Playing; **Classic is the default** and renders

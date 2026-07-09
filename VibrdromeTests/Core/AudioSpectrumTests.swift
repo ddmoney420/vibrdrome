@@ -64,7 +64,7 @@ struct AudioSpectrumTests {
         spectrum.reset()
 
         // Buffer smaller than fftSize should be ignored
-        var samples = [Float](repeating: 0.5, count: 100)
+        let samples = [Float](repeating: 0.5, count: 100)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }
@@ -78,7 +78,7 @@ struct AudioSpectrumTests {
         spectrum.reset()
 
         // Process a loud signal
-        var samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
+        let samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }
@@ -102,6 +102,64 @@ struct AudioSpectrumTests {
         #expect(size & (size - 1) == 0) // Power of 2 check
     }
 
+    // MARK: - FFT overlap (#112)
+
+    /// 50% overlap (hop = fftSize/2): a contiguous `2 * fftSize` sample stream should produce
+    /// ~3 FFT windows — landing at offsets 0, fftSize/2, and fftSize — instead of the 2
+    /// non-overlapping windows the old clear-on-complete behavior produced.
+    @Test func fftOverlapProducesThreeWindowsForDoubleLength() {
+        let spectrum = AudioSpectrum.shared
+        spectrum.reset()
+        let before = spectrum.fftComputeCountForTesting
+
+        let count = AudioSpectrum.fftSize * 2
+        var samples = [Float](repeating: 0, count: count)
+        let sr: Float = 44100, freq: Float = 440
+        for i in 0..<count { samples[i] = sin(2.0 * .pi * freq * Float(i) / sr) }
+        samples.withUnsafeBufferPointer { buf in
+            spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: sr)
+        }
+
+        let computed = spectrum.fftComputeCountForTesting - before
+        #expect(computed == 3)  // was 2 without overlap
+    }
+
+    /// hopSize is exactly half the FFT window (50% overlap).
+    @Test func hopSizeIsHalfFFTSize() {
+        #expect(AudioSpectrum.hopSize == AudioSpectrum.fftSize / 2)
+    }
+
+    // MARK: - Soft-knee de-saturation (#112 Slice B)
+
+    /// Below the knee (0.6) the curve is identity — quiet/medium content is untouched, so derived
+    /// energy (and the idle thresholds that read it) is preserved.
+    @Test func softKneeIsIdentityBelowKnee() {
+        #expect(AudioSpectrum.softKnee(0.0) == 0.0)
+        #expect(AudioSpectrum.softKnee(0.3) == 0.3)
+        #expect(AudioSpectrum.softKnee(0.6) == 0.6)
+    }
+
+    /// A medium-hot value that the old hard clamp would have pinned at exactly 1.0 now keeps
+    /// gradation (strictly between the knee and the ceiling) — the actual de-saturation win. Only
+    /// genuinely extreme input approaches the ceiling (and may reach 1.0 at Float precision).
+    @Test func softKneeCompressesMediumHotBelowCeiling() {
+        let mediumHot = AudioSpectrum.softKnee(1.5)   // hard clamp would have pinned this to 1.0
+        #expect(mediumHot > 0.6 && mediumHot < 1.0)
+        let veryHot = AudioSpectrum.softKnee(8.0)
+        #expect(veryHot >= mediumHot && veryHot <= 1.0)  // monotonic, capped at the ceiling
+    }
+
+    /// Monotonic increasing and always within [0, 1] across the range.
+    @Test func softKneeIsMonotonicAndInUnitRange() {
+        var previous = AudioSpectrum.softKnee(0)
+        for step in 1...200 {
+            let value = AudioSpectrum.softKnee(Float(step) * 0.05)  // 0.05 … 10.0
+            #expect(value >= 0 && value <= 1)
+            #expect(value >= previous)  // non-decreasing
+            previous = value
+        }
+    }
+
     // MARK: - Fast (native-only) band set — Slice 3
 
     @Test func bandsFastInitialZeroAndReset() {
@@ -114,7 +172,7 @@ struct AudioSpectrumTests {
     @Test func bandsFastClampedToUnitRange() {
         let spectrum = AudioSpectrum.shared
         spectrum.reset()
-        var samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
+        let samples = [Float](repeating: 1.0, count: AudioSpectrum.fftSize)
         samples.withUnsafeBufferPointer { buf in
             spectrum.processPCM(buf.baseAddress!, count: buf.count, sampleRate: 44100)
         }

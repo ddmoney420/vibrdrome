@@ -25,14 +25,9 @@ struct GenerationsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(decades, id: \.0) { decade in
-                    NavigationLink {
-                        AlbumsView(
-                            listType: .byYear,
-                            title: decade.0,
-                            fromYear: decade.1,
-                            toYear: decade.2
-                        )
-                    } label: {
+                    NavigationLink(value: DecadeAlbumsNavItem(
+                        title: decade.0, fromYear: decade.1, toYear: decade.2
+                    )) {
                         decadeCard(decade)
                     }
                     .buttonStyle(.plain)
