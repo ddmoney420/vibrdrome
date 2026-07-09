@@ -23,6 +23,8 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.disableSpinningArt) private var disableSpinningArt: Bool = false
     @AppStorage(UserDefaultsKeys.enableMiniPlayerSwipe) private var enableMiniPlayerSwipe: Bool = true
     @AppStorage(UserDefaultsKeys.fetchInternetLyrics) private var fetchInternetLyrics: Bool = true
+    @AppStorage(UserDefaultsKeys.lyricHighlightStyle) private var lyricHighlightStyle: LyricHighlightStyle = .wordDimmed
+    @AppStorage(UserDefaultsKeys.lyricHighlightColor) private var lyricHighlightColor: LyricHighlightColor = .accent
 
     // Playback
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
@@ -117,11 +119,40 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("fetchInternetLyricsToggle")
+
+            Picker(selection: $lyricHighlightStyle) {
+                ForEach(LyricHighlightStyle.allCases) { style in
+                    Text(style.label).tag(style)
+                }
+            } label: {
+                Label("Lyrics Highlight", systemImage: "music.mic")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("lyricHighlightStylePicker")
+
+            Picker(selection: $lyricHighlightColor) {
+                ForEach(LyricHighlightColor.allCases) { color in
+                    Label {
+                        Text(color.label)
+                    } icon: {
+                        Image(systemName: "circle.fill").foregroundStyle(color.swatch)
+                    }
+                    .tag(color)
+                }
+            } label: {
+                Label("Highlight Color", systemImage: "paintpalette")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("lyricHighlightColorPicker")
+            .disabled(!lyricHighlightStyle.isWordLevel)
         } header: {
             settingSectionHeader("Behavior", icon: "gearshape.fill", color: .gray)
         } footer: {
-            if fetchInternetLyrics {
-                Text("When your server has no lyrics for a track, look them up on LRCLIB. This sends the track's title, artist, and album to lrclib.net.")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Lyrics Highlight applies to word-synced lyrics — line-by-line lyrics always highlight a line at a time.")
+                if fetchInternetLyrics {
+                    Text("When your server has no lyrics for a track, look them up on LRCLIB. This sends the track's title, artist, and album to lrclib.net.")
+                }
             }
         }
     }

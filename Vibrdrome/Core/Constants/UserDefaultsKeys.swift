@@ -38,6 +38,12 @@ enum UserDefaultsKeys {
     /// Per-song synced-lyrics timing nudge, in milliseconds (#86). Positive = lyrics
     /// advance earlier relative to the audio.
     static func lyricsOffset(songId: String) -> String { "lyricsOffset.\(songId)" }
+    /// How word-synced (enhanced) lyrics highlight: line-only, word, or word+dimmed (#113).
+    /// Stores a `LyricHighlightStyle` raw value; line-level lyrics ignore it.
+    static let lyricHighlightStyle = "lyricHighlightStyle"
+    /// Color of the currently-sung word in word-level lyrics (#113). Stores a
+    /// `LyricHighlightColor` raw value; default is the app accent.
+    static let lyricHighlightColor = "lyricHighlightColor"
     static let replayGainMode = "replayGainMode"
     static let scrobblingEnabled = "scrobblingEnabled"
     static let preloadSongs = "preloadSongs"

@@ -335,6 +335,18 @@ final class AudioEngine {
         }
     }
 
+    /// Live playback position read straight from the active AVPlayer, for high-frequency UI
+    /// (word-level lyrics, #113) that needs finer granularity than the 0.5s periodic time
+    /// observer that drives `currentTime`. Pull-only — it does NOT add an observer or change the
+    /// global cadence. Falls back to the sampled `currentTime` when there's no active player or
+    /// the player's time is non-finite (e.g. mid-seek).
+    var smoothCurrentTime: TimeInterval {
+        if let seconds = activePlayer?.currentTime().seconds, seconds.isFinite, seconds >= 0 {
+            return seconds
+        }
+        return currentTime
+    }
+
     /// When true, skip all AVPlayer/AVAudioSession operations but still update
     /// observable state so the UI renders correctly for XCUITest.
     let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")

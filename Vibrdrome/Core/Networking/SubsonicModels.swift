@@ -635,6 +635,86 @@ struct StructuredLyrics: Decodable, Sendable {
     let synced: Bool
     let offset: Int?
     let line: [LyricLine]?
+    // OpenSubsonic songLyrics v2 (`enhanced=true`). All optional so the v1 line-level path is
+    // completely unchanged when a server, request, or track has no word-level data:
+    // - `kind`: "main" / "translation" / "pronunciation" (the server adds this under enhanced).
+    // - `cueLine`: word/syllable-level karaoke timing, parallel to `line`. Absent on v1.
+    let kind: String?
+    let cueLine: [CueLine]?
+
+    /// Explicit initializer so the synthesized memberwise init (which the LRCLIB fallback and
+    /// tests use) keeps its original signature — `kind`/`cueLine` default to nil, so line-level
+    /// callers don't have to know about the v2 fields.
+    init(displayArtist: String?, displayTitle: String?, lang: String, synced: Bool,
+         offset: Int?, line: [LyricLine]?, kind: String? = nil, cueLine: [CueLine]? = nil) {
+        self.displayArtist = displayArtist
+        self.displayTitle = displayTitle
+        self.lang = lang
+        self.synced = synced
+        self.offset = offset
+        self.line = line
+        self.kind = kind
+        self.cueLine = cueLine
+    }
+}
+
+/// A word-timed line (OpenSubsonic songLyrics v2). `value` is the full line text; `cue` holds
+/// the per-word/syllable segments. Server sends `index`/`start`/`end` in milliseconds.
+struct CueLine: Decodable, Sendable, Identifiable {
+    let index: Int?
+    let start: Int?
+    let end: Int?
+    let value: String
+    let cue: [LyricCue]?
+
+    private let _id = UUID()
+    var id: UUID { _id }
+
+    enum CodingKeys: String, CodingKey { case index, start, end, value, cue }
+
+    /// True when the cue segments losslessly reconstruct `value` — the safe gate for
+    /// word-level rendering. When false, the caller should fall back to line-level for this line
+    /// rather than risk mis-slicing (e.g. a server variant whose cues don't tile the text).
+    var cuesReconstructValue: Bool {
+        guard let cue, !cue.isEmpty else { return false }
+        return cue.map(\.value).joined() == value
+    }
+}
+
+/// A single word/syllable within a `CueLine`. `start`/`end` are milliseconds. `byteStart`/
+/// `byteEnd` are UTF-8 byte offsets into the parent `CueLine.value`, and `byteEnd` is INCLUSIVE
+/// (the index of the last byte). `value` carries the segment text directly, so rendering does
+/// not need the byte offsets — they are a cross-check (see `String.rangeForUTF8Bytes`).
+struct LyricCue: Decodable, Sendable, Identifiable {
+    let start: Int?
+    let end: Int?
+    let byteStart: Int?
+    let byteEnd: Int?
+    let value: String
+
+    private let _id = UUID()
+    var id: UUID { _id }
+
+    enum CodingKeys: String, CodingKey { case start, end, byteStart, byteEnd, value }
+}
+
+extension String {
+    /// Maps a UTF-8 byte range `[byteStart, byteEndInclusive]` (as emitted by OpenSubsonic
+    /// enhanced lyrics) to a `Range<String.Index>` into this string. Returns nil when the
+    /// offsets are out of range or do not land on Swift character boundaries (e.g. a byte offset
+    /// splitting a multi-byte scalar) — callers treat nil as "cannot map safely" and fall back.
+    func rangeForUTF8Bytes(start byteStart: Int, endInclusive byteEnd: Int) -> Range<String.Index>? {
+        guard byteStart >= 0, byteEnd >= byteStart else { return nil }
+        let bytes = utf8
+        let exclusiveEnd = byteEnd + 1
+        guard let lowerUTF8 = bytes.index(bytes.startIndex, offsetBy: byteStart, limitedBy: bytes.endIndex),
+              let upperUTF8 = bytes.index(bytes.startIndex, offsetBy: exclusiveEnd, limitedBy: bytes.endIndex),
+              let lower = lowerUTF8.samePosition(in: self),
+              let upper = upperUTF8.samePosition(in: self) else {
+            return nil
+        }
+        return lower..<upper
+    }
 }
 
 struct LyricLine: Decodable, Sendable, Identifiable {

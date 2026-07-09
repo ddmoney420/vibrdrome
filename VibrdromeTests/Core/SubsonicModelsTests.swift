@@ -983,4 +983,131 @@ struct SubsonicModelsTests {
         #expect(pl.entry?.count == 1)
         #expect(pl.entry?[0].duration == 300)
     }
+
+    // MARK: - Enhanced Lyrics Decoding (#113)
+
+    /// Real Navidrome 0.63.0 `getLyricsBySongId?enhanced=true` shape (captured from
+    /// "A Different Octave"): line-level `line[]` plus word-level `cueLine[].cue[]`.
+    @Test func enhancedLyricsDecodesCueLines() throws {
+        let json = """
+        {
+            "displayArtist": "Frank Zappa",
+            "displayTitle": "A Different Octave",
+            "kind": "main",
+            "lang": "xxx",
+            "synced": true,
+            "line": [
+                {"start": 1580, "value": "We are actually the same note, but"}
+            ],
+            "cueLine": [
+                {
+                    "index": 0,
+                    "start": 1580,
+                    "end": 5020,
+                    "value": "We are actually the same note, but",
+                    "cue": [
+                        {"start": 1580, "end": 1920, "byteStart": 0, "byteEnd": 2, "value": "We "},
+                        {"start": 1920, "end": 2890, "byteStart": 3, "byteEnd": 6, "value": "are "},
+                        {"start": 4620, "end": 5020, "byteStart": 31, "byteEnd": 33, "value": "but"}
+                    ]
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+        let lyrics = try JSONDecoder().decode(StructuredLyrics.self, from: json)
+        #expect(lyrics.kind == "main")
+        #expect(lyrics.synced == true)
+        #expect(lyrics.line?.count == 1)
+        let cueLine = try #require(lyrics.cueLine?.first)
+        #expect(cueLine.index == 0)
+        #expect(cueLine.start == 1580)
+        #expect(cueLine.end == 5020)
+        #expect(cueLine.cue?.count == 3)
+        let firstCue = try #require(cueLine.cue?.first)
+        #expect(firstCue.value == "We ")
+        #expect(firstCue.start == 1580)
+        #expect(firstCue.byteEnd == 2)
+    }
+
+    /// A v1 / line-only track (no `cueLine`) must still decode and leave the word-level fields nil.
+    @Test func lineOnlyLyricsHasNilCueLine() throws {
+        let json = """
+        {
+            "displayArtist": "Spoon", "displayTitle": "1020 AM",
+            "kind": "main", "lang": "xxx", "synced": true,
+            "line": [{"start": 8390, "value": "1020 am 1020 am"}]
+        }
+        """.data(using: .utf8)!
+        let lyrics = try JSONDecoder().decode(StructuredLyrics.self, from: json)
+        #expect(lyrics.kind == "main")
+        #expect(lyrics.line?.count == 1)
+        #expect(lyrics.cueLine == nil)
+    }
+
+    /// Old server / plain lyrics with neither `kind` nor `cueLine` — the original v1 path.
+    @Test func legacyLyricsDecodesWithoutV2Fields() throws {
+        let json = """
+        {"lang": "en", "synced": false, "line": [{"value": "hello"}]}
+        """.data(using: .utf8)!
+        let lyrics = try JSONDecoder().decode(StructuredLyrics.self, from: json)
+        #expect(lyrics.kind == nil)
+        #expect(lyrics.cueLine == nil)
+        #expect(lyrics.line?.first?.value == "hello")
+    }
+
+    /// `cuesReconstructValue` is the safe gate for word rendering: true when the cue segments
+    /// tile the line exactly, false otherwise (→ caller falls back to line-level).
+    @Test func cueLineReconstructionGate() throws {
+        let good = """
+        {"value": "We are but", "cue": [
+            {"value": "We ", "byteStart": 0, "byteEnd": 2},
+            {"value": "are ", "byteStart": 3, "byteEnd": 6},
+            {"value": "but", "byteStart": 7, "byteEnd": 9}
+        ]}
+        """.data(using: .utf8)!
+        let goodLine = try JSONDecoder().decode(CueLine.self, from: good)
+        #expect(goodLine.cuesReconstructValue == true)
+
+        let mismatched = """
+        {"value": "We are but", "cue": [{"value": "We", "byteStart": 0, "byteEnd": 1}]}
+        """.data(using: .utf8)!
+        let badLine = try JSONDecoder().decode(CueLine.self, from: mismatched)
+        #expect(badLine.cuesReconstructValue == false)
+
+        let empty = """
+        {"value": "We are but", "cue": []}
+        """.data(using: .utf8)!
+        let emptyLine = try JSONDecoder().decode(CueLine.self, from: empty)
+        #expect(emptyLine.cuesReconstructValue == false)
+    }
+
+    // MARK: - UTF-8 Byte-Offset Mapping (#113)
+
+    @Test func byteRangeMapsASCII() throws {
+        let value = "We are actually the same note, but"
+        // "actually " occupies inclusive bytes 7...15 in the captured fixture.
+        let range = try #require(value.rangeForUTF8Bytes(start: 7, endInclusive: 15))
+        #expect(String(value[range]) == "actually ")
+    }
+
+    @Test func byteRangeMapsMultiByte() throws {
+        // é = 2 UTF-8 bytes, 🎵 = 4 bytes. Verify offsets land on scalar boundaries.
+        let value = "café 🎵 x"
+        // "café " = c,a,f (3) + é (2 bytes) + space (1) = inclusive bytes 0...5.
+        let cafe = try #require(value.rangeForUTF8Bytes(start: 0, endInclusive: 5))
+        #expect(String(value[cafe]) == "café ")
+        // The emoji occupies inclusive bytes 6...9 (4 bytes).
+        let note = try #require(value.rangeForUTF8Bytes(start: 6, endInclusive: 9))
+        #expect(String(value[note]) == "🎵")
+    }
+
+    @Test func byteRangeRejectsSplitScalarAndOutOfRange() {
+        let value = "café"  // c a f é(2 bytes) → 5 UTF-8 bytes total
+        // Byte offset 3 ends INSIDE the é scalar (bytes 3..4) → cannot map cleanly.
+        #expect(value.rangeForUTF8Bytes(start: 0, endInclusive: 3) == nil)
+        // Past the end of the string.
+        #expect(value.rangeForUTF8Bytes(start: 0, endInclusive: 99) == nil)
+        // Inverted range.
+        #expect(value.rangeForUTF8Bytes(start: 3, endInclusive: 1) == nil)
+    }
 }
