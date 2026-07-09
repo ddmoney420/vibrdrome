@@ -4,24 +4,22 @@ import SwiftUI
 // MARK: - Filter UI & Logic
 
 extension SearchView {
+    /// #85 Slice 2: primary result-type control (All / Artists / Albums / Songs). Segmented and
+    /// pinned above results so it tailors the search up front rather than filtering after the fact.
+    var scopePicker: some View {
+        Picker("Type", selection: $selectedScope) {
+            ForEach(SearchScope.allCases) { scope in
+                Text(scope.label).tag(scope)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
     var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                filterChip(
-                    label: selectedGenre ?? "Genre",
-                    isActive: selectedGenre != nil,
-                    showPicker: $showGenrePicker,
-                    onClear: { selectedGenre = nil }
-                )
-                .popover(isPresented: $showGenrePicker) {
-                    filterPickerList(
-                        title: "Genre",
-                        options: availableGenres,
-                        selection: $selectedGenre,
-                        isPresented: $showGenrePicker
-                    )
-                }
-
                 filterChip(
                     label: selectedYear.map { "\($0)" } ?? "Year",
                     isActive: selectedYear != nil,
@@ -58,7 +56,6 @@ extension SearchView {
                 if hasActiveFilters {
                     Button {
                         withAnimation {
-                            selectedGenre = nil
                             selectedYear = nil
                             selectedFormat = nil
                         }
@@ -150,9 +147,6 @@ extension SearchView {
         guard hasActiveFilters else { return results }
 
         let filteredSongs = results.song?.filter { song in
-            if let genre = selectedGenre, song.genre?.caseInsensitiveCompare(genre) != .orderedSame {
-                return false
-            }
             if let year = selectedYear, song.year != year {
                 return false
             }
@@ -164,10 +158,6 @@ extension SearchView {
         }
 
         let filteredAlbums = results.album?.filter { album in
-            if let genre = selectedGenre,
-               !album.allGenres.contains(where: { $0.caseInsensitiveCompare(genre) == .orderedSame }) {
-                return false
-            }
             if let year = selectedYear, album.year != year {
                 return false
             }
@@ -175,8 +165,8 @@ extension SearchView {
             return selectedFormat == nil
         }
 
-        // Artists are not filtered (no genre/year/format on the Artist model)
-        let filteredArtists = (selectedGenre != nil || selectedYear != nil || selectedFormat != nil)
+        // Artists have no year/format metadata — hide the section when a refiner is active.
+        let filteredArtists = (selectedYear != nil || selectedFormat != nil)
             ? nil : results.artist
 
         return SearchResult3(
@@ -184,31 +174,5 @@ extension SearchView {
             album: filteredAlbums?.isEmpty == true ? nil : filteredAlbums,
             song: filteredSongs?.isEmpty == true ? nil : filteredSongs
         )
-    }
-
-    func loadGenres() async {
-        let container = PersistenceController.shared.container
-        let localGenres = await Task.detached(priority: .utility) {
-            let context = ModelContext(container)
-            context.autosaveEnabled = false
-            let albums = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
-            let genres = Set(albums.flatMap(\.genres).filter { !$0.isEmpty })
-            return genres.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        }.value
-
-        if !localGenres.isEmpty {
-            availableGenres = localGenres
-            return
-        }
-
-        // Fall back to API
-        do {
-            let genres = try await appState.subsonicClient.getGenres()
-            availableGenres = genres
-                .map(\.value)
-                .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        } catch {
-            // Non-critical — filter just won't have genre options
-        }
     }
 }

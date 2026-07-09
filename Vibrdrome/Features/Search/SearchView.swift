@@ -16,37 +16,55 @@ struct SearchView: View {
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     // MARK: - Filter State (internal for SearchView+Filters extension)
-    @State var availableGenres: [String] = []
-    @State var selectedGenre: String?
     @State var selectedYear: Int?
     @State var selectedFormat: String?
-    @State var showGenrePicker = false
     @State var showYearPicker = false
     @State var showFormatPicker = false
+    @State var selectedScope: SearchScope = .all
     @State private var searchIsActive = false
 
     let formatOptions = ["FLAC", "MP3", "AAC", "OGG", "OPUS", "WAV"]
 
+    /// Search result type filter (#85 Slice 2). `.all` keeps the 3-section layout; a specific scope
+    /// narrows both the fetched result counts and the displayed sections.
+    enum SearchScope: String, CaseIterable, Identifiable {
+        case all, artists, albums, songs
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: return "All"
+            case .artists: return "Artists"
+            case .albums: return "Albums"
+            case .songs: return "Songs"
+            }
+        }
+    }
+
     var hasActiveFilters: Bool {
-        selectedGenre != nil || selectedYear != nil || selectedFormat != nil
+        selectedYear != nil || selectedFormat != nil
     }
 
     var body: some View {
-        ScrollView {
-            if results != nil || hasActiveFilters {
+        VStack(spacing: 0) {
+            // #85 Slice 2: type scope + refiners pinned above the scrolling results, and shown as
+            // soon as search is active so filters are available up front (not gated on results).
+            if searchIsActive || results != nil || hasActiveFilters {
+                scopePicker
                 filterBar
             }
-            if let results {
-                resultsContent(applyFilters(to: results))
-            } else if let searchError, !query.isEmpty {
-                errorContent(searchError)
-            } else if query.isEmpty {
-                emptyContent
+            ScrollView {
+                if let results {
+                    resultsContent(applyFilters(to: results))
+                } else if let searchError, !query.isEmpty {
+                    errorContent(searchError)
+                } else if query.isEmpty {
+                    emptyContent
+                }
             }
+            #if os(iOS)
+            .padding(.bottom, 80)
+            #endif
         }
-        #if os(iOS)
-        .padding(.bottom, 80)
-        #endif
         .navigationTitle("Search")
         .searchable(text: $query, isPresented: $searchIsActive, prompt: "Artists, albums, songs...")
         .onAppear {
@@ -73,13 +91,18 @@ struct SearchView: View {
                 await performSearch(newValue)
             }
         }
+        .onChange(of: selectedScope) { _, _ in
+            // #85 Slice 2: re-run the search with type-tailored fetch counts when the scope changes.
+            guard query.count >= 2 else { return }
+            searchTask?.cancel()
+            searchTask = Task {
+                await performSearch(query)
+            }
+        }
         .overlay {
             if isSearching {
                 ProgressView()
             }
-        }
-        .task {
-            await loadGenres()
         }
     }
 
@@ -95,11 +118,16 @@ struct SearchView: View {
                 ContentUnavailableView.search(text: query)
             }
 
-            if !artists.isEmpty { artistsSection(artists) }
-            if !albums.isEmpty { albumsSection(albums) }
-            if !songs.isEmpty { songsSection(songs) }
+            if showsScope(.artists), !artists.isEmpty { artistsSection(artists) }
+            if showsScope(.albums), !albums.isEmpty { albumsSection(albums) }
+            if showsScope(.songs), !songs.isEmpty { songsSection(songs) }
         }
         .padding(.top, 8)
+    }
+
+    /// #85 Slice 2: which sections to display for the current scope (`.all` shows every section).
+    private func showsScope(_ scope: SearchScope) -> Bool {
+        selectedScope == .all || selectedScope == scope
     }
 
     @ViewBuilder
@@ -325,12 +353,15 @@ struct SearchView: View {
         } actions: {
             Button("Retry") {
                 let q = query
+                let counts = scopeCounts()
                 searchTask?.cancel()
                 searchTask = Task {
                     isSearching = true
                     defer { isSearching = false }
                     do {
-                        let searchResults = try await appState.subsonicClient.search(query: q)
+                        let searchResults = try await appState.subsonicClient.search(
+                            query: q, artistCount: counts.artist,
+                            albumCount: counts.album, songCount: counts.song)
                         guard !Task.isCancelled else { return }
                         self.searchError = nil
                         results = rankedResults(searchResults, query: q)
@@ -347,9 +378,21 @@ struct SearchView: View {
 
     // MARK: - Search Logic
 
+    /// #85 Slice 2: bias the search3 result counts toward the selected type so a scope tailors the
+    /// fetch (more of that type) rather than just hiding sections.
+    private func scopeCounts() -> (artist: Int, album: Int, song: Int) {
+        switch selectedScope {
+        case .all: return (20, 20, 40)
+        case .artists: return (60, 0, 0)
+        case .albums: return (0, 60, 0)
+        case .songs: return (0, 0, 80)
+        }
+    }
+
     private func performSearch(_ query: String) async {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
+        let counts = scopeCounts()
 
         // Show local results instantly while waiting for network
         let localResults = searchLocally(query: query)
@@ -368,23 +411,31 @@ struct SearchView: View {
             var searchResults: SearchResult3
             if !variants.isEmpty {
                 // Search the dotted/specific variant first
-                searchResults = try await appState.subsonicClient.search(query: variants[0])
+                searchResults = try await appState.subsonicClient.search(
+                    query: variants[0], artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
 
                 // Try remaining variants if still few results
                 for variant in variants.dropFirst() {
                     guard !Task.isCancelled else { return }
                     if resultCount(searchResults) >= 3 { break }
-                    let extra = try await appState.subsonicClient.search(query: variant)
+                    let extra = try await appState.subsonicClient.search(
+                        query: variant, artistCount: counts.artist,
+                        albumCount: counts.album, songCount: counts.song)
                     searchResults = mergeResults(searchResults, extra)
                 }
 
                 // Merge with original query results (adds broader matches)
-                let original = try await appState.subsonicClient.search(query: query)
+                let original = try await appState.subsonicClient.search(
+                    query: query, artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
                 searchResults = mergeResults(searchResults, original)
             } else {
-                searchResults = try await appState.subsonicClient.search(query: query)
+                searchResults = try await appState.subsonicClient.search(
+                    query: query, artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
             }
 
