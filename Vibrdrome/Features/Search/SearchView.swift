@@ -333,7 +333,7 @@ struct SearchView: View {
                         let searchResults = try await appState.subsonicClient.search(query: q)
                         guard !Task.isCancelled else { return }
                         self.searchError = nil
-                        results = searchResults
+                        results = rankedResults(searchResults, query: q)
                     } catch {
                         guard !Task.isCancelled else { return }
                         self.searchError = ErrorPresenter.userMessage(for: error)
@@ -354,7 +354,7 @@ struct SearchView: View {
         // Show local results instantly while waiting for network
         let localResults = searchLocally(query: query)
         if let localResults, resultCount(localResults) > 0, results == nil {
-            results = localResults
+            results = rankedResults(localResults, query: query)
         }
 
         isSearching = true
@@ -389,7 +389,7 @@ struct SearchView: View {
             }
 
             searchError = nil
-            results = searchResults
+            results = rankedResults(searchResults, query: query)
         } catch {
             guard !Task.isCancelled else { return }
             // Offline fallback: search cached library locally
@@ -399,7 +399,7 @@ struct SearchView: View {
                 }
             if let offlineResults, resultCount(offlineResults) > 0 {
                 searchError = nil
-                results = offlineResults
+                results = rankedResults(offlineResults, query: query)
             } else {
                 searchError = ErrorPresenter.userMessage(for: error)
                 results = nil
@@ -538,5 +538,81 @@ struct SearchView: View {
     private func dedupSongs(_ songs: [Song]) -> [Song] {
         var seen = Set<String>()
         return songs.filter { seen.insert($0.id).inserted }
+    }
+}
+
+// MARK: - Relevance ranking (#85 Slice 1)
+
+private extension SearchView {
+    /// Relevance-rank the already-fetched result sections. Order: exact > starts-with >
+    /// word-boundary/token prefix > loose contains; small subtle boosts for starred + frequently
+    /// played so text relevance still dominates. Stable on ties (preserves the server's order).
+    /// Pure/synchronous — scoring ~80 items is sub-millisecond, so it runs inline rather than via a
+    /// detached round-trip that would delay the instant local results.
+    func rankedResults(_ results: SearchResult3, query: String) -> SearchResult3 {
+        let q = Self.normalizeForRanking(query)
+        guard !q.isEmpty else { return results }
+
+        let artists = Self.stableRankSort(results.artist ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.name), query: q,
+                                starred: $0.starred != nil, plays: 0)
+        }
+        let albums = Self.stableRankSort(results.album ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.name), query: q,
+                                starred: $0.starred != nil, plays: $0.playCount ?? 0)
+        }
+        let songs = Self.stableRankSort(results.song ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.title), query: q,
+                                starred: $0.starred != nil, plays: Int($0.playCount ?? 0))
+        }
+        return SearchResult3(
+            artist: artists.isEmpty ? nil : artists,
+            album: albums.isEmpty ? nil : albums,
+            song: songs.isEmpty ? nil : songs
+        )
+    }
+
+    static func normalizeForRanking(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Text tiers are 200 apart while the boosts total <= 65, so a tier can never be overtaken by
+    /// boosts alone — relevance always wins; boosts only reorder items within the same tier.
+    static func relevanceScore(_ text: String, query q: String, starred: Bool, plays: Int) -> Int {
+        var s: Int
+        if text == q {
+            s = 1000
+        } else if text.hasPrefix(q) {
+            s = 600
+        } else if tokenHasPrefix(text, q) {
+            s = 400
+        } else if text.contains(q) {
+            s = 200
+        } else {
+            s = 0
+        }
+        if starred { s += 40 }
+        s += min(max(plays, 0), 25)
+        return s
+    }
+
+    /// True if any word (letter/number token) in `text` begins with `q` — the "word-boundary"
+    /// match, e.g. query "beat" matches the "Beatles" token in "The Beatles".
+    static func tokenHasPrefix(_ text: String, _ q: String) -> Bool {
+        for token in text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) where token.hasPrefix(q) {
+            return true
+        }
+        return false
+    }
+
+    /// Sort by score descending; ties keep original order (Swift's sort isn't guaranteed stable).
+    static func stableRankSort<T>(_ items: [T], _ score: (T) -> Int) -> [T] {
+        items.enumerated()
+            .sorted { a, b in
+                let sa = score(a.element), sb = score(b.element)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }
+            .map(\.element)
     }
 }
