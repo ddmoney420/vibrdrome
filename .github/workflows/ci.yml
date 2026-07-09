@@ -13,7 +13,7 @@ concurrency:
 jobs:
   lint:
     name: SwiftLint
-    runs-on: macos-26
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Install SwiftLint
@@ -23,7 +23,7 @@ jobs:
 
   build-ios:
     name: Build iOS
-    runs-on: macos-26
+    runs-on: macos-15
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
 
   build-macos:
     name: Build macOS
-    runs-on: macos-26
+    runs-on: macos-15
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +95,7 @@ jobs:
 
   test:
     name: Test
-    runs-on: macos-26
+    runs-on: macos-15
     needs: [build-ios]
     steps:
       - uses: actions/checkout@v4
