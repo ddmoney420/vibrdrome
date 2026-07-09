@@ -87,9 +87,6 @@ struct AlbumsView: View {
             Button("Save") { saveCollection() }
             Button("Cancel", role: .cancel) { }
         }
-        .navigationDestination(for: AlbumNavItem.self) { item in
-            AlbumDetailView(albumId: item.id)
-        }
         .task {
             #if os(macOS)
             filterRaw = AlbumFilter.all.rawValue

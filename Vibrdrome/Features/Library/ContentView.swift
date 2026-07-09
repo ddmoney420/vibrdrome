@@ -341,6 +341,7 @@ struct ContentView: View {
     @ViewBuilder
     private func tabView(for id: String) -> some View {
         NavigationStack { tabRootContent(for: id) }
+            .libraryNavigationDestinations()
     }
 
     /// App-owned "More" menu. A single NavigationStack listing the overflow
@@ -509,6 +510,34 @@ struct AlbumNavItem: Hashable {
 
 struct GenreNavItem: Hashable {
     let name: String
+}
+
+/// Genre → its albums using the server-side `.byGenre` list (as GenresView shows them). Distinct
+/// from `GenreNavItem`, which uses `.alphabeticalByName + initialGenreFilter`. Value-based so the
+/// genre → albums → album-tile chain stays consistent under the Home tab's bound navigation path.
+struct GenreAlbumsNavItem: Hashable {
+    let genre: String
+}
+
+/// Decade → its albums (`.byYear` range), as GenerationsView shows them. Value-based so the
+/// decade → albums → album-tile chain stays consistent under the Home tab's bound navigation path.
+struct DecadeAlbumsNavItem: Hashable {
+    let title: String
+    let fromYear: Int
+    let toYear: Int
+}
+
+/// A configured album list (used by Home "See All" links). Value-based so the See All → albums →
+/// album-tile chain stays consistent under the Home tab's bound navigation path.
+struct AlbumListNavItem: Hashable {
+    let listType: AlbumListType
+    let title: String
+    let genre: String?
+    init(listType: AlbumListType, title: String, genre: String? = nil) {
+        self.listType = listType
+        self.title = title
+        self.genre = genre
+    }
 }
 
 struct PlaylistNavItem: Hashable {
