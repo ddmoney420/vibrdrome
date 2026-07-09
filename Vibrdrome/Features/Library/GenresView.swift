@@ -146,9 +146,7 @@ struct GenresView: View {
 
     private var genreList: some View {
         List(cachedFilteredGenres) { genre in
-            NavigationLink {
-                AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
-            } label: {
+            NavigationLink(value: GenreAlbumsNavItem(genre: genre.value)) {
                 HStack(spacing: 12) {
                     GenreIconView(genre: genre.value, coverArtId: genreArtworkMap[genre.value])
                         .frame(width: 48, height: 48)
@@ -177,9 +175,7 @@ struct GenresView: View {
                 GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)
             ], spacing: 20) {
                 ForEach(cachedFilteredGenres) { genre in
-                    NavigationLink {
-                        AlbumsView(listType: .byGenre, title: genre.value.cleanedGenreDisplay, genre: genre.value)
-                    } label: {
+                    NavigationLink(value: GenreAlbumsNavItem(genre: genre.value)) {
                         genreCard(genre)
                     }
                     .buttonStyle(.plain)
