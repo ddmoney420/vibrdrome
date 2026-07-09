@@ -1,5 +1,14 @@
 # Regression Testing Checklist
 
+## Build 57 — Home navigation, Top Artists, mini-player accessory, visualizer, streamed-FLAC
+
+- [ ] Home pills: tap album in Recently Added / Genres / Generations / See-All → opens album, one back returns to the panel (no bounce)
+- [ ] Random Album / Random Mix still play immediately (no navigation)
+- [ ] Home → Your Top Artists: tap opens Artist Detail; long-press → "Start Artist Radio" starts radio
+- [ ] iOS 26 mini-player sits above the tab bar on a small/zero-inset phone (SE) and a notched phone; hidden when idle
+- [ ] Visualizer: motion smoother, medium-volume bands not pinned at max, no idle-fallback regression
+- [ ] Streamed FLAC: total shows real length, ends at 0:00 uninterrupted, seek holds sync; MP3/AAC/gapless/crossfade unaffected
+
 ## Build 56 — Native Visualizer, reactivity, projectM removal
 
 - [ ] Classic visualizer is the default and opens/renders from Now Playing
