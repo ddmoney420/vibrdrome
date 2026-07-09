@@ -440,17 +440,27 @@ struct SearchView: View {
             }
 
             searchError = nil
-            results = rankedResults(searchResults, query: query)
+            let ranked = rankedResults(searchResults, query: query)
+            results = ranked
+            // #85 Slice 3: augment thin results with typo-tolerant local Artist/Album matches.
+            let fuzzed = await fuzzyAugmented(ranked, query: query)
+            guard !Task.isCancelled else { return }
+            results = fuzzed
         } catch {
             guard !Task.isCancelled else { return }
-            // Offline fallback: search cached library locally
+            // Offline fallback: search cached library locally, then augment with fuzzy (#85 Slice 3)
+            // — which can surface typo matches even when the substring search found nothing.
             let offlineResults = searchLocally(query: query)
                 ?? searchDownloadsLocally(query: query).map {
                     SearchResult3(artist: nil, album: nil, song: $0)
                 }
-            if let offlineResults, resultCount(offlineResults) > 0 {
+            let base = offlineResults.map { rankedResults($0, query: query) }
+                ?? SearchResult3(artist: nil, album: nil, song: nil)
+            let fuzzed = await fuzzyAugmented(base, query: query)
+            guard !Task.isCancelled else { return }
+            if resultCount(fuzzed) > 0 {
                 searchError = nil
-                results = rankedResults(offlineResults, query: query)
+                results = fuzzed
             } else {
                 searchError = ErrorPresenter.userMessage(for: error)
                 results = nil
@@ -623,7 +633,7 @@ private extension SearchView {
         )
     }
 
-    static func normalizeForRanking(_ s: String) -> String {
+    nonisolated static func normalizeForRanking(_ s: String) -> String {
         s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -665,5 +675,117 @@ private extension SearchView {
                 return sa != sb ? sa > sb : a.offset < b.offset
             }
             .map(\.element)
+    }
+}
+
+// MARK: - Fuzzy / typo-tolerant matching (#85 Slice 3, Artists + Albums only)
+
+private extension SearchView {
+    /// Run fuzzy only when a type's normal (exact/substring) results are sparse.
+    static let fuzzyThinThreshold = 5
+
+    /// Append typo-tolerant local-cache Artist/Album matches below the ranked real results, when the
+    /// normal results are thin. Fuzzy hits rank BELOW real matches (appended after them) and are
+    /// bounded (min length, thin-gate, scope, first-letter + length prefilter, off-main). Songs are
+    /// intentionally excluded — full-library song fuzzy has higher perf/false-positive risk.
+    func fuzzyAugmented(_ ranked: SearchResult3, query: String) async -> SearchResult3 {
+        let q = Self.normalizeForRanking(query)
+        guard q.count >= 4 else { return ranked }
+
+        let doArtists = (selectedScope == .all || selectedScope == .artists)
+            && (ranked.artist?.count ?? 0) < Self.fuzzyThinThreshold
+        let doAlbums = (selectedScope == .all || selectedScope == .albums)
+            && (ranked.album?.count ?? 0) < Self.fuzzyThinThreshold
+        guard doArtists || doAlbums else { return ranked }
+
+        let haveArtistIds = Set((ranked.artist ?? []).map(\.id))
+        let haveAlbumIds = Set((ranked.album ?? []).map(\.id))
+        let container = PersistenceController.shared.container
+
+        let extra = await Task.detached(priority: .utility) { () -> (artists: [Artist], albums: [Album]) in
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            var fArtists: [Artist] = []
+            var fAlbums: [Album] = []
+            if doArtists {
+                let cached = (try? context.fetch(FetchDescriptor<CachedArtist>())) ?? []
+                fArtists = Self.fuzzyMatches(cached, query: q) { $0.name }
+                    .filter { !haveArtistIds.contains($0.item.id) }
+                    .prefix(8).map { $0.item.toArtist() }
+            }
+            if doAlbums {
+                let cached = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+                fAlbums = Self.fuzzyMatches(cached, query: q) { $0.name }
+                    .filter { !haveAlbumIds.contains($0.item.id) }
+                    .prefix(8).map { $0.item.toAlbum() }
+            }
+            return (fArtists, fAlbums)
+        }.value
+
+        guard !extra.artists.isEmpty || !extra.albums.isEmpty else { return ranked }
+        return SearchResult3(
+            artist: Self.mergeAppend(ranked.artist, extra.artists),
+            album: Self.mergeAppend(ranked.album, extra.albums),
+            song: ranked.song
+        )
+    }
+
+    nonisolated static func mergeAppend<T>(_ base: [T]?, _ extra: [T]) -> [T]? {
+        let combined = (base ?? []) + extra
+        return combined.isEmpty ? nil : combined
+    }
+
+    /// Cached items whose name has a *token* within the length-scaled Damerau-Levenshtein threshold
+    /// of `q`, sorted by best (smallest) distance. Cheap prefilter (shared first letter + comparable
+    /// length) runs before the bounded edit-distance so most candidates are rejected instantly.
+    nonisolated static func fuzzyMatches<T>(
+        _ items: [T], query q: String, name: (T) -> String
+    ) -> [(item: T, dist: Int)] {
+        let threshold = q.count >= 7 ? 2 : 1
+        guard let qFirst = q.first else { return [] }
+        var out: [(T, Int)] = []
+        for item in items {
+            let normalized = normalizeForRanking(name(item))
+            var best = Int.max
+            for token in normalized.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) {
+                let t = String(token)
+                // Cheap prefilter: share first letter, and comparable length.
+                guard t.first == qFirst, abs(t.count - q.count) <= threshold else { continue }
+                let d = boundedDamerauLevenshtein(t, q, max: threshold)
+                if d <= threshold { best = Swift.min(best, d) }
+            }
+            if best <= threshold { out.append((item, best)) }
+        }
+        return out.sorted { $0.1 < $1.1 }
+    }
+
+    /// Damerau-Levenshtein (optimal string alignment, with adjacent transposition), bounded by
+    /// `max` with early row-exit — returns `max + 1` as soon as no alignment can stay within budget.
+    nonisolated static func boundedDamerauLevenshtein(_ a: String, _ b: String, max: Int) -> Int {
+        let s = Array(a), t = Array(b)
+        let n = s.count, m = t.count
+        if abs(n - m) > max { return max + 1 }
+        if n == 0 { return m }
+        if m == 0 { return n }
+        var prev2 = [Int](repeating: 0, count: m + 1)
+        var prev = Array(0...m)
+        var curr = [Int](repeating: 0, count: m + 1)
+        for i in 1...n {
+            curr[0] = i
+            var rowMin = curr[0]
+            for j in 1...m {
+                let cost = s[i - 1] == t[j - 1] ? 0 : 1
+                var d = Swift.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+                if i > 1, j > 1, s[i - 1] == t[j - 2], s[i - 2] == t[j - 1] {
+                    d = Swift.min(d, prev2[j - 2] + 1)
+                }
+                curr[j] = d
+                rowMin = Swift.min(rowMin, d)
+            }
+            if rowMin > max { return max + 1 }
+            swap(&prev2, &prev)
+            swap(&prev, &curr)
+        }
+        return prev[m]
     }
 }
