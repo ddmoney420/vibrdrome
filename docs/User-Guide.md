@@ -39,7 +39,7 @@ The **Library** tab is the main way to explore your music:
 
 Use the **Library Filter** sidebar on macOS to multi-select genres, labels, and artists, with TriState toggles for favorites and downloaded.
 
-Use the **Search** tab to find artists, albums, or songs by name.
+Use the **Search** tab to find artists, albums, or songs by name. Results are ranked by relevance (exact matches first, then starts-with and word-boundary matches). Use the scope selector to narrow to **All / Artists / Albums / Songs**, and the **Year** and **Format** filters above the results to refine. Minor typos still work -- fuzzy matching catches close spellings for artists and albums.
 
 Use the **Playlists** tab to view and manage your server-side playlists.
 
@@ -57,7 +57,7 @@ The **Home** tab on macOS offers configurable discovery sections: Greeting + tod
 - **Repeat**: Tap the repeat icon to cycle through off, repeat all, and repeat one.
 - **Radio Mix**: Open the player toolbar and tap the Radio Mix button to queue up songs similar to the one currently playing. Rearrange or hide toolbar items in **Settings > Player > Now Playing Toolbar**.
 - **Song pre-download**: While a track plays, the next song in the queue is fetched in advance so transitions stay gapless on slow connections. The fetch cancels automatically if the queue changes.
-- **Lyrics**: Open the Lyrics view from the player toolbar. Synced lyrics scroll with playback and you can tap any line to seek. If your server has no lyrics for a track, Vibrdrome can look them up on the internet (LRCLIB) — turn this on or off with **Settings > Player > Behavior > "Fetch Lyrics from the Internet"** (it sends the track's title, artist, and album to lrclib.net). If a track's synced lyrics run slightly ahead or behind, use the timing bar at the bottom of the Lyrics view to nudge them in 0.1-second steps; the adjustment is remembered for that song.
+- **Lyrics**: Open the Lyrics view from the player toolbar. Synced lyrics scroll with playback and you can tap any line to seek. When a track has **word-timed ("enhanced") lyrics**, Vibrdrome highlights the current word in time with the music -- karaoke style. Choose how it looks with the style menu in the Lyrics toolbar or under **Settings > Player > Behavior > "Lyrics Highlight"**: **Line Only** (classic line highlight), **Word** (the current word bolds), or **Word + Dimmed** (sung words stay lit, upcoming words dim). Pick the highlight color too (Accent, Yellow, Green, Blue, Pink, or Orange). Tracks with only line-synced or plain lyrics behave exactly as before. If your server has no lyrics for a track, Vibrdrome can look them up on the internet (LRCLIB) — turn this on or off with **Settings > Player > Behavior > "Fetch Lyrics from the Internet"** (it sends the track's title, artist, and album to lrclib.net). If a track's synced lyrics run slightly ahead or behind, use the timing bar at the bottom of the Lyrics view to nudge them in 0.1-second steps; the adjustment is remembered for that song.
 - **Play a playlist with Siri/Shortcuts**: In Apple's Shortcuts app, add the Vibrdrome **"Play Playlist"** action, type a playlist name, and run it — or assign it a Siri phrase to play that playlist by voice.
 
 ## Get Info

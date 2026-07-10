@@ -4,6 +4,20 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 58 -- July 9, 2026
+
+**Search:**
+- Overhauled search (#85): smarter relevance ranking (exact matches first, then starts-with, word-boundary, and contains, with subtle boosts for favorites and frequently played), a result-type scope selector (All / Artists / Albums / Songs), Year and Format filters pinned above the results, and fuzzy matching for artists and albums so minor typos still find what you meant.
+
+**Lyrics:**
+- Enhanced word-level "karaoke" lyrics (#113): when a track has word-timed lyrics (OpenSubsonic enhanced), the current word highlights in time with the music. Pick a highlight style (Line Only / Word / Word + Dimmed) and an active-word color (Accent, Yellow, Green, Blue, Pink, Orange) from the Lyrics toolbar or Settings -> Player -> Behavior. Line-synced and plain lyrics are unchanged.
+
+**Bug fixes:**
+- Fixed local-network connection for servers reached by LAN IP or local hostname (#124): added the iOS Local Network permission declaration so the app can prompt for and use local-network access. Previously the connection could fail on your home Wi-Fi while still working over VPN.
+
+**Under the hood:**
+- Stabilized the RotationTests UI suite (#125): fixed a SwiftUI/XCUITest hittability race so device-rotation tests run reliably (test-only; no app behavior change).
+
 ### Build 57 -- July 8, 2026
 
 **Navigation:**
