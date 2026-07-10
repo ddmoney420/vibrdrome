@@ -81,6 +81,8 @@
     </array>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Save album artwork to your photo library</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Vibrdrome connects to your music server on your local network to stream and manage your library.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>

@@ -92,7 +92,7 @@ struct SubsonicEndpointsTests {
             .stream(id: "1"),
             .download(id: "1"),
             .getCoverArt(id: "1"),
-            .getLyricsBySongId(id: "1"),
+            .getLyricsBySongId(id: "1", enhanced: true),
             .getInternetRadioStations,
             .createInternetRadioStation(streamUrl: "http://x", name: "n"),
             .deleteInternetRadioStation(id: "1"),
@@ -144,6 +144,20 @@ struct SubsonicEndpointsTests {
         let items = SubsonicEndpoint.getSong(id: "789").queryItems
         #expect(findQueryItem(items, name: "id") == "789")
         #expect(items.count == 1)
+    }
+
+    // MARK: - Query Item Tests: getLyricsBySongId (#113)
+
+    @Test func getLyricsEnhancedAddsFlag() {
+        let items = SubsonicEndpoint.getLyricsBySongId(id: "song-1", enhanced: true).queryItems
+        #expect(findQueryItem(items, name: "id") == "song-1")
+        #expect(findQueryItem(items, name: "enhanced") == "true")
+    }
+
+    @Test func getLyricsNonEnhancedOmitsFlag() {
+        let items = SubsonicEndpoint.getLyricsBySongId(id: "song-1", enhanced: false).queryItems
+        #expect(findQueryItem(items, name: "id") == "song-1")
+        #expect(findQueryItem(items, name: "enhanced") == nil)
     }
 
     // MARK: - Query Item Tests: search3

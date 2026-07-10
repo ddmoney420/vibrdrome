@@ -16,37 +16,55 @@ struct SearchView: View {
     @AppStorage(UserDefaultsKeys.showAlbumArtInLists) private var showAlbumArtInLists: Bool = true
 
     // MARK: - Filter State (internal for SearchView+Filters extension)
-    @State var availableGenres: [String] = []
-    @State var selectedGenre: String?
     @State var selectedYear: Int?
     @State var selectedFormat: String?
-    @State var showGenrePicker = false
     @State var showYearPicker = false
     @State var showFormatPicker = false
+    @State var selectedScope: SearchScope = .all
     @State private var searchIsActive = false
 
     let formatOptions = ["FLAC", "MP3", "AAC", "OGG", "OPUS", "WAV"]
 
+    /// Search result type filter (#85 Slice 2). `.all` keeps the 3-section layout; a specific scope
+    /// narrows both the fetched result counts and the displayed sections.
+    enum SearchScope: String, CaseIterable, Identifiable {
+        case all, artists, albums, songs
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: return "All"
+            case .artists: return "Artists"
+            case .albums: return "Albums"
+            case .songs: return "Songs"
+            }
+        }
+    }
+
     var hasActiveFilters: Bool {
-        selectedGenre != nil || selectedYear != nil || selectedFormat != nil
+        selectedYear != nil || selectedFormat != nil
     }
 
     var body: some View {
-        ScrollView {
-            if results != nil || hasActiveFilters {
+        VStack(spacing: 0) {
+            // #85 Slice 2: type scope + refiners pinned above the scrolling results, and shown as
+            // soon as search is active so filters are available up front (not gated on results).
+            if searchIsActive || results != nil || hasActiveFilters {
+                scopePicker
                 filterBar
             }
-            if let results {
-                resultsContent(applyFilters(to: results))
-            } else if let searchError, !query.isEmpty {
-                errorContent(searchError)
-            } else if query.isEmpty {
-                emptyContent
+            ScrollView {
+                if let results {
+                    resultsContent(applyFilters(to: results))
+                } else if let searchError, !query.isEmpty {
+                    errorContent(searchError)
+                } else if query.isEmpty {
+                    emptyContent
+                }
             }
+            #if os(iOS)
+            .padding(.bottom, 80)
+            #endif
         }
-        #if os(iOS)
-        .padding(.bottom, 80)
-        #endif
         .navigationTitle("Search")
         .searchable(text: $query, isPresented: $searchIsActive, prompt: "Artists, albums, songs...")
         .onAppear {
@@ -73,13 +91,18 @@ struct SearchView: View {
                 await performSearch(newValue)
             }
         }
+        .onChange(of: selectedScope) { _, _ in
+            // #85 Slice 2: re-run the search with type-tailored fetch counts when the scope changes.
+            guard query.count >= 2 else { return }
+            searchTask?.cancel()
+            searchTask = Task {
+                await performSearch(query)
+            }
+        }
         .overlay {
             if isSearching {
                 ProgressView()
             }
-        }
-        .task {
-            await loadGenres()
         }
     }
 
@@ -95,11 +118,16 @@ struct SearchView: View {
                 ContentUnavailableView.search(text: query)
             }
 
-            if !artists.isEmpty { artistsSection(artists) }
-            if !albums.isEmpty { albumsSection(albums) }
-            if !songs.isEmpty { songsSection(songs) }
+            if showsScope(.artists), !artists.isEmpty { artistsSection(artists) }
+            if showsScope(.albums), !albums.isEmpty { albumsSection(albums) }
+            if showsScope(.songs), !songs.isEmpty { songsSection(songs) }
         }
         .padding(.top, 8)
+    }
+
+    /// #85 Slice 2: which sections to display for the current scope (`.all` shows every section).
+    private func showsScope(_ scope: SearchScope) -> Bool {
+        selectedScope == .all || selectedScope == scope
     }
 
     @ViewBuilder
@@ -325,15 +353,18 @@ struct SearchView: View {
         } actions: {
             Button("Retry") {
                 let q = query
+                let counts = scopeCounts()
                 searchTask?.cancel()
                 searchTask = Task {
                     isSearching = true
                     defer { isSearching = false }
                     do {
-                        let searchResults = try await appState.subsonicClient.search(query: q)
+                        let searchResults = try await appState.subsonicClient.search(
+                            query: q, artistCount: counts.artist,
+                            albumCount: counts.album, songCount: counts.song)
                         guard !Task.isCancelled else { return }
                         self.searchError = nil
-                        results = searchResults
+                        results = rankedResults(searchResults, query: q)
                     } catch {
                         guard !Task.isCancelled else { return }
                         self.searchError = ErrorPresenter.userMessage(for: error)
@@ -347,14 +378,26 @@ struct SearchView: View {
 
     // MARK: - Search Logic
 
+    /// #85 Slice 2: bias the search3 result counts toward the selected type so a scope tailors the
+    /// fetch (more of that type) rather than just hiding sections.
+    private func scopeCounts() -> (artist: Int, album: Int, song: Int) {
+        switch selectedScope {
+        case .all: return (20, 20, 40)
+        case .artists: return (60, 0, 0)
+        case .albums: return (0, 60, 0)
+        case .songs: return (0, 0, 80)
+        }
+    }
+
     private func performSearch(_ query: String) async {
         try? await Task.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
+        let counts = scopeCounts()
 
         // Show local results instantly while waiting for network
         let localResults = searchLocally(query: query)
         if let localResults, resultCount(localResults) > 0, results == nil {
-            results = localResults
+            results = rankedResults(localResults, query: query)
         }
 
         isSearching = true
@@ -368,38 +411,56 @@ struct SearchView: View {
             var searchResults: SearchResult3
             if !variants.isEmpty {
                 // Search the dotted/specific variant first
-                searchResults = try await appState.subsonicClient.search(query: variants[0])
+                searchResults = try await appState.subsonicClient.search(
+                    query: variants[0], artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
 
                 // Try remaining variants if still few results
                 for variant in variants.dropFirst() {
                     guard !Task.isCancelled else { return }
                     if resultCount(searchResults) >= 3 { break }
-                    let extra = try await appState.subsonicClient.search(query: variant)
+                    let extra = try await appState.subsonicClient.search(
+                        query: variant, artistCount: counts.artist,
+                        albumCount: counts.album, songCount: counts.song)
                     searchResults = mergeResults(searchResults, extra)
                 }
 
                 // Merge with original query results (adds broader matches)
-                let original = try await appState.subsonicClient.search(query: query)
+                let original = try await appState.subsonicClient.search(
+                    query: query, artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
                 searchResults = mergeResults(searchResults, original)
             } else {
-                searchResults = try await appState.subsonicClient.search(query: query)
+                searchResults = try await appState.subsonicClient.search(
+                    query: query, artistCount: counts.artist,
+                    albumCount: counts.album, songCount: counts.song)
                 guard !Task.isCancelled else { return }
             }
 
             searchError = nil
-            results = searchResults
+            let ranked = rankedResults(searchResults, query: query)
+            results = ranked
+            // #85 Slice 3: augment thin results with typo-tolerant local Artist/Album matches.
+            let fuzzed = await fuzzyAugmented(ranked, query: query)
+            guard !Task.isCancelled else { return }
+            results = fuzzed
         } catch {
             guard !Task.isCancelled else { return }
-            // Offline fallback: search cached library locally
+            // Offline fallback: search cached library locally, then augment with fuzzy (#85 Slice 3)
+            // — which can surface typo matches even when the substring search found nothing.
             let offlineResults = searchLocally(query: query)
                 ?? searchDownloadsLocally(query: query).map {
                     SearchResult3(artist: nil, album: nil, song: $0)
                 }
-            if let offlineResults, resultCount(offlineResults) > 0 {
+            let base = offlineResults.map { rankedResults($0, query: query) }
+                ?? SearchResult3(artist: nil, album: nil, song: nil)
+            let fuzzed = await fuzzyAugmented(base, query: query)
+            guard !Task.isCancelled else { return }
+            if resultCount(fuzzed) > 0 {
                 searchError = nil
-                results = offlineResults
+                results = fuzzed
             } else {
                 searchError = ErrorPresenter.userMessage(for: error)
                 results = nil
@@ -538,5 +599,193 @@ struct SearchView: View {
     private func dedupSongs(_ songs: [Song]) -> [Song] {
         var seen = Set<String>()
         return songs.filter { seen.insert($0.id).inserted }
+    }
+}
+
+// MARK: - Relevance ranking (#85 Slice 1)
+
+private extension SearchView {
+    /// Relevance-rank the already-fetched result sections. Order: exact > starts-with >
+    /// word-boundary/token prefix > loose contains; small subtle boosts for starred + frequently
+    /// played so text relevance still dominates. Stable on ties (preserves the server's order).
+    /// Pure/synchronous — scoring ~80 items is sub-millisecond, so it runs inline rather than via a
+    /// detached round-trip that would delay the instant local results.
+    func rankedResults(_ results: SearchResult3, query: String) -> SearchResult3 {
+        let q = Self.normalizeForRanking(query)
+        guard !q.isEmpty else { return results }
+
+        let artists = Self.stableRankSort(results.artist ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.name), query: q,
+                                starred: $0.starred != nil, plays: 0)
+        }
+        let albums = Self.stableRankSort(results.album ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.name), query: q,
+                                starred: $0.starred != nil, plays: $0.playCount ?? 0)
+        }
+        let songs = Self.stableRankSort(results.song ?? []) {
+            Self.relevanceScore(Self.normalizeForRanking($0.title), query: q,
+                                starred: $0.starred != nil, plays: Int($0.playCount ?? 0))
+        }
+        return SearchResult3(
+            artist: artists.isEmpty ? nil : artists,
+            album: albums.isEmpty ? nil : albums,
+            song: songs.isEmpty ? nil : songs
+        )
+    }
+
+    nonisolated static func normalizeForRanking(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Text tiers are 200 apart while the boosts total <= 65, so a tier can never be overtaken by
+    /// boosts alone — relevance always wins; boosts only reorder items within the same tier.
+    static func relevanceScore(_ text: String, query q: String, starred: Bool, plays: Int) -> Int {
+        var s: Int
+        if text == q {
+            s = 1000
+        } else if text.hasPrefix(q) {
+            s = 600
+        } else if tokenHasPrefix(text, q) {
+            s = 400
+        } else if text.contains(q) {
+            s = 200
+        } else {
+            s = 0
+        }
+        if starred { s += 40 }
+        s += min(max(plays, 0), 25)
+        return s
+    }
+
+    /// True if any word (letter/number token) in `text` begins with `q` — the "word-boundary"
+    /// match, e.g. query "beat" matches the "Beatles" token in "The Beatles".
+    static func tokenHasPrefix(_ text: String, _ q: String) -> Bool {
+        for token in text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) where token.hasPrefix(q) {
+            return true
+        }
+        return false
+    }
+
+    /// Sort by score descending; ties keep original order (Swift's sort isn't guaranteed stable).
+    static func stableRankSort<T>(_ items: [T], _ score: (T) -> Int) -> [T] {
+        items.enumerated()
+            .sorted { a, b in
+                let sa = score(a.element), sb = score(b.element)
+                return sa != sb ? sa > sb : a.offset < b.offset
+            }
+            .map(\.element)
+    }
+}
+
+// MARK: - Fuzzy / typo-tolerant matching (#85 Slice 3, Artists + Albums only)
+
+private extension SearchView {
+    /// Run fuzzy only when a type's normal (exact/substring) results are sparse.
+    static let fuzzyThinThreshold = 5
+
+    /// Append typo-tolerant local-cache Artist/Album matches below the ranked real results, when the
+    /// normal results are thin. Fuzzy hits rank BELOW real matches (appended after them) and are
+    /// bounded (min length, thin-gate, scope, first-letter + length prefilter, off-main). Songs are
+    /// intentionally excluded — full-library song fuzzy has higher perf/false-positive risk.
+    func fuzzyAugmented(_ ranked: SearchResult3, query: String) async -> SearchResult3 {
+        let q = Self.normalizeForRanking(query)
+        guard q.count >= 4 else { return ranked }
+
+        let doArtists = (selectedScope == .all || selectedScope == .artists)
+            && (ranked.artist?.count ?? 0) < Self.fuzzyThinThreshold
+        let doAlbums = (selectedScope == .all || selectedScope == .albums)
+            && (ranked.album?.count ?? 0) < Self.fuzzyThinThreshold
+        guard doArtists || doAlbums else { return ranked }
+
+        let haveArtistIds = Set((ranked.artist ?? []).map(\.id))
+        let haveAlbumIds = Set((ranked.album ?? []).map(\.id))
+        let container = PersistenceController.shared.container
+
+        let extra = await Task.detached(priority: .utility) { () -> (artists: [Artist], albums: [Album]) in
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            var fArtists: [Artist] = []
+            var fAlbums: [Album] = []
+            if doArtists {
+                let cached = (try? context.fetch(FetchDescriptor<CachedArtist>())) ?? []
+                fArtists = Self.fuzzyMatches(cached, query: q) { $0.name }
+                    .filter { !haveArtistIds.contains($0.item.id) }
+                    .prefix(8).map { $0.item.toArtist() }
+            }
+            if doAlbums {
+                let cached = (try? context.fetch(FetchDescriptor<CachedAlbum>())) ?? []
+                fAlbums = Self.fuzzyMatches(cached, query: q) { $0.name }
+                    .filter { !haveAlbumIds.contains($0.item.id) }
+                    .prefix(8).map { $0.item.toAlbum() }
+            }
+            return (fArtists, fAlbums)
+        }.value
+
+        guard !extra.artists.isEmpty || !extra.albums.isEmpty else { return ranked }
+        return SearchResult3(
+            artist: Self.mergeAppend(ranked.artist, extra.artists),
+            album: Self.mergeAppend(ranked.album, extra.albums),
+            song: ranked.song
+        )
+    }
+
+    nonisolated static func mergeAppend<T>(_ base: [T]?, _ extra: [T]) -> [T]? {
+        let combined = (base ?? []) + extra
+        return combined.isEmpty ? nil : combined
+    }
+
+    /// Cached items whose name has a *token* within the length-scaled Damerau-Levenshtein threshold
+    /// of `q`, sorted by best (smallest) distance. Cheap prefilter (shared first letter + comparable
+    /// length) runs before the bounded edit-distance so most candidates are rejected instantly.
+    nonisolated static func fuzzyMatches<T>(
+        _ items: [T], query q: String, name: (T) -> String
+    ) -> [(item: T, dist: Int)] {
+        let threshold = q.count >= 7 ? 2 : 1
+        guard let qFirst = q.first else { return [] }
+        var out: [(T, Int)] = []
+        for item in items {
+            let normalized = normalizeForRanking(name(item))
+            var best = Int.max
+            for token in normalized.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) {
+                let t = String(token)
+                // Cheap prefilter: share first letter, and comparable length.
+                guard t.first == qFirst, abs(t.count - q.count) <= threshold else { continue }
+                let d = boundedDamerauLevenshtein(t, q, max: threshold)
+                if d <= threshold { best = Swift.min(best, d) }
+            }
+            if best <= threshold { out.append((item, best)) }
+        }
+        return out.sorted { $0.1 < $1.1 }
+    }
+
+    /// Damerau-Levenshtein (optimal string alignment, with adjacent transposition), bounded by
+    /// `max` with early row-exit — returns `max + 1` as soon as no alignment can stay within budget.
+    nonisolated static func boundedDamerauLevenshtein(_ a: String, _ b: String, max: Int) -> Int {
+        let s = Array(a), t = Array(b)
+        let n = s.count, m = t.count
+        if abs(n - m) > max { return max + 1 }
+        if n == 0 { return m }
+        if m == 0 { return n }
+        var prev2 = [Int](repeating: 0, count: m + 1)
+        var prev = Array(0...m)
+        var curr = [Int](repeating: 0, count: m + 1)
+        for i in 1...n {
+            curr[0] = i
+            var rowMin = curr[0]
+            for j in 1...m {
+                let cost = s[i - 1] == t[j - 1] ? 0 : 1
+                var d = Swift.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+                if i > 1, j > 1, s[i - 1] == t[j - 2], s[i - 2] == t[j - 1] {
+                    d = Swift.min(d, prev2[j - 2] + 1)
+                }
+                curr[j] = d
+                rowMin = Swift.min(rowMin, d)
+            }
+            if rowMin > max { return max + 1 }
+            swap(&prev2, &prev)
+            swap(&prev, &curr)
+        }
+        return prev[m]
     }
 }

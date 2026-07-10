@@ -1,5 +1,16 @@
 # Regression Testing Checklist
 
+## Build 58 — Search overhaul, karaoke lyrics, iOS Local Network fix
+
+- [ ] Search ranking: exact-name matches rank first; starts-with beats contains; favorites/frequently-played get a subtle boost
+- [ ] Search scope selector (All / Artists / Albums / Songs) and Year/Format filters narrow results; clearing restores full results
+- [ ] Fuzzy matching: a small typo in an artist/album name still surfaces the right result (song fuzzy intentionally not included)
+- [ ] Karaoke lyrics: word-timed track highlights the current word smoothly in sync; seek repositions the active word; pause freezes; multi-byte/emoji lines don't crash (fall back to line-level if needed)
+- [ ] Lyrics Highlight styles (Line Only / Word / Word + Dimmed) + colors switch live (toolbar menu + Settings > Player > Behavior) and persist; style menu only shows on word-timed tracks
+- [ ] Line-synced, plain, old-server, and LRCLIB lyrics behave exactly as before
+- [ ] Local Network: LAN-IP / .local server connects on home Wi-Fi (permission prompt appears / Settings toggle present); VPN path still works; public-domain servers unaffected
+- [ ] Regression: Artist Radio, Random Mix, playback, and queue behavior unchanged
+
 ## Build 57 — Home navigation, Top Artists, mini-player accessory, visualizer, streamed-FLAC
 
 - [ ] Home pills: tap album in Recently Added / Genres / Generations / See-All → opens album, one back returns to the panel (no bounce)

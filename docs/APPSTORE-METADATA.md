@@ -1,5 +1,11 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 58)
+
+- Search overhaul: smarter, more relevant results (exact matches first), a result-type selector (All / Artists / Albums / Songs), Year and Format filters up front, and fuzzy matching so small typos still find the right artist or album.
+- Word-level "karaoke" lyrics: when a track has word-timed lyrics, the current word highlights in time with the music. Choose a highlight style (Line Only / Word / Word + Dimmed) and an active-word color, from the Lyrics toolbar or Settings > Player > Behavior.
+- Fixed connecting to servers on your local network by IP or local hostname (adds the iOS Local Network permission prompt) -- previously this could fail on home Wi-Fi while working over VPN.
+
 ## What's New (v1.0.0 Beta Build 57)
 
 - Home navigation fixes across pills and panels: picking an album from a Home pill (Recently Added, Genres, Generations) or a "See All" carousel now opens it directly instead of bouncing back.

@@ -46,3 +46,73 @@ struct LRCLIBClientTests {
         #expect(LRCLIBClient.parseLRC("just some\nplain lyrics\nno timestamps").isEmpty)
     }
 }
+
+// MARK: - Lyric Highlight Style (#113 Slice 2)
+
+struct LyricHighlightStyleTests {
+
+    @Test func rawValuesAreStable() {
+        // Persisted via @AppStorage — raw values must not drift or stored prefs break.
+        #expect(LyricHighlightStyle.lineOnly.rawValue == "lineOnly")
+        #expect(LyricHighlightStyle.word.rawValue == "word")
+        #expect(LyricHighlightStyle.wordDimmed.rawValue == "wordDimmed")
+    }
+
+    @Test func allCasesPresentAndDefaultMatchesSlice1() {
+        #expect(LyricHighlightStyle.allCases.count == 3)
+        // The default used across LyricsView + PlayerSettingsView is the QA'd Slice 1 behavior.
+        #expect(LyricHighlightStyle(rawValue: "wordDimmed") == .wordDimmed)
+    }
+
+    @Test func onlyLineOnlyBypassesWordRendering() {
+        #expect(LyricHighlightStyle.lineOnly.isWordLevel == false)
+        #expect(LyricHighlightStyle.word.isWordLevel == true)
+        #expect(LyricHighlightStyle.wordDimmed.isWordLevel == true)
+    }
+
+    @Test func unknownRawValueIsNil() {
+        // A legacy/garbage stored value decodes to nil so @AppStorage falls back to its default.
+        #expect(LyricHighlightStyle(rawValue: "sparkles") == nil)
+    }
+
+    @Test func everyStyleHasLabelAndIcon() {
+        for style in LyricHighlightStyle.allCases {
+            #expect(!style.label.isEmpty)
+            #expect(!style.icon.isEmpty)
+        }
+    }
+}
+
+// MARK: - Lyric Highlight Color (#113 Slice 3)
+
+struct LyricHighlightColorTests {
+
+    @Test func rawValuesAreStable() {
+        // Persisted via @AppStorage — raw values must not drift or stored prefs break.
+        #expect(LyricHighlightColor.accent.rawValue == "accent")
+        #expect(LyricHighlightColor.yellow.rawValue == "yellow")
+        #expect(LyricHighlightColor.green.rawValue == "green")
+        #expect(LyricHighlightColor.blue.rawValue == "blue")
+        #expect(LyricHighlightColor.pink.rawValue == "pink")
+        #expect(LyricHighlightColor.orange.rawValue == "orange")
+    }
+
+    @Test func paletteIsAccentPlusFive() {
+        #expect(LyricHighlightColor.allCases.count == 6)
+        #expect(LyricHighlightColor.allCases.first == .accent)
+    }
+
+    @Test func defaultIsAccent() {
+        #expect(LyricHighlightColor(rawValue: "accent") == .accent)
+    }
+
+    @Test func unknownRawValueIsNil() {
+        #expect(LyricHighlightColor(rawValue: "chartreuse") == nil)
+    }
+
+    @Test func everyColorHasLabel() {
+        for color in LyricHighlightColor.allCases {
+            #expect(!color.label.isEmpty)
+        }
+    }
+}

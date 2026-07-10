@@ -1,5 +1,14 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 58 — Search overhaul, karaoke lyrics, Local Network fix
+
+- [ ] Search: results ranked by relevance (exact first); scope selector filters to All / Artists / Albums / Songs; Year + Format filters refine; a minor typo still finds the right artist/album
+- [ ] Karaoke lyrics: a word-timed track highlights word-by-word in sync; seek jumps the active word; pause freezes it
+- [ ] Lyrics Highlight style (Line Only / Word / Word + Dimmed) and color switch live from the Lyrics toolbar menu and Settings > Player > Behavior; setting persists across relaunch
+- [ ] Line-synced / plain / LRCLIB lyrics unchanged; style menu hidden on non-word-timed tracks
+- [ ] Local Network: on home Wi-Fi with a LAN-IP / .local server, the app prompts for Local Network and connects; Settings > Vibrdrome > Local Network toggle present
+- [ ] Regression: Random Mix and Artist Radio unchanged
+
 ## Build 57 — Home navigation, Top Artists, mini-player accessory
 
 - [ ] Home pills + "See All" carousels: tapping an album opens it directly; one back returns to the panel
