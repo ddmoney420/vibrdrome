@@ -34,6 +34,35 @@ extension XCUIApplication {
         element.waitForExistence(timeout: timeout)
     }
 
+    /// Robustly tap an element that XCUITest can intermittently report as non-hittable even when
+    /// it is on-screen and enabled — the known SwiftUI/XCUITest hit-point race (#125; see the
+    /// coordinate-tap workaround already used in `tapSidebarItem`). Waits for existence, gives
+    /// hittability a brief chance to settle, scrolls it into view once if still not hittable, then
+    /// taps the element's CENTER by coordinate — which bypasses the hittability gate. Coverage is
+    /// unchanged: it still taps the same element; callers still assert the resulting state.
+    /// - Returns: `true` if the element existed and was tapped, `false` if it never appeared.
+    @discardableResult
+    func tapWhenHittable(_ element: XCUIElement, timeout: TimeInterval = 8) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else { return false }
+
+        // Give the layout a moment to reach a hittable state (~3s max at 150ms steps).
+        var waited = 0
+        while !element.isHittable && waited < 20 {
+            usleep(150_000)
+            waited += 1
+        }
+
+        // Still not hittable? Try scrolling it into view once.
+        if !element.isHittable {
+            swipeUpInDetail()
+            _ = element.waitForExistence(timeout: 2)
+        }
+
+        // Center coordinate tap works even when `.isHittable` is false, sidestepping the race.
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        return true
+    }
+
     /// Whether the app is showing the login/server config screen.
     /// Excludes the ReAuth modal (which also has "Sign In" but no URL text field).
     var isOnLoginScreen: Bool {
@@ -350,7 +379,7 @@ extension XCUIApplication {
             sleep(1)
         }
         if randomMix.exists {
-            randomMix.tap()
+            tapWhenHittable(randomMix)
             // Wait for API call + SwiftUI render. The "Now Playing" button on
             // the mini player is the most reliable indicator.
             let nowPlaying = buttons["Now Playing"]
@@ -371,12 +400,12 @@ extension XCUIApplication {
             ? albumFromButtons.firstMatch
             : albumFromOthers.firstMatch
         if albumCard.waitForExistence(timeout: 5) {
-            albumCard.tap()
+            tapWhenHittable(albumCard)
             sleep(2)
             // Tap the Play button in album detail header
             let playButton = buttons["Play"]
             if playButton.waitForExistence(timeout: 5) {
-                playButton.tap()
+                tapWhenHittable(playButton)
                 sleep(2)
                 if isPlaybackActive || buttons["Now Playing"].exists { return }
             }
@@ -386,7 +415,7 @@ extension XCUIApplication {
                 ? buttons.matching(trackRowPred).firstMatch
                 : otherElements.matching(trackRowPred).firstMatch
             if trackRow.waitForExistence(timeout: 3) {
-                trackRow.tap()
+                tapWhenHittable(trackRow)
                 sleep(2)
                 if isPlaybackActive || buttons["Now Playing"].exists { return }
             }
