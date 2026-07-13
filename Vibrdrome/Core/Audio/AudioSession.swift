@@ -32,7 +32,14 @@ final class AudioSessionManager: @unchecked Sendable {
             try session.setCategory(
                 .playback, mode: .default, policy: .longFormAudio, options: []
             )
-            try session.setActive(true)
+            // Do NOT activate the session here. Configuring the category at launch
+            // is harmless, but activating it interrupts other apps' audio (e.g.
+            // Spotify) on cold launch even though the user hasn't pressed Play (#134).
+            // Activation happens only when playback actually starts or resumes
+            // (`AudioEngine.play(song:)` / `resume()`), and is re-established by the
+            // interruption `.ended` handler below. #45 Now-Playing still surfaces
+            // because `preloadCurrentSong()` loads the AVPlayerItem + sets
+            // NowPlayingInfoCenter — activation is not required for that.
         } catch {
             print("Failed to configure audio session: \(error)")
         }
