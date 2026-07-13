@@ -4,6 +4,11 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 59 -- July 12, 2026
+
+**Bug fixes:**
+- Fixed playback getting stuck when streaming to some AirPlay TVs.
+
 ### Build 58 -- July 9, 2026
 
 **Search:**

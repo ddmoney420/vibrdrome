@@ -1,5 +1,13 @@
 # Regression Testing Checklist
 
+## Build 59 — AirPlay TV playback fix
+
+- [ ] AirPlay to a TV / Apple TV: playback starts normally (no stuck loading indicator)
+- [ ] iMac + TV group still plays; local iPhone output still plays
+- [ ] Select AirPlay before vs during playback; switch AirPlay → iPhone; pause/resume; manual skip; auto queue-advance; background; lock-screen controls
+- [ ] Bluetooth and local playback unaffected
+- [ ] Known separate issue (#132, not fixed here): with Crossfade on, some AirPlay routes switch tracks abruptly at the crossfade point instead of blending — playback still continues
+
 ## Build 58 — Search overhaul, karaoke lyrics, iOS Local Network fix
 
 - [ ] Search ranking: exact-name matches rank first; starts-with beats contains; favorites/frequently-played get a subtle boost
