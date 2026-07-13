@@ -78,6 +78,11 @@ struct DebugView: View {
                 row("Audio Route", value: "\(output.portName) (\(output.portType.rawValue))")
             }
             row("Sample Rate", value: "\(Int(AVAudioSession.sharedInstance().sampleRate)) Hz")
+            let player = AudioEngine.shared.activePlayer
+            row("Ext. Playback Allowed",
+                value: (player?.allowsExternalPlayback ?? false) ? "true" : "false")
+            row("Ext. Playback Active",
+                value: (player?.isExternalPlaybackActive ?? false) ? "YES" : "no")
             #endif
         }
     }

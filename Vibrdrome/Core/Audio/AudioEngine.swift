@@ -335,6 +335,15 @@ final class AudioEngine {
         }
     }
 
+    /// Central player configuration. Vibrdrome is audio-only (no video / external-screen feature),
+    /// and AVPlayer external playback — the video-style handoff to a lone video-capable AirPlay
+    /// device such as an Apple TV — can leave playback stuck loading with no audio on that target
+    /// (confirmed on-device: the same TV plays once this is off). Force local decode + ordinary
+    /// AirPlay *audio* routing for every player. Applied at every player-creation site.
+    static func configureExternalPlayback(_ player: AVPlayer) {
+        player.allowsExternalPlayback = false
+    }
+
     /// Live playback position read straight from the active AVPlayer, for high-frequency UI
     /// (word-level lyrics, #113) that needs finer granularity than the 0.5s periodic time
     /// observer that drives `currentTime`. Pull-only — it does NOT add an observer or change the
@@ -669,6 +678,7 @@ final class AudioEngine {
         if gaplessPlayer == nil {
             gaplessPlayer = AVQueuePlayer(items: [item])
             gaplessPlayer?.automaticallyWaitsToMinimizeStalling = true
+            if let gaplessPlayer { Self.configureExternalPlayback(gaplessPlayer) }
         } else {
             gaplessPlayer?.removeAllItems()
             gaplessPlayer?.insert(item, after: nil)
