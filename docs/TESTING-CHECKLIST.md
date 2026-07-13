@@ -1,5 +1,13 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 59 — AirPlay TV playback fix
+
+- [ ] AirPlay to a TV / Apple TV → plays normally (previously stuck on a loading indicator)
+- [ ] iMac + TV group plays; local iPhone plays
+- [ ] AirPlay before/during play; switch back to iPhone; pause/resume; skip; auto-advance; background; lock-screen controls
+- [ ] Bluetooth + local unaffected
+- [ ] #132 (separate, not fixed): Crossfade may cut abruptly on some AirPlay routes instead of blending; playback continues
+
 ## Build 58 — Search overhaul, karaoke lyrics, Local Network fix
 
 - [ ] Search: results ranked by relevance (exact first); scope selector filters to All / Artists / Albums / Songs; Year + Format filters refine; a minor typo still finds the right artist/album

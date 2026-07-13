@@ -1,5 +1,9 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 59)
+
+- Fixed playback getting stuck when streaming to some AirPlay TVs.
+
 ## What's New (v1.0.0 Beta Build 58)
 
 - Search overhaul: smarter, more relevant results (exact matches first), a result-type selector (All / Artists / Albums / Songs), Year and Format filters up front, and fuzzy matching so small typos still find the right artist or album.
