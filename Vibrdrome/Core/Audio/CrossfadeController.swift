@@ -78,10 +78,12 @@ final class CrossfadeController {
         if playerA == nil {
             playerA = AVPlayer()
             playerA?.automaticallyWaitsToMinimizeStalling = true
+            if let playerA { AudioEngine.configureExternalPlayback(playerA) }
         }
         if playerB == nil {
             playerB = AVPlayer()
             playerB?.automaticallyWaitsToMinimizeStalling = true
+            if let playerB { AudioEngine.configureExternalPlayback(playerB) }
         }
         activeIsA = true
         outFactor = 1.0

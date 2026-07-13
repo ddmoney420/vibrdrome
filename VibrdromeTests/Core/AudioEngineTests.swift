@@ -1,4 +1,5 @@
 import Testing
+import AVFoundation
 import Foundation
 @testable import Vibrdrome
 
@@ -705,5 +706,22 @@ struct AudioEngineTests {
         let result = engine.smartShuffle([song])
         #expect(result.count == 1)
         #expect(result.first?.id == "s0")
+    }
+
+    // MARK: - AirPlay external playback (#airplay TV fix)
+
+    /// Protects the fix: `configureExternalPlayback` must force `allowsExternalPlayback = false`
+    /// on every player (even if something set it true), so a lone video-capable AirPlay target
+    /// (Apple TV / TV) can't leave playback stuck in external-playback mode.
+    @Test @MainActor func configureExternalPlaybackForcesOff() {
+        let player = AVPlayer()
+        player.allowsExternalPlayback = true
+        AudioEngine.configureExternalPlayback(player)
+        #expect(player.allowsExternalPlayback == false)
+
+        let queue = AVQueuePlayer()
+        queue.allowsExternalPlayback = true
+        AudioEngine.configureExternalPlayback(queue)
+        #expect(queue.allowsExternalPlayback == false)
     }
 }
