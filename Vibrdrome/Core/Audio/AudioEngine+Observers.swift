@@ -100,16 +100,63 @@ extension AudioEngine {
                 Task { @MainActor in
                     guard let self,
                           self.generationValue == observerGeneration else { return }
-
-                    if self.gaplessPlayer?.currentItem !== endItem
-                        && self.hasLookahead {
-                        self.handleAutoAdvance()
-                    } else {
-                        self.handleTrackEnd()
-                    }
+                    self.handleItemDidPlayToEnd(endItem: endItem, generation: observerGeneration)
                 }
             }
         )
+    }
+
+    /// Route an item's end-of-play to the correct advance path. When the queue player already
+    /// promoted the next item, advance immediately. When it has a ready, queued lookahead but
+    /// hasn't promoted it synchronously yet, wait for the actual promotion event rather than
+    /// reloading an already-buffered track (the end-of-track race). Otherwise reload.
+    func handleItemDidPlayToEnd(endItem: AVPlayerItem, generation observerGeneration: Int) {
+        let currentIsEnd = (gaplessPlayer?.currentItem === endItem)
+        let lookaheadQueued: Bool
+        if let lookahead = lookaheadItem, let player = gaplessPlayer {
+            lookaheadQueued = player.items().contains(lookahead)
+        } else {
+            lookaheadQueued = false
+        }
+        let lookaheadReady = (lookaheadItem?.status == .readyToPlay)
+
+        switch GaplessAdvanceDecision.decide(
+            currentItemIsEndItem: currentIsEnd, hasLookahead: hasLookahead,
+            lookaheadQueued: lookaheadQueued, lookaheadReady: lookaheadReady) {
+        case .autoAdvance:
+            handleAutoAdvance()
+        case .awaitPromotion:
+            if let lookahead = lookaheadItem {
+                awaitLookaheadPromotion(lookahead: lookahead, generation: observerGeneration)
+            } else {
+                handleTrackEnd()
+            }
+        case .reload:
+            handleTrackEnd()
+        }
+    }
+
+    /// Wait (event-driven) for `AVQueuePlayer` to promote `lookahead` to `currentItem`, then take
+    /// the existing `handleAutoAdvance()` path. Falls back to the existing reload path if the
+    /// promotion doesn't occur within `lookaheadPromotionTimeout`. The wait is cancelled if the
+    /// item-end observer is torn down (replace / stop / skip / generation change).
+    func awaitLookaheadPromotion(lookahead: AVPlayerItem, generation observerGeneration: Int) {
+        guard let player = gaplessPlayer else { handleTrackEnd(); return }
+        let promotion = player.publisher(for: \.currentItem)
+            .receive(on: DispatchQueue.main)
+            .map { $0 === lookahead }
+            .eraseToAnyPublisher()
+        promotionWaiter.arm(
+            promotion: promotion,
+            timeoutSeconds: AudioEngine.lookaheadPromotionTimeout
+        ) { [weak self] promoted in
+            guard let self, self.generationValue == observerGeneration else { return }
+            if promoted {
+                self.handleAutoAdvance()
+            } else {
+                self.handleTrackEnd()
+            }
+        }
     }
 
     func setupLookaheadEndObserver(for item: AVPlayerItem) {
