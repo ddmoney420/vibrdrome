@@ -62,6 +62,23 @@ final class AlbumsViewModel {
     var hasMore = true
     var availableGenres: [String] = []
     var searchResults: [Album] = []
+    /// The current album-search query text. When it has >= 2 non-space characters the
+    /// list is driven by `searchResults` instead of the browsed `indexedAlbums`.
+    var searchQuery = ""
+
+    /// True while a search query is active (>= 2 non-space chars). At that point the
+    /// displayed list comes from `searchResults`, not the paged browse list.
+    var isSearchActive: Bool {
+        searchQuery.trimmingCharacters(in: .whitespaces).count >= 2
+    }
+
+    /// The albums the list/grid should render: server search results while a search is
+    /// active, otherwise the normal browsed/indexed list. Fixes the bug where typing in
+    /// "Search in Albums" fetched results into `searchResults` but the list kept showing
+    /// `indexedAlbums`, so search appeared to do nothing.
+    var displayedIndexedAlbums: [(offset: Int, element: Album)] {
+        isSearchActive ? Array(searchResults.enumerated()) : indexedAlbums
+    }
     var activeListType: AlbumListType?
     var clientSideSort: AlbumSortOption?
     var activeGenre: String?
@@ -188,6 +205,7 @@ final class AlbumsViewModel {
 
     func onSearchTextChanged(_ text: String, appState: AppState) {
         searchTask?.cancel()
+        searchQuery = text
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 2 else {
             searchResults = []

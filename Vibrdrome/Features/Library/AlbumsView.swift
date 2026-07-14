@@ -260,7 +260,7 @@ struct AlbumsView: View {
     private var albumList: some View {
         ScrollViewReader { proxy in
             List {
-                ForEach(model.indexedAlbums, id: \.element.id) { index, album in
+                ForEach(model.displayedIndexedAlbums, id: \.element.id) { index, album in
                     NavigationLink(value: AlbumNavItem(id: album.id)) {
                         AlbumCard(album: album)
                     }
@@ -272,7 +272,10 @@ struct AlbumsView: View {
                         AlbumContextMenu(album: album)
                         #endif
                     }
-                    .onAppear { model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw) }
+                    .onAppear {
+                        // Don't paginate the browse list off search-result offsets.
+                        if !model.isSearchActive { model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw) }
+                    }
                 }
                 if model.hasMore && !model.albums.isEmpty && model.localFilteredAlbums == nil && searchText.isEmpty {
                     listLoadMoreFooter
@@ -307,7 +310,7 @@ struct AlbumsView: View {
                           ? [GridItem(.adaptive(minimum: gridDensity.minimumWidth), spacing: 16)]
                           : model.gridColumns,
                           spacing: 20) {
-                    ForEach(model.indexedAlbums, id: \.element.id) { index, album in
+                    ForEach(model.displayedIndexedAlbums, id: \.element.id) { index, album in
                         NavigationLink(value: AlbumNavItem(id: album.id)) {
                             AlbumGridCard(album: album, cellWidth: model.gridCellWidth)
                         }
@@ -321,7 +324,8 @@ struct AlbumsView: View {
                             #endif
                         }
                         .onAppear {
-                            model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw)
+                            // Don't paginate the browse list off search-result offsets.
+                            if !model.isSearchActive { model.triggerLoadIfNeeded(at: index, filterRaw: filterRaw) }
                         }
                     }
                 }
