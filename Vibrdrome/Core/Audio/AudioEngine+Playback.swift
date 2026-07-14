@@ -670,6 +670,10 @@ extension AudioEngine {
     /// but the AVPlayer item swap is delayed briefly so spam-tapping collapses
     /// into a single replacement rather than churning the audio session.
     func scheduleDebouncedPlayerSwap(url: URL, mode: PlaybackMode) {
+        // A new player-item swap (manual next/previous, skipToIndex, new play) supersedes any
+        // pending end-of-track promotion wait — cancel it synchronously here rather than relying
+        // on the debounced replacePlayerItem → removeItemEndObserver path.
+        promotionWaiter.cancel()
         playbackSwapTask?.cancel()
         playbackSwapTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(50))
