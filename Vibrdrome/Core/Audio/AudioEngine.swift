@@ -185,6 +185,10 @@ final class AudioEngine {
     private var bufferingObserver: AnyCancellable?
     private var statusObserver: AnyCancellable?
 
+    /// One-shot wait bridging the end-of-track / lookahead-promotion race
+    /// (see `setupTrackEndObserver`). Cancelled on item-end teardown.
+    let promotionWaiter = GaplessPromotionWaiter()
+
     /// Scrobble tracking
     var scrobbleSubmitted = false
     var trackStartTime: Date?
@@ -201,6 +205,9 @@ final class AudioEngine {
     var stallAutoRecoveryEnabled: Bool {
         UserDefaults.standard.object(forKey: Self.stallAutoRecoveryKey) as? Bool ?? true
     }
+    /// Ceiling for waiting on the queue player to promote a ready lookahead before falling back
+    /// to the reload path. The race is normally resolved in ~10ms; this is only a safety net.
+    static let lookaheadPromotionTimeout: TimeInterval = 0.25
     static let stallRecoveryMaxAttempts = 3
     static let stallRecoveryBufferThreshold: Double = 10.0  // buffered-ahead seconds = "ample"
     static let stallRecoveryMinInterval: TimeInterval = 1.5  // anti-thrash between attempts
@@ -282,6 +289,9 @@ final class AudioEngine {
     func setTimeObserver(player: AVPlayer?) { timeObserverPlayer = player }
     func setItemEndObserver(_ observer: Any?) { itemEndObserver = observer }
     func removeItemEndObserver() {
+        // Tearing down the item-end observer (replace / stop / mode change / skip / auto-advance)
+        // invalidates any in-flight promotion wait for that item.
+        promotionWaiter.cancel()
         if let itemEndObserver {
             NotificationCenter.default.removeObserver(itemEndObserver)
             self.itemEndObserver = nil
