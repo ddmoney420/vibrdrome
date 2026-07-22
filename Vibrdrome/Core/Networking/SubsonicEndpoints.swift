@@ -55,6 +55,10 @@ enum SubsonicEndpoint: Sendable {
     case getMusicDirectory(id: String)
     case jukeboxControl(action: String, index: Int? = nil, offset: Int? = nil,
                         ids: [String]? = nil, gain: Float? = nil)
+    case getShares
+    case createShare(ids: [String], description: String? = nil, expires: Int? = nil)
+    case updateShare(id: String, description: String? = nil, expires: Int? = nil)
+    case deleteShare(id: String)
 
     var path: String {
         switch self {
@@ -97,6 +101,10 @@ enum SubsonicEndpoint: Sendable {
         case .getIndexes: "/rest/getIndexes"
         case .getMusicDirectory: "/rest/getMusicDirectory"
         case .jukeboxControl: "/rest/jukeboxControl"
+        case .getShares: "/rest/getShares"
+        case .createShare: "/rest/createShare"
+        case .updateShare: "/rest/updateShare"
+        case .deleteShare: "/rest/deleteShare"
         }
     }
 
@@ -104,7 +112,7 @@ enum SubsonicEndpoint: Sendable {
         switch self {
         case .ping, .getGenres, .getPlaylists,
              .getInternetRadioStations, .getPlayQueue, .getBookmarks,
-             .getMusicFolders:
+             .getMusicFolders, .getShares:
             return []
 
         case .getStarred2(let musicFolderId):
@@ -294,6 +302,21 @@ enum SubsonicEndpoint: Sendable {
             return items
 
         case .getMusicDirectory(let id):
+            return [URLQueryItem(name: "id", value: id)]
+
+        case .createShare(let ids, let description, let expires):
+            var items: [URLQueryItem] = ids.map { URLQueryItem(name: "id", value: $0) }
+            if let description { items.append(URLQueryItem(name: "description", value: description)) }
+            if let expires { items.append(URLQueryItem(name: "expires", value: "\(expires)")) }
+            return items
+
+        case .updateShare(let id, let description, let expires):
+            var items = [URLQueryItem(name: "id", value: id)]
+            if let description { items.append(URLQueryItem(name: "description", value: description)) }
+            if let expires { items.append(URLQueryItem(name: "expires", value: "\(expires)")) }
+            return items
+
+        case .deleteShare(let id):
             return [URLQueryItem(name: "id", value: id)]
 
         case .jukeboxControl(let action, let index, let offset, let ids, let gain):

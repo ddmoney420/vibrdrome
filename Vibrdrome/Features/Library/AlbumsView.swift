@@ -440,6 +440,33 @@ private struct AlbumContextMenu: View {
 
         Divider()
 
+        let shareText = "💿 \(album.name)\(album.artist.map { " — \($0)" } ?? "")\nvibrdrome://album/\(album.id)"
+        ShareLink(item: shareText) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+
+        Button {
+            fetch { songs in
+                let songIds = songs.map(\.id)
+                Task {
+                    do {
+                        let share = try await appState.subsonicClient.createShare(ids: songIds)
+                        #if os(macOS)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(share.url, forType: .string)
+                        #else
+                        UIPasteboard.general.string = share.url
+                        #endif
+                    } catch {
+                        Logger(subsystem: "com.vibrdrome.app", category: "Sharing")
+                            .error("Failed to create album share: \(error)")
+                    }
+                }
+            }
+        } label: { Label("Copy Navidrome Share Link", systemImage: "link") }
+
+        Divider()
+
         Button {
             #if os(macOS)
             openWindow(id: "get-info", value: GetInfoTarget(type: .album, id: album.id))

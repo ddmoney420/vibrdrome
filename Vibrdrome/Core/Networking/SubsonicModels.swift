@@ -43,6 +43,7 @@ struct SubsonicResponseBody: Decodable {
     let indexes: IndexesResponse?
     let jukeboxStatus: JukeboxStatus?
     let jukeboxPlaylist: JukeboxPlaylist?
+    let shares: SharesWrapper?
 
     enum CodingKeys: String, CodingKey {
         case status, version, type, serverVersion, openSubsonic, error
@@ -52,6 +53,7 @@ struct SubsonicResponseBody: Decodable {
         case artistInfo2, albumInfo, similarSongs2, topSongs
         case musicFolders, directory, indexes
         case jukeboxStatus, jukeboxPlaylist
+        case shares
     }
 
     init(from decoder: Decoder) throws {
@@ -86,6 +88,7 @@ struct SubsonicResponseBody: Decodable {
         indexes = try container.decodeIfPresent(IndexesResponse.self, forKey: .indexes)
         jukeboxStatus = try container.decodeIfPresent(JukeboxStatus.self, forKey: .jukeboxStatus)
         jukeboxPlaylist = try container.decodeIfPresent(JukeboxPlaylist.self, forKey: .jukeboxPlaylist)
+        shares = try container.decodeIfPresent(SharesWrapper.self, forKey: .shares)
     }
 }
 
@@ -877,6 +880,24 @@ struct JukeboxPlaylist: Decodable, Sendable {
     let playing: Bool?
     let gain: Float?
     let position: Int?
+    let entry: [Song]?
+}
+
+// MARK: - Shares
+
+struct SharesWrapper: Decodable, Sendable {
+    let share: [Share]?
+}
+
+struct Share: Decodable, Identifiable, Sendable {
+    let id: String
+    let url: String
+    let description: String?
+    let username: String
+    let created: String
+    let expires: String?
+    let lastVisited: String?
+    let visitCount: Int
     let entry: [Song]?
 }
 
