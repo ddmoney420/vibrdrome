@@ -454,4 +454,170 @@ struct ArtistInfoPanelView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+// MARK: - Similar Tracks Panel
+
+struct SimilarTracksPanelView: View {
+    @Environment(AppState.self) private var appState
+
+    private struct TrackEntry: Identifiable {
+        let song: Song
+        let similarity: Double?
+        var id: String { song.id }
+    }
+
+    @State private var entries: [TrackEntry] = []
+    @State private var isLoading = false
+    @State private var error: String?
+    @State private var loadedSongId: String?
+
+    private var seed: Song? { appState.similarTracksSeed }
+
+    var body: some View {
+        SidePanelContainer(title: "Similar Tracks", onClose: {
+            appState.activeSidePanel = nil
+        }) {
+            Group {
+                if isLoading {
+                    ProgressView("Loading...")
+                        .padding(40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error {
+                    ContentUnavailableView {
+                        Label("Error", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(error)
+                    }
+                    .padding(20)
+                } else if entries.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Similar Tracks", systemImage: "waveform.path")
+                    } description: {
+                        Text("No similar tracks found for this song")
+                    }
+                    .padding(20)
+                } else {
+                    trackList
+                }
+            }
+        }
+        .task(id: seed?.id) {
+            await loadTracks()
+        }
+    }
+
+    private var trackList: some View {
+        List {
+            if let seed {
+                Section {
+                    HStack(spacing: 10) {
+                        AlbumArtView(coverArtId: seed.coverArt, size: 36, cornerRadius: 6)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Similar to")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(seed.title)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .lineLimit(1)
+                            Text(seed.displayArtist ?? "")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            Section("\(entries.count) tracks") {
+                ForEach(entries) { entry in
+                    similarRow(entry)
+                }
+            }
+        }
+        .listStyle(.inset)
+    }
+
+    private func similarRow(_ entry: TrackEntry) -> some View {
+        HStack(spacing: 10) {
+            AlbumArtView(coverArtId: entry.song.coverArt, size: 40, cornerRadius: 6)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.song.title).font(.subheadline).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(entry.song.displayArtist ?? "")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if let sim = entry.similarity {
+                        Text("·").font(.caption).foregroundStyle(.tertiary)
+                        Text("\(Int(sim * 100))%")
+                            .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                    }
+                }
+            }
+            Spacer()
+            if let duration = entry.song.duration {
+                Text(formatDuration(duration))
+                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { AudioEngine.shared.addToQueueNext(entry.song) }
+        .contextMenu { similarRowMenu(entry) }
+    }
+
+    @ViewBuilder
+    private func similarRowMenu(_ entry: TrackEntry) -> some View {
+        Button { AudioEngine.shared.play(song: entry.song) } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+        Button { AudioEngine.shared.addToQueueNext(entry.song) } label: {
+            Label("Play Next", systemImage: "text.insert")
+        }
+        Button { AudioEngine.shared.addToQueue(entry.song) } label: {
+            Label("Add to Queue", systemImage: "text.append")
+        }
+        Button {
+            AudioEngine.shared.startSongSimilarityMix(entry.song)
+            appState.activeSidePanel = nil
+        } label: {
+            Label("Find Sonic Mix", systemImage: "waveform.badge.magnifyingglass")
+        }
+        Divider()
+        Button {
+            if let albumId = entry.song.albumId { appState.pendingNavigation = .album(id: albumId) }
+        } label: {
+            Label("Go to Album", systemImage: "square.stack")
+        }
+        .disabled(entry.song.albumId == nil)
+        Button {
+            if let artistId = entry.song.artistId { appState.pendingNavigation = .artist(id: artistId) }
+        } label: {
+            Label("Go to Artist", systemImage: "music.mic")
+        }
+        .disabled(entry.song.artistId == nil)
+    }
+
+    private func loadTracks() async {
+        guard let song = seed else { return }
+        if loadedSongId == song.id { return }
+        isLoading = true
+        error = nil
+        entries = []
+        defer { isLoading = false }
+
+        let client = appState.subsonicClient
+        do {
+            if client.supportsSonicSimilarity {
+                let matches = try await client.getSonicSimilarTracks(id: song.id, count: 50)
+                entries = matches.map { TrackEntry(song: $0.entry, similarity: $0.similarity) }
+            } else {
+                let songs = try await client.getSimilarSongs(id: song.id, count: 50)
+                entries = songs.map { TrackEntry(song: $0, similarity: nil) }
+            }
+            loadedSongId = song.id
+        } catch {
+            self.error = ErrorPresenter.userMessage(for: error)
+        }
+    }
+}
 #endif

@@ -106,6 +106,23 @@ private struct TrackContextMenuContent: View {
             Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
         }
 
+        if appState.subsonicClient.supportsSonicSimilarity {
+            Button {
+                AudioEngine.shared.startSongSimilarityMix(song)
+            } label: {
+                Label("Find Sonic Mix", systemImage: "waveform.badge.magnifyingglass")
+            }
+        }
+
+        #if os(macOS)
+        Button {
+            appState.similarTracksSeed = song
+            appState.activeSidePanel = .similarTracks
+        } label: {
+            Label("Show Similar Tracks", systemImage: "waveform.path")
+        }
+        #endif
+
         Button {
             DownloadManager.shared.download(
                 song: song,
