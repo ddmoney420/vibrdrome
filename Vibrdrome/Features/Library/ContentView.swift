@@ -1,6 +1,10 @@
 import SwiftUI
 import Network
 
+/// Value used to push an overflow ("More") tab's browse root by value, keeping the More stack
+/// fully value-based so value-based cells inside the pushed view resolve and render on top.
+private struct MoreTabNavItem: Hashable { let id: String }
+
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
@@ -340,8 +344,10 @@ struct ContentView: View {
     /// A tab's content as a real tab: its root wrapped in its own NavigationStack.
     @ViewBuilder
     private func tabView(for id: String) -> some View {
-        NavigationStack { tabRootContent(for: id) }
-            .libraryNavigationDestinations()
+        NavigationStack {
+            tabRootContent(for: id)
+                .libraryNavigationDestinations()
+        }
     }
 
     /// App-owned "More" menu. A single NavigationStack listing the overflow
@@ -352,14 +358,14 @@ struct ContentView: View {
         NavigationStack {
             List {
                 ForEach(ids, id: \.self) { id in
-                    NavigationLink {
-                        tabRootContent(for: id)
-                    } label: {
+                    NavigationLink(value: MoreTabNavItem(id: id)) {
                         Label(tabLabel(id), systemImage: tabIcon(id))
                     }
                 }
             }
             .navigationTitle("More")
+            .navigationDestination(for: MoreTabNavItem.self) { tabRootContent(for: $0.id) }
+            .libraryNavigationDestinations()
         }
     }
 
