@@ -568,27 +568,44 @@ final class AudioEngine {
 
     // MARK: - Gapless Lookahead
 
+    /// Pure next-index policy for sequential (non-shuffle) queue playback. Isolated so the
+    /// repeat semantics are unit-testable without driving the player.
+    /// - Repeat Off: advance while another item exists, else `nil` (end-of-queue policy applies).
+    /// - Repeat All: advance, wrapping to `0` after the last item — cycles the whole queue.
+    /// - Repeat One: the same index (current track).
+    /// A one-item queue yields `0` for both All and One; an empty queue yields `nil`.
+    nonisolated static func nextSequentialIndex(current: Int, count: Int, repeatMode: RepeatMode) -> Int? {
+        guard count > 0 else { return nil }
+        switch repeatMode {
+        case .one:
+            return current
+        case .all:
+            return (current + 1) % count
+        case .off:
+            let next = current + 1
+            return next < count ? next : nil
+        }
+    }
+
     func nextSongIndex() -> Int? {
         guard !queue.isEmpty else { return nil }
-        if repeatMode == .all { return currentIndex }  // Gapless loop of same track
-        if repeatMode == .one { return nil }  // Handled in handleTrackEnd
+        // Repeat One loops the current track via `handleTrackEnd`, NOT the lookahead, so it
+        // deliberately provides no advance index here (preserving its existing mechanism and its
+        // crossfade/predownload behavior). Its logical same-index policy is covered by
+        // `nextSequentialIndex` for testing/consistency.
+        if repeatMode == .one { return nil }
         if currentRadioStation != nil { return nil }
 
         if shuffleEnabled {
+            // Shuffle + Repeat All must NOT stick on the current index (the prior bug): only a
+            // one-item queue replays index 0; otherwise pick the next smart-shuffle item.
             guard queue.count > 1 else {
                 return repeatMode == .all ? currentIndex : nil
             }
             return smartShuffleNextIndex()
-        } else {
-            let next = currentIndex + 1
-            if next < queue.count {
-                return next
-            } else if repeatMode == .all {
-                return 0
-            } else {
-                return nil
-            }
         }
+        return Self.nextSequentialIndex(
+            current: currentIndex, count: queue.count, repeatMode: repeatMode)
     }
 
     func prepareLookahead() {
