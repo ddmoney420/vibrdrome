@@ -138,12 +138,6 @@ final class AudioEngine {
     var repeatMode: RepeatMode = .off
     var shufflePlayCount = 0
 
-    // MARK: - Repeat-One Tracking
-
-    /// Tracks whether repeat-one has already replayed the current track.
-    /// When true, the next track-end advances instead of replaying.
-    var repeatOneUsed = false
-
     // MARK: - Artist Radio (methods in AudioEngine+Radio.swift)
 
     var isRadioMode = false
@@ -503,7 +497,6 @@ final class AudioEngine {
         case .all: repeatMode = .one
         case .one: repeatMode = .off
         }
-        repeatOneUsed = false
         if activeMode == .gapless { prepareLookahead() }
     }
 

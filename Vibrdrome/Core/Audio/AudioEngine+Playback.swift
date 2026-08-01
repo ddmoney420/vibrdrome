@@ -74,7 +74,6 @@ extension AudioEngine {
             playingFromContext = nil
         }
         scrobbleSubmitted = false
-        if isNewTrack { repeatOneUsed = false }
         trackStartTime = Date()
         currentTime = 0
         duration = 0
@@ -357,8 +356,6 @@ extension AudioEngine {
             isCrossfading = false
         }
 
-        // Manual next always advances — reset repeat-one state
-        repeatOneUsed = false
         guard advanceIndex(), currentIndex < queue.count else { return }
         play(song: queue[currentIndex])
         refillRadioIfNeeded()
@@ -550,22 +547,11 @@ extension AudioEngine {
     }
 
     private func handleTrackEndRepeatOne() {
-        // Repeat once then advance
-        if !repeatOneUsed {
-            guard let song = currentSong else { return }
-            repeatOneUsed = true
-            play(song: song)
-        } else {
-            repeatOneUsed = false
-            if isCrossfading {
-                incrementGeneration()
-                crossfadeController.forceComplete()
-                isCrossfading = false
-            }
-            guard advanceIndex() else { return }
-            play(song: queue[currentIndex])
-            refillRadioIfNeeded()
-        }
+        // Repeat One loops the current item indefinitely — until the repeat mode changes, the
+        // user navigates (Next/Previous), or the queue is replaced. Each completed replay goes
+        // through play(), which submits at most one scrobble per completion.
+        guard let song = currentSong else { return }
+        play(song: song)
     }
 
     func handleAutoAdvance() {
@@ -651,7 +637,6 @@ extension AudioEngine {
         currentSong = song
         currentRadioStation = nil
         scrobbleSubmitted = false
-        repeatOneUsed = false
         trackStartTime = Date()
         currentTime = 0
         duration = 0
