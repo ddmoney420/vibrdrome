@@ -87,8 +87,20 @@ struct AudioEngineTests {
         engine.play(song: songs[4], from: songs, at: 4)
         engine.repeatMode = .all
 
-        // repeat-all: gapless loops the same track index for lookahead
-        #expect(engine.nextSongIndex() == 4)
+        // repeat-all at the last track wraps to the first — cycles the whole queue
+        // (previously this incorrectly returned the current index, re-looping one track).
+        #expect(engine.nextSongIndex() == 0)
+    }
+
+    @Test func nextIndexMidQueueRepeatAllAdvances() async {
+        resetEngine()
+        let engine = AudioEngine.shared
+        let songs = makeSongs(5)
+        engine.play(song: songs[2], from: songs, at: 2)
+        engine.repeatMode = .all
+
+        // repeat-all mid-queue advances to the next index, not the same one
+        #expect(engine.nextSongIndex() == 3)
     }
 
     @Test func nextIndexRepeatOneReturnsNil() async {
