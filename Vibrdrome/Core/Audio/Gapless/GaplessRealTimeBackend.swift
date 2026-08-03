@@ -201,15 +201,21 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         tailGeneration += 1
         timelineOffset = resumeFrame
         scheduleOriginFrame = resumeFrame
-        // Keep the audible segment's record; everything after it is gone.
-        scheduledSegments.removeAll { $0.startFrame > resumeFrame }
-        // Play instances belonging to discarded segments must not be able to emit a boundary later.
-        let surviving = Set(scheduledSegments.map(\.playInstance))
-        reportedInstances.formIntersection(surviving.union(reportedInstances.filter { instance in
-            scheduledSegments.contains { $0.playInstance == instance }
-        }))
+        // EVERY segment record is dropped, including the audible one — `stop()` discarded its
+        // remaining audio along with the rest, so keeping its record would describe audio that no
+        // longer exists and place the replacement at the wrong timeline frame. A caller that wants
+        // the current track to continue must re-schedule it from `audibleOffset(of:)`.
+        scheduledSegments.removeAll()
+        reportedInstances.removeAll()
         if wasPlaying, engine.engine.isRunning { engine.player.play() }
         return resumeFrame
+    }
+
+    /// How far into its own audio the given item currently is, for re-scheduling it after a tail
+    /// replacement. Must be read *before* `resetTail()`, which discards the segment records.
+    func audibleOffset(of itemID: GaplessQueueItemID) -> AVAudioFramePosition? {
+        guard let segment = scheduledSegments.last(where: { $0.itemID == itemID }) else { return nil }
+        return max(0, renderFrame - segment.startFrame)
     }
 
     /// Whether a callback or event carrying `tailGeneration` still describes live audio.
