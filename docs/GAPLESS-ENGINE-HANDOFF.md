@@ -1,6 +1,6 @@
 # Persistent Gapless Engine — Session Handoff
 
-**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `fbb1c0f` (off `develop @ 3d82895`)
+**Written:** 2026-08-03 · **Branch:** `feat/persistent-gapless-engine` @ `cb9c59b` (off `develop @ 3d82895`)
 
 Resume point for building the persistent-output gapless audio engine. Self-contained — read this
 top to bottom and you have everything to continue in a fresh session.
@@ -64,7 +64,7 @@ Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.
 ## State of the branch
 
 ```
-feat/persistent-gapless-engine @ fbb1c0f   ← work here
+feat/persistent-gapless-engine @ cb9c59b   ← work here
 develop                        @ 3d82895   ← Build 60 fixes, DO NOT TOUCH
 diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, never merge
 ```
@@ -381,12 +381,45 @@ callback. Open/close/switch leave the tap installed exactly once and the graph u
 
 ---
 
-## THE REMAINING BLOCKER — there is still no real-time playback path
+## What's DONE — the real-time playback path (`cb9c59b`)
 
-Everything proven so far is **offline-rendered**. The engine has never started in real time, never
-held an audio session, and never driven the transport. The session layer above is complete and
-tested, but nothing yet connects it to actual playback. That is the single largest remaining piece
-and it gates most of what is left:
+**The graph now runs in real time against hardware output.** A capability probe established this
+first: the test host *can* start the graph in real time and the player node's sample clock advances.
+That is why the results below are from actually-rendered audio rather than offline renders — worth
+re-checking on any new machine before trusting real-time test results.
+
+- **Backend abstraction** (`GaplessRenderBackend`): init, connect, format, schedule, start, pause,
+  resume, stop, tail replacement, render position, failure reporting. Both backends consume the
+  **same** `GaplessPreparedTrack` values and segment model — one scheduler, not two.
+- **Lifecycle**: `idle → prepared → starting → playing → paused → stopping → idle`, plus `failed`
+  from any active state. `starting`/`stopping` exist so a duplicate Play or an overlapping stop/start
+  is *rejected* rather than raced (verified: three Plays activate the session once).
+- **Cold-launch preserved**: building the graph, preparing files and scheduling audio are all
+  verified NOT to activate the session. Only `start()`/`resume()` do, and activation is injected so
+  the step stays visible instead of hiding in a side effect.
+- **Audible-frame clock**: player node time → engine render time → timeline frame → queue item →
+  source-relative frame → elapsed seconds, in one place, so no two consumers can disagree.
+- **Boundaries are clock-driven, not callback-driven.** A completion callback says a segment finished
+  *feeding*, which on this architecture is a whole track before it is heard.
+- **Play-instance identity** is separate from slot and song identity, because Repeat One replays the
+  same slot and each replay is its own play. Verified: three replays → three distinct instances.
+
+**A real bug the tests caught, worth not rediscovering:** the hardware clock can run **backwards**
+across a tail rebuild (measured 1411 after an earlier 2351). Elapsed time, boundary detection and
+seek all derive from it, so `renderFrame` now enforces monotonicity at the source rather than each
+caller defending against it.
+
+**Evidence:** 20 automatic transitions on one continuously running engine (one boundary per play
+instance, no duplicates, no node replacement); four-part album start to finish; pause preserves
+position and tail across cycles; stop invalidates future events and leaves the graph reusable; tail
+reset keeps the timeline monotonic; session-activation failure and a missing file leave a known
+state without corrupting the timeline.
+
+---
+
+## What's NEXT — real-time integration still to do
+
+The real-time *path* exists; the real-time *integration* does not. Still outstanding:
 
 - **Now Playing / metadata** — the session emits `becameAudible` at the correct frame; nothing is
   wired to `NowPlayingManager` yet.
@@ -398,6 +431,11 @@ and it gates most of what is left:
 - **Soak / performance under real playback** — same.
 - **End-to-end acceptance through actual audio** — the acceptance sequences are proven at session
   level; they have not been run through rendered audio with frame assertions.
+
+Also still outstanding on the real-time path itself: driving the session's transport (Next /
+Previous / seek / queue mutation) through the real backend, real-time tail replenishment via
+`GaplessPrefetchWindow`, real encoded-format transitions in real time (only the synthetic tone album
+has been run), live visualizer-adapter measurements, and real-time CPU/memory/deadline figures.
 
 **Do not request a Checkpoint 4 device build until these are done.**
 
@@ -494,7 +532,7 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## First moves in the new session
 
-1. `git checkout feat/persistent-gapless-engine` (confirm `@ fbb1c0f`).
+1. `git checkout feat/persistent-gapless-engine` (confirm `@ cb9c59b`).
 2. Re-read this file + the two gapless memory files.
 3. Sanity-check the proof still passes: `swift spike/gapless-proof/main.swift` → `RESULT: PASS`.
 4. Start Checkpoint 3 item 3 (**ReplayGain**) — the gain-stage interface is already defined in
