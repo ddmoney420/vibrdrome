@@ -1,6 +1,6 @@
 # Persistent Gapless Engine — Session Handoff
 
-**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `21dfbf3` (off `develop @ 3d82895`)
+**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `fbb1c0f` (off `develop @ 3d82895`)
 
 Resume point for building the persistent-output gapless audio engine. Self-contained — read this
 top to bottom and you have everything to continue in a fresh session.
@@ -64,7 +64,7 @@ Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.
 ## State of the branch
 
 ```
-feat/persistent-gapless-engine @ 21dfbf3   ← work here
+feat/persistent-gapless-engine @ fbb1c0f   ← work here
 develop                        @ 3d82895   ← Build 60 fixes, DO NOT TOUCH
 diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, never merge
 ```
@@ -75,6 +75,15 @@ diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, neve
 - `Vibrdrome/Core/Audio/Gapless/PersistentGaplessEngine.swift` — persistent graph + offline render.
 - `VibrdromeTests/Core/GaplessEngineOfflineTests.swift` — objective frame-continuity tests.
 - `spike/gapless-proof/main.swift` — standalone repro (`swift main.swift`).
+
+**Committed on this branch (fbb1c0f — Checkpoint 3 item 5, partial):**
+- `GaplessPlaybackQueue.swift` — authoritative queue mirror, slot identity, generation, item states.
+- `GaplessTransportPolicy.swift` — repeat/manual-skip/previous policy + seedable smart shuffle.
+- `GaplessPlaybackSession.swift` — session: planning, transport, seek, render-frame-driven events,
+  completion/scrobble accounting.
+- `GaplessVisualizerAdapters.swift` — Classic + Native adapters on the shared feed.
+- `GaplessEngineSelector.swift` — fallback reasons + capability policy.
+- Tests: `GaplessPlaybackSessionTests`, `GaplessVisualizerAdapterTests`, `GaplessEngineSelectorTests`.
 
 **Committed on this branch (21dfbf3 — Checkpoint 3 items 3–4):**
 - `Vibrdrome/Core/Audio/Gapless/GaplessReplayGain.swift` — policy map, calculator, diagnostics.
@@ -338,7 +347,63 @@ above is measured by driving the copy path directly.
 
 ---
 
-## What's NEXT — Checkpoint 3 items 5–6
+## What's DONE — Checkpoint 3 item 5 (partial): the playback session layer
+
+**One authoritative queue.** Queue *content* stays owned by the app; `GaplessPlaybackQueue` is the
+single place it is mirrored into the engine and adds only derived state
+(pending → preparing → ready → scheduled → audible → completed, plus cancelled/failed). No second
+hidden queue. Slots carry their own identity because a queue can legitimately contain the same song
+twice.
+
+**Generation.** Structural changes bump a monotonic generation; *advancing* through the queue does
+not, because that would needlessly invalidate preparation that is still correct. Async work carries
+its generation and is discarded when superseded.
+
+**Events come from rendered frames**, never from a download, decode, or accepted buffer. Scrobble
+eligibility reproduces production exactly: half the effective duration, capped at 240 s, one
+eligible scrobble per play.
+
+**Two modelling bugs the tests caught** (worth not rediscovering): keying "already audible" on item
+identity swallowed every Repeat One replay — the same slot becomes audible again at a *new frame*,
+which is a new play; and carrying the per-play scrobble flag across a repeat suppressed the second
+play's scrobble. Both now key on the boundary.
+
+**Existing semantics mapped and preserved:** Previous restarts past **3 s**; manual navigation
+overrides Repeat One; and — the important one — **shuffle is not a permuted playlist**. Production
+picks the next index on the fly, preferring a different artist and excluding
+current/planned/recently-played. So there is **no original order to restore** and **no reshuffle on
+a Repeat All wrap**. Both are existing user-visible behaviour, documented rather than "fixed".
+Randomness is injectable, so tests are deterministic while production stays random.
+
+**Visualizer adapters are wired** to the real `AudioSpectrum` and `VisualizerPCMSource`. Each drains
+its own bounded ring *off* the render thread, so the FFT (which allocates) never runs in the audio
+callback. Open/close/switch leave the tap installed exactly once and the graph untouched.
+
+---
+
+## THE REMAINING BLOCKER — there is still no real-time playback path
+
+Everything proven so far is **offline-rendered**. The engine has never started in real time, never
+held an audio session, and never driven the transport. The session layer above is complete and
+tested, but nothing yet connects it to actual playback. That is the single largest remaining piece
+and it gates most of what is left:
+
+- **Now Playing / metadata** — the session emits `becameAudible` at the correct frame; nothing is
+  wired to `NowPlayingManager` yet.
+- **Scrobbling** — eligibility is computed correctly; nothing calls `OfflineActionQueue` yet.
+- **Restoration, audio session, background** — untouched. The Build 60 cold-launch fix (launch must
+  not interrupt Spotify/YouTube) must be preserved when this is wired.
+- **Lock screen / remote commands** — untouched.
+- **Seek latency and manual-skip interruption** — cannot be measured without a real-time path.
+- **Soak / performance under real playback** — same.
+- **End-to-end acceptance through actual audio** — the acceptance sequences are proven at session
+  level; they have not been run through rendered audio with frame assertions.
+
+**Do not request a Checkpoint 4 device build until these are done.**
+
+---
+
+## What's NEXT — Checkpoint 3 items 5 (rest) and 6
 
 Real integration, each gated by **automated frame-continuity + state tests before any device build**:
 
@@ -429,7 +494,7 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## First moves in the new session
 
-1. `git checkout feat/persistent-gapless-engine` (confirm `@ 21dfbf3`).
+1. `git checkout feat/persistent-gapless-engine` (confirm `@ fbb1c0f`).
 2. Re-read this file + the two gapless memory files.
 3. Sanity-check the proof still passes: `swift spike/gapless-proof/main.swift` → `RESULT: PASS`.
 4. Start Checkpoint 3 item 3 (**ReplayGain**) — the gain-stage interface is already defined in
