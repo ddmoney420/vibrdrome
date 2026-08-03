@@ -33,13 +33,57 @@ struct Case {
     let name: String
     let gains: [Float]
     let enabled: Bool
+    /// Apply a ReplayGain-style gain change at every simulated track boundary.
+    var replayGain = false
 }
 
+// Graph cost is measured by offline rendering. The visualization tap is measured SEPARATELY, below,
+// by driving the copy path directly: under offline manual rendering the engine batches tap callbacks
+// (~1 per render slice instead of one per 1024 frames) and dispatches them off the render loop, so
+// timings taken there describe the rendering mode rather than real-time playback.
 let cases = [
     Case(name: "EQ bypassed", gains: Array(repeating: 0, count: 10), enabled: false),
     Case(name: "EQ active, neutral (all 0 dB)", gains: Array(repeating: 0, count: 10), enabled: true),
-    Case(name: "EQ active, Rock preset", gains: [5, 4, 2, 0, -1, 0, 2, 3, 4, 5], enabled: true)
+    Case(name: "EQ active, Rock preset", gains: [5, 4, 2, 0, -1, 0, 2, 3, 4, 5], enabled: true),
+    Case(name: "ReplayGain only", gains: Array(repeating: 0, count: 10), enabled: false,
+         replayGain: true),
+    Case(name: "EQ + ReplayGain (no tap)", gains: [5, 4, 2, 0, -1, 0, 2, 3, 4, 5], enabled: true,
+         replayGain: true)
 ]
+
+/// A bounded ring per consumer, mirroring `FloatRingBuffer`: storage allocated once, written through
+/// a raw pointer with a masked index, drained periodically like a UI would.
+///
+/// It has to be a faithful stand-in — an earlier version of this spike used a bounds-checked Swift
+/// array and reported a 430 us callback, which measured the toy, not the engine.
+final class Ring {
+    private let storage: UnsafeMutablePointer<Float>
+    private let capacity: Int
+    private let mask: Int
+    private var head = 0
+    private var tail = 0
+    var dropped = 0
+
+    init(capacity: Int) {
+        self.capacity = capacity
+        mask = capacity - 1
+        storage = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 2)
+        storage.initialize(repeating: 0, count: capacity * 2)
+    }
+    deinit { storage.deallocate() }
+
+    func write(left: UnsafePointer<Float>, right: UnsafePointer<Float>, frameCount: Int) {
+        let free = capacity - (head - tail)
+        if frameCount > free { dropped += frameCount - free; tail += frameCount - free }
+        for i in 0..<frameCount {
+            let slot = ((head + i) & mask) * 2
+            storage[slot] = left[i]
+            storage[slot + 1] = right[i]
+        }
+        head += frameCount
+    }
+    func drain() { tail = head }
+}
 
 func measure(_ testCase: Case) -> (seconds: Double, throughput: Double, memoryDelta: Int64) {
     let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
@@ -86,10 +130,21 @@ func measure(_ testCase: Case) -> (seconds: Double, throughput: Double, memoryDe
     let output = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: 4_096)!
     let memoryBefore = residentBytes()
     let started = Date()
+    var rendered = 0
+    // One simulated track boundary per 10 s of audio.
+    let boundaryInterval = Int(sampleRate * 10)
+    var nextBoundary = boundaryInterval
+    var gainToggle = false
     while engine.manualRenderingSampleTime < Int64(totalFrames) {
+        if testCase.replayGain && rendered >= nextBoundary {
+            gainToggle.toggle()
+            gain.outputVolume = gainToggle ? 0.708 : 1.0
+            nextBoundary += boundaryInterval
+        }
         let remaining = Int64(totalFrames) - engine.manualRenderingSampleTime
         let slice = AVAudioFrameCount(min(4_096, remaining))
         guard (try? engine.renderOffline(slice, to: output)) == .success else { break }
+        rendered += Int(slice)
     }
     let elapsed = Date().timeIntervalSince(started)
     let memoryAfter = residentBytes()
@@ -113,10 +168,48 @@ for testCase in cases {
     // keep up with real time. A ratio between the states exaggerates a difference that is tiny in
     // absolute terms.
     let coreShare = 100.0 / result.throughput
-    print(String(format: "%-32@ %6.3f s render  %8.1fx real-time  %.4f%% of one core  rss %+.1f MB",
+    print(String(format: "%-32@ %6.3f s  %8.1fx RT  %.4f%% core  rss %+.1f MB",
                  testCase.name as NSString, result.seconds, result.throughput, coreShare,
                  Double(result.memoryDelta) / 1_048_576.0))
 }
+
+// MARK: - Visualization callback cost, measured directly
+
+print("\n=== Visualization tap callback cost ===")
+print("one 1024-frame stereo buffer copied into N bounded rings, 20000 iterations\n")
+
+let callbackFrames = 1_024
+let deadlineMicroseconds = Double(callbackFrames) / sampleRate * 1_000_000
+let left = UnsafeMutablePointer<Float>.allocate(capacity: callbackFrames)
+let right = UnsafeMutablePointer<Float>.allocate(capacity: callbackFrames)
+for i in 0..<callbackFrames {
+    left[i] = 0.4 * Float(sin(2.0 * .pi * freq * Double(i) / sampleRate))
+    right[i] = left[i]
+}
+
+for consumerCount in [0, 1, 2] {
+    let rings = (0..<consumerCount).map { _ in Ring(capacity: 16_384) }
+    var peak: UInt64 = 0
+    var total: UInt64 = 0
+    let iterations = 20_000
+    for iteration in 0..<iterations {
+        let started = DispatchTime.now().uptimeNanoseconds
+        for ring in rings { ring.write(left: left, right: right, frameCount: callbackFrames) }
+        let elapsed = DispatchTime.now().uptimeNanoseconds - started
+        peak = max(peak, elapsed)
+        total += elapsed
+        // Drain at ~60 Hz, as a UI would.
+        if iteration % 3 == 0 { for ring in rings { ring.drain() } }
+    }
+    let averageMicroseconds = Double(total) / Double(iterations) / 1_000.0
+    let peakMicroseconds = Double(peak) / 1_000.0
+    let dropped = rings.reduce(0) { $0 + $1.dropped }
+    print(String(format: "%d consumer(s): avg %6.2f us  peak %7.2f us  (%.2f%% of the %.1f ms deadline)  dropped %d",
+                 consumerCount, averageMicroseconds, peakMicroseconds,
+                 averageMicroseconds / deadlineMicroseconds * 100, deadlineMicroseconds / 1_000,
+                 dropped))
+}
+left.deallocate(); right.deallocate()
 
 print("""
 

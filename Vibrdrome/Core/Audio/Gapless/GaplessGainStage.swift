@@ -67,33 +67,110 @@ struct GaplessGain: Equatable, Sendable {
     }
 }
 
+/// A gain change bound to the render frame at which its track becomes audible.
+struct GaplessGainEvent: Equatable, Sendable {
+    let trackID: String
+    /// Render frame at which this track starts — taken from `GaplessScheduler`, so the gain change
+    /// is tied to the same frame accounting that drives metadata and scrobbling.
+    let boundaryFrame: AVAudioFramePosition
+    let gain: GaplessGain
+}
+
 /// Owns the persistent gain node sitting between the player and the EQ.
 ///
-/// Holds no ReplayGain policy of its own — it applies a resolved `GaplessGain` at a moment the
+/// Holds no ReplayGain policy of its own — it applies a resolved `GaplessGain` at a frame the
 /// scheduler chooses. Keeping policy out of here is what allows album-vs-track gain, preamp changes,
 /// and clipping rules to evolve without touching the audio graph.
 final class GaplessGainStage {
     let node = AVAudioMixerNode()
 
-    /// Long enough to avoid a step discontinuity, short enough to be inaudible as a fade.
-    static let rampSeconds = 0.02
+    /// Measured smoothing time of `AVAudioMixerNode.outputVolume`: setting it never steps the
+    /// signal — the node interpolates internally, reaching 10% in ~2.5 ms, 50% in ~16 ms and 90% in
+    /// ~28 ms. Verified across gain jumps up to 1.5x → 0.25x, where an unsmoothed change would have
+    /// produced a delta of ~0.5 and instead produced nothing above the tone's own movement
+    /// (`spike/gapless-replaygain-ramp`).
+    ///
+    /// This is a property of the platform node, not a value chosen here: an explicit ramp of our own
+    /// would convolve with this smoothing and could only make the transition *longer*, never
+    /// shorter or sharper. So the node's own interpolation is the ramp, and the engine's job is to
+    /// start it on the right frame.
+    static let measuredSmoothingSeconds = 0.028
 
     private(set) var currentGain: GaplessGain = .unity
+    /// Gain changes waiting for their boundary, ordered by frame.
+    private(set) var pendingEvents: [GaplessGainEvent] = []
+    /// The most recently applied event, for diagnostics and duplicate suppression.
+    private(set) var lastAppliedEvent: GaplessGainEvent?
 
     init() {
         node.outputVolume = 1.0
     }
 
-    /// Apply a gain to the live node.
+    /// The frame of the next pending change, so the render loop can stop exactly on it.
+    var nextEventFrame: AVAudioFramePosition? { pendingEvents.first?.boundaryFrame }
+
+    // MARK: - Scheduling
+
+    /// Schedule a gain change for the frame at which `trackID` becomes audible. Replaces any
+    /// existing event for the same track, so re-preparing a track cannot produce two changes.
+    func schedule(_ event: GaplessGainEvent) {
+        pendingEvents.removeAll { $0.trackID == event.trackID }
+        pendingEvents.append(event)
+        pendingEvents.sort { $0.boundaryFrame < $1.boundaryFrame }
+    }
+
+    /// Drop pending events for audio that will no longer play — the queue was edited, replaced, or
+    /// the user skipped past it. Without this a removed track's gain would still be applied to
+    /// whatever ends up at that frame.
+    func cancelEvents(fromFrame frame: AVAudioFramePosition) {
+        pendingEvents.removeAll { $0.boundaryFrame >= frame }
+    }
+
+    func cancelEvent(forTrackID trackID: String) {
+        pendingEvents.removeAll { $0.trackID == trackID }
+    }
+
+    func cancelAllPendingEvents() {
+        pendingEvents.removeAll()
+    }
+
+    // MARK: - Application
+
+    /// Apply any event whose boundary has been reached. Called from the render loop with the number
+    /// of frames rendered so far, so gain changes happen at the **audible** boundary — not when the
+    /// track was downloaded, decoded, scheduled, or its metadata prepared.
     ///
-    /// `AVAudioMixerNode.outputVolume` is set directly here; the ramp is documented as the
-    /// contract and becomes a scheduled parameter ramp when ReplayGain lands. Callers must invoke
-    /// this at the **rendered** boundary, not when a track is scheduled.
+    /// If several events are somehow due at once (a very short track, or a long render slice) only
+    /// the last is applied: the intermediate ones describe audio that has already gone by.
+    @discardableResult
+    func advance(toRenderFrame frame: AVAudioFramePosition) -> GaplessGainEvent? {
+        var due: GaplessGainEvent?
+        while let next = pendingEvents.first, next.boundaryFrame <= frame {
+            due = next
+            pendingEvents.removeFirst()
+        }
+        guard let due else { return nil }
+        // Skip a redundant set: an unchanged gain must not restart the node's smoothing, which is
+        // what keeps an album-gain join completely untouched.
+        if due.gain != currentGain { apply(due.gain) }
+        lastAppliedEvent = due
+        return due
+    }
+
+    /// Apply a gain to the live node immediately.
+    ///
+    /// Setting `outputVolume` is itself the ramp — see `measuredSmoothingSeconds`. Correct for a
+    /// mid-track change (a settings edit); boundary changes should go through `schedule` +
+    /// `advance` so they land on the right frame.
     func apply(_ gain: GaplessGain) {
         currentGain = gain
         node.outputVolume = max(0, gain.linear)
     }
 
-    /// Reset to unity — queue replaced or playback stopped.
-    func reset() { apply(.unity) }
+    /// Reset to unity and drop every pending change — queue replaced or playback stopped.
+    func reset() {
+        cancelAllPendingEvents()
+        lastAppliedEvent = nil
+        apply(.unity)
+    }
 }

@@ -32,6 +32,9 @@ final class PersistentGaplessEngine {
     let eqStage = GaplessEQStage()
     /// Permanent tap point for the visualizers, after gain and EQ so they show what is heard.
     let outputMixer = AVAudioMixerNode()
+    /// The one PCM feed both visualizers consume. Installed once; opening or closing a visualizer
+    /// changes consumers, never the tap or the graph.
+    let visualizerFeed = GaplessVisualizerFeed()
 
     /// Convenience accessor for the EQ node itself.
     var eq: AVAudioUnitEQ { eqStage.node }
@@ -76,6 +79,55 @@ final class PersistentGaplessEngine {
     /// Change one band mid-playback — the hot path while a user drags a slider.
     func setEQGain(_ gain: Float, forBand index: Int) {
         eqStage.setGain(gain, forBand: index, sampleRate: renderFormat.sampleRate)
+    }
+
+    // MARK: - ReplayGain
+
+    /// Schedule a track's ReplayGain to take effect at the frame that track becomes audible.
+    ///
+    /// The boundary frame comes from the scheduler's own segment map — the same accounting that
+    /// drives metadata and scrobbling — so a gain change cannot drift from the track it belongs to.
+    /// Returns false when the track is not scheduled, rather than guessing a frame.
+    @discardableResult
+    func scheduleReplayGain(_ gain: GaplessGain, forTrackID trackID: String) -> Bool {
+        guard let segment = scheduler.segments.first(where: { $0.id == trackID }) else { return false }
+        gainStage.schedule(GaplessGainEvent(trackID: trackID, boundaryFrame: segment.startFrame,
+                                            gain: gain))
+        return true
+    }
+
+    /// Resolve and schedule ReplayGain for a track from its server metadata.
+    @discardableResult
+    func scheduleReplayGain(for trackID: String, replayGain: ReplayGain?,
+                            settings: GaplessReplayGainSettings) -> GaplessReplayGainDiagnostics {
+        let resolved = GaplessReplayGainCalculator.resolve(replayGain: replayGain, settings: settings)
+        scheduleReplayGain(resolved.gain, forTrackID: trackID)
+        return resolved.diagnostics
+    }
+
+    /// Apply a gain to the *current* track immediately — a settings change mid-track, where waiting
+    /// for the next boundary would leave the user's edit apparently ignored.
+    func applyReplayGainNow(_ gain: GaplessGain) {
+        gainStage.apply(gain)
+    }
+
+    /// Drop scheduled gain changes for audio that will no longer play. Call whenever the queue is
+    /// edited beyond the current track.
+    func cancelScheduledReplayGain(fromFrame frame: AVAudioFramePosition) {
+        gainStage.cancelEvents(fromFrame: frame)
+    }
+
+    // MARK: - Visualizer feed
+
+    /// Install the one visualizer tap. Called once when the engine starts, never per track and never
+    /// because a visualizer opened.
+    func installVisualizerFeed() {
+        visualizerFeed.install(on: outputMixer, format: renderFormat)
+    }
+
+    /// Remove the tap — engine teardown only.
+    func uninstallVisualizerFeed() {
+        visualizerFeed.uninstall()
     }
 
     /// Schedule local files consecutively into the running player node and record their exact
@@ -173,6 +225,13 @@ final class PersistentGaplessEngine {
             if let rampLimit = eqStage.rampSliceLimit {
                 slice = min(slice, Int64(rampLimit))
             }
+            // Stop exactly on a pending gain boundary so ReplayGain lands on the frame its track
+            // becomes audible, not at the next slice edge.
+            if let gainFrame = gainStage.nextEventFrame {
+                let distance = gainFrame - AVAudioFramePosition(out.count)
+                if distance > 0 { slice = min(slice, distance) }
+            }
+            gainStage.advance(toRenderFrame: AVAudioFramePosition(out.count))
             let toRender = AVAudioFrameCount(max(1, slice))
             let status = try engine.renderOffline(toRender, to: buffer)
             guard status == .success else {
