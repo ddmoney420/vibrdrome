@@ -1,6 +1,6 @@
 # Persistent Gapless Engine — Session Handoff
 
-**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `19fd966` (off `develop @ 3d82895`)
+**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `93ec188` (off `develop @ 3d82895`)
 
 Resume point for building the persistent-output gapless audio engine. Self-contained — read this
 top to bottom and you have everything to continue in a fresh session.
@@ -11,10 +11,10 @@ top to bottom and you have everything to continue in a fresh session.
 
 Gapless playback is the **active release gate**. Build 60 release prep is **stopped**. The
 AVQueuePlayer path has two proven transition defects that no AVQueuePlayer-level fix resolves, so
-we are **rewriting playback onto a persistent-output `AVAudioEngine` graph**. **Checkpoint 2 is
-done and objectively proven** (offline render = frame-continuous across every boundary). Next is
-**Checkpoint 3** (real integration: streaming, EQ, visualizers, ReplayGain, queue/repeat parity),
-then **Checkpoint 4** (one device build + acceptance).
+we are **rewriting playback onto a persistent-output `AVAudioEngine` graph**. **Checkpoints 1, 2 and
+3 item 1 are done and objectively proven** (offline render = frame-continuous across every boundary,
+for every delivery format). Next is **Checkpoint 3 items 2–6** (EQ, visualizers, ReplayGain,
+queue/repeat parity, seeking), then **Checkpoint 4** (one device build + acceptance).
 
 ---
 
@@ -62,17 +62,27 @@ Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.
 ## State of the branch
 
 ```
-feat/persistent-gapless-engine @ 19fd966   ← work here
+feat/persistent-gapless-engine @ 93ec188   ← work here
 develop                        @ 3d82895   ← Build 60 fixes, DO NOT TOUCH
 diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, never merge
 ```
 
-**Committed on this branch (19fd966):**
+**Committed on this branch (19fd966 — Checkpoint 1 + 2):**
 - `Vibrdrome/Core/Audio/Gapless/GaplessRenderFormat.swift` — render-format policy.
 - `Vibrdrome/Core/Audio/Gapless/GaplessScheduler.swift` — pure frame-accounting.
 - `Vibrdrome/Core/Audio/Gapless/PersistentGaplessEngine.swift` — persistent graph + offline render.
 - `VibrdromeTests/Core/GaplessEngineOfflineTests.swift` — objective frame-continuity tests.
 - `spike/gapless-proof/main.swift` — standalone repro (`swift main.swift`).
+
+**Committed on this branch (93ec188 — Checkpoint 3 item 1):**
+- `Vibrdrome/Core/Audio/Gapless/GaplessTrim.swift` — per-format schedulable range + Xing/LAME parsing.
+- `Vibrdrome/Core/Audio/Gapless/GaplessPrefetchWindow.swift` — pure rolling-window policy.
+- `Vibrdrome/Core/Audio/Gapless/GaplessTrackPreparer.swift` — resolve → decode → prepare.
+- `Vibrdrome/Core/Audio/Gapless/GaplessFileProviders.swift` — local + streaming/caching providers.
+- `PersistentGaplessEngine.schedule(tracks:)` — segment-based scheduling.
+- Tests: `GaplessTrimTests`, `GaplessPrefetchWindowTests`, `GaplessPipelineOfflineTests`,
+  `GaplessRealAlbumTests` (real encoded albums through the production types).
+- `spike/gapless-formats/main.swift` + `make-test-albums.sh` — per-format matrix and its media.
 
 (Note: `GaplessPromotionWaiter.swift` / `GaplessAdvanceTests.swift` on develop are the OLD
 AVQueuePlayer helpers — not part of the new engine.) Prior spec: `docs/release/12-gapless-playback-spec.md`.
@@ -128,8 +138,9 @@ battery need device measurement at CP4).
 
 **Verify anytime:**
 ```bash
-# Standalone objective proof (no Xcode):
+# Standalone objective proofs (no Xcode):
 swift spike/gapless-proof/main.swift          # expect RESULT: PASS
+swift spike/gapless-formats/main.swift        # per-format matrix (needs ffmpeg)
 
 # In-target automated tests:
 xcodebuild -project Vibrdrome.xcodeproj -scheme Vibrdrome \
@@ -139,14 +150,61 @@ xcodebuild -project Vibrdrome.xcodeproj -scheme Vibrdrome \
 
 ---
 
-## What's NEXT — Checkpoint 3 (do this next)
+## What's DONE — Checkpoint 3 item 1 (streaming / cached-file gapless)
+
+Pipeline: **resolve → local file (downloaded/cached, else fetched whole) → decode → prepare →
+schedule as a segment**, with a rolling window of *current + next fully ready + one preparing*
+(`GaplessPrefetchWindow`). No network, decode, or file I/O happens at a boundary.
+
+**Per-format result** — independently-encoded parts of one continuous tone, scheduled consecutively
+into the persistent graph and measured by frame count *and* by phase at each join:
+
+| Delivery path                   | Decoded length      | Join after this work |
+|---------------------------------|---------------------|----------------------|
+| FLAC (direct)                   | exact               | frame-continuous     |
+| ALAC (direct, m4a)              | exact               | frame-continuous     |
+| AAC (direct, m4a)               | exact (`iTunSMPB`)  | frame-continuous     |
+| Opus (transcode, 48 kHz)        | exact               | frame-continuous     |
+| MP3 (direct or transcoded file) | **+1368 frames**    | frame-continuous *after trim* |
+| MP3 from a **live** transcode   | +1368 frames        | **not fixable** — see below |
+| Downloaded / offline            | same as its format  | same as its format   |
+
+**The MP3 finding.** `AVAudioFile` applies the m4a `iTunSMPB` gapless atom but **not** the MP3
+Xing/LAME header — it returns encoder delay + padding as ordinary audio (measured: delay 576 +
+padding 792 = 1368 frames per track, ~31 ms per join, 124 ms across a 4-track album).
+`GaplessTrimPolicy` parses that header and the engine schedules `[delay, length - padding)` as an
+explicit segment, which restores exact continuity.
+
+**The one unfixable cell.** A live server-side transcode writes to a **non-seekable** stream, so the
+encoder can never go back and fill in the gapless header — verified directly: ffmpeg to a pipe emits
+no Xing/Info tag at all, while the same encode to a file does. Those sources report
+`.mp3WithoutGaplessHeader` and keep the codec's inserted frames rather than silently shipping a gap.
+**Mitigation to decide later (owner's call):** prefer the original format over MP3 transcoding when
+gapless matters, or prefer **Opus** as the transcode target — it measured frame-exact.
+
+**Note on `PredownloadManager`:** the new provider *consumes* what the download layer already
+cached, but does not drive `PredownloadManager` itself. That actor sleeps 10 s before its first
+download and 20 s between downloads, and does nothing when the user's *Preload songs* setting is 0 —
+correct for polite background caching, wrong for a fetch that must finish before the current track
+ends. A file it already fetched is used as-is, with no second download.
+
+**Evidence:** `GaplessRealAlbumTests` runs 5 real encoded albums through the **production** types;
+`GaplessPipelineOfflineTests` proves the pipeline end-to-end hermetically; `GaplessTrimTests` pins
+the header parsing. `verify-build.sh` **RESULT: PASS** — 801 tests, 0 warnings, SwiftLint clean.
+
+**Harness gotcha (cost an hour, don't rediscover):** building many `AVAudioEngine`s in one process
+without a full teardown starts producing corrupted renders — it showed up as a phantom
+discontinuity on files that render clean in isolation. `spike/gapless-formats` now stops, disables
+manual rendering, and detaches nodes inside an autorelease pool per render. If a measurement
+disagrees with an isolated re-run, suspect the harness before the engine.
+
+---
+
+## What's NEXT — Checkpoint 3 items 2–6
 
 Real integration, each gated by **automated frame-continuity + state tests before any device build**:
 
-1. **Streaming/cached-file**: resolve Navidrome URL → predownload to temp cache (reuse
-   `PredownloadManager`) → decode from local file → schedule. Rolling pipeline: current + next
-   fully ready + one more preparing. Report per format: direct ALAC, direct FLAC, AAC, MP3,
-   server-transcoded, downloaded/offline. Real-album automated evidence (use the test albums below).
+1. ~~**Streaming/cached-file**~~ — **DONE** (see above).
 2. **EQ** in the persistent graph — toggle without engine restart or item recreation; gapless holds
    with EQ ON. Reuse `EQEngine` (`syncCoefficients()`) coefficients.
 3. **Visualizers** — persistent mixer tap feeding Classic + Native; consumer gating without graph
@@ -185,7 +243,9 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## Integration points in existing code (reuse, don't reinvent)
 
-- `PredownloadManager` (`AudioEngine.predownloadManager`) — prefetch to local cache.
+- `PredownloadManager` (`AudioEngine.predownloadManager`) — background offline caching. **Consume its
+  output; don't drive it** for boundary-critical fetches (10 s/20 s pacing, preload-count gated).
+- `GaplessStreamingFileProvider` — the gapless-owned resolve/fetch path (checks downloads first).
 - `EQEngine` (`Core/Audio/EQEngine.swift`, `syncCoefficients()`) — 10-band coefficients.
 - `VisualizerPCMSource` (`Core/Audio/VisualizerPCMSource.swift`) — Native viz PCM consumer.
 - `AudioSpectrum` — Classic viz FFT source.
@@ -203,10 +263,13 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
   (`xcrun devicectl device install app --device <udid> <app>`; launch with
   `process launch --terminate-existing --device <udid> com.vibrdrome.app`). idevicesyslog hardware
   UDID `00008150-001635990EC0401C` (flaky; drops when phone locks — prefer on-screen logging).
-- **Test media (local Mac):** `~/vibrdrome-test-media/Gapless 4-Track Test/` (FLAC),
-  `~/vibrdrome-test-media/Gapless 4-Track ALAC/` (ALAC) — one continuous 220 Hz tone split into 4
-  sample-exact 441000-frame parts, all joins (incl. loop wrap) verified seamless. Also on the
-  owner's Navidrome server. Regenerate with ffmpeg if needed (see git history of this handoff).
+- **Test media (local Mac):** `~/vibrdrome-test-media/Gapless 4-Track Test/` (FLAC) and
+  `Gapless 4-Track ALAC/` — one continuous 220 Hz tone split into 4 sample-exact 441000-frame parts,
+  all joins (incl. loop wrap) verified seamless. Also on the owner's Navidrome server.
+  Per-format albums (`MP3`, `AAC`, `Opus`, `Transcoded MP3`) are generated from the FLAC master by
+  `spike/gapless-formats/make-test-albums.sh`. `GaplessRealAlbumTests` finds them via
+  `SIMULATOR_HOST_HOME` (or `VIBRDROME_TEST_MEDIA`) and **skips** when absent — so a green run on a
+  machine without the media is not evidence; check that 5 album cases actually executed.
 - **Tools:** Swift 6.3 + AVFoundation on macOS 26 (offline render works). `xcodegen` (restore
   entitlements after). Xcode 26, iOS 17+ target, sim = iPhone 17 Pro.
 - **Build/QA:** `scripts/verify-build.sh` (or `--quick`) = source of truth for green.
@@ -216,8 +279,19 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## First moves in the new session
 
-1. `git checkout feat/persistent-gapless-engine` (confirm `@ 19fd966`).
+1. `git checkout feat/persistent-gapless-engine` (confirm `@ 93ec188`).
 2. Re-read this file + the two gapless memory files.
 3. Sanity-check the proof still passes: `swift spike/gapless-proof/main.swift` → `RESULT: PASS`.
-4. Start Checkpoint 3 item 1 (streaming/cached-file gapless) — build the prefetch→decode→schedule
-   path, prove it with the real 4-track album via automated/offline evidence before any device build.
+4. Start Checkpoint 3 item 2 (**EQ in the persistent graph**) — toggling must not rebuild the graph
+   or recreate the player node, and gapless must still hold with EQ ON. Prove it the same way: an
+   offline render with EQ engaged and toggled mid-schedule, measured for frame continuity, before
+   any device build.
+
+### Open question for the owner (not blocking)
+
+MP3 delivered by a **live** server transcode cannot be made gapless — the encoder never writes the
+gapless header. If the owner's Navidrome is configured to transcode to MP3, the options are: serve
+originals when possible, or switch the transcode target to **Opus** (measured frame-exact). Worth
+one check against the real server: fetch a transcoded stream and run
+`GaplessTrimPolicy.mp3GaplessHeader(atFileURL:)` on it. Everything else (FLAC, ALAC, AAC, Opus,
+stored MP3, downloaded) is already frame-exact.
