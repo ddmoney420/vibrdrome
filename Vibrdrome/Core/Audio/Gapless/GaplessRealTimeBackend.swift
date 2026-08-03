@@ -52,6 +52,55 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// belonging to a discarded tail can be recognised and ignored.
     private(set) var tailGeneration: UInt64 = 1
 
+    /// Bounded cache of open `AVAudioFile` objects, keyed by source URL.
+    ///
+    /// **This is a partial mitigation, not the fix.** It removes redundant opens when the working
+    /// set fits the cache, but a one-hour run over a 9-source queue (cache size 6, so every entry is
+    /// evicted before it comes round again) still grew ~141 KB per transition — the same rate as
+    /// before. Do not read this cache as closing the memory issue.
+    ///
+    /// Isolated on a bare graph with no controller, session or diagnostics in the path:
+    ///
+    ///     fresh file per schedule + closure   +44.83 MB   45.9 KB/transition
+    ///     reused file + the same closure        0.00 MB    0.0 KB/transition
+    ///     reused file, no closure              -0.38 MB   -0.4 KB/transition
+    ///
+    /// Read correctly, that table says growth requires **both** a fresh file *and* a completion
+    /// closure: fresh-without-closure is flat, and reused-with-closure is flat. So the retained
+    /// object is the per-schedule file, and what keeps it alive is bound up with the completion
+    /// closure the node holds — neither alone accumulates. The completion-handler variant matrix is
+    /// the next step, not another cache-sizing change: a real queue is always larger than any cache
+    /// that is safe to hold open.
+    ///
+    /// Reuse is safe here specifically because `scheduleSegment(_:startingFrame:frameCount:...)`
+    /// takes an explicit starting frame and does not depend on the file's own read position, so one
+    /// open file can back several pending segments. The cache is bounded to the preparation window
+    /// plus headroom; evicting only drops *our* reference, since the player node retains what it is
+    /// still playing.
+    private var openFiles: [URL: AVAudioFile] = [:]
+    private var openFileOrder: [URL] = []
+    /// Window depth (current + next ready + one preparing) plus headroom for a tail rebuild.
+    static let maximumOpenFiles = 6
+
+    private func openFile(at url: URL) throws -> AVAudioFile {
+        if let cached = openFiles[url] {
+            openFileOrder.removeAll { $0 == url }
+            openFileOrder.append(url)
+            return cached
+        }
+        let file = try AVAudioFile(forReading: url)
+        openFiles[url] = file
+        openFileOrder.append(url)
+        while openFileOrder.count > Self.maximumOpenFiles {
+            let evicted = openFileOrder.removeFirst()
+            openFiles[evicted] = nil
+        }
+        return file
+    }
+
+    /// Live open-file count, for the memory regression test.
+    var openFileCount: Int { openFiles.count }
+
     /// Injected so tests can drive the clock deterministically instead of sleeping.
     var clockOverride: (() -> AVAudioFramePosition)?
 
@@ -139,6 +188,10 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         scheduleOriginFrame = 0
         monotonicFrame = 0
         tailGeneration += 1
+        // Stop discards every pending schedule, so nothing here is still needed. The node keeps
+        // whatever it is finishing alive on its own.
+        openFiles.removeAll()
+        openFileOrder.removeAll()
         engine.gainStage.reset()
         deactivateAudioSession?()
         state = .idle
@@ -167,7 +220,7 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             let start = scheduledSegments.last?.endFrame ?? scheduleOriginFrame
             let file: AVAudioFile
             do {
-                file = try AVAudioFile(forReading: entry.track.fileURL)
+                file = try openFile(at: entry.track.fileURL)
             } catch {
                 throw GaplessEngineFailure.scheduleFailed(error.localizedDescription)
             }

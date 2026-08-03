@@ -82,11 +82,14 @@ struct GaplessLeakProbeTests {
             try? await Task.sleep(for: .milliseconds(4))
         }
         let transitions = controller.observedBoundaries.count
+        let openFiles = backend.openFileCount
         let end = rss()
         let growthMB = Double(Int64(end) - Int64(base)) / 1_048_576
-        print(String(format: "PROBE %-28@ transitions %4d  growth %8.1f MB  perTransition %6.3f MB",
+        print(String(format: "PROBE %-28@ transitions %4d  growth %8.1f MB  perTransition %6.3f MB  openFiles %d  segments %d  boundaries %d",
                      label as NSString, transitions, growthMB,
-                     transitions > 0 ? growthMB / Double(transitions) : 0))
+                     transitions > 0 ? growthMB / Double(transitions) : 0,
+                     openFiles, backend.scheduledSegments.count,
+                     controller.observedBoundaries.count))
         controller.stop()
         if visualizer { backend.engine.uninstallVisualizerFeed() }
     }
