@@ -48,6 +48,9 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     private var timelineOffset: AVAudioFramePosition = 0
     /// Frame at which the current schedule begins on the timeline.
     private(set) var scheduleOriginFrame: AVAudioFramePosition = 0
+    /// Identity of the current scheduled tail. Bumped by every replacement, so audio and callbacks
+    /// belonging to a discarded tail can be recognised and ignored.
+    private(set) var tailGeneration: UInt64 = 1
 
     /// Injected so tests can drive the clock deterministically instead of sleeping.
     var clockOverride: (() -> AVAudioFramePosition)?
@@ -135,6 +138,7 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         timelineOffset = 0
         scheduleOriginFrame = 0
         monotonicFrame = 0
+        tailGeneration += 1
         engine.gainStage.reset()
         deactivateAudioSession?()
         state = .idle
@@ -170,6 +174,7 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             let segment = GaplessScheduledSegment(
                 playInstance: instances.allocate(), itemID: entry.itemID,
                 songID: entry.track.trackID, generation: entry.generation,
+                tailGeneration: tailGeneration,
                 startFrame: start, frameCount: entry.track.renderFrames)
             engine.player.scheduleSegment(file, startingFrame: entry.track.trim.startFrame,
                                           frameCount: entry.track.trim.frameCount, at: nil,
@@ -188,14 +193,27 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     func resetTail() -> AVAudioFramePosition {
         let resumeFrame = renderFrame
         let wasPlaying = state == .playing
+        // `AVAudioPlayerNode` has no surgical per-buffer cancellation: `stop()` discards *every*
+        // pending schedule, including the audible one. That is the only mechanism available, so a
+        // tail replacement is always a stop-and-reschedule, and the audible position is preserved by
+        // arithmetic (the timeline offset) rather than by the node.
         engine.player.stop()
+        tailGeneration += 1
         timelineOffset = resumeFrame
         scheduleOriginFrame = resumeFrame
         // Keep the audible segment's record; everything after it is gone.
         scheduledSegments.removeAll { $0.startFrame > resumeFrame }
+        // Play instances belonging to discarded segments must not be able to emit a boundary later.
+        let surviving = Set(scheduledSegments.map(\.playInstance))
+        reportedInstances.formIntersection(surviving.union(reportedInstances.filter { instance in
+            scheduledSegments.contains { $0.playInstance == instance }
+        }))
         if wasPlaying, engine.engine.isRunning { engine.player.play() }
         return resumeFrame
     }
+
+    /// Whether a callback or event carrying `tailGeneration` still describes live audio.
+    func isCurrentTail(_ candidate: UInt64) -> Bool { candidate == tailGeneration }
 
     // MARK: - Clock
 
@@ -257,7 +275,8 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             reportedInstances.insert(segment.playInstance)
             pendingBoundaryEvents.append(GaplessBoundaryEvent(
                 playInstance: segment.playInstance, itemID: segment.itemID, songID: segment.songID,
-                generation: segment.generation, scheduledStartFrame: segment.startFrame,
+                generation: segment.generation, tailGeneration: segment.tailGeneration,
+                scheduledStartFrame: segment.startFrame,
                 observedRenderFrame: frame,
                 replayGainLinear: engine.gainStage.currentGain.linear,
                 eqEnabled: engine.eqStage.settings.isEnabled,

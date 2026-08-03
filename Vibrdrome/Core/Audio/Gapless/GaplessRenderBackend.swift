@@ -65,8 +65,16 @@ struct GaplessScheduledSegment: Sendable, Equatable {
     let playInstance: GaplessPlayInstanceID
     let itemID: GaplessQueueItemID
     let songID: String
-    /// Generation the schedule was created under; anything older is stale.
+    /// Queue generation the schedule was created under; anything older is stale.
     let generation: UInt64
+    /// Which scheduled *tail* this segment belongs to.
+    ///
+    /// Deliberately separate from queue generation, slot ID and play instance. A seek or a skip
+    /// replaces the tail without changing the queue at all, so queue generation cannot distinguish
+    /// the old audio from the new; and the same slot can appear in both the discarded tail and its
+    /// replacement, so slot ID cannot either. Callbacks carrying a superseded tail generation are
+    /// ignored outright.
+    let tailGeneration: UInt64
     let startFrame: AVAudioFramePosition
     let frameCount: AVAudioFramePosition
     var endFrame: AVAudioFramePosition { startFrame + frameCount }
@@ -78,6 +86,8 @@ struct GaplessBoundaryEvent: Sendable, Equatable {
     let itemID: GaplessQueueItemID
     let songID: String
     let generation: UInt64
+    /// Tail this boundary came from; a superseded tail must never emit one.
+    let tailGeneration: UInt64
     let scheduledStartFrame: AVAudioFramePosition
     /// Where the clock actually was when the crossing was observed.
     let observedRenderFrame: AVAudioFramePosition
