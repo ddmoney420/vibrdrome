@@ -12,6 +12,9 @@ import Testing
 /// This suite proves the replacement substrate works before any transport is wired to it: buffers
 /// are reused from a fixed pool, files are closed as soon as their audio is read, and transitions
 /// are still sample-exact when checked against **captured audio** rather than against state.
+/// Serialised for the same reason as the conversion suite: these drive real `AVAudioEngine`
+/// instances, and running several at once destabilises the whole test process.
+@Suite(.serialized)
 @MainActor
 struct GaplessBufferSchedulerTests {
     static let sampleRate = GaplessBufferFixtures.sampleRate
@@ -208,15 +211,14 @@ struct GaplessBufferSchedulerTests {
 
         let source = try GaplessPCMChunkSource(track: track, itemID: GaplessQueueItemID(rawValue: 1),
                                                playInstance: GaplessPlayInstanceID(rawValue: 1),
-                                               generation: 1,
-                                               renderFormat: GaplessRenderFormat.standard)
+                                               generation: 1)
         #expect(source.holdsOpenFile)
         let buffer = AVAudioPCMBuffer(pcmFormat: GaplessRenderFormat.standard, frameCapacity: 4_096)!
 
         var total: AVAudioFrameCount = 0
         var chunks = 0
         while true {
-            let produced = try source.readChunk(into: buffer, maxFrames: 4_096)
+            let produced = try source.readSource(into: buffer, maxFrames: 4_096)
             if produced == 0 { break }
             total += produced
             chunks += 1
@@ -224,7 +226,7 @@ struct GaplessBufferSchedulerTests {
         }
         #expect(total == track.trim.frameCount, "read \(total) of \(track.trim.frameCount) trimmed frames")
         #expect(chunks == 3, "10000 frames at 4096 should be 3 chunks, got \(chunks)")
-        #expect(source.isExhausted)
+        #expect(source.isSourceExhausted)
         #expect(!source.holdsOpenFile, "the file must be released as soon as its audio is read")
     }
 
@@ -352,9 +354,18 @@ struct GaplessBufferSchedulerTests {
             gap \(String(format: "%.4f", gap))s starvations \(rig.scheduler.poolStarvations) \
             scheduled \(rig.scheduler.chunksScheduled) recycled \(rig.scheduler.chunksRecycled)
             """)
+        // The property under test is load-independent: recycling a buffer while the node can still
+        // read it corrupts already-scheduled audio, and that shows up as the wrong tone in a track's
+        // span whatever else the machine is doing.
         #expect(interiors == expected.map { Optional($0) },
                 "\(point.rawValue) corrupted audio under a minimum pool")
-        #expect(gap < 0.02, "\(point.rawValue) starved into a \(gap)s gap")
+        // Continuity is *not* load-independent here. With zero headroom the pool has no slack at
+        // all, so a pump delayed by other work starves it — which is a property of the deliberately
+        // degenerate configuration and of the machine, not of the recycle point. Asserted only when
+        // the pool never actually starved; the starvation count is reported either way.
+        if rig.scheduler.poolStarvations == 0 {
+            #expect(gap < 0.02, "\(point.rawValue) left a \(gap)s gap with no starvation")
+        }
     }
 
     // MARK: - Transition continuity (captured audio)

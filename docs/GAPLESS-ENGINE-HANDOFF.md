@@ -658,10 +658,92 @@ diverge, and boundary detection reads the segment records — so the divergence 
 boundary at the wrong frame rather than as an error. Reconcile the record against produced frames
 when a track's final chunk is scheduled, as part of transport integration.
 
+### Checkpoint B — explicit PCM conversion (DONE)
+
+**Stable graph format.** Fixed by Vibrdrome, not adopted from the device: `PersistentGaplessEngine`
+connects every node with `GaplessRenderFormat.standard` — 44,100 Hz, 2 ch, Float32,
+non-interleaved, 8 bytes/frame, 1 frame/packet — and holds it for the life of the engine. Measured
+live: the mixer reports 44,100/2 before and after a mixed-format album, with no graph reconstruction.
+Route-driven reconstruction stays a later system-integration concern. Note the output *node* runs at
+48 kHz on this host; the graph does not follow it, which is why the capture tap needed calibrating.
+
+**Substrate.** `source file → bounded decode → GaplessPCMConverter → fixed buffer pool →
+scheduleBuffer`. `GaplessPCMChunkSource` is now a pure source-format reader; the converter belongs to
+the scheduler, because converter lifetime is a policy question a single track must not decide.
+
+**Frames are counted, never computed.** A track's segment record opens when its first chunk is
+scheduled and is *reconciled to actually produced output* when its last chunk is scheduled.
+`renderFrames` and the rate ratio are planning estimates only. This closes the Checkpoint A gap.
+
+Measured 48 kHz → 44.1 kHz, four 24,000-frame parts: **22,050 produced each, diff 0**, tiling
+0 / 22,050 / 44,100 / 66,150. Real Navidrome Opus (48 kHz mono, `wholeFile` trim), four parts:
+**480,000 source frames → 441,000 output frames each, diff 0**, total 1,764,000, fd delta 0.
+
+**Truncated input.** A file cut on disk shortens *its own* record and the next track starts at the
+real end — `t0:0+11025, t1:11025+22050` for both the direct and converted paths. Note a WAV header
+that merely *claims* more audio is resolved by `AVAudioFile` from the real data, so it never reaches
+the scheduler; the bytes have to actually be missing.
+
+**Converter lifecycle — measured, and the result is a constraint, not a preference.** On one
+sample-continuous 48 kHz sine split into four parts:
+
+| lifecycle | built | reused | boundary step | interior step | ratio | gap |
+|---|---|---|---|---|---|---|
+| perTrack | 4 | 0 | 0.04200 | 0.03998 | 1.05 | 0.0000 s |
+| reuseWhileFormatMatches | 4 | 0 | 0.04200 | 0.03998 | 1.05 | 0.0000 s |
+
+Reuse measured **0 in every run**. Not a bug: reuse is gated on the retained converter not being held
+by a live source, and the preparation window keeps up to three tracks enqueued at once, so the
+previous track's converter is still in use when the next is prepared. Handing one `AVAudioConverter`
+to two concurrently-converting tracks would interleave their input into one resampler state. **Object
+reuse is therefore structurally unavailable under the preparation window, and per-track converters
+are what the architecture actually permits.** A boundary/interior step ratio of 1.05 on a continuous
+sine says the per-track prime-and-flush cycle produces no click.
+
+**Channel policy.** Mono→stereo up-mixes with the frame count unchanged (22,050 in, 22,050 out, both
+channels identical). Stereo passes through. **More than two channels is refused** with
+`unsupportedChannelCount` — an explicit capability result, pending an owner decision on downmix.
+Channels are never silently dropped. (Note `AVAudioFormat(commonFormat:sampleRate:channels:...)`
+returns nil above stereo without an explicit layout.)
+
+**Conversion failure**, all four injection points — pool returns to 6/6, no segment claims a span
+that was not produced, segments still tile, no file left open:
+
+    creation          enqueueFailures 2  productionFailures 0  segments []
+    beforeFirstOutput enqueueFailures 0  productionFailures 2  segments []
+    afterChunks(2)    enqueueFailures 0  productionFailures 2  segments [f0:8192, f1:8192]
+    flush             enqueueFailures 0  productionFailures 2  segments [f0:44100, f1:44100]
+
+Cancellation mid-conversion returns every buffer (6/6), clears live files to 0, bumps the tail
+generation, and re-anchors the cursor.
+
+**Mixed format** — 44.1/2 → 48/1 → 44.1/1 → 48/2, each landing at 22,050 render frames, tiling
+exactly, graph unchanged.
+
+**Chunk size reconfirmed under conversion** (2048/4096/8192): all correct, zero starvation, zero gap;
+4,096 keeps half the callback rate of 2,048 at comparable CPU. **Default unchanged at 4,096.**
+
+**Long acceptance runs are gated.** `chunkSizeComparison`, `chunkSizeUnderConversion` and the
+1,000-transition runs are minutes-long real-time audio. Ungated they ran in parallel with every other
+audio suite and the test process restarted with "unexpected exit, crash, or test timeout", taking
+unrelated suites down with it. They now follow the soak/hour convention:
+
+    TEST_RUNNER_GAPLESS_BUFFER_GATE=1 xcodebuild ... -only-testing:VibrdromeTests/GaplessBufferMemoryTests test
+
+The gapless buffer suites are also `@Suite(.serialized)` — overlapping `AVAudioEngine` instances,
+one of them in manual rendering mode, destabilise the process.
+
+**1,000-transition acceptance, every transition converting** (48 kHz mono, 64 distinct sources):
+
+    converted=false  growth 0.19 MB  fdΔ -5  peakFiles 3  liveConverters 0  chunks 2200/2200
+    converted=true   growth 0.00 MB  fdΔ -2  peakFiles 2  liveConverters 0  convBuilt 1100
+                     starvations 0   after stop: fd 26, files 0
+
+Converters are built per track (1,100 over the run) and every one is released as its track drains —
+live count returns to 0, so nothing is retained because a track merely finished.
+
 ### Still to do
 
-- **Checkpoint B** — explicit `GaplessPCMConverter` (48 kHz Opus, mono, channel layouts), converter
-  lifecycle and continuity, mixed-format policy.
 - **Checkpoint C** — full format + transport integration, processing/Now Playing/scrobble parity,
   removal of the production `AVAudioFile` cache in `GaplessRealTimeBackend`.
 - **Checkpoint D** — genuine `TEST_RUNNER_GAPLESS_SOAK=full` and `TEST_RUNNER_GAPLESS_HOUR=1` runs.

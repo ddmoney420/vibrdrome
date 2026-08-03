@@ -17,10 +17,25 @@ enum GaplessBufferFixtures {
     /// Write a stereo 16-bit WAV of one steady tone.
     static func writeStereoWav(url: URL, frequency: Double, frames: Int,
                                sampleRate: Double = sampleRate) throws {
-        let channels: UInt16 = 2, bits: UInt16 = 16
+        try writeWav(url: url, frequency: frequency, frames: frames, sampleRate: sampleRate,
+                     channelCount: 2)
+    }
+
+    /// Write a 16-bit WAV at any rate and channel count, optionally starting at a phase offset so
+    /// consecutive files form one sample-continuous signal.
+    ///
+    /// The phase offset is what makes a converter-continuity test meaningful: if four parts are
+    /// independent tones, a boundary artifact hides inside the tone change. If they are four parts
+    /// of *one* sine, any discontinuity at a join is the converter's.
+    static func writeWav(url: URL, frequency: Double, frames: Int, sampleRate: Double,
+                         channelCount: UInt16, phaseOffsetFrames: Int = 0,
+                         declaredFrames: Int? = nil) throws {
+        let channels = channelCount, bits: UInt16 = 16
         let blockAlign = channels * bits / 8
-        let dataSize = UInt32(frames * Int(blockAlign))
-        var data = Data(capacity: Int(dataSize) + 44)
+        // A declared count larger than what is written produces a file whose header promises more
+        // audio than it contains — the truncated-source case.
+        let dataSize = UInt32((declaredFrames ?? frames) * Int(blockAlign))
+        var data = Data(capacity: frames * Int(blockAlign) + 44)
         func ascii(_ text: String) { data.append(contentsOf: Array(text.utf8)) }
         func u32(_ value: UInt32) {
             var little = value.littleEndian
@@ -35,15 +50,44 @@ enum GaplessBufferFixtures {
         u16(blockAlign); u16(bits)
         ascii("data"); u32(dataSize)
 
-        var samples = [Int16](repeating: 0, count: frames * 2)
+        var samples = [Int16](repeating: 0, count: frames * Int(channels))
         for frame in 0..<frames {
-            let value = sin(2.0 * .pi * frequency * Double(frame) / sampleRate) * 0.5
+            let position = Double(frame + phaseOffsetFrames)
+            let value = sin(2.0 * .pi * frequency * position / sampleRate) * 0.5
             let scaled = Int16((max(-1, min(1, value)) * 32_767).rounded())
-            samples[frame * 2] = scaled
-            samples[frame * 2 + 1] = scaled
+            for channel in 0..<Int(channels) { samples[frame * Int(channels) + channel] = scaled }
         }
         samples.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
         try data.write(to: url)
+    }
+
+    /// `count` files that together are one sample-continuous tone, so a join defect cannot hide
+    /// behind a change of material.
+    static func makeContinuousParts(count: Int, partFrames: Int, frequency: Double,
+                                    sampleRate: Double, channelCount: UInt16,
+                                    in directory: URL) throws -> [URL] {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var urls: [URL] = []
+        for index in 0..<count {
+            let url = directory.appendingPathComponent("part\(index).wav")
+            try writeWav(url: url, frequency: frequency, frames: partFrames, sampleRate: sampleRate,
+                         channelCount: channelCount, phaseOffsetFrames: index * partFrames)
+            urls.append(url)
+        }
+        return urls
+    }
+
+    /// Largest absolute sample-to-sample step in a window — a click shows up here as a step far
+    /// larger than a continuous tone can produce.
+    static func maximumStep(_ samples: ArraySlice<Float>) -> Float {
+        guard samples.count > 1 else { return 0 }
+        var peak: Float = 0
+        var previous = samples[samples.startIndex]
+        for index in (samples.startIndex + 1)..<samples.endIndex {
+            peak = max(peak, abs(samples[index] - previous))
+            previous = samples[index]
+        }
+        return peak
     }
 
     /// A directory of `count` distinct stereo tone files, cycling through `tones`.

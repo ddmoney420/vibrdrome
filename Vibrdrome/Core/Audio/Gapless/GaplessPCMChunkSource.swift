@@ -14,16 +14,19 @@ struct GaplessChunkDescriptor: Sendable, Equatable {
 
     /// Frame of the *source file* this chunk starts at, already inside the trimmed range.
     let sourceStartFrame: AVAudioFramePosition
+    /// Source frames consumed for this chunk. Differs from `timelineFrameCount` whenever a
+    /// converter is in the path.
     let sourceFrameCount: AVAudioFrameCount
     /// Frame on the engine's render timeline this chunk starts at.
     let timelineStartFrame: AVAudioFramePosition
-    /// Frames contributed to the render timeline. Equal to `sourceFrameCount` while no sample-rate
-    /// conversion is in the path; kept separate so it stays correct once one is.
+    /// Output frames **actually produced** and scheduled. Never an estimate.
     let timelineFrameCount: AVAudioFrameCount
 
     let chunkIndex: Int
     let isFirstChunk: Bool
     let isFinalChunk: Bool
+    /// Whether a converter produced this chunk, for diagnostics that need to separate the two paths.
+    let wasConverted: Bool
 
     var timelineEndFrame: AVAudioFramePosition {
         timelineStartFrame + AVAudioFramePosition(timelineFrameCount)
@@ -31,35 +34,36 @@ struct GaplessChunkDescriptor: Sendable, Equatable {
 }
 
 enum GaplessChunkSourceError: Error, LocalizedError {
-    /// The decoded format does not match the render graph. Explicit rather than silently coerced:
-    /// this is exactly the case an explicit converter has to own.
-    case formatMismatch(trackID: String, sourceRate: Double, sourceChannels: AVAudioChannelCount)
     case readFailed(trackID: String, underlying: Error)
     case seekFailed(trackID: String)
+    /// The source's decoded format cannot be played under the current channel policy.
+    case unsupportedFormat(trackID: String, reason: String)
 
     var errorDescription: String? {
         switch self {
-        case .formatMismatch(let id, let rate, let channels):
-            return "Track \(id) decodes to \(rate) Hz / \(channels)ch, which the render graph cannot take directly"
         case .readFailed(let id, let error):
             return "Track \(id) could not be read: \(error.localizedDescription)"
         case .seekFailed(let id):
             return "Track \(id) could not seek to its trimmed start"
+        case .unsupportedFormat(let id, let reason):
+            return "Track \(id) cannot be played: \(reason)"
         }
     }
 }
 
-/// Streams one track's trimmed audio as bounded PCM chunks, then lets go of the file.
+/// Reads one track's trimmed audio **in its own source format**, then lets go of the file.
 ///
-/// The file is opened here, read here, and closed here — it is never handed to the player node.
-/// That is the whole point: in the tested persistent `AVAudioPlayerNode` configuration,
-/// `scheduleSegment` retains each supplied `AVAudioFile` and its descriptor until the node is
-/// stopped, so a long session grows without bound in both. A chunk source holds its file only while
-/// there is still audio to read from it, which bounds open files by the preparation window rather
-/// than by the number of tracks played.
+/// Deliberately knows nothing about the render format or about conversion. Conversion is a separate,
+/// independently fallible stage owned by the scheduler, because a converter may legitimately outlive
+/// a single track — which is a policy question this type must not silently decide.
 ///
-/// Trim is applied before any chunk is produced, so encoder delay and end padding are never decoded
-/// as music and never reach the graph.
+/// The file is opened here, read here, and closed here; it is never handed to the player node. In
+/// the tested persistent `AVAudioPlayerNode` configuration, `scheduleSegment` retains each supplied
+/// `AVAudioFile` and file descriptor until the node is stopped, so a long session grows without
+/// bound in both. A chunk source holds its file only while there is still audio to read from it.
+///
+/// Trim is applied before any audio is produced, so encoder delay and end padding are never decoded
+/// as music.
 final class GaplessPCMChunkSource {
     /// Live `AVAudioFile` objects held by chunk sources anywhere in the process.
     ///
@@ -84,16 +88,22 @@ final class GaplessPCMChunkSource {
     let itemID: GaplessQueueItemID
     let playInstance: GaplessPlayInstanceID
     let generation: UInt64
+    /// The format this source's audio actually decodes to.
+    let processingFormat: AVAudioFormat
 
     private var file: AVAudioFile?
     /// Frames of the trimmed range already read.
     private(set) var framesRead: AVAudioFrameCount = 0
-    private(set) var chunksProduced = 0
     private(set) var isClosed = false
+    /// Set when a read returned fewer frames than the trim range promised — a truncated or
+    /// mis-declared file. Recorded rather than ignored, because the timeline must be built from what
+    /// the file actually contained.
+    private(set) var endedEarly = false
 
-    /// True once every trimmed frame has been read and the file has been released.
-    var isExhausted: Bool { framesRead >= track.trim.frameCount }
-    var framesRemaining: AVAudioFrameCount { track.trim.frameCount - min(framesRead, track.trim.frameCount) }
+    var isSourceExhausted: Bool { framesRead >= track.trim.frameCount || isClosed }
+    var framesRemaining: AVAudioFrameCount {
+        track.trim.frameCount - min(framesRead, track.trim.frameCount)
+    }
     /// Whether this source is still holding an open file (and therefore a descriptor).
     var holdsOpenFile: Bool { file != nil }
 
@@ -101,7 +111,7 @@ final class GaplessPCMChunkSource {
     /// into the track without changing the trim policy.
     init(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
          playInstance: GaplessPlayInstanceID, generation: UInt64,
-         renderFormat: AVAudioFormat, startFrameOffset: AVAudioFrameCount = 0) throws {
+         startFrameOffset: AVAudioFrameCount = 0) throws {
         self.track = track
         self.itemID = itemID
         self.playInstance = playInstance
@@ -113,15 +123,11 @@ final class GaplessPCMChunkSource {
         } catch {
             throw GaplessChunkSourceError.readFailed(trackID: track.trackID, underlying: error)
         }
-        let format = opened.processingFormat
-        // `read(into:)` fills at the file's processing format. Anything else has to be converted,
-        // and that conversion is a separate, independently fallible stage — not something to paper
-        // over here by handing the graph a buffer it cannot mix.
-        guard format.sampleRate == renderFormat.sampleRate,
-              format.channelCount == renderFormat.channelCount else {
-            throw GaplessChunkSourceError.formatMismatch(trackID: track.trackID,
-                                                         sourceRate: format.sampleRate,
-                                                         sourceChannels: format.channelCount)
+        processingFormat = opened.processingFormat
+        guard GaplessChannelPolicy.supports(sourceChannels: processingFormat.channelCount) else {
+            throw GaplessChunkSourceError.unsupportedFormat(
+                trackID: track.trackID,
+                reason: "\(processingFormat.channelCount) channels exceeds the stereo policy")
         }
         framesRead = min(startFrameOffset, track.trim.frameCount)
         opened.framePosition = track.trim.startFrame + AVAudioFramePosition(framesRead)
@@ -132,18 +138,20 @@ final class GaplessPCMChunkSource {
         Self.adjustLiveFiles(1)
     }
 
-    /// Read the next chunk into a pooled buffer. Returns the frames written, or 0 when the trimmed
-    /// range is finished — at which point the file is already closed.
+    /// Read source-format PCM into `buffer`. Returns frames written, or 0 when the trimmed range is
+    /// finished — at which point the file is already closed.
     ///
-    /// Never reads past the trimmed range, so end padding cannot leak into the last chunk of a
-    /// track and become audible at a boundary.
+    /// Never reads past the trimmed range, so end padding cannot leak into the last chunk and become
+    /// audible at a boundary.
     @discardableResult
-    func readChunk(into buffer: AVAudioPCMBuffer, maxFrames: AVAudioFrameCount) throws -> AVAudioFrameCount {
-        guard !isExhausted, let file else {
+    func readSource(into buffer: AVAudioPCMBuffer,
+                    maxFrames: AVAudioFrameCount? = nil) throws -> AVAudioFrameCount {
+        guard !isSourceExhausted, let file else {
             close()
             return 0
         }
-        let wanted = min(maxFrames, min(buffer.frameCapacity, framesRemaining))
+        let limit = min(maxFrames ?? buffer.frameCapacity, buffer.frameCapacity)
+        let wanted = min(limit, framesRemaining)
         guard wanted > 0 else {
             close()
             return 0
@@ -156,11 +164,15 @@ final class GaplessPCMChunkSource {
         }
         let produced = buffer.frameLength
         framesRead += produced
-        chunksProduced += 1
         // A short read means the decoder has no more audio, whatever the container claimed. Closing
         // now keeps the descriptor bound tight rather than waiting for an exhaustion check that a
         // truncated file would never satisfy.
-        if produced < wanted || isExhausted { close() }
+        if produced < wanted {
+            endedEarly = true
+            close()
+        } else if isSourceExhausted {
+            close()
+        }
         return produced
     }
 

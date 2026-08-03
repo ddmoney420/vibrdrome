@@ -9,6 +9,27 @@ import Testing
 /// because the player node retained each `AVAudioFile` until it was stopped. The question here is
 /// not whether buffers are tidier in principle but whether 1,000 transitions with a fresh file open
 /// every time leave memory and descriptors flat.
+/// Gate for the long acceptance runs in this file.
+///
+/// These are minutes-long real-time audio runs. Left ungated they run in parallel with every other
+/// audio suite, and the process was observed restarting with "unexpected exit, crash, or test
+/// timeout" — taking unrelated suites down with it. They are acceptance gates, not per-commit
+/// regressions, so they follow the same explicit-opt-in convention as the soak and hour tests.
+///
+/// Run them with:
+///
+///     TEST_RUNNER_GAPLESS_BUFFER_GATE=1 xcodebuild ... -only-testing:VibrdromeTests/GaplessBufferMemoryTests test
+///
+/// Nonisolated so Swift Testing can evaluate `.enabled(if:)` outside the actor.
+enum GaplessBufferGate {
+    static var isEnabled: Bool {
+        ProcessInfo.processInfo.environment["GAPLESS_BUFFER_GATE"] == "1"
+    }
+}
+
+/// Serialised: several of these drive a real-time `AVAudioEngine`, and overlapping engines have
+/// already produced phantom discontinuities in this work.
+@Suite(.serialized)
 @MainActor
 struct GaplessBufferMemoryTests {
     static let sampleRate = GaplessBufferFixtures.sampleRate
@@ -131,7 +152,8 @@ struct GaplessBufferMemoryTests {
     }
 
     /// The chunk-size matrix. Reports every candidate; the choice is made from the numbers.
-    @Test func chunkSizeComparison() async throws {
+    @Test(.enabled(if: GaplessBufferGate.isEnabled))
+    func chunkSizeComparison() async throws {
         let candidates: [AVAudioFrameCount] = [2_048, 4_096, 8_192, 16_384, 32_768]
         // One discarded run first. The audio stack's one-time allocation and first-touch cost land
         // on whichever candidate runs first, and charging them to 2048 would misreport it by an
@@ -160,6 +182,123 @@ struct GaplessBufferMemoryTests {
         }
     }
 
+    // MARK: - Chunk size under conversion
+
+    /// Reconfirm the 4,096 choice with a resampler in the path.
+    ///
+    /// Checkpoint A picked it against same-format PCM, where the pump only had to read and schedule.
+    /// Conversion adds a staging buffer sized from the rate ratio and a converter call per chunk, so
+    /// the balance between callback overhead and lead time is not the same measurement.
+    @Test(.enabled(if: GaplessBufferGate.isEnabled))
+    func chunkSizeUnderConversion() async throws {
+        let candidates: [AVAudioFrameCount] = [2_048, 4_096, 8_192]
+        _ = try await Self.measureConvertedChunkSize(4_096)          // discard warm-up
+        var results: [(AVAudioFrameCount, Bool, Double)] = []
+        for chunkFrames in candidates {
+            let result = try await Self.measureConvertedChunkSize(chunkFrames)
+            results.append((chunkFrames, result.ordered, result.gap))
+        }
+        for result in results {
+            #expect(result.1, "chunk \(result.0) played out of order under conversion")
+            #expect(result.2 < 0.02, "chunk \(result.0) left a \(result.2)s gap")
+        }
+    }
+
+    static func measureConvertedChunkSize(_ chunkFrames: AVAudioFrameCount) async throws
+        -> (ordered: Bool, gap: Double) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gcsz-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let trackCount = 6
+        var urls: [URL] = []
+        for index in 0..<trackCount {
+            let url = directory.appendingPathComponent("s\(index).wav")
+            try GaplessBufferFixtures.writeWav(
+                url: url, frequency: GaplessBufferFixtures.tones[index],
+                frames: 24_000, sampleRate: 48_000, channelCount: 1)
+            urls.append(url)
+        }
+
+        let engine = PersistentGaplessEngine()
+        let scheduler = GaplessBufferScheduler(player: engine.player,
+                                               renderFormat: engine.renderFormat,
+                                               chunkFrames: chunkFrames)
+        for (index, url) in urls.enumerated() {
+            let track = try GaplessTrackPreparer.describe(trackID: "s\(index)", fileURL: url,
+                                                          renderSampleRate: Self.sampleRate)
+            try scheduler.enqueue(track: track, itemID: GaplessQueueItemID(rawValue: UInt64(index)),
+                                  generation: 1)
+        }
+
+        let capture = GaplessRealTimeCapture(engine: engine)
+        capture.start()
+        var scheduleSamples: [Double] = []
+        let cpuStart = cpuSeconds()
+        let wallStart = Date()
+        scheduler.pump()
+        try engine.engine.start()
+        engine.player.play()
+        let deadline = Date().addingTimeInterval(12)
+        while Date() < deadline {
+            let started = DispatchTime.now().uptimeNanoseconds
+            scheduler.pump()
+            scheduleSamples.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000)
+            if !scheduler.hasPendingAudio, scheduler.outstandingCallbackCount == 0 { break }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        try? await Task.sleep(for: .milliseconds(250))
+        capture.stop()
+        let wall = Date().timeIntervalSince(wallStart)
+        let cpu = cpuSeconds() - cpuStart
+        // Read before the tail replacement below, which discards every segment record and resets
+        // the recycle inbox — sampling either afterwards reports zero.
+        let playedSegments = scheduler.segments
+        let callbacks = scheduler.inbox.totalDeposits
+
+        // Tail replacement and seek, timed with a converter in the path.
+        let tailStart = DispatchTime.now().uptimeNanoseconds
+        engine.player.stop()
+        scheduler.resetAfterNodeStop(resumeTimelineFrame: scheduler.timelineCursor)
+        let replacement = try GaplessTrackPreparer.describe(trackID: "tail", fileURL: urls[0],
+                                                            renderSampleRate: Self.sampleRate)
+        try scheduler.enqueue(track: replacement, itemID: GaplessQueueItemID(rawValue: 900),
+                              generation: 1)
+        scheduler.pump()
+        let tailMs = Double(DispatchTime.now().uptimeNanoseconds - tailStart) / 1_000_000
+
+        let seekStart = DispatchTime.now().uptimeNanoseconds
+        engine.player.stop()
+        scheduler.resetAfterNodeStop(resumeTimelineFrame: scheduler.timelineCursor)
+        let seekTrack = try GaplessTrackPreparer.describe(trackID: "seek", fileURL: urls[1],
+                                                          renderSampleRate: Self.sampleRate)
+        try scheduler.enqueue(track: seekTrack, itemID: GaplessQueueItemID(rawValue: 901),
+                              generation: 1, startFrameOffset: 12_000)
+        scheduler.pump()
+        let seekMs = Double(DispatchTime.now().uptimeNanoseconds - seekStart) / 1_000_000
+
+        let expected = (0..<trackCount).map { GaplessBufferFixtures.tones[$0] }
+        let interiors = GaplessConversionTests.tonesInSegments(capture, segments: playedSegments)
+        let gap = capture.longestSilenceSeconds(sampleRate: Self.sampleRate)
+        let sorted = scheduleSamples.sorted()
+        print(String(format: """
+            CONVCHUNK %6d  sched %6.1f us  cb/s %6.1f  cpu %5.1f%%  pool %7.1f KB  \
+            starv %d  tail %6.2f ms  seek %6.2f ms  order %@  gap %.4f s
+            """,
+            Int(chunkFrames), sorted.isEmpty ? 0 : sorted[sorted.count / 2],
+            wall > 0 ? Double(callbacks) / wall : 0,
+            wall > 0 ? cpu / wall * 100 : 0,
+            Double(scheduler.pool.allocatedBytes) / 1_024, scheduler.poolStarvations,
+            tailMs, seekMs,
+            (interiors == expected.map { Optional($0) } ? "OK" : "WRONG") as NSString, gap))
+
+        engine.player.stop()
+        engine.engine.stop()
+        let ordered = interiors == expected.map { Optional($0) }
+        scheduler.resetAfterNodeStop(resumeTimelineFrame: 0)
+        return (ordered, gap)
+    }
+
     // MARK: - 1,000-transition memory and descriptor acceptance
 
     struct MemorySample {
@@ -183,7 +322,8 @@ struct GaplessBufferMemoryTests {
     /// Enqueueing is done on demand — at most three tracks ahead — because that is what the
     /// preparation window does in production. Enqueueing all 1,000 up front would open 1,000 files
     /// at once and prove nothing about the steady state.
-    @Test func thousandTransitionsPlateauInMemoryAndDescriptors() async throws {
+    @Test(.enabled(if: GaplessBufferGate.isEnabled), arguments: [false, true])
+    func thousandTransitionsPlateauInMemoryAndDescriptors(converted: Bool) async throws {
         let warmUpTransitions = 100
         let windowSize = 200
         let windows = 5
@@ -193,8 +333,22 @@ struct GaplessBufferMemoryTests {
                                                           targetScheduledChunks: 4)
         defer { GaplessBufferSchedulerTests.teardown(rig) }
         // 64 distinct sources: larger than the old 6-entry file cache, and larger than any cache it
-        // would be safe to hold open, so a cache could not mask the result.
-        let urls = try GaplessBufferFixtures.makeAlbum(count: 64, frames: 4_410, in: rig.directory)
+        // would be safe to hold open, so a cache could not mask the result. The converted variant
+        // uses 48 kHz mono — the shape real Opus arrives in — so every one of the 1,000 transitions
+        // runs a converter as well as a decoder.
+        var urls: [URL] = []
+        if converted {
+            for index in 0..<64 {
+                let url = rig.directory.appendingPathComponent("c\(index).wav")
+                try GaplessBufferFixtures.writeWav(
+                    url: url,
+                    frequency: GaplessBufferFixtures.tones[index % GaplessBufferFixtures.tones.count],
+                    frames: 4_800, sampleRate: 48_000, channelCount: 1)
+                urls.append(url)
+            }
+        } else {
+            urls = try GaplessBufferFixtures.makeAlbum(count: 64, frames: 4_410, in: rig.directory)
+        }
 
         var enqueued = 0
         func topUp() throws {
@@ -299,10 +453,12 @@ struct GaplessBufferMemoryTests {
         let afterStop = sample(final.transitions)
 
         print("""
-            BUFMEM RESULT  transitions \(measuredTransitions)  \
+            BUFMEM RESULT converted=\(converted)  transitions \(measuredTransitions)  \
             growth \(String(format: "%.2f", growthMB)) MB  \
             \(String(format: "%.2f", perTransitionKB)) KB/tx  \
             fdΔ \(descriptorGrowth)  peakFd \(peakDescriptors)  peakFiles \(peakLiveFiles)  \
+            liveConverters \(GaplessPCMConverter.liveCount)  \
+            convBuilt \(rig.scheduler.converterRebuilds) reused \(rig.scheduler.converterReuses)  \
             starvations \(deadlineMisses)  chunksScheduled \(rig.scheduler.chunksScheduled)  \
             recycled \(rig.scheduler.chunksRecycled)  \
             afterStop fp \(String(format: "%.1f", afterStop.footprintMB)) MB \
