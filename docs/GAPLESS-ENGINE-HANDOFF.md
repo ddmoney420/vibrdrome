@@ -1,6 +1,6 @@
 # Persistent Gapless Engine — Session Handoff
 
-**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `93ec188` (off `develop @ 3d82895`)
+**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `68b74cb` (off `develop @ 3d82895`)
 
 Resume point for building the persistent-output gapless audio engine. Self-contained — read this
 top to bottom and you have everything to continue in a fresh session.
@@ -12,9 +12,10 @@ top to bottom and you have everything to continue in a fresh session.
 Gapless playback is the **active release gate**. Build 60 release prep is **stopped**. The
 AVQueuePlayer path has two proven transition defects that no AVQueuePlayer-level fix resolves, so
 we are **rewriting playback onto a persistent-output `AVAudioEngine` graph**. **Checkpoints 1, 2 and
-3 item 1 are done and objectively proven** (offline render = frame-continuous across every boundary,
-for every delivery format). Next is **Checkpoint 3 items 2–6** (EQ, visualizers, ReplayGain,
-queue/repeat parity, seeking), then **Checkpoint 4** (one device build + acceptance).
+3 items 1–2 are done and objectively proven** (offline render = frame-continuous across every
+boundary, for every delivery format, with EQ bypassed / neutral / audible). Next is **Checkpoint 3
+items 3–6** (ReplayGain, visualizers, queue/repeat/seek parity, background + remote), then
+**Checkpoint 4** (one device build + acceptance).
 
 ---
 
@@ -62,7 +63,7 @@ Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.
 ## State of the branch
 
 ```
-feat/persistent-gapless-engine @ 93ec188   ← work here
+feat/persistent-gapless-engine @ 68b74cb   ← work here
 develop                        @ 3d82895   ← Build 60 fixes, DO NOT TOUCH
 diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, never merge
 ```
@@ -73,6 +74,14 @@ diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, neve
 - `Vibrdrome/Core/Audio/Gapless/PersistentGaplessEngine.swift` — persistent graph + offline render.
 - `VibrdromeTests/Core/GaplessEngineOfflineTests.swift` — objective frame-continuity tests.
 - `spike/gapless-proof/main.swift` — standalone repro (`swift main.swift`).
+
+**Committed on this branch (68b74cb — Checkpoint 3 item 2):**
+- `Vibrdrome/Core/Audio/Gapless/GaplessEQStage.swift` — persistent EQ, settings mapping, ramp+settle.
+- `Vibrdrome/Core/Audio/Gapless/GaplessGainStage.swift` — ReplayGain gain-stage interface (design).
+- `Vibrdrome/Core/Audio/Gapless/GaplessVisualizerTap.swift` — install-once tap seam (not yet wired).
+- `GaplessTrimDiagnostics` + trim hardening; `.mp3WithoutGaplessMetadata` rename.
+- Tests: `GaplessEQTests`. Spikes: `gapless-eq-cost`, `probe-server-transcode.sh`,
+  `fetch-server-album.sh`.
 
 **Committed on this branch (93ec188 — Checkpoint 3 item 1):**
 - `Vibrdrome/Core/Audio/Gapless/GaplessTrim.swift` — per-format schedulable range + Xing/LAME parsing.
@@ -94,7 +103,7 @@ AVQueuePlayer helpers — not part of the new engine.) Prior spec: `docs/release
 Persistent graph — never torn down across track boundaries:
 
 ```
-AVAudioPlayerNode → AVAudioUnitEQ(10-band) → AVAudioMixerNode(+visualizer tap) → engine.mainMixerNode → output
+AVAudioPlayerNode → gain stage → AVAudioUnitEQ(10-band) → output mixer(+visualizer tap) → engine.mainMixerNode → output
 ```
 
 - **Scheduler** (`GaplessScheduler`): frame-accounted rolling queue. Each item = {id, renderFrames,
@@ -106,8 +115,8 @@ AVAudioPlayerNode → AVAudioUnitEQ(10-band) → AVAudioMixerNode(+visualizer ta
   Float32, non-interleaved, 44.1 kHz stereo (`.standard`). Mono up-mixes to stereo (frame count
   unchanged). Sample-rate mismatch → convert ahead with `AVAudioConverter` (changes frame count →
   record converted frames per segment). Never silently downmix >2ch; use an explicit channel map.
-- **Decode/prefetch**: reuse `PredownloadManager` → decode from local cached file → schedule. Never
-  hit network at the boundary. Underrun must be reported (not disguised) with safe fallback.
+- **Decode/prefetch**: consume the download layer's cache → decode from the local file → schedule.
+  Never hit network at the boundary. Underrun must be reported (not disguised) with safe fallback.
 - **EQ**: `AVAudioUnitEQ` in the persistent graph; flat = transparent bypass; toggling must not
   rebuild the graph or recreate the player node. The old per-item `MTAudioProcessingTap` is NOT used.
 - **Visualizers**: persistent mixer tap feeds Classic (FFT/`AudioSpectrum`) + Native
@@ -175,12 +184,40 @@ padding 792 = 1368 frames per track, ~31 ms per join, 124 ms across a 4-track al
 `GaplessTrimPolicy` parses that header and the engine schedules `[delay, length - padding)` as an
 explicit segment, which restores exact continuity.
 
-**The one unfixable cell.** A live server-side transcode writes to a **non-seekable** stream, so the
-encoder can never go back and fill in the gapless header — verified directly: ffmpeg to a pipe emits
-no Xing/Info tag at all, while the same encode to a file does. Those sources report
-`.mp3WithoutGaplessHeader` and keep the codec's inserted frames rather than silently shipping a gap.
-**Mitigation to decide later (owner's call):** prefer the original format over MP3 transcoding when
-gapless matters, or prefer **Opus** as the transcode target — it measured frame-exact.
+**The cell that cannot be trimmed.** An MP3 carrying no trustworthy gapless metadata cannot be
+trimmed by the client, because the exact encoder delay and final padding are unknown. Reported as
+`.mp3WithoutGaplessMetadata`, which describes **that response** — not MP3, and not streaming in
+general. A server that supplied the same information another way, or spooled the encode to a
+complete file before delivering it, would trim normally.
+
+**Never apply a fallback constant.** A fixed 576/792 is right for one encoder at one setting; applied
+to anything else it deletes real audio or leaves padding in place. Either way it converts an honest
+"unsupported" into a silently wrong answer.
+
+### Measured against the owner's real Navidrome (2026-08-02)
+
+Probe: `spike/gapless-formats/probe-server-transcode.sh` (reads the Keychain itself; prints no
+credentials, tokens, or media URLs). Album fetch: `fetch-server-album.sh`.
+
+| | MP3 transcode | Opus transcode |
+|---|---|---|
+| HTTP | 200, `audio/mpeg` | 200, `audio/ogg` |
+| Delivery | 1st request chunked, 2nd had `content-length` (server caches the transcode) | complete response |
+| Repeatability | two identical requests byte-identical | — |
+| Xing / Info / LAME | **all absent** | n/a |
+| Delay + padding | **not recoverable** | n/a |
+| Codec / rate | mp3, 44.1 kHz, stereo | opus, **48 kHz**, stereo |
+| Decoded frames (10 s part) | 442368 (**+1368**) | 480000 (**exact**) |
+| Boundary continuity | **discontinuous at every join** | **frame-continuous at every join** |
+| Range requests | — | `206` — byte ranges supported |
+
+Caching the completed response does **not** make it trim-capable: caching cannot add metadata the
+encoder never wrote.
+
+**Recommendation (owner's decision, not blocking):** this server's MP3 transcode cannot be gapless.
+Its **Opus** transcode is gapless and measured frame-exact, so switching the transcode target to Opus
+— or serving originals — resolves it. FLAC, ALAC, AAC, stored MP3, and downloaded files are already
+frame-exact and unaffected. AirPlay behaviour with Opus is still to be checked (Checkpoint 4).
 
 **Note on `PredownloadManager`:** the new provider *consumes* what the download layer already
 cached, but does not drive `PredownloadManager` itself. That actor sleeps 10 s before its first
@@ -200,11 +237,67 @@ disagrees with an isolated re-run, suspect the harness before the engine.
 
 ---
 
-## What's NEXT — Checkpoint 3 items 2–6
+## What's DONE — Checkpoint 3 item 2 (persistent EQ)
+
+Graph, built once and never rebuilt:
+
+```
+AVAudioPlayerNode → gain stage → AVAudioUnitEQ → output mixer → mainMixerNode → output
+```
+
+A track boundary is no longer an EQ event — nothing is attached, detached, reset, or reconnected, so
+filter state carries across the join like any mid-track moment. No per-item `MTAudioProcessingTap`.
+
+**Existing settings mapped unchanged** (`GaplessEQStage`): 10 ISO bands (32 Hz–16 kHz), RBJ peaking
+shape at a fixed 1-octave bandwidth, ±12 dB clamp, presets and persistence untouched. The
+`EQTapProcessor` pre-gain clip guard becomes the unit's `globalGain` — identical result, because
+scaling commutes with a linear filter chain.
+
+**Two findings that changed the implementation** (both found by measurement, neither by ear):
+
+1. **A one-step EQ change clicks.** Worst sample-to-sample delta ~5× the signal's own in-cycle step.
+   Fixed with a **50 ms parameter ramp** driven in *audio* time (the render loop), not wall time —
+   which is also why it reproduces identically offline.
+2. **Flattening the bands is not enough to engage bypass.** The biquads still hold decaying energy
+   from the previous curve, and bypassing discards it in a single sample: a step of **0.071**, ~8×
+   in-cycle. Settle time was measured directly (50 ms already clean) and a **200 ms transparent
+   settle** now runs before bypass engages. Re-enabling during the settle cancels it, so bypass is
+   never switched under a live signal.
+
+Bypass is kept because it is confirmed to cost nothing: **0.0043% of one core bypassed vs 0.13%
+active** (`spike/gapless-eq-cost`), memory unchanged in every state. Device CPU/thermal/battery
+remain a Checkpoint 4 measurement.
+
+**Proven:** frame continuity with EQ bypassed, active-neutral, and active with an audible preset;
+scheduled frame ranges **identical** with EQ on and off; graph node identity unchanged across
+enable/disable/band-change cycles; mid-render enable, band change, disable and re-enable (including
+immediately before boundaries) leave no discontinuity. 829 tests green, 0 warnings.
+
+**Filter-state reset semantics** — a persistent filter carries state across a *continuous* join,
+which is what an album should do. It is **not** reset by a track boundary or by an EQ change. It
+*will* be discontinuous wherever the audio itself is: a manual skip, a seek, or a queue replacement
+splices unrelated audio, so the filter's carried state belongs to the previous material. That is
+correct and inaudible in practice (the state decays in tens of milliseconds), but it is the reason
+seek/skip must not be treated as gapless joins.
+
+---
+
+## What's NEXT — Checkpoint 3 items 3–6
 
 Real integration, each gated by **automated frame-continuity + state tests before any device build**:
 
 1. ~~**Streaming/cached-file**~~ — **DONE** (see above).
+2. ~~**EQ** in the persistent graph~~ — **DONE** (see above).
+3. **ReplayGain** — interface already defined in `GaplessGainStage` (persistent node, applied at the
+   *rendered* boundary, short ramp, never baked into cached files, 1.5× cap, album vs track gain,
+   peak protection, missing-metadata → unity). Only the policy + wiring remain.
+4. **Visualizers** — tap point already exists (`GaplessVisualizerTap` on `outputMixer`, install-once,
+   consumers add/remove without touching the graph). Wire Classic + Native to the one feed.
+5. **Queue / repeat / shuffle / seek parity.**
+6. **Background, lock-screen, remote control.**
+
+Original numbering below is preserved for the remaining items:
+
 2. **EQ** in the persistent graph — toggle without engine restart or item recreation; gapless holds
    with EQ ON. Reuse `EQEngine` (`syncCoefficients()`) coefficients.
 3. **Visualizers** — persistent mixer tap feeding Classic + Native; consumer gating without graph
@@ -279,19 +372,17 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## First moves in the new session
 
-1. `git checkout feat/persistent-gapless-engine` (confirm `@ 93ec188`).
+1. `git checkout feat/persistent-gapless-engine` (confirm `@ 68b74cb`).
 2. Re-read this file + the two gapless memory files.
 3. Sanity-check the proof still passes: `swift spike/gapless-proof/main.swift` → `RESULT: PASS`.
-4. Start Checkpoint 3 item 2 (**EQ in the persistent graph**) — toggling must not rebuild the graph
-   or recreate the player node, and gapless must still hold with EQ ON. Prove it the same way: an
-   offline render with EQ engaged and toggled mid-schedule, measured for frame continuity, before
-   any device build.
+4. Start Checkpoint 3 item 3 (**ReplayGain**) — the gain-stage interface is already defined in
+   `GaplessGainStage`; add the policy (album vs track gain, preamp, peak protection, 1.5x cap) and
+   apply it at the *rendered* boundary with a ramp. Prove it with an offline render measuring level
+   changes at boundaries and the absence of a step, before any device build.
 
-### Open question for the owner (not blocking)
+### Open decision for the owner (not blocking)
 
-MP3 delivered by a **live** server transcode cannot be made gapless — the encoder never writes the
-gapless header. If the owner's Navidrome is configured to transcode to MP3, the options are: serve
-originals when possible, or switch the transcode target to **Opus** (measured frame-exact). Worth
-one check against the real server: fetch a transcoded stream and run
-`GaplessTrimPolicy.mp3GaplessHeader(atFileURL:)` on it. Everything else (FLAC, ALAC, AAC, Opus,
-stored MP3, downloaded) is already frame-exact.
+The owner's Navidrome MP3 transcode carries no gapless metadata and measures discontinuous at every
+join; its Opus transcode measures frame-exact and continuous (full table above). Switching the
+transcode target to Opus, or serving originals, resolves it. Everything else (FLAC, ALAC, AAC,
+stored MP3, downloaded) is already frame-exact. Not blocking any remaining checkpoint work.
