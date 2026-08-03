@@ -57,6 +57,18 @@ struct GaplessRealAlbumTests {
         Album(directory: "Gapless 4-Track MP3", expectedTrimReason: .lameGaplessHeader, expectsFrameExact: true)
     ]
 
+    /// Albums fetched from the owner's real Navidrome, as the server actually delivers them.
+    /// Fetch with `spike/gapless-formats/fetch-server-album.sh`.
+    static let serverAlbums: [Album] = [
+        Album(directory: "Server Opus Transcode", expectedTrimReason: .wholeFile, expectsFrameExact: true)
+    ]
+
+    static var serverMediaAvailable: Bool {
+        serverAlbums.allSatisfy {
+            FileManager.default.fileExists(atPath: mediaRoot.appendingPathComponent($0.directory).path)
+        }
+    }
+
     static var mediaAvailable: Bool {
         albums.allSatisfy { FileManager.default.fileExists(atPath: mediaRoot.appendingPathComponent($0.directory).path) }
     }
@@ -112,25 +124,40 @@ struct GaplessRealAlbumTests {
         }
     }
 
-    // MARK: - The one format that cannot be made exact
+    // MARK: - Real server transcodes
 
-    /// A live server-side transcode streams from a non-seekable pipe, so the MP3 encoder never fills
-    /// in its Xing/LAME gapless header and no exact trim exists. The engine must **report** that
-    /// rather than silently ship a gap, so this pins the reported reason and the resulting error.
-    @Test(.enabled(if: FileManager.default.fileExists(
-        atPath: mediaRoot.appendingPathComponent("Gapless 4-Track Transcoded MP3").path)))
-    func transcodedMP3WithoutGaplessHeaderIsReportedNotHidden() async throws {
-        let urls = try Self.trackURLs(in: "Gapless 4-Track Transcoded MP3")
+    /// The server's Opus transcode, measured on the bytes Navidrome actually returns.
+    @Test(.enabled(if: serverMediaAvailable), arguments: serverAlbums)
+    func serverTranscodedAlbumJoinsAreFrameContinuous(album: Album) async throws {
+        try await realAlbumJoinsAreFrameContinuous(album: album)
+    }
+
+    // MARK: - The delivery path that cannot be made exact
+
+    /// MP3 arriving without trustworthy gapless metadata — reproduced both by a local pipe transcode
+    /// and by the owner's real Navidrome MP3 transcode. The exact encoder delay and final padding
+    /// are unknown to the client, so no reliable trim exists. What the engine must do is **report**
+    /// that, not quietly present a gapped join as gapless.
+    ///
+    /// This is a property of these responses, not of MP3 or of streaming in general: a server that
+    /// supplied the same information another way, or spooled the encode to a complete file first,
+    /// would trim normally.
+    @Test(arguments: ["Gapless 4-Track Transcoded MP3", "Server MP3 Transcode"])
+    func mp3WithoutTrustworthyMetadataIsReportedNotHidden(directory: String) async throws {
+        guard FileManager.default.fileExists(
+            atPath: Self.mediaRoot.appendingPathComponent(directory).path) else { return }
+        let urls = try Self.trackURLs(in: directory)
+        guard !urls.isEmpty else { return }
         let renderFormat = try AVAudioFile(forReading: urls[0]).processingFormat
         let preparer = GaplessTrackPreparer(provider: GaplessLocalFileProvider(albumFiles: urls),
                                             renderSampleRate: renderFormat.sampleRate)
 
         let track = try await preparer.preparedTrack(urls[0].lastPathComponent)
 
-        #expect(track.trim.reason == .mp3WithoutGaplessHeader)
+        #expect(track.trim.reason == .mp3WithoutGaplessMetadata, "\(directory)")
         // The codec's inserted frames survive into the schedule — that is the cost being reported.
         let expectedFrames = AVAudioFramePosition((Self.partSeconds * renderFormat.sampleRate).rounded())
-        #expect(track.renderFrames > expectedFrames)
+        #expect(track.renderFrames > expectedFrames, "\(directory)")
     }
 
     // MARK: - Helpers

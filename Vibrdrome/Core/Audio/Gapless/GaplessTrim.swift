@@ -31,9 +31,14 @@ struct GaplessTrim: Equatable, Sendable {
         case wholeFile
         /// Encoder delay + padding removed using the file's Xing/LAME gapless header.
         case lameGaplessHeader
-        /// An MP3 with no usable gapless header — cannot be trimmed exactly. See
-        /// `GaplessTrimPolicy.trim(forFileAt:decodedLength:)` for what this costs.
-        case mp3WithoutGaplessHeader
+        /// An MP3 carrying no *trustworthy* gapless metadata, so the exact encoder delay and final
+        /// padding are unknown to the client and no reliable trim exists. Covers a missing header, a
+        /// truncated or malformed one, and values that contradict the decoded length.
+        ///
+        /// This is a statement about **this response**, not about MP3 or live streams in general: a
+        /// server could supply the same information by another mechanism, or spool the encode to a
+        /// complete file before delivering it, and such a source would trim normally.
+        case mp3WithoutGaplessMetadata
     }
 
     var endFrame: AVAudioFramePosition { startFrame + AVAudioFramePosition(frameCount) }
@@ -49,6 +54,35 @@ struct MP3GaplessHeader: Equatable {
     let padding: Int
 }
 
+/// What the trim policy parsed and why it decided as it did. Kept as a first-class value rather
+/// than a log line so tests can assert on the *reasoning*, not just the outcome — a trim that lands
+/// on the right range for the wrong reason is a latent bug.
+struct GaplessTrimDiagnostics: Equatable, Sendable {
+    let fileExtension: String
+    let decodedLength: AVAudioFramePosition
+    /// Values exactly as parsed from the file, before any validation.
+    let rawEncoderDelay: Int?
+    let rawPadding: Int?
+    let validation: Validation
+    /// The range actually handed to the player node.
+    let selectedStartFrame: AVAudioFramePosition
+    let selectedFrameCount: AVAudioFrameCount
+
+    enum Validation: String, Equatable, Sendable {
+        /// Not an MP3 — the decoder already reports the true length.
+        case notMP3
+        /// No Xing/Info + LAME header found.
+        case metadataAbsent
+        /// A header was found but could not be parsed into usable values.
+        case metadataMalformed
+        /// Values parsed, but they contradict the decoded length (delay + padding would consume the
+        /// file, or exceed it). Trusting them would produce an invalid schedule range.
+        case rangeInconsistentWithDecodedLength
+        /// Values parsed and validated; the trim was applied.
+        case accepted
+    }
+}
+
 enum GaplessTrimPolicy {
     /// Bytes to inspect after any ID3v2 tag — the first MPEG frame (and so the Xing/LAME header)
     /// always begins here, and is far smaller than this.
@@ -56,29 +90,65 @@ enum GaplessTrimPolicy {
 
     /// The frame range to schedule for a decoded file.
     ///
-    /// For an MP3 with no gapless header — notably a **live server-side transcode**, where the
-    /// encoder writes to a non-seekable stream and so cannot go back and fill in the header
-    /// (verified: ffmpeg to a pipe emits no Xing/Info tag at all) — no exact trim exists. The whole
-    /// file is scheduled and the join keeps the codec's inserted frames; the returned
-    /// `.mp3WithoutGaplessHeader` reason makes that visible instead of silently lossy.
+    /// When an MP3 carries no trustworthy gapless metadata, the exact encoder delay and final
+    /// padding are unknown to the client, so no reliable trim exists. The whole file is scheduled
+    /// and the join keeps the codec's inserted frames — reported as `.mp3WithoutGaplessMetadata`
+    /// rather than presented as gapless.
+    ///
+    /// No fallback constant is ever applied. A fixed 576/792 guess is right only for one encoder at
+    /// one setting; applied to anything else it deletes real audio or leaves padding in place, and
+    /// either way it silently converts an honest "unsupported" into a wrong answer.
     static func trim(forFileAt url: URL, decodedLength: AVAudioFramePosition) -> GaplessTrim {
-        guard url.pathExtension.lowercased() == "mp3" else {
-            return GaplessTrim(startFrame: 0, frameCount: AVAudioFrameCount(max(0, decodedLength)),
-                               reason: .wholeFile)
+        evaluate(forFileAt: url, decodedLength: decodedLength).trim
+    }
+
+    /// The trim plus the reasoning behind it. Used by DEBUG diagnostics and by the trim tests.
+    static func diagnostics(forFileAt url: URL,
+                            decodedLength: AVAudioFramePosition) -> GaplessTrimDiagnostics {
+        evaluate(forFileAt: url, decodedLength: decodedLength).diagnostics
+    }
+
+    /// Single source of truth for both the decision and the explanation, so they cannot diverge.
+    private static func evaluate(forFileAt url: URL, decodedLength: AVAudioFramePosition)
+        -> (trim: GaplessTrim, diagnostics: GaplessTrimDiagnostics) {
+        let ext = url.pathExtension.lowercased()
+        let safeLength = max(0, decodedLength)
+
+        func wholeFile(_ reason: GaplessTrim.Reason,
+                       _ validation: GaplessTrimDiagnostics.Validation,
+                       delay: Int? = nil, padding: Int? = nil)
+            -> (GaplessTrim, GaplessTrimDiagnostics) {
+            let trim = GaplessTrim(startFrame: 0, frameCount: AVAudioFrameCount(safeLength),
+                                   reason: reason)
+            return (trim, GaplessTrimDiagnostics(
+                fileExtension: ext, decodedLength: decodedLength, rawEncoderDelay: delay,
+                rawPadding: padding, validation: validation,
+                selectedStartFrame: 0, selectedFrameCount: AVAudioFrameCount(safeLength)))
         }
+
+        guard ext == "mp3" else { return wholeFile(.wholeFile, .notMP3) }
         guard let header = mp3GaplessHeader(atFileURL: url) else {
-            return GaplessTrim(startFrame: 0, frameCount: AVAudioFrameCount(max(0, decodedLength)),
-                               reason: .mp3WithoutGaplessHeader)
+            return wholeFile(.mp3WithoutGaplessMetadata, .metadataAbsent)
         }
-        let start = AVAudioFramePosition(header.encoderDelay)
-        let trimmed = decodedLength - start - AVAudioFramePosition(header.padding)
-        // A header that would trim away the entire file is not trustworthy — keep the whole file.
-        guard trimmed > 0 else {
-            return GaplessTrim(startFrame: 0, frameCount: AVAudioFrameCount(max(0, decodedLength)),
-                               reason: .mp3WithoutGaplessHeader)
+
+        let delay = header.encoderDelay
+        let padding = header.padding
+        // Reject anything that cannot describe a real segment of this file: negative values, a
+        // padding larger than the file, or a delay+padding pair that would consume all of it.
+        // Arithmetic is done in Int64 so an absurd pair cannot overflow into a plausible range.
+        let start = AVAudioFramePosition(delay)
+        let remaining = safeLength - start - AVAudioFramePosition(padding)
+        guard delay >= 0, padding >= 0, start < safeLength, remaining > 0 else {
+            return wholeFile(.mp3WithoutGaplessMetadata, .rangeInconsistentWithDecodedLength,
+                             delay: delay, padding: padding)
         }
-        return GaplessTrim(startFrame: start, frameCount: AVAudioFrameCount(trimmed),
-                           reason: .lameGaplessHeader)
+
+        let trim = GaplessTrim(startFrame: start, frameCount: AVAudioFrameCount(remaining),
+                               reason: .lameGaplessHeader)
+        return (trim, GaplessTrimDiagnostics(
+            fileExtension: ext, decodedLength: decodedLength, rawEncoderDelay: delay,
+            rawPadding: padding, validation: .accepted,
+            selectedStartFrame: start, selectedFrameCount: AVAudioFrameCount(remaining)))
     }
 
     /// Read an MP3's Xing/LAME gapless header, reading only the file's leading bytes.
