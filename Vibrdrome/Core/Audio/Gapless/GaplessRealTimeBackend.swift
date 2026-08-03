@@ -218,6 +218,14 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         return max(0, renderFrame - segment.startFrame)
     }
 
+    /// Drop segment records for audio that has already played, so the timeline record stays bounded
+    /// across a long run. The audible segment and everything after it are kept.
+    func pruneSegments(before instance: GaplessPlayInstanceID) {
+        guard let index = scheduledSegments.firstIndex(where: { $0.playInstance == instance }),
+              index > 0 else { return }
+        scheduledSegments.removeFirst(index)
+    }
+
     /// Whether a callback or event carrying `tailGeneration` still describes live audio.
     func isCurrentTail(_ candidate: UInt64) -> Bool { candidate == tailGeneration }
 

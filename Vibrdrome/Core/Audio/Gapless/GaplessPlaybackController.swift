@@ -82,6 +82,13 @@ final class GaplessPlaybackController {
     private(set) var staleResultCount = 0
     /// Boundary events observed on the render clock, newest last.
     private(set) var observedBoundaries: [GaplessBoundaryEvent] = []
+    /// Play instance of the currently audible segment.
+    ///
+    /// The tail position CANNOT be found by item ID: under Repeat All the same slot appears on the
+    /// timeline more than once, so matching by ID finds the *first* (already played) occurrence,
+    /// computes a tail that looks longer than it is, and schedules nothing — the engine runs dry a
+    /// few tracks in. Play instance is unique per play, which is exactly what this needs.
+    private(set) var audiblePlayInstance: GaplessPlayInstanceID?
 
     /// ReplayGain settings applied at each boundary.
     var replayGainSettings: GaplessReplayGainSettings = .off
@@ -121,6 +128,7 @@ final class GaplessPlaybackController {
         backend.stop()
         session.stop()
         observedBoundaries.removeAll()
+        audiblePlayInstance = nil
     }
 
     /// Manual Next: resolve the destination under repeat/shuffle, replace the tail, restart there.
@@ -231,8 +239,8 @@ final class GaplessPlaybackController {
         // more than once — Repeat All wraps back to it, Repeat One plays it over and over — so
         // "have we scheduled this ID already?" would refuse to schedule the wrap and playback would
         // simply stop at the end of the queue.
-        let audibleIndex = session.audibleItemID
-            .flatMap { id in backend.scheduledSegments.firstIndex { $0.itemID == id } } ?? 0
+        let audibleIndex = audiblePlayInstance
+            .flatMap { instance in backend.scheduledSegments.firstIndex { $0.playInstance == instance } } ?? 0
         let alreadyOnTimeline = max(0, backend.scheduledSegments.count - audibleIndex)
         let needed = planned.count - alreadyOnTimeline
         guard needed > 0 else { return }
@@ -337,11 +345,19 @@ final class GaplessPlaybackController {
         session.advance(renderedFrames: delta,
                         boundaries: live.map { ($0.itemID, $0.scheduledStartFrame) })
 
+        if let latest = live.last { audiblePlayInstance = latest.playInstance }
         for event in live where preparationRecords[event.itemID]?.audibleAt == nil {
             preparationRecords[event.itemID]?.audibleAt = Date()
         }
+        // Segments before the audible one describe audio that has already gone by; dropping them
+        // keeps the timeline record bounded over a long run.
+        if let instance = audiblePlayInstance { backend.pruneSegments(before: instance) }
         backend.engine.gainStage.advance(toRenderFrame: clockFrame)
-        if !live.isEmpty { await replenishTail() }
+        // Replenish on EVERY tick, not only after a boundary. Under `controlledWait` a slow item
+        // lets the graph run dry, and no further boundary can fire while nothing is scheduled — so
+        // a boundary-gated replenish would wait forever for an event that can only happen after it
+        // has already run. The call is cheap: it returns immediately once the window is full.
+        await replenishTail()
     }
 
     /// Report a deadline miss for an item that could not be ready in time.
