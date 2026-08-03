@@ -546,3 +546,124 @@ The owner's Navidrome MP3 transcode carries no gapless metadata and measures dis
 join; its Opus transcode measures frame-exact and continuous (full table above). Switching the
 transcode target to Opus, or serving originals, resolves it. Everything else (FLAC, ALAC, AAC,
 stored MP3, downloaded) is already frame-exact. Not blocking any remaining checkpoint work.
+
+---
+
+## The retained-memory investigation and the buffer-scheduler rewrite (branch `feat/persistent-gapless-buffer-scheduler`)
+
+**Branch:** `feat/persistent-gapless-buffer-scheduler`, off `feat/persistent-gapless-engine @ ac7c24e`.
+`feat/persistent-gapless-engine` is **parked** until this passes its acceptance gate.
+
+### Accepted root cause
+
+> In the tested persistent `AVAudioPlayerNode` configuration, `scheduleSegment` retains each supplied
+> `AVAudioFile` and file descriptor until the player node is stopped. This makes long uninterrupted
+> sessions unbounded in both memory and descriptors.
+
+Proven in `VibrdromeTests/Core/GaplessCallbackOwnershipTests.swift` by direct lifetime evidence —
+weak boxes on the files, deinit sentinels on the closures, `/dev/fd` counts — not by footprint
+inference:
+
+| Probe | Live files | fdΔ |
+|---|---|---|
+| opened, never scheduled | 0/40 | 0 |
+| scheduled, all callbacks fired, 2 s settle, no stop | 40/40 | +40 |
+| scheduled, then `player.stop()` | 0/40 | 0 |
+| scheduled inside an explicit `autoreleasepool`, no stop | 40/40 | — |
+| `scheduleBuffer` (PCM), no stop | 0/40 | — |
+
+The completion-handler matrix (500 tracked schedules per variant) showed ~30 KB and one descriptor
+per schedule for **every** variant — no closure, `.dataConsumed`, `.dataRendered`, `.dataPlayedBack`
+— with **zero outstanding closures** in all of them. The production closure was `{ _ in }`: empty
+capture list, no retain path. Closure capture is not causal; autorelease timing is not causal.
+
+**Rejected as the final fix:** session-long per-URL `AVAudioFile` identity. It only moves the bound
+from *transitions* to *distinct tracks*, and descriptors — not memory — become the binding
+constraint on a long queue.
+
+### Substrate
+
+    source file → bounded decode → reusable AVAudioPCMBuffer pool → scheduleBuffer
+
+The player node never receives an `AVAudioFile` in this path.
+
+- `GaplessPCMChunkSource` — opens the file, seeks to the trimmed start, reads bounded chunks, and
+  **closes the file as soon as its audio is read**, while its chunks are still scheduled. Rejects a
+  source whose decoded format does not match the graph (that is the converter stage's job, not
+  something to paper over). Carries a process-wide live-file counter so file lifetime is observed
+  directly rather than inferred from descriptors.
+- `GaplessBufferPool` — a *fixed* set of `AVAudioPCMBuffer` objects allocated once. Starves rather
+  than allocates; refuses a duplicate release so one buffer can never back two chunks.
+- `GaplessBufferScheduler` — keeps N chunks scheduled ahead, crosses track boundaries inside its own
+  produce loop so the last chunk of A and the first of B are back to back, and recycles on
+  completion. The callback captures **only** a `GaplessRecycleToken` (four scalars) and the inbox.
+
+**Callbacks are for recycling only.** Audible boundaries stay clock-driven off the per-track
+`segments` records — a completion callback reports the node finished with a buffer, which is not the
+instant the next track became audible.
+
+### Recycle point: measured, not assumed
+
+All three points keep captured audio intact at pool capacity 6 *and* with **no headroom at all**
+(capacity == scheduled depth), with zero starvations. Correctness does not discriminate, so the
+choice is slack: `.dataConsumed` returns a buffer earliest and gives the pump the most time. It is
+the default.
+
+### Chunk size: measured
+
+| chunk | sched | cb/s | CPU | pool | starv | tail | seek | order | gap |
+|---|---|---|---|---|---|---|---|---|---|
+| 2048 | 3.9 µs | 20.4 | 4.1% | 96 KB | 0 | 4.69 ms | 10.57 ms | OK | 0.0000 s |
+| **4096** | **3.9 µs** | **11.1** | **3.7%** | **192 KB** | **0** | **3.86 ms** | **10.65 ms** | **OK** | **0.0000 s** |
+| 8192 | 4.2 µs | 5.6 | 3.5% | 384 KB | 0 | 4.79 ms | 10.64 ms | OK | 0.0000 s |
+| 16384 | 2.8 µs | 3.7 | 2.7% | 768 KB | 0 | 5.10 ms | 10.63 ms | OK | 0.0000 s |
+| 32768 | 4.5 µs | 1.9 | 3.2% | 1536 KB | 0 | 5.14 ms | 10.77 ms | OK | 0.0000 s |
+
+**4096 frames** (93 ms; 4 chunks ≈ 372 ms of lead) — the smallest size with no starvation that does
+not double the callback rate for nothing. A discarded warm-up run precedes the matrix: the audio
+stack's one-time allocation otherwise lands entirely on whichever candidate runs first.
+
+### Checkpoint A result — 1,000 transitions, fresh file every time
+
+    baseline tx 100   fp 137.5 MB  fd 31  files 3  pool 2/4  chunks 4  segs 15
+    window   tx 1100  fp 137.6 MB  fd 28  files 0  pool 3/3  chunks 3  segs 12
+    RESULT   1000 transitions  growth 0.03 MB (0.03 KB/tx)  fdΔ -3  peakFd 31
+             peakFiles 3  starvations 0  chunks 2200 scheduled / 2200 recycled
+             after stop: fp 137.5 MB  fd 28  files 0
+
+Against the file scheduler's ~30 KB and one descriptor per transition. 64 distinct sources (larger
+than any cache it would be safe to hold open), enqueued at most three ahead as the preparation
+window does, and **no player-node stop anywhere in the run**.
+
+### Harness correction (worth knowing before trusting a capture)
+
+`GaplessRealTimeCapture` installs its tap on `mainMixerNode` **before** `engine.start()`, so it asks
+for 44.1 kHz and then receives **48 kHz** buffers once the mixer adopts the output node's rate
+(measured ratio 1.0885 = 48000/44100). Analysis that assumed one timebase stretched every span it
+measured. The capture now records `observedSampleRate` from the delivered buffers, and span analysis
+scales by it.
+
+Separately: `heardSequence` slides a fixed window across the whole capture, so a window straddling a
+track boundary contains two tones and can report **a third frequency that was never played**. Use
+`tonesInTrackInteriors` — it maps captured audio onto the span the scheduler claims for each track.
+Both effects looked exactly like scheduler defects and were not.
+
+### Known limitation carried into Checkpoint E
+
+`GaplessBufferScheduler` places each track's timeline record from the **declared** `renderFrames`
+(`segments.last?.endFrame`) but advances the chunk cursor by frames **actually produced**. Those
+agreed exactly in every run here (timeline 158760/158760 over 24 transitions), because the trim
+policy resolves lengths from the decoded file. A truncated or mis-declared file would make them
+diverge, and boundary detection reads the segment records — so the divergence would show up as a
+boundary at the wrong frame rather than as an error. Reconcile the record against produced frames
+when a track's final chunk is scheduled, as part of transport integration.
+
+### Still to do
+
+- **Checkpoint B** — explicit `GaplessPCMConverter` (48 kHz Opus, mono, channel layouts), converter
+  lifecycle and continuity, mixed-format policy.
+- **Checkpoint C** — full format + transport integration, processing/Now Playing/scrobble parity,
+  removal of the production `AVAudioFile` cache in `GaplessRealTimeBackend`.
+- **Checkpoint D** — genuine `TEST_RUNNER_GAPLESS_SOAK=full` and `TEST_RUNNER_GAPLESS_HOUR=1` runs.
+
+Checkpoint 4 (device build) stays blocked until D passes.

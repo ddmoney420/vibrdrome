@@ -47,8 +47,15 @@ struct GaplessCallbackOwnershipTests {
         var isAlive: Bool { file != nil }
     }
 
+    /// A weak node reference a `@Sendable` closure can legally capture, for the variant that asks
+    /// whether a weak backend reference changes what the node retains.
+    final class WeakNodeBox: @unchecked Sendable {
+        weak var node: AVAudioPlayerNode?
+        init(_ node: AVAudioPlayerNode) { self.node = node }
+    }
+
     /// Captured by a completion closure; its `deinit` reports that the closure was released.
-    final class ClosureSentinel {
+    final class ClosureSentinel: @unchecked Sendable {
         private let onRelease: @Sendable () -> Void
         init(onRelease: @escaping @Sendable () -> Void) { self.onRelease = onRelease }
         deinit { onRelease() }
@@ -157,7 +164,7 @@ struct GaplessCallbackOwnershipTests {
                     counters.callback()
                 }
             case .minimalClosureWeakBackend:
-                weak var weakPlayer = player
+                let weakPlayer = WeakNodeBox(player)
                 let token = UInt64(index)
                 player.scheduleSegment(file, startingFrame: 0, frameCount: frames, at: nil,
                                        completionCallbackType: variant.callbackType) { [counters] _ in

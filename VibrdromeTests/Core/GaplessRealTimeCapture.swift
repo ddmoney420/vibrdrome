@@ -28,9 +28,19 @@ final class GaplessRealTimeCapture: @unchecked Sendable {
     private final class SampleStore: @unchecked Sendable {
         private let lock = NSLock()
         private var samples: [Float] = []
-        func append(_ buffer: UnsafePointer<Float>, count: Int) {
+        private var rate: Double = 0
+        func append(_ buffer: UnsafePointer<Float>, count: Int, sampleRate: Double) {
             lock.lock(); defer { lock.unlock() }
+            if rate == 0 { rate = sampleRate }
             samples.append(contentsOf: UnsafeBufferPointer(start: buffer, count: count))
+        }
+        /// Rate of the buffers that actually arrived. Read from the tap rather than from the format
+        /// requested at install time: the mixer's output format follows the hardware once the engine
+        /// starts, so a capture installed before `start()` can receive a different rate than it asked
+        /// for. Analysis that assumed otherwise stretched every span it measured.
+        var observedRate: Double {
+            lock.lock(); defer { lock.unlock() }
+            return rate
         }
         var snapshot: [Float] {
             lock.lock(); defer { lock.unlock() }
@@ -39,6 +49,7 @@ final class GaplessRealTimeCapture: @unchecked Sendable {
         func reset() {
             lock.lock(); defer { lock.unlock() }
             samples.removeAll()
+            rate = 0
         }
     }
 
@@ -54,7 +65,8 @@ final class GaplessRealTimeCapture: @unchecked Sendable {
         // travels into the audio callback.
         node.installTap(onBus: 0, bufferSize: 1_024, format: format) { [storage] buffer, _ in
             guard let channel = buffer.floatChannelData?[0] else { return }
-            storage.append(channel, count: Int(buffer.frameLength))
+            storage.append(channel, count: Int(buffer.frameLength),
+                           sampleRate: buffer.format.sampleRate)
         }
         isCapturing = true
     }
@@ -66,6 +78,9 @@ final class GaplessRealTimeCapture: @unchecked Sendable {
     }
 
     var samples: [Float] { storage.snapshot }
+    /// Sample rate of the captured audio, measured from the delivered buffers. Zero until the first
+    /// buffer arrives.
+    var observedSampleRate: Double { storage.observedRate }
     var frameCount: Int { storage.snapshot.count }
     func reset() { storage.reset() }
 
