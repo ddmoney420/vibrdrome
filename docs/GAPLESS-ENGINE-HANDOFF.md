@@ -1,6 +1,6 @@
 # Persistent Gapless Engine — Session Handoff
 
-**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `68b74cb` (off `develop @ 3d82895`)
+**Written:** 2026-08-02 · **Branch:** `feat/persistent-gapless-engine` @ `21dfbf3` (off `develop @ 3d82895`)
 
 Resume point for building the persistent-output gapless audio engine. Self-contained — read this
 top to bottom and you have everything to continue in a fresh session.
@@ -12,10 +12,11 @@ top to bottom and you have everything to continue in a fresh session.
 Gapless playback is the **active release gate**. Build 60 release prep is **stopped**. The
 AVQueuePlayer path has two proven transition defects that no AVQueuePlayer-level fix resolves, so
 we are **rewriting playback onto a persistent-output `AVAudioEngine` graph**. **Checkpoints 1, 2 and
-3 items 1–2 are done and objectively proven** (offline render = frame-continuous across every
-boundary, for every delivery format, with EQ bypassed / neutral / audible). Next is **Checkpoint 3
-items 3–6** (ReplayGain, visualizers, queue/repeat/seek parity, background + remote), then
-**Checkpoint 4** (one device build + acceptance).
+3 items 1–4 are done and objectively proven** (frame-continuous across every boundary, for every
+delivery format, with EQ bypassed / neutral / audible, with ReplayGain changing at boundaries, and
+with both visualizer consumers attached). Next is **Checkpoint 3 items 5–6** (queue/repeat/shuffle/
+seek parity, background + lock-screen + remote control), then **Checkpoint 4** (one consolidated
+device build + acceptance).
 
 ---
 
@@ -63,7 +64,7 @@ Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.
 ## State of the branch
 
 ```
-feat/persistent-gapless-engine @ 68b74cb   ← work here
+feat/persistent-gapless-engine @ 21dfbf3   ← work here
 develop                        @ 3d82895   ← Build 60 fixes, DO NOT TOUCH
 diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, never merge
 ```
@@ -74,6 +75,13 @@ diag/gapless-queue-matrix      @ bc4b2d6   ← throwaway DEBUG diagnostics, neve
 - `Vibrdrome/Core/Audio/Gapless/PersistentGaplessEngine.swift` — persistent graph + offline render.
 - `VibrdromeTests/Core/GaplessEngineOfflineTests.swift` — objective frame-continuity tests.
 - `spike/gapless-proof/main.swift` — standalone repro (`swift main.swift`).
+
+**Committed on this branch (21dfbf3 — Checkpoint 3 items 3–4):**
+- `Vibrdrome/Core/Audio/Gapless/GaplessReplayGain.swift` — policy map, calculator, diagnostics.
+- `GaplessGainStage` — boundary-aligned gain events, cancellation, measured mixer smoothing.
+- `GaplessVisualizerTap.swift` → `GaplessVisualizerFeed` — one tap, per-consumer bounded rings.
+- Tests: `GaplessReplayGainTests`, `GaplessReplayGainOfflineTests`, `GaplessVisualizerFeedTests`.
+- Spike: `gapless-replaygain-ramp`.
 
 **Committed on this branch (68b74cb — Checkpoint 3 item 2):**
 - `Vibrdrome/Core/Audio/Gapless/GaplessEQStage.swift` — persistent EQ, settings mapping, ramp+settle.
@@ -282,18 +290,67 @@ seek/skip must not be treated as gapless joins.
 
 ---
 
-## What's NEXT — Checkpoint 3 items 3–6
+## What's DONE — Checkpoint 3 items 3–4 (ReplayGain + visualizer feed)
+
+**ReplayGain** reproduces the existing policy exactly (off/track/album; album falls back to track
+gain; preamp added before conversion; fallback dB for untagged material; flat 1.5x ceiling), applied
+through the persistent gain stage at the frame each track becomes audible — the boundary frame comes
+from the scheduler's own segment map, so a gain change cannot drift from its track. Nothing is baked
+into cached files or decoded PCM; the EQ's `globalGain` is untouched.
+
+**Two gaps in the existing policy, reported not silently fixed:**
+1. `trackPeak` / `albumPeak` are fetched, cached and persisted but **never used** — there is no
+   peak-based clipping prevention today, only the flat 1.5x cap. The new calculator supports it,
+   **off by default**, because enabling it changes playback levels.
+2. There is **no "automatic" mode** — only off/track/album, global across radio/playlists/albums/
+   single tracks. None was invented. If one is wanted later, the proposal to document first is:
+   album gain for sequential album playback, track gain for shuffle/radio/search/mixed playlists.
+
+**The ramp finding.** `AVAudioMixerNode.outputVolume` already interpolates internally — measured at
+10% in ~2.5 ms, 50% at ~16 ms, 90% at ~28 ms — and **never steps**, verified across jumps up to
+1.5x → 0.25x where an unsmoothed change would have produced a delta of ~0.5. An explicit ramp of our
+own would convolve with that and could only make the transition *longer*, never sharper. So the
+node's own interpolation is the ramp, and the engine's job is to start it on the right frame. Equal
+consecutive gains skip the set entirely, so an album-gain join is completely untouched.
+
+**Gain order and clipping policy:** `player → ReplayGain (gain stage) → EQ (+ its own clip guard) →
+output mixer`. The two attenuations are deliberately separate and both apply: the EQ clip guard
+offsets *EQ's own* boost and is a function of EQ gains alone; ReplayGain matches loudness between
+tracks and is a function of track metadata alone. Neither reads the other, so there is no hidden
+double attenuation — only two independent guards that happen to compose.
+
+**Visualizer feed:** one tap on the persistent `outputMixer`, after gain and EQ so it shows what is
+heard. Installed once, survives every boundary, and is never removed because a visualizer closed —
+opening/closing changes *consumers*. Each consumer holds its own bounded `FloatRingBuffer`, which
+keeps that type's single-producer/single-consumer contract intact while Classic and Native both read
+the same audio. The callback copies and nothing else: no allocation, no FFT, no UI, and it never
+waits on the consumer lock (it drops a buffer and counts it instead).
+
+**Measured cost:** EQ bypassed 0.004% of one core, EQ active 0.14%, ReplayGain 0.004%, visualizer
+callback 67 µs per consumer per 1024-frame buffer = **0.29% of the 23.2 ms deadline** (0.58% for
+both consumers), zero drops when drained at 60 Hz, memory flat in every state. Device CPU/thermal/
+battery remain a Checkpoint 4 measurement.
+
+**Measurement caveat worth keeping:** under offline manual rendering the engine *batches* tap
+callbacks (~1 per render slice instead of one per 1024 frames) and dispatches them off the render
+loop — timings taken there describe the rendering mode, not real-time playback. The visualizer cost
+above is measured by driving the copy path directly.
+
+---
+
+## What's NEXT — Checkpoint 3 items 5–6
 
 Real integration, each gated by **automated frame-continuity + state tests before any device build**:
 
 1. ~~**Streaming/cached-file**~~ — **DONE** (see above).
 2. ~~**EQ** in the persistent graph~~ — **DONE** (see above).
-3. **ReplayGain** — interface already defined in `GaplessGainStage` (persistent node, applied at the
-   *rendered* boundary, short ramp, never baked into cached files, 1.5× cap, album vs track gain,
-   peak protection, missing-metadata → unity). Only the policy + wiring remain.
-4. **Visualizers** — tap point already exists (`GaplessVisualizerTap` on `outputMixer`, install-once,
-   consumers add/remove without touching the graph). Wire Classic + Native to the one feed.
-5. **Queue / repeat / shuffle / seek parity.**
+3. ~~**ReplayGain**~~ — **DONE** (see above).
+4. ~~**Visualizer feed**~~ — **DONE** (feed + tap). Still to do: point the real `AudioSpectrum`
+   (Classic) and `VisualizerPCMSource` (Native) at `GaplessVisualizerFeed` consumers when playback
+   moves onto this engine — the feed is ready, the adapters are not wired.
+5. **Queue / repeat / shuffle / seek parity** — including cancelling scheduled gain events on every
+   queue mutation (`cancelScheduledReplayGain(fromFrame:)` exists and is tested; the call sites do
+   not exist yet because queue integration is this item).
 6. **Background, lock-screen, remote control.**
 
 Original numbering below is preserved for the remaining items:
@@ -372,7 +429,7 @@ play = one eligible scrobble; scheduling/decoding ≠ scrobble).
 
 ## First moves in the new session
 
-1. `git checkout feat/persistent-gapless-engine` (confirm `@ 68b74cb`).
+1. `git checkout feat/persistent-gapless-engine` (confirm `@ 21dfbf3`).
 2. Re-read this file + the two gapless memory files.
 3. Sanity-check the proof still passes: `swift spike/gapless-proof/main.swift` → `RESULT: PASS`.
 4. Start Checkpoint 3 item 3 (**ReplayGain**) — the gain-stage interface is already defined in
