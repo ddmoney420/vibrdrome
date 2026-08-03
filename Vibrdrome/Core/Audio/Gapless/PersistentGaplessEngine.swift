@@ -37,23 +37,42 @@ final class PersistentGaplessEngine {
     }
 
     /// Schedule local files consecutively into the running player node and record their exact
-    /// render-frame ranges. Assumes each file already matches `renderFormat` (SR + channel layout);
-    /// conversion of mismatched sources is a prefetch-stage concern handled before this call.
+    /// render-frame ranges.
+    ///
+    /// Each file is described through the same `GaplessTrackPreparer` path used in production, so
+    /// codec-specific trimming (notably MP3 encoder delay + padding) applies here too rather than
+    /// only on the streaming path.
+    func schedule(urls: [URL]) throws {
+        let tracks = try urls.map {
+            try GaplessTrackPreparer.describe(trackID: $0.lastPathComponent, fileURL: $0,
+                                              renderSampleRate: renderFormat.sampleRate)
+        }
+        try schedule(tracks: tracks)
+    }
+
+    /// Schedule prepared tracks consecutively into the running player node.
+    ///
+    /// This is the boundary-critical call, and it does no I/O beyond opening an already-local file:
+    /// resolving, fetching, and decoding all happened during preparation. Each track is scheduled as
+    /// an explicit *segment* rather than a whole file so codec priming/padding is excluded.
     ///
     /// - Note: `completionCallbackType: .dataRendered` fires when the segment's audio has actually
     ///   been rendered to the output — the correct signal for flipping metadata at the audible
     ///   boundary, rather than `.dataConsumed` which fires early when the node merely buffered it.
-    func schedule(urls: [URL]) throws {
-        for url in urls {
-            let file = try AVAudioFile(forReading: url)
-            let segment = scheduler.append(id: url.lastPathComponent, renderFrames: file.length)
-            let label = "\(url.lastPathComponent) [\(segment.startFrame)..<\(segment.endFrame)]"
-            // Capture only the Sendable Logger (not self) so the @Sendable render-thread callback
-            // stays concurrency-clean. Real-time metadata advance is driven off the frame-accounting
+    func schedule(tracks: [GaplessPreparedTrack]) throws {
+        for track in tracks {
+            let file = try AVAudioFile(forReading: track.fileURL)
+            let segment = scheduler.append(id: track.trackID, renderFrames: track.renderFrames)
+            let label = "\(track.trackID) [\(segment.startFrame)..<\(segment.endFrame)]"
+            let trimNote = track.trim.reason.rawValue
+            // Capture only Sendable values (not self) so the @Sendable render-thread callback stays
+            // concurrency-clean. Real-time metadata advance is driven off the frame-accounting
             // scheduler on the main actor in a later checkpoint, not from this callback.
             let renderLog = log
-            player.scheduleFile(file, at: nil, completionCallbackType: .dataRendered) { _ in
-                renderLog.debug("segment rendered to output: \(label, privacy: .public)")
+            player.scheduleSegment(file, startingFrame: track.trim.startFrame,
+                                   frameCount: track.trim.frameCount, at: nil,
+                                   completionCallbackType: .dataRendered) { _ in
+                renderLog.debug("segment rendered to output: \(label, privacy: .public) (\(trimNote, privacy: .public))")
             }
         }
     }
