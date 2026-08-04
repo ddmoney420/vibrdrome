@@ -803,3 +803,80 @@ behaviours against the controller, but not at the volumes Checkpoint C specifies
 - **Checkpoint D** — genuine `TEST_RUNNER_GAPLESS_SOAK=full` and `TEST_RUNNER_GAPLESS_HOUR=1` runs.
 
 Checkpoint 4 (device build) stays blocked until D passes.
+
+---
+
+# SESSION HANDOFF — application wiring lanes
+
+**Branch:** `feat/persistent-gapless-buffer-scheduler` @ `e59a46d`
+
+## Where things stand
+
+The persistent PCM gapless engine is **built, proven on host, and unwired**.
+
+Host gate passed on `3bdc855`: `verify-build.sh` PASS (1104 tests), serialized buffer gate PASS
+(38 tests), full soak PASS, genuine one-hour run PASS — 3620.7 s measured, +2.5 MB peak footprint,
+fd delta 0, 6075 transitions, 0 deadline misses, 0.00 % clock drift.
+
+The app still plays through `AudioEngine.shared` (AVQueuePlayer). `GaplessPlaybackController` is
+instantiated only by tests. Wiring it is a multi-lane refactor:
+
+| Lane | Commit | Status |
+|---|---|---|
+| 1 — façade + legacy adapter + composition seam | `4456899` | Done. verify-build PASS, 1117 tests |
+| 2A phase 1 — cross-platform façade surface | `e59a46d` | Done. 13 members added; iOS/macOS/watchOS build 0 warnings; **verify-build PASS, 1117 tests in 92 suites** |
+| 2A phase 2 — hotspot view refactor | — | **Next** |
+| 2A phase 3 — view call-site migration | — | After phase 2 |
+| 2B — RemoteCommandManager (8 refs) | — | Later |
+| 2C — CarPlay (19), Watch (9), AppIntents (6) | — | Later |
+| 2D — scene/lifecycle: `Vibrdrome.swift` (13), `ContentView`, `MacContentView` | — | Later |
+| 3 — persistent construction + engine selection | — | Later |
+
+## Next task: Lane 2A phases 2 and 3
+
+**Phase 2 (own commit).** `MiniPlayerView.swift` and `QueueView.swift` fail with
+`error: the compiler is unable to type-check this expression in reasonable time` once `AudioEngine`
+becomes `any ApplicationPlaybackControlling`. Their bodies are already near the limit and the
+existential adds inference work at every member access; explicit annotations were **not** enough.
+Split each into named subviews taking concrete inputs (`isPlaying`, `currentSong`, `currentTime`,
+queue entries, small action closures) rather than passing the existential down. Change no layout,
+navigation, accessibility label, gesture, button behaviour, queue ordering or playback semantic.
+
+**Phase 3 (own commit).** Replace `AudioEngine.shared` with `ApplicationPlayback.shared` across the
+39 in-scope view files, and change `let engine: AudioEngine` / `var engine: AudioEngine {` to
+`any ApplicationPlaybackControlling`. The façade surface is already complete, so this should be one
+mechanical pass and one verify — not iterative member discovery. Scope:
+
+```bash
+grep -rl "AudioEngine.shared" Vibrdrome VibrdromeWatch | grep -v VibrdromeTests \
+  | grep -vE "RemoteCommandManager|CarPlayManager|WatchSessionManager|AppIntents|Vibrdrome\.swift|ContentView\.swift|MacContentView\.swift|DebugView\.swift|Core/Audio/AudioEngine|Core/Audio/Gapless|Core/Audio/Application"
+```
+
+## Gotchas learned the hard way
+
+1. **Enumerate via aliases.** 10 in-scope files do `let engine = AudioEngine.shared` then use
+   `engine.member`. Grepping only `AudioEngine.shared.member` finds 19 members; the real total is
+   **38**. This gap caused a full revert of the first Lane 2A attempt.
+2. **Observation already works** — proven by test. Façade computed read-throughs preserve SwiftUI
+   observation because the access happens on the `@Observable` `AudioEngine` inside the caller's
+   tracking scope. Do **not** duplicate state, add forwarding, or add polling timers.
+3. **Permanent exception:** `DebugView` keeps `AudioEngine.shared.activePlayer`. It returns the
+   `AVQueuePlayer` itself and must never join the façade.
+4. **Deferred to lane 2D:** `ContentView` and `MacContentView`. Their `savePlayQueue` calls are
+   scene-phase bound; migrating them produces a misleading
+   `(ScenePhase) -> Void expects 1 argument` error.
+5. **Tests must not start real audio.** Calling `togglePlayPause()` on the live shared engine starts
+   AVQueuePlayer while the gapless suites drive their own `AVAudioEngine`s. That contention killed
+   the test process three times and truncated a run to 910 tests. Use delegation counters and
+   state-only operations.
+6. **Verify all three targets.** An iOS-only build is not completion — macOS surfaced members iOS
+   never did (`skipToIndex` in `SidePanels.swift`).
+7. **`build-logs/.lock` is a directory.** If the script reports a stale run: `rm -rf build-logs/.lock`
+8. **A truncated test run is a failure**, not a pass. If the count drops below ~1117, or the log
+   contains `Restarting after unexpected exit`, treat it as failed.
+
+## Verification
+
+`./scripts/verify-build.sh` must print `RESULT: PASS` with all tests passing, zero source warnings,
+SwiftLint clean, and no truncated run. Do **not** run the serialized buffer gate in this lane unless
+persistent-engine files change — they should not.
