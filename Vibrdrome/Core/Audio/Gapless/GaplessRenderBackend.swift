@@ -77,6 +77,8 @@ struct GaplessScheduledSegment: Sendable, Equatable {
     let tailGeneration: UInt64
     let startFrame: AVAudioFramePosition
     let frameCount: AVAudioFramePosition
+    /// Frames into the track's own audio that this segment begins at — non-zero after a seek.
+    var sourceStartOffsetFrames: AVAudioFramePosition = 0
     var endFrame: AVAudioFramePosition { startFrame + frameCount }
 }
 

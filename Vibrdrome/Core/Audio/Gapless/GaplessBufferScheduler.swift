@@ -129,6 +129,11 @@ final class GaplessBufferScheduler {
     private(set) var converterRebuilds = 0
     /// How often the retained converter could actually be handed to the next track.
     private(set) var converterReuses = 0
+    /// Chunks whose buffer came back because the node was stopped rather than because it finished
+    /// playing them. Counted separately so `chunksScheduled` reconciles exactly:
+    /// `scheduled == recycled + reclaimedAtStop`. Folding these into `chunksRecycled` would make the
+    /// books balance while hiding that some audio was discarded rather than heard.
+    private(set) var chunksReclaimedAtStop = 0
 
     init(player: AVAudioPlayerNode, renderFormat: AVAudioFormat,
          chunkFrames: AVAudioFrameCount = 4_096,
@@ -183,7 +188,9 @@ final class GaplessBufferScheduler {
             playInstance: instance, itemID: itemID, songID: track.trackID,
             generation: generation, tailGeneration: tailGeneration,
             startFrame: segments.last?.endFrame ?? timelineCursor,
-            frameCount: max(0, track.renderFrames - AVAudioFramePosition(startFrameOffset)))
+            frameCount: max(0, track.renderFrames - AVAudioFramePosition(startFrameOffset)),
+            sourceStartOffsetFrames: track.sourceStartOffsetFrames
+                + AVAudioFramePosition(startFrameOffset))
         let active = ActiveSource(source: source, converter: converter)
         active.segmentIndex = segments.count
         segments.append(planned)
@@ -304,7 +311,8 @@ final class GaplessBufferScheduler {
                         playInstance: existing.playInstance, itemID: existing.itemID,
                         songID: existing.songID, generation: existing.generation,
                         tailGeneration: existing.tailGeneration, startFrame: timelineCursor,
-                        frameCount: existing.frameCount)
+                        frameCount: existing.frameCount,
+                        sourceStartOffsetFrames: existing.sourceStartOffsetFrames)
                     materializedInstances.insert(existing.playInstance)
                 }
             }
@@ -369,7 +377,7 @@ final class GaplessBufferScheduler {
                 playInstance: existing.playInstance, itemID: existing.itemID,
                 songID: existing.songID, generation: existing.generation,
                 tailGeneration: existing.tailGeneration, startFrame: existing.startFrame,
-                frameCount: actual)
+                frameCount: actual, sourceStartOffsetFrames: existing.sourceStartOffsetFrames)
         }
     }
 
@@ -416,6 +424,11 @@ final class GaplessBufferScheduler {
     /// Every converter is cancelled first, so a conversion belonging to the discarded tail can never
     /// write into a buffer that has since been handed to another track.
     func resetAfterNodeStop(resumeTimelineFrame: AVAudioFramePosition) {
+        // Take the callbacks the node delivered as it stopped *before* discarding the inbox, so
+        // buffers it genuinely finished with are counted as recycled rather than silently reclaimed.
+        recycleFinishedBuffers()
+        // Whatever is still out was discarded mid-flight by the stop.
+        chunksReclaimedAtStop += inFlightChunks.count
         tailGeneration += 1
         for active in sources {
             active.converter?.cancel()
@@ -429,6 +442,33 @@ final class GaplessBufferScheduler {
         inbox.reset()
         pool.reclaimAll()
         timelineCursor = resumeTimelineFrame
+    }
+
+    /// Pick up completion callbacks that arrived after `resetAfterNodeStop` returned.
+    ///
+    /// `AVAudioPlayerNode.stop()` delivers its pending completion handlers asynchronously, so some
+    /// land just after the reset. They name buffers the pool has already reclaimed; releasing them
+    /// again would be a double release, so they are only *counted* — which is what lets the totals
+    /// reconcile without corrupting ownership.
+    @discardableResult
+    func reconcileLateCallbacks() -> Int {
+        let late = inbox.drain()
+        guard !late.isEmpty else { return 0 }
+        // Deliberately NOT released: `reclaimAll` already returned every buffer, and a second
+        // release would hand one buffer out twice.
+        chunksReclaimedAtStop -= min(late.count, chunksReclaimedAtStop)
+        chunksRecycled += late.count
+        return late.count
+    }
+
+    /// Whether every scheduled chunk is accounted for.
+    ///
+    /// Mid-run the identity includes the chunks still in flight — that difference *is* the scheduled
+    /// lead, and expecting it to be zero while audio is playing would be expecting the pump to have
+    /// nothing queued. At rest `inFlightChunks` is empty and this reduces to scheduled == recycled +
+    /// reclaimed.
+    var chunkAccountingBalances: Bool {
+        chunksScheduled == chunksRecycled + chunksReclaimedAtStop + inFlightChunks.count
     }
 
     /// Drop timeline records for audio already played, so the record stays bounded across a long

@@ -21,15 +21,18 @@ DESTINATION='platform=iOS Simulator,name=iPhone 17 Pro'
 LOG_DIR="build-logs"
 LOG="$LOG_DIR/gapless-buffer-gate.log"
 
-# Suites that must run, and the number of test *cases* each is expected to execute. Parameterised
-# tests count once per argument, which is why these are not simply the number of @Test functions.
+# Suites that must run. Swift Testing reports a parameterised @Test as ONE test in its run summary
+# however many arguments it has, so the expected minimum is a count of @Test functions, not of cases.
+# Set just below the current total so a suite silently dropping out fails the gate while adding a
+# test does not.
 REQUIRED_SUITES=(
   "GaplessBufferSchedulerTests"
   "GaplessBufferMemoryTests"
   "GaplessConversionTests"
   "GaplessBufferIntegrationTests"
+  "GaplessControllerGapTests"
 )
-EXPECTED_MINIMUM=30
+EXPECTED_MINIMUM=35
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"

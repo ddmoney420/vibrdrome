@@ -283,7 +283,8 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
                 playInstance: instances.allocate(), itemID: entry.itemID,
                 songID: entry.track.trackID, generation: entry.generation,
                 tailGeneration: tailGeneration,
-                startFrame: start, frameCount: entry.track.renderFrames)
+                startFrame: start, frameCount: entry.track.renderFrames,
+                sourceStartOffsetFrames: entry.track.sourceStartOffsetFrames)
             engine.player.scheduleSegment(file, startingFrame: entry.track.trim.startFrame,
                                           frameCount: entry.track.trim.frameCount, at: nil,
                                           completionCallbackType: .dataRendered) { _ in }
@@ -379,7 +380,9 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         let segment = scheduledSegments.last { $0.startFrame <= frame && frame < $0.endFrame }
         let nodeTime = engine.player.lastRenderTime
         let playerTime = nodeTime.flatMap { engine.player.playerTime(forNodeTime: $0) }
-        let sourceRelative = segment.map { frame - $0.startFrame } ?? 0
+        // Position in the TRACK, not on the timeline: after a seek the segment begins partway into
+        // the track's own audio, and reporting the timeline offset alone would show time-since-seek.
+        let sourceRelative = segment.map { $0.sourceStartOffsetFrames + (frame - $0.startFrame) } ?? 0
         return GaplessClockReading(
             hostTime: nodeTime?.hostTime ?? 0,
             sampleTime: playerTime?.sampleTime ?? 0,

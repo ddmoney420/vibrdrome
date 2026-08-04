@@ -22,6 +22,13 @@ struct GaplessPreparedTrack: Equatable, Sendable {
     /// the source already runs at the render rate; otherwise it is the sample-rate-converted count,
     /// so boundary accounting stays exact for 48 kHz sources in a 44.1 kHz graph.
     let renderFrames: AVAudioFramePosition
+    /// How far into the track's own audio this scheduling begins.
+    ///
+    /// A seek re-schedules the current track with its trim advanced to the seek point, which loses
+    /// the original position — the segment would start at frame 0 of a shortened track. Elapsed time
+    /// is derived from this, so without it Now Playing reports time-since-seek instead of
+    /// position-in-track.
+    var sourceStartOffsetFrames: AVAudioFramePosition = 0
 
     /// True when the source needs no sample-rate conversion to join the render timeline.
     var matchesRenderRate: Bool { renderFrames == AVAudioFramePosition(trim.frameCount) }

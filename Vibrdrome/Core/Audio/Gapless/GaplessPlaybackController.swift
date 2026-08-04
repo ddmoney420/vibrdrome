@@ -294,6 +294,8 @@ final class GaplessPlaybackController {
     }
 
     /// Resume a prepared track from a source offset, preserving its trim range.
+    /// Resume a prepared track from a source offset, preserving its trim range **and recording how
+    /// far in it starts**, so elapsed time stays position-in-track rather than time-since-seek.
     private static func offsetting(_ track: GaplessPreparedTrack,
                                    byFrames offset: AVAudioFramePosition) -> GaplessPreparedTrack {
         let clamped = min(offset, AVAudioFramePosition(track.trim.frameCount))
@@ -306,7 +308,9 @@ final class GaplessPlaybackController {
         return GaplessPreparedTrack(trackID: track.trackID, fileURL: track.fileURL, trim: trim,
                                     sourceSampleRate: track.sourceSampleRate,
                                     sourceChannelCount: track.sourceChannelCount,
-                                    renderFrames: AVAudioFramePosition((Double(remaining) * ratio).rounded()))
+                                    renderFrames: AVAudioFramePosition((Double(remaining) * ratio).rounded()),
+                                    sourceStartOffsetFrames: track.sourceStartOffsetFrames
+                                        + AVAudioFramePosition((Double(clamped) * ratio).rounded()))
     }
 
     /// Schedule the ReplayGain change for a segment at the frame it becomes audible.
