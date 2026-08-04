@@ -37,7 +37,19 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     private let instances = GaplessPlayInstanceAllocator()
 
     private(set) var state: GaplessEngineState = .idle
-    private(set) var scheduledSegments: [GaplessScheduledSegment] = []
+    /// Timeline records for the DEBUG file path; the PCM path keeps its own, already reconciled.
+    private var fileSegments: [GaplessScheduledSegment] = []
+
+    /// Segments currently on the timeline, in play order.
+    ///
+    /// Under the PCM substrate these are the scheduler's own records, whose lengths are **actually
+    /// produced output** rather than declared or ratio-estimated.
+    var scheduledSegments: [GaplessScheduledSegment] {
+        #if DEBUG
+        if schedulingMode == .fileSegment { return fileSegments }
+        #endif
+        return bufferScheduler.segments
+    }
     private var pendingBoundaryEvents: [GaplessBoundaryEvent] = []
     /// Boundaries already reported, keyed by play instance so a Repeat One replay is never
     /// mistaken for a duplicate of the previous play.
@@ -52,34 +64,46 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// belonging to a discarded tail can be recognised and ignored.
     private(set) var tailGeneration: UInt64 = 1
 
-    /// Bounded cache of open `AVAudioFile` objects, keyed by source URL.
+    /// How this backend hands audio to the player node.
     ///
-    /// **This is a partial mitigation, not the fix.** It removes redundant opens when the working
-    /// set fits the cache, but a one-hour run over a 9-source queue (cache size 6, so every entry is
-    /// evicted before it comes round again) still grew ~141 KB per transition — the same rate as
-    /// before. Do not read this cache as closing the memory issue.
+    /// Production is `.pcmBuffer`. The file path exists only for controlled comparison and is
+    /// **DEBUG-only**: in the tested persistent `AVAudioPlayerNode` configuration, `scheduleSegment`
+    /// retains each supplied `AVAudioFile` and file descriptor until the node is stopped, which makes
+    /// a long uninterrupted session unbounded in both. It is unsafe for long persistent sessions and
+    /// cannot be selected in a release build.
+    enum SchedulingMode: String, Sendable {
+        case pcmBuffer
+        #if DEBUG
+        case fileSegment
+        #endif
+    }
+
+    private(set) var schedulingMode: SchedulingMode = .pcmBuffer
+
+    /// Change the scheduling substrate. Refused while a track is audible — swapping substrates under
+    /// a playing track would cut the output stream, which is the defect this architecture exists to
+    /// remove.
+    @discardableResult
+    func setSchedulingMode(_ mode: SchedulingMode) -> Bool {
+        guard state != .playing else { return false }
+        guard mode != schedulingMode else { return true }
+        schedulingMode = mode
+        return true
+    }
+
+    /// The PCM substrate. Built lazily so a backend that is never started allocates no pool.
+    private(set) lazy var bufferScheduler = GaplessBufferScheduler(
+        player: engine.player, renderFormat: engine.renderFormat)
+
+    #if DEBUG
+    /// Open `AVAudioFile` objects for the DEBUG file-segment comparison path only.
     ///
-    /// Isolated on a bare graph with no controller, session or diagnostics in the path:
-    ///
-    ///     fresh file per schedule + closure   +44.83 MB   45.9 KB/transition
-    ///     reused file + the same closure        0.00 MB    0.0 KB/transition
-    ///     reused file, no closure              -0.38 MB   -0.4 KB/transition
-    ///
-    /// Read correctly, that table says growth requires **both** a fresh file *and* a completion
-    /// closure: fresh-without-closure is flat, and reused-with-closure is flat. So the retained
-    /// object is the per-schedule file, and what keeps it alive is bound up with the completion
-    /// closure the node holds — neither alone accumulates. The completion-handler variant matrix is
-    /// the next step, not another cache-sizing change: a real queue is always larger than any cache
-    /// that is safe to hold open.
-    ///
-    /// Reuse is safe here specifically because `scheduleSegment(_:startingFrame:frameCount:...)`
-    /// takes an explicit starting frame and does not depend on the file's own read position, so one
-    /// open file can back several pending segments. The cache is bounded to the preparation window
-    /// plus headroom; evicting only drops *our* reference, since the player node retains what it is
-    /// still playing.
+    /// **Not a bound and not a fix.** It removes redundant opens when the working set fits, but the
+    /// node retains every file it is handed until stop regardless, so a queue larger than the cache
+    /// still grows without limit — measured at ~141 KB per transition over a one-hour run. Kept
+    /// solely so the two substrates can be compared; production does not use it.
     private var openFiles: [URL: AVAudioFile] = [:]
     private var openFileOrder: [URL] = []
-    /// Window depth (current + next ready + one preparing) plus headroom for a tail rebuild.
     static let maximumOpenFiles = 6
 
     private func openFile(at url: URL) throws -> AVAudioFile {
@@ -97,9 +121,16 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         }
         return file
     }
+    #endif
 
-    /// Live open-file count, for the memory regression test.
-    var openFileCount: Int { openFiles.count }
+    /// Live open-file count. In production this is the preparation window's own count — the PCM
+    /// substrate holds a file only while there is still audio to read from it.
+    var openFileCount: Int {
+        #if DEBUG
+        if schedulingMode == .fileSegment { return openFiles.count }
+        #endif
+        return bufferScheduler.openFileCount
+    }
 
     /// Injected so tests can drive the clock deterministically instead of sleeping.
     var clockOverride: (() -> AVAudioFramePosition)?
@@ -181,17 +212,18 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         state = .stopping
         engine.player.stop()
         engine.engine.stop()
-        scheduledSegments.removeAll()
+        fileSegments.removeAll()
+        bufferScheduler.resetAfterNodeStop(resumeTimelineFrame: 0)
         pendingBoundaryEvents.removeAll()
         reportedInstances.removeAll()
         timelineOffset = 0
         scheduleOriginFrame = 0
         monotonicFrame = 0
         tailGeneration += 1
-        // Stop discards every pending schedule, so nothing here is still needed. The node keeps
-        // whatever it is finishing alive on its own.
+        #if DEBUG
         openFiles.removeAll()
         openFileOrder.removeAll()
+        #endif
         engine.gainStage.reset()
         deactivateAudioSession?()
         state = .idle
@@ -215,9 +247,32 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     @discardableResult
     func schedule(_ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
                               generation: UInt64)]) throws -> [GaplessScheduledSegment] {
+        #if DEBUG
+        if schedulingMode == .fileSegment { return try scheduleAsFileSegments(tracks) }
+        #endif
         var created: [GaplessScheduledSegment] = []
         for entry in tracks {
-            let start = scheduledSegments.last?.endFrame ?? scheduleOriginFrame
+            do {
+                created.append(try bufferScheduler.enqueue(track: entry.track, itemID: entry.itemID,
+                                                           generation: entry.generation))
+            } catch {
+                throw GaplessEngineFailure.scheduleFailed(error.localizedDescription)
+            }
+        }
+        // Produce immediately so the lead is filled before the boundary rather than at it.
+        bufferScheduler.pump()
+        return created
+    }
+
+    #if DEBUG
+    /// The original substrate, retained for comparison only. Unsafe for long persistent sessions:
+    /// every file handed to the node is retained until the node stops.
+    private func scheduleAsFileSegments(
+        _ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID, generation: UInt64)]
+    ) throws -> [GaplessScheduledSegment] {
+        var created: [GaplessScheduledSegment] = []
+        for entry in tracks {
+            let start = fileSegments.last?.endFrame ?? scheduleOriginFrame
             let file: AVAudioFile
             do {
                 file = try openFile(at: entry.track.fileURL)
@@ -232,11 +287,12 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             engine.player.scheduleSegment(file, startingFrame: entry.track.trim.startFrame,
                                           frameCount: entry.track.trim.frameCount, at: nil,
                                           completionCallbackType: .dataRendered) { _ in }
-            scheduledSegments.append(segment)
+            fileSegments.append(segment)
             created.append(segment)
         }
         return created
     }
+    #endif
 
     /// Drop everything not yet audible. The player node cannot remove a single future buffer, so the
     /// narrowest available operation is to stop the node — which discards *all* pending schedules —
@@ -258,7 +314,11 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         // remaining audio along with the rest, so keeping its record would describe audio that no
         // longer exists and place the replacement at the wrong timeline frame. A caller that wants
         // the current track to continue must re-schedule it from `audibleOffset(of:)`.
-        scheduledSegments.removeAll()
+        fileSegments.removeAll()
+        // Every discarded chunk token is invalidated with the tail bump, every safe buffer returns
+        // to the pool exactly once, and any conversion still running for the old tail is cancelled
+        // so it cannot write into a buffer that now belongs to a newer generation.
+        bufferScheduler.resetAfterNodeStop(resumeTimelineFrame: resumeFrame)
         reportedInstances.removeAll()
         if wasPlaying, engine.engine.isRunning { engine.player.play() }
         return resumeFrame
@@ -274,9 +334,15 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// Drop segment records for audio that has already played, so the timeline record stays bounded
     /// across a long run. The audible segment and everything after it are kept.
     func pruneSegments(before instance: GaplessPlayInstanceID) {
-        guard let index = scheduledSegments.firstIndex(where: { $0.playInstance == instance }),
-              index > 0 else { return }
-        scheduledSegments.removeFirst(index)
+        #if DEBUG
+        if schedulingMode == .fileSegment {
+            guard let index = fileSegments.firstIndex(where: { $0.playInstance == instance }),
+                  index > 0 else { return }
+            fileSegments.removeFirst(index)
+            return
+        }
+        #endif
+        bufferScheduler.pruneSegments(before: instance)
     }
 
     /// Whether a callback or event carrying `tailGeneration` still describes live audio.
@@ -336,9 +402,23 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// **play instance**, so a Repeat One replay of the same slot produces a genuinely new event
     /// instead of being suppressed as a duplicate.
     func observeBoundaries() {
+        #if DEBUG
+        let usingBuffers = schedulingMode == .pcmBuffer
+        #else
+        let usingBuffers = true
+        #endif
+        // Top the schedule up first: the pump is what turns enqueued tracks into scheduled audio,
+        // and a boundary can only be observed against audio that exists.
+        if usingBuffers { bufferScheduler.pump() }
         let frame = renderFrame
         for segment in scheduledSegments
         where segment.startFrame <= frame && !reportedInstances.contains(segment.playInstance) {
+            // A record whose start is still the enqueue-time estimate describes audio that has not
+            // been scheduled yet. Observing a boundary against an estimate would name a track as
+            // audible at a frame it may never occupy.
+            if usingBuffers, !bufferScheduler.materializedInstances.contains(segment.playInstance) {
+                continue
+            }
             reportedInstances.insert(segment.playInstance)
             pendingBoundaryEvents.append(GaplessBoundaryEvent(
                 playInstance: segment.playInstance, itemID: segment.itemID, songID: segment.songID,

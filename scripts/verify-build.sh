@@ -11,6 +11,11 @@
 # passing from scrolled output — run this script and report its exit code and
 # the "RESULT:" line.
 #
+# This is the STANDARD (bounded, parallel) suite. It deliberately does NOT include the serialized
+# gapless buffer gate: those are minutes-long real-time audio runs that destabilise the test process
+# when run alongside other audio suites. Run them separately with
+# ./scripts/verify-gapless-buffer-gate.sh -- a PASS here alone is not "full verification".
+#
 # Usage:
 #   scripts/verify-build.sh            # full suite
 #   scripts/verify-build.sh --quick    # SwiftLint + iOS build + unit tests only
@@ -126,8 +131,12 @@ while IFS=$'\t' read -r status name detail; do
 done < "$SUMMARY"
 echo "==============================================="
 if grep -q '^FAIL' "$SUMMARY"; then
+  echo "Standard verification: FAIL"
+  echo "Serialized gapless buffer gate: NOT RUN (./scripts/verify-gapless-buffer-gate.sh)"
   echo "RESULT: FAIL"
   exit 1
 fi
+echo "Standard verification: PASS"
+echo "Serialized gapless buffer gate: NOT RUN (./scripts/verify-gapless-buffer-gate.sh)"
 echo "RESULT: PASS"
 exit 0

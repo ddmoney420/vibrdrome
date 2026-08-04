@@ -742,9 +742,63 @@ one of them in manual rendering mode, destabilise the process.
 Converters are built per track (1,100 over the run) and every one is released as its track drains —
 live count returns to 0, so nothing is retained because a track merely finished.
 
+### Checkpoint C — controller integration (PARTIAL; see scope note)
+
+**Two gates, named separately.** `verify-build.sh` is the standard bounded parallel suite and now
+prints `Serialized gapless buffer gate: NOT RUN` alongside its own result, so a PASS there cannot be
+read as "full verification". `scripts/verify-gapless-buffer-gate.sh` runs the serialized real-time
+suites and fails on: non-zero xcodebuild status, zero tests executed, fewer than 30 tests, any
+skipped test, any recorded issue, any test-process restart, a required suite that never started, or
+a missing `GATEFLAG reached runner` marker proving `TEST_RUNNER_GAPLESS_BUFFER_GATE` reached the
+runner. A millisecond skipped test is not a pass.
+
+    Standard verification:          PASS  (1089 tests)
+    Serialized gapless buffer gate: PASS  (31 tests, 0 skipped, 0 failures, 0 restarts, 534 s)
+
+**Backend integration.** `GaplessRealTimeBackend` gained a substrate selector; production is
+`.pcmBuffer` and `.fileSegment` is `#if DEBUG` only — it cannot be selected in a release build. The
+selector is refused while a track is audible. `schedule(_:)` returns one planned segment per track so
+`GaplessPlaybackController` is unchanged; each record's start is corrected when the track's first
+chunk lands and its length when the track drains. `materializedInstances` gates boundary observation
+so a boundary is never fired against an enqueue-time estimate. `observeBoundaries()` pumps first.
+
+**All 1,089 standard tests pass with the PCM substrate as the default** — every pre-existing
+transport, repeat/shuffle, encoded-format, Now Playing, scrobble, ReplayGain, EQ and visualizer suite
+now runs through the buffer scheduler unchanged. That is the parity evidence.
+
+Integration results:
+
+    CIREPEAT     40 boundaries, 40 distinct play instances, correct wrap order, gap 0.0000 s
+    CIREPEATONE  27 replays of one slot, 27 distinct play instances
+    CITRANSPORT  7 tail generations, pool conserved, 0 stale recycles, clock monotonic
+    CISTOPCYCLE  100 stop/restart cycles, pool 6/6 every cycle, fdDelta 0
+    CINOCACHE    50 transitions over 12 distinct tracks, peak open files 1
+    CISOAK       1800 transitions through the full controller with conversion:
+                 growth 0.16 MB, heap +0.33 MB, fdDelta 0, windows flat at 136.3 MB,
+                 peakOpenFiles 1, peakConverters 2, segments 3, starvations 0,
+                 staleRecycles 0, chunks 4002/3998
+
+**Open-file cache removed from production.** The LRU is now inside `#if DEBUG` and reachable only via
+the DEBUG file-segment path. `openFileCount` in production reports the chunk sources' own count,
+bounded by the preparation window: peak 1 open file across 12 distinct tracks, 0 after stop.
+
+### Scope note — what Checkpoint C did NOT cover
+
+Delivered: verification gates, backend integration, substrate selector, automatic playback,
+repeat/shuffle, tail replacement, stop/restart, open-file-cache removal, integrated resource run,
+and format/processing/Now Playing/scrobble parity **by way of the existing suites passing against the
+new substrate**.
+
+Not yet done as dedicated new captured-audio tests: per-format 25-transition matrices re-run
+explicitly through the integrated controller; boundary-timed queue mutations at 250 ms / 100 ms /
+at-boundary; the 250×{Next, Previous, seek, tail replacement, Play Next, remove/reorder} transport
+stress counts; and dedicated integrated conversion-failure injection. The existing suites cover these
+behaviours against the controller, but not at the volumes Checkpoint C specifies.
+
 ### Still to do
 
-- **Checkpoint C** — full format + transport integration, processing/Now Playing/scrobble parity,
+- **Checkpoint C (remainder)** — the dedicated matrices listed in the scope note above.
+- **Checkpoint D** — full format + transport integration, processing/Now Playing/scrobble parity,
   removal of the production `AVAudioFile` cache in `GaplessRealTimeBackend`.
 - **Checkpoint D** — genuine `TEST_RUNNER_GAPLESS_SOAK=full` and `TEST_RUNNER_GAPLESS_HOUR=1` runs.
 

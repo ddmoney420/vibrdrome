@@ -157,8 +157,10 @@ final class GaplessBufferScheduler {
     /// cannot cost decode-and-converter-construction time at the moment the previous track ends.
     /// Produces no audio and creates no timeline record yet: the record is opened when the track's
     /// first chunk is actually scheduled, at the frame it actually lands on.
+    @discardableResult
     func enqueue(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
-                 generation: UInt64, startFrameOffset: AVAudioFrameCount = 0) throws {
+                 generation: UInt64, startFrameOffset: AVAudioFrameCount = 0) throws
+        -> GaplessScheduledSegment {
         let instance = instances.allocate()
         let source = try GaplessPCMChunkSource(track: track, itemID: itemID, playInstance: instance,
                                                generation: generation,
@@ -172,8 +174,30 @@ final class GaplessBufferScheduler {
                 throw error
             }
         }
-        sources.append(ActiveSource(source: source, converter: converter))
+        // The record is created now, with *planned* values, because the controller needs one segment
+        // back per scheduled track. It is corrected twice afterwards: its start when the track's
+        // first chunk actually lands, and its length when the track drains. Until the first chunk
+        // lands the record is an estimate, which is why `materializedInstances` exists — boundary
+        // observation must never fire on an estimated start.
+        let planned = GaplessScheduledSegment(
+            playInstance: instance, itemID: itemID, songID: track.trackID,
+            generation: generation, tailGeneration: tailGeneration,
+            startFrame: segments.last?.endFrame ?? timelineCursor,
+            frameCount: max(0, track.renderFrames - AVAudioFramePosition(startFrameOffset)))
+        let active = ActiveSource(source: source, converter: converter)
+        active.segmentIndex = segments.count
+        segments.append(planned)
+        sources.append(active)
+        return planned
     }
+
+    /// Play instances whose segment record describes audio that has genuinely been scheduled.
+    ///
+    /// A record created at enqueue time carries a planned start derived from the previous track's
+    /// *planned* length. If that track then reconciles shorter, the estimate is wrong — so a boundary
+    /// must never be observed against it. Chunks are scheduled roughly 372 ms ahead of audibility, so
+    /// a track is always materialised well before the clock reaches it.
+    private(set) var materializedInstances: Set<GaplessPlayInstanceID> = []
 
     /// Build or reuse a converter according to the lifecycle policy.
     ///
@@ -272,13 +296,17 @@ final class GaplessBufferScheduler {
             active.consumedSourceFrames += sourceConsumed
             if wasFirst {
                 active.timelineStart = timelineCursor
-                active.segmentIndex = segments.count
-                // Opened with the planned length; reconciled to actual output when the track drains.
-                segments.append(GaplessScheduledSegment(
-                    playInstance: active.source.playInstance, itemID: active.source.itemID,
-                    songID: active.source.track.trackID, generation: active.source.generation,
-                    tailGeneration: tailGeneration, startFrame: timelineCursor,
-                    frameCount: active.source.track.renderFrames))
+                // Correct the planned start to the frame this track genuinely begins at, and only
+                // now allow a boundary to be observed against it.
+                if let index = active.segmentIndex, index < segments.count {
+                    let existing = segments[index]
+                    segments[index] = GaplessScheduledSegment(
+                        playInstance: existing.playInstance, itemID: existing.itemID,
+                        songID: existing.songID, generation: existing.generation,
+                        tailGeneration: existing.tailGeneration, startFrame: timelineCursor,
+                        frameCount: existing.frameCount)
+                    materializedInstances.insert(existing.playInstance)
+                }
             }
             let descriptor = GaplessChunkDescriptor(
                 itemID: active.source.itemID, playInstance: active.source.playInstance,
@@ -326,6 +354,15 @@ final class GaplessBufferScheduler {
         guard let index = active.segmentIndex, index < segments.count else { return }
         let existing = segments[index]
         let actual = active.producedOutputFrames
+        // A track that produced nothing at all leaves no record: an empty span would be a phantom
+        // segment, and a boundary against it would name a track the listener never heard.
+        if actual == 0, !materializedInstances.contains(existing.playInstance) {
+            segments.remove(at: index)
+            for other in sources where (other.segmentIndex ?? 0) > index {
+                other.segmentIndex = (other.segmentIndex ?? 0) - 1
+            }
+            return
+        }
         if existing.frameCount != actual {
             reconciliations.append((existing.songID, existing.frameCount, actual))
             segments[index] = GaplessScheduledSegment(
@@ -387,6 +424,7 @@ final class GaplessBufferScheduler {
         sources.removeAll()
         retainedConverter = nil
         segments.removeAll()
+        materializedInstances.removeAll()
         inFlightChunks.removeAll()
         inbox.reset()
         pool.reclaimAll()
@@ -398,7 +436,9 @@ final class GaplessBufferScheduler {
     func pruneSegments(before instance: GaplessPlayInstanceID) {
         guard let index = segments.firstIndex(where: { $0.playInstance == instance }), index > 0
         else { return }
+        let dropped = segments.prefix(index).map(\.playInstance)
         segments.removeFirst(index)
+        for playInstance in dropped { materializedInstances.remove(playInstance) }
         for active in sources {
             if let segmentIndex = active.segmentIndex { active.segmentIndex = segmentIndex - index }
         }
