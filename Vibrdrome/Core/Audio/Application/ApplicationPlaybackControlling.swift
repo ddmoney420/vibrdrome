@@ -26,6 +26,16 @@ protocol PlaybackTransportControlling: AnyObject {
     func next()
     func previous()
     func seek(to time: TimeInterval)
+    /// Jump straight to a queue position — a tapped queue row.
+    func skipToIndex(_ index: Int)
+}
+
+extension PlaybackTransportControlling {
+    /// The form ~40 call sites use. A protocol requirement cannot carry default arguments, so the
+    /// defaults live here — and delegate exactly once to the semantic requirement.
+    func play(song: Song, from queue: [Song]? = nil) {
+        play(song: song, from: queue, at: 0)
+    }
 }
 
 // MARK: - Queue
@@ -37,6 +47,10 @@ protocol PlaybackQueueControlling: AnyObject {
     func addToQueueNext(_ song: Song)
     func addToQueueNext(_ songs: [Song])
     func updateQueueSongStarred(id: String, starred: Bool)
+    func updateQueueSongRating(id: String, rating: Int?)
+    func clearQueue()
+    func removeFromQueue(atAbsolute index: Int)
+    func moveInUpNext(from source: IndexSet, to destination: Int)
 }
 
 // MARK: - Observable state
@@ -46,13 +60,22 @@ protocol PlaybackStateProviding: AnyObject {
     var isPlaying: Bool { get }
     var currentSong: Song? { get }
     var currentTime: TimeInterval { get }
+    /// Live position sampled from the player rather than the periodic tick. The karaoke lyrics view
+    /// re-reads this up to 30 fps for word placement; it is a time value, not the player itself.
+    var smoothCurrentTime: TimeInterval { get }
+    var isBuffering: Bool { get }
     var duration: TimeInterval { get }
     /// Server-declared duration reconciled against what the player reports.
     var effectiveDuration: TimeInterval { get }
     var queue: [Song] { get }
     var currentIndex: Int { get }
-    /// Where playback was started from, for UI attribution.
-    var playingFromContext: String? { get }
+    /// What plays next, honouring shuffle. Derived by the engine, not stored.
+    var upNextEntries: [(index: Int, song: Song)] { get }
+    /// Index the engine would advance to. The mini player peeks at it to name the next track.
+    func nextSongIndex() -> Int?
+    /// Where playback was started from, for UI attribution. Views set it alongside starting
+    /// playback, so it is read-write — it is an application concept, not engine state.
+    var playingFromContext: String? { get set }
 }
 
 // MARK: - Repeat and shuffle
@@ -74,10 +97,13 @@ protocol PlaybackModeControlling: AnyObject {
 protocol PlaybackRadioControlling: AnyObject {
     var isRadioMode: Bool { get }
     var currentRadioStation: InternetRadioStation? { get }
+    /// Artist the radio session was seeded from, shown in the queue header.
+    var radioSeedArtistName: String? { get }
     func startRadio(artistName: String)
     func startRadioFromSong(_ song: Song)
     func startSongSimilarityMix(_ song: Song)
     func playRadio(station: InternetRadioStation)
+    func stopRadioMode()
 }
 
 // MARK: - Processing
@@ -85,7 +111,13 @@ protocol PlaybackRadioControlling: AnyObject {
 @MainActor
 protocol PlaybackProcessingControlling: AnyObject {
     var eqEnabled: Bool { get }
+    /// Output volume as the engine applies it, after ReplayGain scaling.
     var volume: Float { get set }
+    /// The user's own volume setting, distinct from ReplayGain scaling.
+    var userVolume: Float { get set }
+    var playbackRate: Float { get set }
+    /// Whether a visualizer is attached; the visualizer view sets it as it appears and disappears.
+    var visualizerActive: Bool { get set }
     func applyEQToggle(enabled: Bool)
     func applyEffectiveVolume()
 }

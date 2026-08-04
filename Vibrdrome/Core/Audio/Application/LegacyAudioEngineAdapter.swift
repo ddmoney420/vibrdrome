@@ -29,7 +29,7 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
 
     // MARK: - Transport
 
-    func play(song: Song, from queue: [Song]? = nil, at index: Int = 0) {
+    func play(song: Song, from queue: [Song]?, at index: Int) {
         count("play")
         engine.play(song: song, from: queue, at: index)
     }
@@ -40,6 +40,7 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
     func next() { count("next"); engine.next() }
     func previous() { count("previous"); engine.previous() }
     func seek(to time: TimeInterval) { count("seek"); engine.seek(to: time) }
+    func skipToIndex(_ index: Int) { count("skipToIndex"); engine.skipToIndex(index) }
 
     // MARK: - Queue
 
@@ -51,17 +52,37 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
         count("updateQueueSongStarred")
         engine.updateQueueSongStarred(id: id, starred: starred)
     }
+    func updateQueueSongRating(id: String, rating: Int?) {
+        count("updateQueueSongRating")
+        engine.updateQueueSongRating(id: id, rating: rating)
+    }
+    func clearQueue() { count("clearQueue"); engine.clearQueue() }
+    func removeFromQueue(atAbsolute index: Int) {
+        count("removeFromQueue")
+        engine.removeFromQueue(atAbsolute: index)
+    }
+    func moveInUpNext(from source: IndexSet, to destination: Int) {
+        count("moveInUpNext")
+        engine.moveInUpNext(from: source, to: destination)
+    }
 
     // MARK: - State
 
     var isPlaying: Bool { engine.isPlaying }
     var currentSong: Song? { engine.currentSong }
     var currentTime: TimeInterval { engine.currentTime }
+    var smoothCurrentTime: TimeInterval { engine.smoothCurrentTime }
+    var isBuffering: Bool { engine.isBuffering }
     var duration: TimeInterval { engine.duration }
     var effectiveDuration: TimeInterval { engine.effectiveDuration }
     var queue: [Song] { engine.queue }
     var currentIndex: Int { engine.currentIndex }
-    var playingFromContext: String? { engine.playingFromContext }
+    var upNextEntries: [(index: Int, song: Song)] { engine.upNextEntries }
+    func nextSongIndex() -> Int? { engine.nextSongIndex() }
+    var playingFromContext: String? {
+        get { engine.playingFromContext }
+        set { engine.playingFromContext = newValue }
+    }
 
     // MARK: - Repeat and shuffle
 
@@ -74,6 +95,7 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
 
     var isRadioMode: Bool { engine.isRadioMode }
     var currentRadioStation: InternetRadioStation? { engine.currentRadioStation }
+    var radioSeedArtistName: String? { engine.radioSeedArtistName }
     func startRadio(artistName: String) { count("startRadio"); engine.startRadio(artistName: artistName) }
     func startRadioFromSong(_ song: Song) { count("startRadioFromSong"); engine.startRadioFromSong(song) }
     func startSongSimilarityMix(_ song: Song) {
@@ -81,10 +103,23 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
         engine.startSongSimilarityMix(song)
     }
     func playRadio(station: InternetRadioStation) { count("playRadio"); engine.playRadio(station: station) }
+    func stopRadioMode() { count("stopRadioMode"); engine.stopRadioMode() }
 
     // MARK: - Processing
 
     var eqEnabled: Bool { engine.eqEnabled }
+    var userVolume: Float {
+        get { engine.userVolume }
+        set { engine.userVolume = newValue }
+    }
+    var playbackRate: Float {
+        get { engine.playbackRate }
+        set { engine.playbackRate = newValue }
+    }
+    var visualizerActive: Bool {
+        get { engine.visualizerActive }
+        set { engine.visualizerActive = newValue }
+    }
     var volume: Float {
         get { engine.volume }
         set { engine.volume = newValue }
