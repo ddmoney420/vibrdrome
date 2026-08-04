@@ -20,6 +20,15 @@ struct GaplessFailureAndSoakTests {
     /// Bounded by default so `verify-build.sh` stays usable. Set `GAPLESS_SOAK=full` for the long
     /// run; the assertions are identical, only the volume changes.
     static var soakIsFull: Bool { ProcessInfo.processInfo.environment["GAPLESS_SOAK"] == "full" }
+
+    /// Printed by every soak test so a gate can prove which branch actually ran.
+    ///
+    /// This exists because the mistake has already been made here: `GAPLESS_SOAK=full` was reported
+    /// as a full run when xcodebuild had not forwarded the variable and the bounded path executed —
+    /// the identical runtime was the only clue. A marker in the output removes the guesswork.
+    static func announceSoakMode() {
+        print("GAPLESS_SOAK_MODE=\(soakIsFull ? "full" : "bounded")")
+    }
     static var soakTransitions: Int { soakIsFull ? 500 : 60 }
     static var soakMutations: Int { soakIsFull ? 250 : 30 }
 
@@ -381,6 +390,7 @@ struct GaplessFailureAndSoakTests {
     /// CI-sized by default; `GAPLESS_SOAK=full` raises the volume without changing a single
     /// assertion, so the long run proves the same properties rather than different ones.
     @Test func soakSustainsPlaybackWithoutDriftOrLeaks() async throws {
+        Self.announceSoakMode()
         let rig = try Self.makeRig(count: 4, repeatMode: .all)
         defer { rig.cleanUp() }
         let playerBefore = ObjectIdentifier(rig.controller.backend.engine.player)
@@ -429,6 +439,7 @@ struct GaplessFailureAndSoakTests {
 
     /// Transport and mutation churn under sustained playback.
     @Test func soakSustainsTransportAndMutationChurn() async throws {
+        Self.announceSoakMode()
         let rig = try Self.makeRig(count: 4, repeatMode: .all)
         defer { rig.cleanUp() }
         let playerBefore = ObjectIdentifier(rig.controller.backend.engine.player)
@@ -468,6 +479,7 @@ struct GaplessFailureAndSoakTests {
 
     /// Visualizer open/close churn plus EQ and ReplayGain changes during sustained playback.
     @Test func soakSustainsVisualizerAndEffectChurn() async throws {
+        Self.announceSoakMode()
         let rig = try Self.makeRig(count: 4, repeatMode: .all)
         defer { rig.cleanUp() }
         rig.controller.backend.engine.installVisualizerFeed()
@@ -505,6 +517,7 @@ struct GaplessFailureAndSoakTests {
 
     /// 100 stop/start cycles on one engine instance.
     @Test func soakSustainsStopStartCycles() async throws {
+        Self.announceSoakMode()
         let rig = try Self.makeRig(count: 2)
         defer { rig.cleanUp() }
         let playerBefore = ObjectIdentifier(rig.controller.backend.engine.player)

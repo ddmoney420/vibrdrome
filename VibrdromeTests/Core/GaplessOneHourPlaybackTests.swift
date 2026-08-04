@@ -122,6 +122,17 @@ struct GaplessOneHourPlaybackTests {
     /// relaxed to make this pass.
     @Test(.enabled(if: GaplessLongRunGate.isFullHour))
     func continuousPlaybackHoldsUpOverALongRun() async throws {
+        // Markers a gate can check. A skipped test, a bounded run reported as an hour, or an early
+        // exit that still returns success are all indistinguishable from a pass without them.
+        print("GAPLESS_HOUR_ENABLED=\(GaplessLongRunGate.isFullHour ? 1 : 0)")
+        print("GAPLESS_HOUR_STARTED requestedSeconds=\(Self.runSeconds)")
+        let hourStartedAt = Date()
+        defer {
+            print("""
+                GAPLESS_HOUR_COMPLETED measuredSeconds=\
+                \(String(format: "%.1f", Date().timeIntervalSince(hourStartedAt)))
+                """)
+        }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ghour-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
