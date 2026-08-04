@@ -7,6 +7,55 @@ import os.log
 /// Recorded so the preparation deadline can be *measured* rather than guessed: the only number that
 /// matters is how much time was left between an item becoming ready and the moment it had to be
 /// audible, and that cannot be reasoned about from code.
+/// A bounded rolling window of one lead-time metric, for the Debug diagnostics display.
+///
+/// Bounded on purpose: a playback session produces thousands of transitions, and retaining every
+/// sample to show an average would be the sort of unbounded history this engine spent a checkpoint
+/// removing. 100 samples is enough for a stable average and costs 800 bytes.
+struct GaplessLeadTimeWindow: Sendable {
+    static let capacity = 100
+
+    private(set) var samples: [TimeInterval] = []
+    private(set) var latest: TimeInterval?
+
+    /// Records a sample, discarding the oldest once the window is full.
+    mutating func record(_ value: TimeInterval) {
+        latest = value
+        samples.append(value)
+        if samples.count > Self.capacity { samples.removeFirst(samples.count - Self.capacity) }
+    }
+
+    var minimum: TimeInterval? { samples.min() }
+    var average: TimeInterval? {
+        guard !samples.isEmpty else { return nil }
+        return samples.reduce(0, +) / Double(samples.count)
+    }
+    var count: Int { samples.count }
+    var hasMeasurement: Bool { latest != nil }
+
+    mutating func reset() {
+        samples.removeAll(keepingCapacity: true)
+        latest = nil
+    }
+}
+
+/// The two lead-time windows, as the Debug screen reads them.
+struct GaplessLeadTimeStatistics: Sendable {
+    /// **ready → audible.** Preserved from the existing production definition: how much slack there
+    /// was between an item being ready to schedule and the moment it had to be heard. It is NOT
+    /// "requested → ready"; the label in the Debug screen says so, because silently redefining a
+    /// metric is worse than an awkward name.
+    var preparation = GaplessLeadTimeWindow()
+    /// **scheduled → audible.** Time between the item's audio being handed to the player node and
+    /// it becoming audible.
+    var scheduling = GaplessLeadTimeWindow()
+
+    mutating func reset() {
+        preparation.reset()
+        scheduling.reset()
+    }
+}
+
 struct GaplessPreparationRecord: Sendable {
     let itemID: GaplessQueueItemID
     let songID: String
@@ -80,6 +129,9 @@ final class GaplessPlaybackController {
     private(set) var deadlineMisses: [GaplessDeadlineMiss] = []
     /// Async preparation results that arrived after their generation was superseded.
     private(set) var staleResultCount = 0
+    /// Bounded lead-time windows for the Debug diagnostics screen. Read-only to the UI; written only
+    /// here, on the main actor, at the audible boundary — never on the render callback.
+    private(set) var leadTimeStatistics = GaplessLeadTimeStatistics()
     /// Rations preparation work for planned occurrences.
     ///
     /// Without it, `replenishTail` re-attempted any not-yet-ready occurrence on every tick, so a
@@ -113,6 +165,17 @@ final class GaplessPlaybackController {
         self.backend = backend
         self.preparer = preparer
         self.window = window
+        #if DEBUG
+        // Registered weakly so the Debug diagnostics screen can read lead times. No effect on
+        // playback, and compiled out of release builds.
+        GaplessDiagnosticsRegistry.register(self)
+        #endif
+    }
+
+    deinit {
+        #if DEBUG
+        // Nothing to unregister explicitly: the registry holds a weak reference and nils itself.
+        #endif
     }
 
     // MARK: - Transport
@@ -159,6 +222,8 @@ final class GaplessPlaybackController {
         // the user has stopped.
         preparationGate.reset()
         occurrenceEpochs.removeAll()
+        // Cleared when the session is stopped, not at every track boundary.
+        leadTimeStatistics.reset()
         backend.stop()
         session.stop()
         observedBoundaries.removeAll()
@@ -434,6 +499,14 @@ final class GaplessPlaybackController {
         if let latest = live.last { audiblePlayInstance = latest.playInstance }
         for event in live where preparationRecords[event.itemID]?.audibleAt == nil {
             preparationRecords[event.itemID]?.audibleAt = Date()
+            // Recorded from the record that just became audible, so a stale queue generation, a
+            // superseded tail or a replayed play instance cannot contribute: `live` has already been
+            // filtered to the current tail, and a record only reaches here once.
+            if let record = preparationRecords[event.itemID],
+               record.queueGeneration == session.queue.generation {
+                if let lead = record.preparationLeadTime { leadTimeStatistics.preparation.record(lead) }
+                if let lead = record.schedulingLeadTime { leadTimeStatistics.scheduling.record(lead) }
+            }
         }
         // Segments before the audible one describe audio that has already gone by; dropping them
         // keeps the timeline record bounded over a long run.

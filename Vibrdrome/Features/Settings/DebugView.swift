@@ -17,6 +17,7 @@ struct DebugView: View {
         List {
             serverSection
             audioSection
+            gaplessLeadTimeSection
             cacheSection
             errorsSection
             actionsSection
@@ -88,6 +89,53 @@ struct DebugView: View {
     }
 
     // MARK: - Cache
+
+    /// Lead-time diagnostics for the persistent gapless engine.
+    ///
+    /// The labels spell out each definition because they are not what the names suggest:
+    /// "preparation lead" is *ready to audible*, not *requested to ready*. That is the existing
+    /// production measurement, and renaming or recomputing it for a nicer label would make the
+    /// number on screen disagree with the number the engine uses.
+    private var gaplessLeadTimeSection: some View {
+        Section {
+            if let controller = GaplessDiagnosticsRegistry.current {
+                let stats = controller.leadTimeStatistics
+                leadRows(title: "Preparation lead", window: stats.preparation)
+                leadRows(title: "Scheduling lead", window: stats.scheduling)
+                row("Samples retained",
+                    value: "\(stats.preparation.count)/\(GaplessLeadTimeWindow.capacity)")
+            } else {
+                row("Persistent engine", value: "Not active")
+                row("Preparation lead", value: "Not measured")
+                row("Scheduling lead", value: "Not measured")
+            }
+        } header: {
+            Text("Gapless Lead Times")
+        } footer: {
+            Text("""
+                Preparation lead = item ready → item audible. \
+                Scheduling lead = item handed to the player node → item audible. \
+                Rolling window of the last \(GaplessLeadTimeWindow.capacity) transitions, \
+                cleared when playback is stopped.
+                """)
+        }
+    }
+
+    @ViewBuilder
+    private func leadRows(title: String, window: GaplessLeadTimeWindow) -> some View {
+        if window.hasMeasurement {
+            row("\(title) latest", value: Self.milliseconds(window.latest))
+            row("\(title) minimum", value: Self.milliseconds(window.minimum))
+            row("\(title) average", value: Self.milliseconds(window.average))
+        } else {
+            row(title, value: "Not measured")
+        }
+    }
+
+    private static func milliseconds(_ value: TimeInterval?) -> String {
+        guard let value else { return "Not measured" }
+        return String(format: "%.1f ms", value * 1_000)
+    }
 
     private var cacheSection: some View {
         Section("Cache & Storage") {
