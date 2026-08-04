@@ -6,7 +6,7 @@ struct QueueView: View {
     @State private var showingSaveAlert = false
     @State private var saveMessage = ""
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         NavigationStack {

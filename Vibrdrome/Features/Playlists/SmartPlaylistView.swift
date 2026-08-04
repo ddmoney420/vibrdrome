@@ -269,7 +269,7 @@ struct SmartPlaylistView: View {
     // Similar songs view
     private var similarView: some View {
         VStack(spacing: 12) {
-            if let song = AudioEngine.shared.currentSong {
+            if let song = ApplicationPlayback.shared.currentSong {
                 HStack(spacing: 12) {
                     AlbumArtView(coverArtId: song.coverArt, size: 48, cornerRadius: 8)
                     VStack(alignment: .leading, spacing: 2) {

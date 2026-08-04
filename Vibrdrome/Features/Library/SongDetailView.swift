@@ -17,7 +17,7 @@ struct SongDetailView: View {
     @State private var lyricsLoaded = false
     @State private var isDownloaded = false
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         ScrollView {

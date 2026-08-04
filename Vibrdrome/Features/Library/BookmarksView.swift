@@ -7,7 +7,7 @@ struct BookmarksView: View {
     @State private var isLoading = true
     @State private var error: String?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         List {

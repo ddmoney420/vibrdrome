@@ -14,7 +14,7 @@ struct RadioView: View {
     @AppStorage(UserDefaultsKeys.gridDensity) private var gridDensityRaw: String = GridDensity.comfortable.rawValue
     private var gridDensity: GridDensity { GridDensity(rawValue: gridDensityRaw) ?? .comfortable }
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var filteredStations: [InternetRadioStation] {
         if searchText.isEmpty { return stations }

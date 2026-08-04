@@ -54,7 +54,7 @@ struct SidePanelContainer<Content: View>: View {
 
 struct QueuePanelView: View {
     @Environment(AppState.self) private var appState
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         SidePanelContainer(title: "Queue", onClose: {
@@ -198,7 +198,7 @@ struct LyricsPanelView: View {
     @State private var error: String?
     @State private var loadedSongId: String?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var selectedLyrics: StructuredLyrics? {
         guard let list = lyricsList?.structuredLyrics, !list.isEmpty else { return nil }
@@ -266,7 +266,7 @@ private struct SyncedLyricsPanelContent: View {
     @AppStorage(UserDefaultsKeys.reduceMotion) private var reduceMotion = false
     private let timer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         GeometryReader { geo in
@@ -348,7 +348,7 @@ struct ArtistInfoPanelView: View {
     @State private var isLoading = true
     @State private var loadedArtistId: String?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
     private var artistId: String? { engine.currentSong?.artistId }
     private var artistName: String? { engine.currentSong?.artist }
 

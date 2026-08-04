@@ -42,7 +42,7 @@ struct BatchActionBar: View {
             Button {
                 let selected = songs.filter { selectedSongIds.contains($0.id) }
                 for song in selected {
-                    AudioEngine.shared.addToQueue(song)
+                    ApplicationPlayback.shared.addToQueue(song)
                 }
                 #if os(iOS)
                 Haptics.light()

@@ -18,7 +18,7 @@ struct LyricsView: View {
     @State private var isLoading = true
     @State private var error: String?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         NavigationStack {
@@ -220,7 +220,7 @@ enum LyricHighlightColor: String, CaseIterable, Identifiable {
 
 private struct SyncedLyricsContent: View {
     let lyrics: StructuredLyrics
-    let engine: AudioEngine
+    let engine: any ApplicationPlaybackControlling
     let songId: String
 
     @State private var activeLineIndex: Int = 0
@@ -413,7 +413,7 @@ private struct SyncedLyricsContent: View {
 /// is one small `Text` rebuild.
 private struct KaraokeLineView: View {
     let cueLine: CueLine
-    let engine: AudioEngine
+    let engine: any ApplicationPlaybackControlling
     /// `lyrics.offset` + the user's timing nudge, applied to the live clock.
     let baseOffsetMs: Int
     /// `.wordDimmed` dims not-yet-sung words; `.word` keeps them full strength.

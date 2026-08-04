@@ -83,25 +83,25 @@ private struct TrackContextMenuContent: View {
     @ViewBuilder
     private var playbackActions: some View {
         Button {
-            AudioEngine.shared.play(song: song, from: queue, at: index ?? 0)
+            ApplicationPlayback.shared.play(song: song, from: queue, at: index ?? 0)
         } label: {
             Label("Play", systemImage: "play.fill")
         }
 
         Button {
-            AudioEngine.shared.addToQueueNext(song)
+            ApplicationPlayback.shared.addToQueueNext(song)
         } label: {
             Label("Play Next", systemImage: "text.insert")
         }
 
         Button {
-            AudioEngine.shared.addToQueue(song)
+            ApplicationPlayback.shared.addToQueue(song)
         } label: {
             Label("Add to Queue", systemImage: "text.append")
         }
 
         Button {
-            AudioEngine.shared.startRadioFromSong(song)
+            ApplicationPlayback.shared.startRadioFromSong(song)
         } label: {
             Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
         }

@@ -11,7 +11,7 @@ struct MiniPlayerView: View {
     @AppStorage(UserDefaultsKeys.enableMiniPlayerSwipe) private var enableMiniPlayerSwipe = true
     @State private var dominantColor: Color?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var shouldSpin: Bool {
         engine.isPlaying && !disableSpinningArt && !reduceMotion
@@ -133,12 +133,12 @@ struct MiniPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
@@ -284,7 +284,7 @@ struct MacMiniPlayerView: View {
         sidebarSelectionRaw = "nowPlaying"
     }
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -591,12 +591,12 @@ struct MacMiniPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
@@ -663,7 +663,7 @@ struct PopOutPlayerView: View {
     @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
     @State private var dominantColor: Color?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var shouldSpin: Bool {
         engine.isPlaying && !disableSpinningArt && !reduceMotion
@@ -785,12 +785,12 @@ struct PopOutPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }

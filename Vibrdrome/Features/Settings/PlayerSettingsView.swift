@@ -288,7 +288,7 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("equalizerToggle")
             .onChange(of: eqEnabled) { _, newValue in
-                AudioEngine.shared.applyEQToggle(enabled: newValue)
+                ApplicationPlayback.shared.applyEQToggle(enabled: newValue)
             }
 
             NavigationLink {

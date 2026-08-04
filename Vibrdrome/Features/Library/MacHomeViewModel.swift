@@ -255,8 +255,8 @@ final class MacHomeViewModel {
         guard let pool = try? await appState.subsonicClient.getRandomSongs(size: 200) else { return }
         let mix = SidebarContentView.diversifyMix(pool, target: 50, maxPerArtist: 3)
         guard let first = mix.first else { return }
-        AudioEngine.shared.play(song: first, from: mix, at: 0)
-        AudioEngine.shared.playingFromContext = "Random Mix"
+        ApplicationPlayback.shared.play(song: first, from: mix, at: 0)
+        ApplicationPlayback.shared.playingFromContext = "Random Mix"
         appState.activeSidePanel = .queue
     }
 
@@ -268,7 +268,7 @@ final class MacHomeViewModel {
               let album = albums.first,
               let detail = try? await appState.subsonicClient.getAlbum(id: album.id),
               let songs = detail.song, let first = songs.first else { return }
-        AudioEngine.shared.play(song: first, from: songs, at: 0)
+        ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
         appState.pendingNavigation = .album(id: album.id)
     }
 
@@ -278,8 +278,8 @@ final class MacHomeViewModel {
         defer { isLoadingShuffleFavorites = false }
         let shuffled = starredSongs.shuffled()
         guard let first = shuffled.first else { return }
-        AudioEngine.shared.play(song: first, from: shuffled, at: 0)
-        AudioEngine.shared.playingFromContext = "Shuffle Favorites"
+        ApplicationPlayback.shared.play(song: first, from: shuffled, at: 0)
+        ApplicationPlayback.shared.playingFromContext = "Shuffle Favorites"
         appState.activeSidePanel = .queue
     }
 }

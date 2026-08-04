@@ -139,7 +139,7 @@ struct SettingsView: View {
         }
         .alert("Sign Out?", isPresented: $showLogoutConfirmation) {
             Button("Sign Out", role: .destructive) {
-                AudioEngine.shared.stop()
+                ApplicationPlayback.shared.stop()
                 appState.clearCredentials()
             }
             Button("Cancel", role: .cancel) {}

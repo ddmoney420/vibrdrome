@@ -265,7 +265,7 @@ struct SearchView: View {
             #if os(iOS)
             Haptics.light()
             #endif
-            AudioEngine.shared.play(song: song, from: songs, at: index)
+            ApplicationPlayback.shared.play(song: song, from: songs, at: index)
         }
         .trackContextMenu(song: song, queue: songs, index: index)
     }

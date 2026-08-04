@@ -87,7 +87,7 @@ struct ServerManagerView: View {
 
         return Button {
             if !isActive {
-                AudioEngine.shared.stop()
+                ApplicationPlayback.shared.stop()
                 appState.switchToServer(id: server.id)
             }
         } label: {
@@ -170,7 +170,7 @@ struct ServerManagerView: View {
     private func serverContextMenuItems(_ server: SavedServer, isActive: Bool) -> some View {
         if !isActive {
             Button {
-                AudioEngine.shared.stop()
+                ApplicationPlayback.shared.stop()
                 appState.switchToServer(id: server.id)
             } label: {
                 Label("Switch To", systemImage: "arrow.right.circle")
