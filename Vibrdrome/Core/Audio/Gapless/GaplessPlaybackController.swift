@@ -80,6 +80,18 @@ final class GaplessPlaybackController {
     private(set) var deadlineMisses: [GaplessDeadlineMiss] = []
     /// Async preparation results that arrived after their generation was superseded.
     private(set) var staleResultCount = 0
+    /// Rations preparation work for planned occurrences.
+    ///
+    /// Without it, `replenishTail` re-attempted any not-yet-ready occurrence on every tick, so a
+    /// permanently unplayable source produced 172-450 attempts in ~1.5 s. The pump may still observe
+    /// a failed occurrence constantly; the gate is what stops it doing work each time.
+    let preparationGate = GaplessPreparationGate()
+    /// How many times each slot has begun a new play, plus any explicit retries.
+    ///
+    /// This is what separates "the pump asked again about the same planned play" from "this slot is
+    /// being played again" — a Repeat All wrap and a Repeat One replay are new plays and must get a
+    /// clean attempt, while a pump cycle that changed nothing must not.
+    private var occurrenceEpochs: [GaplessQueueItemID: UInt64] = [:]
     /// Boundary events observed on the render clock, newest last.
     private(set) var observedBoundaries: [GaplessBoundaryEvent] = []
     /// Play instance of the currently audible segment.
@@ -124,7 +136,29 @@ final class GaplessPlaybackController {
     }
 
     /// Stop everything and leave the graph reusable.
+    /// Clear a failed occurrence and allow exactly one fresh attempt.
+    ///
+    /// A deliberate retry is a *new* occurrence, not a continuation: the retry epoch advances, so the
+    /// permanent-failure record for the old one stays put and cannot be confused with the new
+    /// attempt's state.
+    func retryPreparation(itemID: GaplessQueueItemID) {
+        guard let item = session.queue.item(id: itemID) else { return }
+        let identity = GaplessPreparationIdentity(
+            itemID: itemID, songID: item.songID, queueGeneration: session.queue.generation,
+            occurrenceEpoch: occurrenceEpochs[itemID] ?? 0)
+        _ = preparationGate.explicitRetry(identity)
+        occurrenceEpochs[itemID] = (occurrenceEpochs[itemID] ?? 0) + 1
+    }
+
+    /// Occurrences that will not be retried without explicit action, for the application-facing
+    /// state. A controller must not look plainly `playing` when nothing more can be produced.
+    var hasPermanentPreparationFailure: Bool { preparationGate.permanentFailureCount > 0 }
+
     func stop() {
+        // Every planned occurrence is abandoned; a pending retry deadline must not revive one after
+        // the user has stopped.
+        preparationGate.reset()
+        occurrenceEpochs.removeAll()
         backend.stop()
         session.stop()
         observedBoundaries.removeAll()
@@ -234,6 +268,10 @@ final class GaplessPlaybackController {
         let planned = session.plannedItemIDs(depth: window.size)
         guard !planned.isEmpty else { return }
         let generation = session.queue.generation
+        // A queue edit abandons every occurrence planned under the old generation, so a retry
+        // deadline that expires afterwards cannot start work for a queue that no longer exists.
+        preparationGate.cancelAll(except: generation)
+        preparationGate.prune(keeping: generation, activeItems: Set(session.queue.items.map(\.id)))
 
         // The tail is tracked POSITIONALLY, not by item identity. A slot is legitimately scheduled
         // more than once — Repeat All wraps back to it, Repeat One plays it over and over — so
@@ -248,8 +286,16 @@ final class GaplessPlaybackController {
 
         var toSchedule: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
                           generation: UInt64)] = []
+        var identities: [GaplessQueueItemID: GaplessPreparationIdentity] = [:]
         for (offset, itemID) in pending.enumerated() {
             guard let item = session.queue.item(id: itemID) else { continue }
+            let startOffset: AVAudioFramePosition = offset == 0 ? sourceOffsetFrames : 0
+            let identity = preparationIdentity(for: itemID, songID: item.songID,
+                                               generation: generation, offset: startOffset)
+            // One occurrence, one attempt at a time — and none at all while a failure is still
+            // cooling off or has been classified permanent.
+            guard preparationGate.beginAttemptIfAllowed(identity) else { continue }
+
             var record = preparationRecords[itemID]
                 ?? GaplessPreparationRecord(itemID: itemID, songID: item.songID,
                                             queueGeneration: generation, requestedAt: Date())
@@ -261,6 +307,9 @@ final class GaplessPlaybackController {
                 guard session.queue.isCurrent(generation: generation) else {
                     staleResultCount += 1
                     preparationRecords[itemID] = record
+                    // The queue moved on; this occurrence is abandoned rather than left `preparing`,
+                    // which would block its replacement forever.
+                    preparationGate.cancel(identity)
                     continue
                 }
                 // Only a batch that begins at the audible item can resume mid-track (restart/seek).
@@ -268,32 +317,65 @@ final class GaplessPlaybackController {
                     prepared = Self.offsetting(prepared, byFrames: sourceOffsetFrames)
                 }
                 session.markReady(itemID, renderFrames: prepared.renderFrames, generation: generation)
+                preparationGate.recordReady(identity)
                 toSchedule.append((prepared, itemID, generation))
+                identities[itemID] = identity
                 record.scheduledAt = Date()
                 preparationRecords[itemID] = record
             } catch {
                 record.failure = error.localizedDescription
                 preparationRecords[itemID] = record
                 session.markFailed(itemID, generation: generation)
-                log.error("preparation failed for \(item.songID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                // Classified and rationed here; the gate logs the transition once rather than every
+                // observation, so a permanent failure cannot flood the log.
+                preparationGate.recordFailure(identity, error: error)
             }
         }
 
         guard !toSchedule.isEmpty else { return }
+        scheduleBatch(toSchedule, identities: identities, generation: generation)
+    }
+
+    /// Hand a prepared batch to the backend and record what happened to each occurrence.
+    private func scheduleBatch(_ batch: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
+                                          generation: UInt64)],
+                               identities: [GaplessQueueItemID: GaplessPreparationIdentity],
+                               generation: UInt64) {
         do {
-            let segments = try backend.schedule(toSchedule)
+            let segments = try backend.schedule(batch)
             for segment in segments {
                 session.markScheduled(segment.itemID, startFrame: segment.startFrame,
                                       generation: generation)
+                if let identity = identities[segment.itemID] {
+                    preparationGate.recordScheduled(identity)
+                    // This slot has now begun a play; its next planned play is a new occurrence and
+                    // gets its own attempt. Without this a Repeat All wrap could never be prepared.
+                    occurrenceEpochs[segment.itemID] = (occurrenceEpochs[segment.itemID] ?? 0) + 1
+                }
                 scheduleGainEvent(for: segment)
             }
         } catch {
             log.error("scheduling failed: \(error.localizedDescription, privacy: .public)")
-            for entry in toSchedule { session.markFailed(entry.itemID, generation: generation) }
+            for entry in batch {
+                session.markFailed(entry.itemID, generation: generation)
+                // Classified like any other failure, so a scheduling fault cannot spin either.
+                if let identity = identities[entry.itemID] {
+                    preparationGate.recordFailure(identity, error: error)
+                }
+            }
         }
     }
 
     /// Resume a prepared track from a source offset, preserving its trim range.
+    /// Identity for a planned occurrence, stable across pump cycles that change nothing.
+    private func preparationIdentity(for itemID: GaplessQueueItemID, songID: String,
+                                     generation: UInt64,
+                                     offset: AVAudioFramePosition) -> GaplessPreparationIdentity {
+        GaplessPreparationIdentity(itemID: itemID, songID: songID, queueGeneration: generation,
+                                   sourceStartOffsetFrames: offset,
+                                   occurrenceEpoch: occurrenceEpochs[itemID] ?? 0)
+    }
+
     /// Resume a prepared track from a source offset, preserving its trim range **and recording how
     /// far in it starts**, so elapsed time stays position-in-track rather than time-since-seek.
     private static func offsetting(_ track: GaplessPreparedTrack,
