@@ -9,6 +9,7 @@ struct DebugView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var downloadedSongs: [DownloadedSong]
     @State private var imageCacheSize: String = "Calculating..."
+    @State private var persistentPreparationMessage: String?
     @State private var recentErrors: [DebugErrorEntry] = []
     @State private var showExportSheet = false
     @State private var exportText = ""
@@ -17,6 +18,7 @@ struct DebugView: View {
         List {
             serverSection
             audioSection
+            playbackRouterSection
             gaplessLeadTimeSection
             cacheSection
             errorsSection
@@ -89,6 +91,67 @@ struct DebugView: View {
     }
 
     // MARK: - Cache
+
+    /// Router state and the explicit persistent-construction trigger.
+    ///
+    /// **The button builds the stack; it does not play anything.** Lane 3C exists to measure what
+    /// construction costs and to prove the result is inert, so preparation has to be something a
+    /// person asks for rather than a side effect of using the app. Selected backend stays Legacy
+    /// afterwards — if this screen ever shows anything else before Lane 3D, that is the bug.
+    @ViewBuilder
+    private var playbackRouterSection: some View {
+        if let router = ApplicationPlayback.router {
+            let diagnostics = router.diagnostics
+            Section {
+                row("Persistent preparation", value: diagnostics.preparationDescription)
+                row("Selected backend", value: diagnostics.selectedBackend == .legacy ? "Legacy" : "Persistent")
+                row("Legacy adapter", value: diagnostics.legacyAdapterActive ? "Active" : "Inactive")
+                row("Persistent controller",
+                    value: diagnostics.persistentControllerConstructed ? "Constructed" : "Not constructed")
+                row("Persistent engine selected",
+                    value: diagnostics.selectedBackend == .persistent ? "Yes" : "No")
+
+                if let assembly = router.persistentAssembly {
+                    let inert = assembly.diagnostics
+                    row("Assembly generation", value: "#\(inert.generation)")
+                    row("Graph format", value: inert.graphFormat)
+                    row("Engine running", value: inert.engineRunning ? "Yes" : "No")
+                    row("Player node playing", value: inert.playerNodePlaying ? "Yes" : "No")
+                    row("Buffer pool", value: inert.bufferPoolAllocated
+                        ? "\(inert.bufferPoolAvailable ?? 0)/\(inert.bufferPoolCapacity ?? 0) available"
+                        : "Not allocated (lazy)")
+                    row("Live source files", value: "\(inert.liveSourceFiles)")
+                    row("Live converters", value: "\(inert.liveConverters)")
+                    row("Scheduled buffers", value: "\(inert.scheduledBuffers)")
+                    row("Engine state", value: inert.engineState)
+                }
+
+                Button("Prepare Persistent Engine") {
+                    do {
+                        try router.preparePersistentBackend()
+                        persistentPreparationMessage = "Prepared. Selected backend is still Legacy."
+                    } catch let failure as PersistentPreparationFailure {
+                        persistentPreparationMessage = "Preparation failed: \(failure.rawValue)"
+                    } catch {
+                        persistentPreparationMessage = "Preparation failed."
+                    }
+                }
+                .disabled(diagnostics.persistentPreparationState == .ready)
+
+                if let message = persistentPreparationMessage {
+                    Text(message).font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Playback Router")
+            } footer: {
+                Text("""
+                    Builds the persistent engine without selecting or starting it. Playback keeps \
+                    running through the legacy engine either way; this only measures what \
+                    construction costs and proves the result is inert.
+                    """)
+            }
+        }
+    }
 
     /// Lead-time diagnostics for the persistent gapless engine.
     ///

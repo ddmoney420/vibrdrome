@@ -32,8 +32,9 @@ REQUIRED_SUITES=(
   "GaplessBufferIntegrationTests"
   "GaplessControllerGapTests"
   "GaplessRetryStormTests"
+  "PersistentPlaybackAssemblyTests"
 )
-EXPECTED_MINIMUM=36
+EXPECTED_MINIMUM=46
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"

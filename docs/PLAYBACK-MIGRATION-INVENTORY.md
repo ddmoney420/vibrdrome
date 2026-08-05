@@ -901,6 +901,91 @@ converter channel map". `GaplessChannelPolicy.validate` actually **throws** for 
 channels. The code is authoritative and the policy follows it; the comment is stale. Not corrected
 here — it is persistent-engine code and outside this lane.
 
+---
+
+# Lane 3C — lazy production construction of the persistent stack (done)
+
+```
+ApplicationPlayback.shared
+→ ApplicationPlaybackRouter          ← stable authority, Legacy selected
+  ├── LegacyAudioEngineAdapter       ← every operation still goes here
+  └── PersistentPlaybackAssembly     ← lazily constructible, explicitly prepared, unselected
+```
+
+## Cold launch does not construct Persistent
+
+Nothing builds it: app init, router init, view construction, diagnostics reads, remote-command
+setup, CarPlay connection, Watch resolution, App Intent construction, scene activation, queue
+restoration, or evaluating the Lane 3B policy. Cold launch reports `notConstructed`, and the shared
+production router is still unprepared — asserted by test.
+
+## Explicit preparation
+
+`ApplicationPlaybackRouter.preparePersistentBackend()` is the only production construction site. It
+is deliberately **not** reachable from any playback operation, not even Play: this lane exists to
+measure what construction costs and prove the result is inert, so it has to be something a person
+asks for. Idempotent — 50 calls produced 1 assembly.
+
+Triggered from **Settings → Debug → Playback Router → "Prepare Persistent Engine"**, DEBUG only.
+
+## Construction state
+
+`notConstructed → constructing → ready | failed(reason)`. Failure reasons are a closed coarse set —
+`cacheDirectoryUnavailable`, `audioGraphUnavailable`, `builderRefused` — carrying no credential,
+URL, path or token.
+
+## Inert after construction
+
+Construction attaches and connects the fixed 44.1 kHz / 2 ch / Float32 graph and builds the
+controller, session and preparer. Verified after preparation:
+
+| | |
+|---|---|
+| Persistent engine running | **No** |
+| Player node playing | **No** |
+| Audio-session category / mode | **unchanged** |
+| Buffer pool | **not allocated** |
+| Live source files / converters / scheduled buffers | **0 / 0 / 0** |
+| Queue adopted | **none** — the session is empty |
+| Remote-command registrations | **unchanged** |
+| Selected backend | **Legacy** |
+
+The pool is absent because `GaplessRealTimeBackend.bufferScheduler` is a `lazy var` — "built lazily
+so a backend that is never started allocates no pool" — and the assembly never touches it. Its
+diagnostics deliberately do **not** read `backend.openFileCount`, which reaches through that lazy
+scheduler and would allocate the very pool this lane proves is absent. (If it were allocated,
+capacity would be 6: `targetScheduledChunks 4 + poolHeadroom 2`.)
+
+## Measured construction cost
+
+```
+5.4 ms · resident +16 KB · settled +16 KB after 25 repeat preparations
+fd 30 → 30 → 30 · assemblies 1 · engines 1 · player nodes 1 · pools 0
+```
+
+No growth from repeated preparation, no descriptor growth, one of everything.
+
+## Test placement — a real finding
+
+The Lane 3C tests construct **real** `AVAudioEngine` graphs, and running them in the parallel suite
+broke a neighbour: `GaplessControllerGapTests.mutationsNearBoundaryKeepOnlyTheFinalTail` measured a
+**0.44 s gap against a 0.1 s threshold**, having passed on the previous commit and passing in the
+serialized gate on this one. Building audio graphs alongside tests that measure real gaps in
+milliseconds perturbs them.
+
+`PersistentPlaybackAssemblyTests` therefore runs in `verify-gapless-buffer-gate.sh`
+(`-parallel-testing-enabled NO`), and `verify-build.sh` skips it via a documented
+`SERIALIZED_ONLY_SUITES` list. The threshold was **not** relaxed — the test placement was wrong,
+not the assertion.
+
+## Still Legacy
+
+Every representative operation still delegates exactly once to the legacy adapter *after*
+preparation, the persistent backend stays `.idle`, and the Lane 3B policy remains unconsulted for
+active routing. Lane 3D will select through this same assembly path.
+
+## Remaining direct references by subsystem
+
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem

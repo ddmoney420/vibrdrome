@@ -37,8 +37,58 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// constructing the persistent controller is Lane 3C; selecting it is Lane 3D.
     private(set) var selectedBackend: PlaybackBackend = .legacy
 
-    init(legacy: LegacyAudioEngineAdapter = LegacyAudioEngineAdapter()) {
+    /// Builds the persistent stack when — and only when — preparation is explicitly requested.
+    private let persistentBuilder: any PersistentPlaybackAssemblyBuilding
+
+    /// The persistent stack, once built. Retained for the process lifetime so a second preparation
+    /// cannot produce a second engine, graph or pool.
+    private(set) var persistentAssembly: PersistentPlaybackAssembly?
+
+    /// How far persistent construction has got. Cold launch is always `.notConstructed` — nothing
+    /// in app init, router init, view construction, diagnostics, remote-command setup, CarPlay,
+    /// Watch, App Intents, scene activation, restoration or policy evaluation builds it.
+    private(set) var persistentPreparationState: PersistentPreparationState = .notConstructed
+
+    init(
+        legacy: LegacyAudioEngineAdapter = LegacyAudioEngineAdapter(),
+        persistentBuilder: any PersistentPlaybackAssemblyBuilding
+            = ProductionPersistentPlaybackAssemblyBuilder()
+    ) {
         self.legacy = legacy
+        self.persistentBuilder = persistentBuilder
+    }
+
+    // MARK: - Persistent preparation
+
+    /// Construct the persistent stack once, and keep it.
+    ///
+    /// **Explicit by design.** No playback operation triggers this — not even Play. Lane 3C exists
+    /// to measure what construction costs and to prove the result is inert, so construction has to
+    /// be something a person asks for, not a side effect of using the app.
+    ///
+    /// Idempotent: a second call returns the same assembly. Never changes `selectedBackend`, never
+    /// starts playback, never touches the queue, never publishes Now Playing, never registers a
+    /// remote command. A failure leaves legacy fully authoritative.
+    @discardableResult
+    func preparePersistentBackend() throws -> PersistentPlaybackAssembly {
+        if let existing = persistentAssembly {
+            persistentPreparationState = .ready
+            return existing
+        }
+        persistentPreparationState = .constructing
+        do {
+            let assembly = try persistentBuilder.build()
+            persistentAssembly = assembly
+            persistentPreparationState = .ready
+            return assembly
+        } catch let failure as PersistentPreparationFailure {
+            // No partial assembly is retained: `persistentAssembly` is only assigned on success.
+            persistentPreparationState = .failed(failure)
+            throw failure
+        } catch {
+            persistentPreparationState = .failed(.builderRefused)
+            throw PersistentPreparationFailure.builderRefused
+        }
     }
 
     /// The destination for the current decision.
@@ -74,13 +124,25 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         var selectedBackend: PlaybackBackend
         var legacyAdapterActive: Bool
         var persistentControllerConstructed: Bool
+        var persistentPreparationState: PersistentPreparationState
+
+        var preparationDescription: String {
+            switch persistentPreparationState {
+            case .notConstructed: "Not constructed"
+            case .constructing: "Constructing"
+            case .ready: "Ready"
+            case .failed(let failure): "Failed (\(failure.rawValue))"
+            }
+        }
 
         var summary: String {
             """
             Application playback router: \(routerActive ? "Active" : "Inactive")
+            Persistent preparation: \(preparationDescription)
             Selected backend: \(selectedBackend == .legacy ? "Legacy" : "Persistent")
             Legacy adapter: \(legacyAdapterActive ? "Active" : "Inactive")
             Persistent controller: \(persistentControllerConstructed ? "Constructed" : "Not constructed")
+            Persistent engine selected: \(selectedBackend == .persistent ? "Yes" : "No")
             """
         }
     }
@@ -92,7 +154,8 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             legacyAdapterActive: true,
             // Read, never asserted: if anything ever does construct a persistent controller, this
             // must say so rather than keep reporting the comfortable answer.
-            persistentControllerConstructed: GaplessDiagnosticsRegistry.current != nil
+            persistentControllerConstructed: GaplessDiagnosticsRegistry.current != nil,
+            persistentPreparationState: persistentPreparationState
         )
     }
 

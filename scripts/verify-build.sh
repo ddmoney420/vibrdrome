@@ -110,11 +110,25 @@ build() {
   fi
 }
 
+# Suites that construct a real AVAudioEngine graph and must NOT run in the parallel suite.
+#
+# The gapless real-time tests measure actual gaps against millisecond thresholds. Building audio
+# graphs alongside them perturbs those measurements — GaplessControllerGapTests failed at a 0.44 s
+# gap against a 0.1 s threshold in the parallel run while passing in the serialized gate. These
+# suites therefore run in ./scripts/verify-gapless-buffer-gate.sh, which disables parallel testing.
+SERIALIZED_ONLY_SUITES=(
+  "VibrdromeTests/PersistentPlaybackAssemblyTests"
+)
+
 # runtest NAME ONLY
 runtest() {
   local name="$1" only="$2" log="$LOGDIR/test-$1.log"
+  local skips=()
+  if [ "$only" = "VibrdromeTests" ]; then
+    for suite in "${SERIALIZED_ONLY_SUITES[@]}"; do skips+=("-skip-testing:$suite"); done
+  fi
   xcodebuild -project "$PROJECT" -scheme Vibrdrome -destination "$IOS_DEST" \
-    -only-testing:"$only" test > "$log" 2>&1
+    -only-testing:"$only" "${skips[@]}" test > "$log" 2>&1
   local ok bad
   ok=$(grep -Fc 'TEST SUCCEEDED' "$log")
   bad=$(grep -Fc 'TEST FAILED' "$log")
