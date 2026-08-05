@@ -70,7 +70,19 @@ protocol PlaybackStateProviding: AnyObject {
     var queue: [Song] { get }
     var currentIndex: Int { get }
     /// What plays next, honouring shuffle. Derived by the engine, not stored.
+    ///
+    /// **Not interchangeable with `upNext`.** Under shuffle this returns the true playback order and
+    /// is capped at five entries; `upNext` is the raw linear tail of the queue with no cap. Swapping
+    /// one for the other silently changes both the ordering and the length of a queue list.
     var upNextEntries: [(index: Int, song: Song)] { get }
+
+    /// The linear tail of the queue after the current track — `queue[(currentIndex + 1)...]` — with
+    /// no shuffle awareness and no cap.
+    ///
+    /// Kept alongside `upNextEntries` because CarPlay's Up Next list is built from it and pairs it
+    /// with an index computed as `currentIndex + 1 + offset` at tap time. That mapping is only
+    /// correct against the linear tail, so the two must stay distinct members.
+    var upNext: [Song] { get }
     /// Index the engine would advance to. The mini player peeks at it to name the next track.
     func nextSongIndex() -> Int?
     /// Where playback was started from, for UI attribution. Views set it alongside starting

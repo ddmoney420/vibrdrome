@@ -387,7 +387,13 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
     func next() { record("next") }
     func previous() { record("previous") }
     func seek(to time: TimeInterval) { record("seek") }
-    func skipToIndex(_ index: Int) { record("skipToIndex") }
+    /// The index argument is recorded as well as the call, because CarPlay's Up Next mapping is
+    /// positional arithmetic and the value passed through is the thing under test.
+    private(set) var skipToIndexCalls: [Int] = []
+    func skipToIndex(_ index: Int) {
+        record("skipToIndex")
+        skipToIndexCalls.append(index)
+    }
 
     // Queue
     func addToQueue(_ song: Song) { record("addToQueue") }
@@ -421,6 +427,7 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
     var queue: [Song] = []
     var currentIndex = 0
     var upNextEntries: [(index: Int, song: Song)] = []
+    var upNext: [Song] = []
     func nextSongIndex() -> Int? { nil }
     var playingFromContext: String?
 

@@ -212,22 +212,106 @@ running. Production never sets it and the property does not exist in release bui
 `registrationCount` proves the `isSetup` guard stops a second set of handlers being attached, which
 is the defect that makes one lock-screen press skip two tracks.
 
+---
+
+# Lane 2C-A — CarPlayManager (done)
+
+`CarPlay/CarPlayManager.swift`: **19 direct references → 0.** Route:
+
+```
+CarPlayManager → CarPlayPlaybackActions → ApplicationPlayback.shared
+               → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+## CarPlay has no transport handlers
+
+Worth recording, because it answers the double-dispatch question outright: **play, pause, toggle,
+next and previous never reach `CarPlayManager`.** CarPlay raises them through
+`MPRemoteCommandCenter`, which `RemoteCommandManager` owns and Lane 2B already migrated. There is no
+second path for a transport command to travel, so this migration cannot double-dispatch.
+
+CarPlay's entire playback surface is: shuffle and repeat buttons, Up Next row selection, playing a
+song or list from a template, artist radio, and radio stations — plus live reads of `currentSong`,
+`isPlaying`, `currentTime`, `recentlyPlayed` and `upNext`.
+
+## The `upNext` / `upNextEntries` trap
+
+`showUpNext` reads **`upNext`**, not `upNextEntries`. They are not interchangeable:
+
+| | `upNext` | `upNextEntries` |
+|---|---|---|
+| Content | `queue[(currentIndex + 1)...]` | shuffle-aware playback order |
+| Shuffle | ignored | honoured |
+| Cap | none | **5 entries** (`min(count, 5)`) |
+| Index | caller computes | carried in the tuple |
+
+Substituting `upNextEntries` would have silently cut CarPlay's Up Next list from up to 30 rows to 5
+and reordered it whenever shuffle was on. `upNext` was therefore **added to the façade** as a
+distinct member rather than folded into `upNextEntries`.
+
+## Queue-index semantics — audited, unchanged
+
+CarPlay's Up Next rows map positionally: row `offset` → absolute queue index
+`currentIndex + 1 + offset`. Two properties are preserved deliberately:
+
+- **`currentIndex` is read at tap time**, not when the template was built. A queue that advanced
+  while the list was on screen resolves against the queue as it is now. Pre-existing behaviour.
+- **Positional, never identity-based.** Two queue positions holding the same song id stay distinct;
+  matching by `song.id` would collapse them onto the first occurrence.
+- **No clamping is added.** An out-of-range row passes its computed index straight through to the
+  engine, which owns range handling, exactly as before.
+
+Everywhere else CarPlay plays a song it passes an explicit
+`songs.firstIndex(where: { $0.id == song.id }) ?? 0` — unchanged, including its identity-based
+lookup within a freshly fetched album/playlist array where ids are unique by construction.
+
+## Test seam
+
+`CarPlayPlaybackActions` is an `enum` of static members. `CPInterfaceController` has no public
+initialiser, so `CarPlayManager` cannot be constructed in a test; every playback-triggering handler
+calls one of these methods and does nothing else, so tests drive the exact code a tap runs. Static
+members mean handlers reference it the way they previously referenced `AudioEngine.shared` — no
+closure gains a `self` capture, so no `CPListItem` held by a template starts retaining the manager.
+
+The DEBUG-only `playbackOverride` defaults to `nil`, falls back to `ApplicationPlayback.shared`, is
+reset in teardown, does not exist in release builds, and touches neither template registration nor
+scene ownership. Same pattern as `RemoteCommandManager` — deliberately one mechanism, not two.
+
+## CarPlaySceneDelegate stays on the legacy singleton
+
+`CarPlaySceneDelegate` keeps its **4** direct references until the scene/lifecycle lane, because its
+`restorePlayQueue` call on scene connect is cold-launch restoration and belongs with that work.
+
+So the application temporarily has:
+
+```
+CarPlayManager       → façade
+CarPlaySceneDelegate → legacy singleton
+```
+
+This is safe: both routes reach the same `AudioEngine.shared`, so there is no second queue authority
+and the two cannot disagree. No dependency was added from `CarPlaySceneDelegate` to `CarPlayManager`.
+
 ## Remaining direct references by subsystem
 
-85 references remain (occurrence counts, not line counts):
+67 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
-| CarPlay | `CarPlay/CarPlayManager.swift` (19), `CarPlay/CarPlaySceneDelegate.swift` (4) | 23 | 2C |
+| General scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| Scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
-| Watch session | `Core/Networking/WatchSessionManager.swift` | 9 | 2C |
-| Siri / App Intents | `App/AppIntents.swift` | 6 | 2C |
-| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1) | 4 | — (by design) |
+| Watch session | `Core/Networking/WatchSessionManager.swift` | 9 | 2C-B |
+| Siri / App Intents | `App/AppIntents.swift` | 6 | 2C-C |
+| CarPlay scene / lifecycle | `CarPlay/CarPlaySceneDelegate.swift` | 4 | 2D |
+| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
-| Persistent engine | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| CarPlay manager | — | **0** | **2C-A done** |
 | Remote commands | — | **0** | **2B done** |
 | Views | — | **0** | **2A done** |
+
+Persistent-engine references in **tests** are separate and expected: `GaplessPlaybackController` is
+constructed in 11 test files and **0** production files.
 
 `GaplessPlaybackController` is constructed in **11 test files and 0 production files** — the
 persistent engine remains unwired.
@@ -256,7 +340,7 @@ refactor was triggered.
 
 1. **Views** — **complete**: 34 files. The largest group and the lowest risk.
 2. **RemoteCommandManager** — **complete**: one file, 8 references, one-press-one-call proven by test.
-3. **CarPlay, Watch, Siri** — out-of-process callers; migrate together, each verified separately.
+3. **CarPlay, Watch, Siri** — out-of-process callers. **2C-A CarPlayManager complete**; Watch (2C-B) and Siri (2C-C) still to do, each verified separately.
 4. **Scene entry and lifecycle** — restoration and cold launch; migrate last, because the Build 60
    zero-activation behaviour depends on it.
 

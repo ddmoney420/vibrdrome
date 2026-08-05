@@ -78,6 +78,7 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
     var queue: [Song] { engine.queue }
     var currentIndex: Int { engine.currentIndex }
     var upNextEntries: [(index: Int, song: Song)] { engine.upNextEntries }
+    var upNext: [Song] { engine.upNext }
     func nextSongIndex() -> Int? { engine.nextSongIndex() }
     var playingFromContext: String? {
         get { engine.playingFromContext }

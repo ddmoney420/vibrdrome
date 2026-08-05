@@ -12,6 +12,12 @@ final class CarPlayManager: NSObject {
     private var taskMap: [UUID: Task<Void, Never>] = [:]
     private var configObservation: Task<Void, Never>?
 
+    /// The application playback façade, resolved on every access so CarPlay reads live state rather
+    /// than a snapshot. Routed through `CarPlayPlaybackActions` so reads and actions share one seam.
+    /// CarPlay's own presentation caches (template item artwork) are untouched; playback authority
+    /// stays with the façade.
+    private var playback: any ApplicationPlaybackControlling { CarPlayPlaybackActions.playback }
+
     init(interfaceController: CPInterfaceController) {
         self.interfaceController = interfaceController
         super.init()
@@ -85,25 +91,27 @@ final class CarPlayManager: NSObject {
         nowPlaying.add(self)
 
         let shuffle = CPNowPlayingShuffleButton { _ in
-            AudioEngine.shared.toggleShuffle()
+            CarPlayPlaybackActions.toggleShuffle()
         }
         let repeatBtn = CPNowPlayingRepeatButton { _ in
-            AudioEngine.shared.cycleRepeatMode()
+            CarPlayPlaybackActions.cycleRepeatMode()
         }
         nowPlaying.updateNowPlayingButtons([shuffle, repeatBtn])
         nowPlaying.isUpNextButtonEnabled = true
         nowPlaying.upNextTitle = "Up Next"
 
         // Refresh MPNowPlayingInfoCenter in case music is already playing
-        if let song = AudioEngine.shared.currentSong {
-            NowPlayingManager.shared.update(song: song, isPlaying: AudioEngine.shared.isPlaying)
-            NowPlayingManager.shared.updateElapsedTime(AudioEngine.shared.currentTime)
+        if let song = playback.currentSong {
+            NowPlayingManager.shared.update(song: song, isPlaying: playback.isPlaying)
+            NowPlayingManager.shared.updateElapsedTime(playback.currentTime)
         }
     }
 
     private func showUpNext() {
-        let engine = AudioEngine.shared
-        let upcoming = engine.upNext
+        // Built from `upNext` — the raw linear tail of the queue — and paired below with an index
+        // computed at tap time. Deliberately not `upNextEntries`, which under shuffle returns true
+        // playback order capped at five entries and would silently reorder and truncate this list.
+        let upcoming = playback.upNext
         guard !upcoming.isEmpty else {
             let empty = CPListTemplate(title: "Up Next", sections: [
                 CPListSection(items: [CPListItem(text: "Queue is empty", detailText: nil)])
@@ -118,7 +126,7 @@ final class CarPlayManager: NSObject {
                 loadImage(id: coverArtId, size: 120, into: item)
             }
             item.handler = { _, completion in
-                engine.skipToIndex(engine.currentIndex + 1 + offset)
+                CarPlayPlaybackActions.selectUpNext(offset: offset)
                 completion()
             }
             return item
@@ -319,7 +327,7 @@ final class CarPlayManager: NSObject {
                 let client = AppState.shared.subsonicClient
                 let songs = try await client.getRandomSongs(size: 30, genre: genre)
                 guard let first = songs.first else { return }
-                AudioEngine.shared.play(song: first, from: songs)
+                CarPlayPlaybackActions.play(song: first, from: songs)
             } catch {
                 print("Genre play failed: \(ErrorPresenter.userMessage(for: error))")
             }
@@ -399,7 +407,7 @@ final class CarPlayManager: NSObject {
                                        detailText: "Mix based on \(artist.name)",
                                        image: UIImage(systemName: "dot.radiowaves.left.and.right"))
             radioItem.handler = { _, completion in
-                AudioEngine.shared.startRadio(artistName: artist.name)
+                CarPlayPlaybackActions.startRadio(artistName: artist.name)
                 completion()
             }
 
@@ -442,7 +450,7 @@ final class CarPlayManager: NSObject {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
                 item.handler = { _, completion in
-                    AudioEngine.shared.play(
+                    CarPlayPlaybackActions.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
@@ -455,7 +463,7 @@ final class CarPlayManager: NSObject {
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
             playAll.handler = { _, completion in
-                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
+                if let first = songs.first { CarPlayPlaybackActions.play(song: first, from: songs) }
                 completion()
             }
 
@@ -464,7 +472,7 @@ final class CarPlayManager: NSObject {
             shuffle.handler = { _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
-                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
+                if let first = shuffled.first { CarPlayPlaybackActions.play(song: first, from: shuffled) }
                 completion()
             }
 
@@ -671,7 +679,7 @@ final class CarPlayManager: NSObject {
                         self?.loadImage(id: coverArtId, size: 120, into: item)
                     }
                     item.handler = { _, completion in
-                        AudioEngine.shared.play(
+                        CarPlayPlaybackActions.play(
                             song: song, from: visibleSongs,
                             at: visibleSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
                         completion()
@@ -718,7 +726,7 @@ final class CarPlayManager: NSObject {
                 let client = AppState.shared.subsonicClient
                 let songs = try await client.getRandomSongs(size: 20)
                 guard let first = songs.first else { return }
-                AudioEngine.shared.play(song: first, from: songs)
+                CarPlayPlaybackActions.play(song: first, from: songs)
             } catch {
                 // Can't push a template for a non-navigation action,
                 // but at least log it for diagnostics
@@ -780,7 +788,7 @@ final class CarPlayManager: NSObject {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
                 item.handler = { _, completion in
-                    AudioEngine.shared.play(
+                    CarPlayPlaybackActions.play(
                         song: song, from: songs,
                         at: songs.firstIndex(where: { $0.id == song.id }) ?? 0)
                     completion()
@@ -792,7 +800,7 @@ final class CarPlayManager: NSObject {
                                      detailText: "\(songs.count) songs",
                                      image: UIImage(systemName: "play.fill"))
             playAll.handler = { _, completion in
-                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs) }
+                if let first = songs.first { CarPlayPlaybackActions.play(song: first, from: songs) }
                 completion()
             }
 
@@ -801,7 +809,7 @@ final class CarPlayManager: NSObject {
             shuffle.handler = { _, completion in
                 var shuffled = songs
                 shuffled.shuffle()
-                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled) }
+                if let first = shuffled.first { CarPlayPlaybackActions.play(song: first, from: shuffled) }
                 completion()
             }
 
@@ -839,7 +847,7 @@ final class CarPlayManager: NSObject {
                         self?.loadFavicon(host: host, into: item)
                     }
                     item.handler = { _, completion in
-                        AudioEngine.shared.playRadio(station: station)
+                        CarPlayPlaybackActions.playRadio(station: station)
                         completion()
                     }
                     return item
@@ -860,7 +868,7 @@ final class CarPlayManager: NSObject {
 
     private func showRecentlyPlayed() {
         navigateTo { [weak self] in
-            let songs = AudioEngine.shared.recentlyPlayed
+            let songs = CarPlayPlaybackActions.playback.recentlyPlayed
             guard !songs.isEmpty else {
                 return CPListTemplate(title: "Recently Played", sections: [
                     CPListSection(items: [
@@ -874,7 +882,7 @@ final class CarPlayManager: NSObject {
                     self?.loadImage(id: coverArtId, size: 120, into: item)
                 }
                 item.handler = { _, completion in
-                    AudioEngine.shared.play(song: song, from: Array(songs))
+                    CarPlayPlaybackActions.play(song: song, from: Array(songs))
                     completion()
                 }
                 return item
