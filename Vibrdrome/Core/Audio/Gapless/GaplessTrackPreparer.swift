@@ -141,6 +141,16 @@ actor GaplessTrackPreparer {
     }
 
     /// Already-prepared track, without triggering or awaiting any work.
+    /// Materialize a track's complete local file **without** adopting it into the prefetch window.
+    ///
+    /// Backend selection needs the delivered bytes in order to inspect the representation before
+    /// deciding whether a session uses the persistent engine at all — which is earlier than the
+    /// window's own lifecycle, and must not perturb it. Delegates to the same provider the window
+    /// uses, so there remains one materialization path and one cache.
+    func materializeSource(forTrack trackID: String) async throws -> URL {
+        try await provider.localFile(forTrack: trackID)
+    }
+
     func readyTrack(_ trackID: String) -> GaplessPreparedTrack? { prepared[trackID] }
 
     var readyTrackIDs: Set<String> { Set(prepared.keys) }
