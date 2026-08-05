@@ -17,7 +17,7 @@ struct PlayFavoritesIntent: AppIntent {
             throw IntentError.noContent
         }
         songs.shuffle()
-        AudioEngine.shared.play(song: songs[0], from: songs)
+        AppIntentPlaybackActions.play(song: songs[0], from: songs)
         return .result()
     }
 }
@@ -38,7 +38,7 @@ struct PlayRandomMixIntent: AppIntent {
         guard let first = songs.first else {
             throw IntentError.noContent
         }
-        AudioEngine.shared.play(song: first, from: songs)
+        AppIntentPlaybackActions.play(song: first, from: songs)
         return .result()
     }
 }
@@ -58,7 +58,7 @@ struct PlayArtistRadioIntent: AppIntent {
         guard AppState.shared.isConfigured else {
             throw IntentError.notConfigured
         }
-        AudioEngine.shared.startRadio(artistName: artistName)
+        AppIntentPlaybackActions.startRadio(artistName: artistName)
         return .result()
     }
 }
@@ -72,7 +72,7 @@ struct TogglePlaybackIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        AudioEngine.shared.togglePlayPause()
+        AppIntentPlaybackActions.togglePlayPause()
         return .result()
     }
 }
@@ -86,7 +86,7 @@ struct SkipTrackIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        AudioEngine.shared.next()
+        AppIntentPlaybackActions.skipToNextTrack()
         return .result()
     }
 }
@@ -121,7 +121,7 @@ struct PlayPlaylistIntent: AppIntent {
         guard let songs = full.entry, !songs.isEmpty else {
             throw IntentError.noContent
         }
-        AudioEngine.shared.play(song: songs[0], from: songs)
+        AppIntentPlaybackActions.play(song: songs[0], from: songs)
         return .result()
     }
 }

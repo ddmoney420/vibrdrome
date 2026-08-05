@@ -381,19 +381,81 @@ Command parsing moved into `WatchPlaybackActions.handleSkipToIndexCommand(_:)` s
 text is testable. It preserves the dispatch contract exactly: text that is not a valid integer is
 still *handled* — it performs nothing rather than falling through to the sleep-timer handler.
 
+---
+
+# Lane 2C-C — Siri and App Intents (done)
+
+`App/AppIntents.swift`: **6 direct references → 0.** No aliases and no helper methods hid any of
+them; all six were direct `AudioEngine.shared.<member>` calls, one per intent that performs playback.
+
+```
+Siri / Shortcut → App Intent → AppIntentPlaybackActions → ApplicationPlayback.shared
+                → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+## Execution context — verified, not assumed
+
+`AppIntents.swift` has **exactly one build-file entry**, in the `Vibrdrome` app target's Sources
+phase. The project's only app-extension target is `VibrdromeWidget`, whose sources are
+`VibrdromeWidget` + `Shared` — it does not compile `Vibrdrome/App/`. **There is no App Intents
+extension target.**
+
+So the intents are compiled into the main app binary and run **in the app's own process**. The
+pre-existing `AudioEngine.shared` calls did reach the app's real playback authority, and
+`ApplicationPlayback.shared` now reaches the same one. There is no process boundary here and no IPC
+to invent — the concern that motivated the audit does not apply to this codebase.
+
+That holds for `TogglePlaybackIntent` and `SkipTrackIntent` too: `openAppWhenRun = false` means they
+run without *foregrounding* the app, not outside it.
+
+## Intent inventory
+
+| Intent | Title | Parameter | Playback operation | `openAppWhenRun` | Errors | Returns |
+|---|---|---|---|---|---|---|
+| `PlayFavoritesIntent` | Play Favorites | — | `play(song:from:)` at 0 | `true` | `notConfigured`, `noContent` | `.result()` |
+| `PlayRandomMixIntent` | Play Random Mix | — | `play(song:from:)` at 0 | `true` | `notConfigured`, `noContent` | `.result()` |
+| `PlayArtistRadioIntent` | Play Artist Radio | `artistName: String` | `startRadio(artistName:)` | `true` | `notConfigured` | `.result()` |
+| `TogglePlaybackIntent` | Toggle Playback | — | `togglePlayPause()` | **`false`** | none | `.result()` |
+| `SkipTrackIntent` | Skip Track | — | `next()` | **`false`** | none | `.result()` |
+| `PlayPlaylistIntent` | Play Playlist | `playlistName: String` | `play(song:from:)` at 0 | `true` | `notConfigured`, `playlistNotFound`, `noContent` | `.result()` |
+
+**No intent reads or returns playback state.** Every one returns a bare `.result()` — no dialog, no
+snippet, no metadata payload. There is therefore no state-bearing response surface to keep fresh, and
+this lane did not create one. What is tested instead is that the *seam* resolves during `perform()`
+rather than at intent construction, since the system builds intent values during Shortcuts browsing
+and may run them much later.
+
+The four content intents guard on `AppState.shared.isConfigured` and throw `IntentError` before any
+network call; the two transport intents deliberately have no such guard, because pausing what is
+already playing must work whether or not a server is reachable. Both behaviours are pinned by test.
+
+`VibrdromeShortcuts` still provides exactly two phrase-backed shortcuts; `PlayPlaylistIntent`
+remains deliberately phrase-less (a phrase placeholder must be an `AppEntity`/`AppEnum`, not a
+`String` parameter).
+
+## Double-dispatch result — clear
+
+`TogglePlaybackIntent` and `SkipTrackIntent` expose the same semantic actions as the lock-screen
+play/pause and next buttons, but they are separate entry points: an intent calls the façade directly
+and never raises an `MPRemoteCommand`. A test installs recorders on the intent seam **and** the
+remote-command seam simultaneously, performs both intents, and asserts the remote recorder stays
+empty with the registration count unchanged.
+
 ## Remaining direct references by subsystem
 
-58 references remain (occurrence counts, not line counts):
+## Remaining direct references by subsystem
+
+52 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
 | General scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| Siri / App Intents | `App/AppIntents.swift` | 6 | 2C-C |
 | CarPlay scene / lifecycle | `CarPlay/CarPlaySceneDelegate.swift` | 4 | 2D |
 | Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Siri / App Intents | — | **0** | **2C-C done** |
 | Watch session | — | **0** | **2C-B done** |
 | CarPlay manager | — | **0** | **2C-A done** |
 | Remote commands | — | **0** | **2B done** |
@@ -429,7 +491,7 @@ refactor was triggered.
 
 1. **Views** — **complete**: 34 files. The largest group and the lowest risk.
 2. **RemoteCommandManager** — **complete**: one file, 8 references, one-press-one-call proven by test.
-3. **CarPlay, Watch, Siri** — out-of-process callers. **2C-A CarPlayManager** and **2C-B WatchSessionManager** complete; Siri / App Intents (2C-C) still to do.
+3. **CarPlay, Watch, Siri** — out-of-process callers. **2C-A CarPlayManager** and **2C-B WatchSessionManager** and **2C-C AppIntents** all complete — batch 3 is done.
 4. **Scene entry and lifecycle** — restoration and cold launch; migrate last, because the Build 60
    zero-activation behaviour depends on it.
 
