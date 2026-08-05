@@ -795,6 +795,114 @@ streamed, cache state, radio, live streams, channel count or gapless metadata. T
 | **3D** | First real persistent routing behind a DEBUG/settings flag, then the serialized buffer gate |
 | **4** | Direct-device smoke and regression testing |
 
+---
+
+# Lane 3B — the playback-backend routing policy (done)
+
+A pure decision function, **consulted by nothing**. The router still always selects `.legacy`.
+
+## Pre-playback fact availability — audited, not assumed
+
+| Fact | When it becomes known |
+|---|---|
+| Content kind (track vs radio) | **Before request** — the queue knows what it holds |
+| Song metadata: server-declared suffix, duration | **Before request** |
+| Download / cache record for the track | **Before request** |
+| *Requested* transcode format + max bitrate | **When the request is constructed** — `stream(id:maxBitRate:format:)`. A request, not an outcome |
+| **Delivered** container | **From response headers** — `GaplessStreamingFileProvider.fileExtension(for:remote:)` reads `response.mimeType` |
+| True sample rate, channel count, exact frame length | **Only after opening the media** — `AVAudioFile(forReading:)` |
+| MP3 Xing/LAME trim validity | **Only after decoder inspection** — `GaplessTrim` parses the header |
+| Whether the server *will* honour a requested transcode | **Never reliably known before asking** |
+
+## The transcode-knowledge result
+
+The client **does** confirm the delivered representation — but only after fetching. The gapless file
+provider reads the response MIME type and names the cache file from it, with the reason stated in
+the source: *"A transcoding server returns a different type than the stored file, so the response's
+content type wins over anything in the request URL."*
+
+That gives Lane 3D a real confirmation point, and it is not before the request:
+
+```
+existing local file?  → representation confirmed from the file itself
+otherwise fetch       → representation confirmed from the response MIME type
+then open AVAudioFile → sample rate, channel count and exact length confirmed
+```
+
+The persistent engine reads `AVAudioFile(forReading:)`, so **every source must exist as a complete
+local file before playback** — remote tracks are materialised by a whole-file download, deliberately
+not a streaming read, because a partial file decodes short and would corrupt boundary accounting.
+That materialisation *is* the confirmation step.
+
+## Conservative rule
+
+```
+Delivered representation not confirmed → Legacy
+```
+
+Requested-but-unconfirmed and unknown delivery are always legacy, whatever else is true — including
+when a trusted trim is already known. Routing on the configured transcode preference would be
+guessing what the server did.
+
+## Backend eligibility ≠ gapless capability
+
+Two separate outputs, because collapsing them fails in both directions — withholding the engine from
+playable content, or promising a seam it cannot deliver.
+
+| Source | Backend | Playable | Gapless | Reason |
+|---|---|---|---|---|
+| FLAC / ALAC / AAC / WAV / Opus, confirmed | persistent | yes | yes | supported *(source form)* |
+| MP3 with trusted Xing/LAME trim | persistent | yes | **yes** | supported *(source form)* |
+| MP3, header absent or not inspected | persistent | yes | **no** | `gaplessMetadataUnavailable` |
+| MP3, header malformed or untrusted | persistent | yes | **no** | `gaplessMetadataUntrusted` |
+
+MP3 without a trim is **not** forced to legacy. It plays on the persistent engine; it just cannot
+promise a seamless join. That mirrors the measured format matrix: WAV/FLAC exact, ALAC/AAC exact via
+`iTunSMPB`, Opus exact at 48 kHz, MP3 **+1368 frames** (delay 576 + padding 792) unless trimmed.
+
+## Hard legacy decisions
+
+Radio · live stream · indefinite stream · unknown content kind · unknown delivery ·
+requested-but-unconfirmed transcode · unsupported codec · unknown codec · above-stereo channel
+layout · decoder known unavailable · required media properties unknown (duration, channel count).
+
+Each has its own reason — nothing funnels into a single `.unsupported`.
+
+## Channels
+
+Mono up-mixes to stereo **without changing the frame count**, so accounting stays exact; stereo
+passes through; above stereo is refused, matching `GaplessChannelPolicy.validate`, which throws
+`unsupportedChannelCount` for anything other than 1 or 2 "pending a product decision on downmix".
+An undiscovered channel count is treated conservatively — it is discoverable only by opening the
+file, so Lane 3D must defer final selection until preparation has done so.
+
+Sample rate is deliberately **not** gated: a mismatch against the fixed 44.1 kHz graph is the
+converter's job, and Opus decoding at 48 kHz is an expected supported case.
+
+## The Lane 3D sequence
+
+```
+build routing facts
+→ evaluate policy
+→ prepare the selected backend
+→ confirm the actual representation (response MIME, then AVAudioFile)
+→ finalise selection BEFORE audible playback
+→ never switch while audible
+```
+
+If the final representation cannot be confirmed before playback starts, select **Legacy**. There is
+no mid-track fallback and no cutover: a source that turns out unsuitable must have been legacy from
+the first sample.
+
+## Doc-comment discrepancy worth knowing
+
+`GaplessRenderFormat`'s header comment says sources above stereo "are down-mixed only via an explicit
+converter channel map". `GaplessChannelPolicy.validate` actually **throws** for anything above 2
+channels. The code is authoritative and the policy follows it; the comment is stale. Not corrected
+here — it is persistent-engine code and outside this lane.
+
+## Remaining direct references by subsystem
+
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem
