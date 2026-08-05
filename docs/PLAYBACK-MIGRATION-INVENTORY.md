@@ -292,20 +292,99 @@ CarPlaySceneDelegate → legacy singleton
 This is safe: both routes reach the same `AudioEngine.shared`, so there is no second queue authority
 and the two cannot disagree. No dependency was added from `CarPlaySceneDelegate` to `CarPlayManager`.
 
+---
+
+# Lane 2C-B — WatchSessionManager (done)
+
+`Core/Networking/WatchSessionManager.swift`: **9 direct references → 0**, including all **6** local
+`let engine = AudioEngine.shared` aliases. Route:
+
+```
+Watch command → WatchSessionManager → WatchPlaybackActions → ApplicationPlayback.shared
+              → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+`WatchSessionManager` remains the `WCSessionDelegate` and message receiver; WatchConnectivity
+ownership is unchanged.
+
+## Watch command inventory
+
+Audited from **both** sides — the commands the watch app actually sends, and what the phone does
+with them. Message key is always `command: String`; the only other payload key is `volume: Float`.
+
+| Command | Payload | Operation | Reply |
+|---|---|---|---|
+| `togglePlayPause` | — | `togglePlayPause()` | `[:]` |
+| `next` | — | `next()` | `[:]` |
+| `previous` | — | `previous()` | `[:]` |
+| `setVolume` | `volume: Float` | `volume =` | `[:]` |
+| `toggleStar` | — | `OfflineActionQueue` star/unstar (no transport) | `[:]` |
+| `toggleShuffle` | — | `toggleShuffle()` | `[:]` |
+| `cycleRepeat` | — | `cycleRepeatMode()` | `[:]` |
+| `startRadio` | — | `startRadioFromSong(currentSong)` | `[:]` |
+| `playFavorites` / `shuffleFavorites` | — | fetch starred → `play(…at: 0)` | `[:]` |
+| `shuffleAll` | — | fetch 50 random → `play(…at: 0)` | `[:]` |
+| `playAlbum:<id>` | in the command string | fetch album → `play(…at: 0)` | `[:]` |
+| `playPlaylist:<id>` | in the command string | fetch playlist → `play(…at: 0)` | `[:]` |
+| `skipToIndex:<n>` | in the command string | `play(queue[currentIndex+1+n], …)` | `[:]` |
+| `sleepTimer15/30/45/60`, `sleepTimerEndOfTrack`, `sleepTimerCancel` | — | `SleepTimer` (no playback) | `[:]` |
+
+Three things this audit settled, all contrary to what the command list looks like at a glance:
+
+- **There is no `play` and no `pause` command.** Transport is `togglePlayPause` only.
+- **There is no `seek` command.** The entire protocol's only numeric payload is `setVolume`'s
+  `volume`, so that is the payload surface with valid / missing / out-of-range coverage.
+- **Replies are always `[:]`.** No state is ever returned in a reply. State travels *outbound* in
+  the `sendNowPlayingUpdate` application context, so that is where freshness matters.
+
+Every command is fire-and-forget: both `didReceiveMessage` overloads dispatch to `handleCommand` and
+the reply variant immediately answers `[:]`. Library commands complete asynchronously after a network
+fetch; the reply does not wait for them. No command triggers more than one playback operation.
+
+## Wire contract (unchanged)
+
+Now Playing context keys: `title`, `artist`, `album`, `isPlaying`, `elapsed`, `duration`,
+`isStarred`, `isShuffleOn`, `repeatMode`, `sleepTimerActive`, `queue` (capped at 20), plus
+`coverArtData` on the art-bearing overload only. Playback-state ticks: `isPlaying`, `elapsed`,
+`sleepTimerActive`. Names, types and the 20-entry cap are asserted by test.
+
+## Double-dispatch audit — clear
+
+A Watch message and a remote-command press are **independent routes to the same engine**, and neither
+crosses into the other. `WatchSessionManager` and `WatchPlaybackActions` contain no reference to
+`RemoteCommandManager` or `MPRemoteCommandCenter` (the only mention is a doc comment), and
+`RemoteCommandManager` is driven by system remote events, not by WatchConnectivity. A test installs a
+recorder on **both** seams at once and asserts a Watch command records on the Watch seam only.
+
+## Pre-existing gap, deliberately not fixed here
+
+`skipToIndex:<n>` guards only the **upper** bound:
+
+```swift
+let abs = currentIndex + 1 + n
+guard abs < queue.count else { return }
+playback.play(song: playback.queue[abs], …)
+```
+
+A sufficiently negative `n` drives `abs` below zero and would subscript the queue out of range. Our
+own watch app only ever sends row indices ≥ 0, so it is unreachable in practice, and this lane was
+scoped to change no behaviour — so it is recorded here rather than silently patched. Worth closing
+deliberately, with its own test, in a later pass.
+
 ## Remaining direct references by subsystem
 
-67 references remain (occurrence counts, not line counts):
+58 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
 | General scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| Watch session | `Core/Networking/WatchSessionManager.swift` | 9 | 2C-B |
 | Siri / App Intents | `App/AppIntents.swift` | 6 | 2C-C |
 | CarPlay scene / lifecycle | `CarPlay/CarPlaySceneDelegate.swift` | 4 | 2D |
 | Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Watch session | — | **0** | **2C-B done** |
 | CarPlay manager | — | **0** | **2C-A done** |
 | Remote commands | — | **0** | **2B done** |
 | Views | — | **0** | **2A done** |
@@ -340,7 +419,7 @@ refactor was triggered.
 
 1. **Views** — **complete**: 34 files. The largest group and the lowest risk.
 2. **RemoteCommandManager** — **complete**: one file, 8 references, one-press-one-call proven by test.
-3. **CarPlay, Watch, Siri** — out-of-process callers. **2C-A CarPlayManager complete**; Watch (2C-B) and Siri (2C-C) still to do, each verified separately.
+3. **CarPlay, Watch, Siri** — out-of-process callers. **2C-A CarPlayManager** and **2C-B WatchSessionManager** complete; Siri / App Intents (2C-C) still to do.
 4. **Scene entry and lifecycle** — restoration and cold launch; migrate last, because the Build 60
    zero-activation behaviour depends on it.
 
