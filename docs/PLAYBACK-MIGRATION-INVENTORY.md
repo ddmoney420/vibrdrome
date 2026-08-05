@@ -441,20 +441,116 @@ and never raises an `MPRemoteCommand`. A test installs recorders on the intent s
 remote-command seam simultaneously, performs both intents, and asserts the remote recorder stays
 empty with the registration count unchanged.
 
+---
+
+# Lane 2D-A — CarPlaySceneDelegate (done)
+
+`CarPlay/CarPlaySceneDelegate.swift`: **4 direct references → 0.**
+
+```
+CarPlaySceneDelegate → CarPlayScenePlaybackActions → ApplicationPlayback.shared
+                     → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+## Scene responsibility map
+
+Traced from the source, not inferred from names. The whole file is 41 lines and owns exactly this:
+
+| Responsibility | Owner |
+|---|---|
+| Scene connect / disconnect callbacks | `CarPlaySceneDelegate` |
+| `CPInterfaceController` reference | `CarPlaySceneDelegate` (stored on connect, cleared on disconnect) |
+| `CarPlayManager` construction, retention, teardown | `CarPlaySceneDelegate` |
+| Templates, Up Next, list actions | `CarPlayManager` (unchanged) |
+| Remote-command registration | `RemoteCommandManager.shared.setup()` — idempotent |
+| Connect-time Now Playing / restore | **`CarPlayScenePlaybackActions`** (this lane) |
+| `CPWindow` | **none** — a template scene delegate has no window |
+| Audio-session calls | **none** |
+| Async tasks, observers | **none** — `CarPlayManager` owns its own |
+| Queue *saving* | **none** — save is scene-phase work in the main app (Lane 2D-B) |
+
+Registered via `Info.plist` → `CPTemplateApplicationSceneSessionRoleApplication` →
+`$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate`, not in code.
+
+`didConnect` order is unchanged: teardown any prior manager → store the interface controller →
+construct `CarPlayManager` → `setupRootTemplate()` → `RemoteCommandManager.shared.setup()` →
+connect-time playback sync **last**.
+
+## The four references
+
+All four were in `templateApplicationScene(_:didConnect:)`, in one `if let currentSong` branch.
+
+| # | Reference | Kind | Can activate audio | Idempotent | Re-runs on reconnect |
+|---|---|---|---|---|---|
+| 1 | `currentSong` | read | no | yes | yes |
+| 2 | `isPlaying` | read | no | yes | yes |
+| 3 | `currentTime` | read | no | yes | yes |
+| 4 | `restorePlayQueue(client:)` | operation | **no** | effectively — engine-guarded | yes, but self-limiting |
+
+`restorePlayQueue` cannot begin audible playback. It guards on
+`currentSong == nil, currentRadioStation == nil, queue.isEmpty`, restores from the local snapshot or
+the server, publishes Now Playing with `isPlaying: false`, and calls `preloadCurrentSong()` — which
+carries an explicit comment that it must **not** activate the audio session, because doing so would
+interrupt other apps' audio before the user presses Play (#134). The rate stays at 0.
+
+## Restoration ownership — unchanged
+
+Restoration stays in the scene delegate's `didConnect`, in the same callback, still last, still on
+every connection, still asynchronous inside the engine, still with the engine's own error handling.
+It was **not** moved into `CarPlayManager` and **not** consolidated with the main app's path.
+
+Reconnection is safe without a once-only rule, because two independent guards already limit it: the
+call site skips restore whenever `currentSong` is non-nil, and `restorePlayQueue` itself returns
+early unless song, radio station and queue are all empty. A head unit reconnecting mid-session
+therefore takes the Now Playing refresh branch and leaves the queue untouched.
+
+## Restoration overlap with the main app — documented, unchanged
+
+Three call sites request restoration:
+
+| Call site | Trigger |
+|---|---|
+| `CarPlay/CarPlaySceneDelegate.swift` | CarPlay scene connect |
+| `Features/Library/ContentView.swift` | main iOS scene |
+| `Features/Library/MacContentView.swift` | macOS scene |
+
+They overlap by design and the overlap is harmless: whichever runs first restores, and the engine's
+guard makes the others no-ops. Left exactly as-is — `ContentView` and `MacContentView` belong to
+Lane 2D-B.
+
+## Test seam
+
+`CarPlayScenePlaybackActions` holds only the connect-time playback step. Scene ownership — the
+interface controller, the manager's lifetime, teardown, and the order of those steps — stays in the
+delegate, and template logic stays in `CarPlayManager`. The extraction exists because
+`CPInterfaceController` and `CPTemplateApplicationScene` have no public initialisers, so `didConnect`
+cannot be invoked from a test; without it, "connecting CarPlay must not start audible playback" would
+be a claim with nothing behind it.
+
+It returns a `ConnectOutcome` so tests can pin which branch ran without inspecting
+`MPNowPlayingInfoCenter`. DEBUG-only `playbackOverride`, same pattern as the other four seams:
+defaults `nil`, falls back to the composition point, reset in teardown, absent from release builds,
+and alters no scene registration, controller ownership or template setup.
+
+A test also asserts `CarPlayScenePlaybackActions.playback === CarPlayPlaybackActions.playback`, so
+the scene and the manager can never drift onto different playback authorities.
+
+## Remaining direct references by subsystem
+
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem
 
-52 references remain (occurrence counts, not line counts):
+48 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
-| General scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
+| Main app scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D-B |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| CarPlay scene / lifecycle | `CarPlay/CarPlaySceneDelegate.swift` | 4 | 2D |
 | Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| CarPlay scene / lifecycle | — | **0** | **2D-A done** |
 | Siri / App Intents | — | **0** | **2C-C done** |
 | Watch session | — | **0** | **2C-B done** |
 | CarPlay manager | — | **0** | **2C-A done** |
