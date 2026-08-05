@@ -20,3 +20,4 @@ PersistentPlaybackAssemblyTests
 PersistentRoutingFlagTests
 PlaybackOwnershipTests
 PlaybackSessionSelectionPlannerTests
+GaplessAudibleBoundaryCallbackTests

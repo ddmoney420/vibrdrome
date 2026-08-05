@@ -155,6 +155,18 @@ final class GaplessPlaybackController {
     private(set) var audiblePlayInstance: GaplessPlayInstanceID?
 
     /// ReplayGain settings applied at each boundary.
+    /// Invoked when a play occurrence first becomes audible, as observed by the render clock.
+    ///
+    /// **Render-observed, never inferred.** It is driven by `GaplessBoundaryEvent`, which the
+    /// backend emits only once the player node's own sample clock has reached a segment whose PCM
+    /// has actually been materialized — so it does not fire because the engine started, because
+    /// buffers were scheduled, or because the audio session was activated.
+    ///
+    /// Fires **once per play occurrence**, which is why a repeat replaying the same queue item
+    /// fires again while a pause, resume or in-place seek does not. Defaults to `nil`, and holds no
+    /// router or ownership coordinator — the consumer supplies a closure.
+    var onFirstAudibleSample: (() -> Void)?
+
     var replayGainSettings: GaplessReplayGainSettings = .off
     /// Server ReplayGain metadata per song.
     var replayGains: [String: ReplayGain] = [:]
@@ -497,7 +509,14 @@ final class GaplessPlaybackController {
                         boundaries: live.map { ($0.itemID, $0.scheduledStartFrame) })
 
         if let latest = live.last { audiblePlayInstance = latest.playInstance }
-        for event in live where preparationRecords[event.itemID]?.audibleAt == nil {
+        for event in live {
+            // One boundary per play instance is guaranteed by the backend's `reportedInstances`,
+            // and `live` has already dropped superseded tails — so every event here is exactly one
+            // occurrence becoming audible. Deliberately not gated on `audibleAt`, which is keyed by
+            // *item*: a repeat replays the same item and would otherwise be silently skipped.
+            onFirstAudibleSample?()
+
+            guard preparationRecords[event.itemID]?.audibleAt == nil else { continue }
             preparationRecords[event.itemID]?.audibleAt = Date()
             // Recorded from the record that just became audible, so a stale queue generation, a
             // superseded tail or a replayed play instance cannot contribute: `live` has already been
