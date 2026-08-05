@@ -356,20 +356,30 @@ crosses into the other. `WatchSessionManager` and `WatchPlaybackActions` contain
 `RemoteCommandManager` is driven by system remote events, not by WatchConnectivity. A test installs a
 recorder on **both** seams at once and asserts a Watch command records on the Watch seam only.
 
-## Pre-existing gap, deliberately not fixed here
+## `skipToIndex` bounds — hardened
 
-`skipToIndex:<n>` guards only the **upper** bound:
+`skipToIndex:<n>` previously guarded only the **upper** bound:
 
 ```swift
 let abs = currentIndex + 1 + n
 guard abs < queue.count else { return }
-playback.play(song: playback.queue[abs], …)
+playback.play(song: playback.queue[abs], ...)
 ```
 
-A sufficiently negative `n` drives `abs` below zero and would subscript the queue out of range. Our
-own watch app only ever sends row indices ≥ 0, so it is unreachable in practice, and this lane was
-scoped to change no behaviour — so it is recorded here rather than silently patched. Worth closing
-deliberately, with its own test, in a later pass.
+A negative `n` reached `queue[negative]` and trapped. Our own watch app only ever sends row
+indices >= 0, so it was unreachable from our UI — but a watch message is a dictionary on a wire, and
+`skipToIndex:-1` is as deliverable as `skipToIndex:3`.
+
+`skipToIndexAbsolute(currentIndex:relative:)` now returns `Int?` and rejects a negative `n`, a
+computed index below zero, and either addition overflowing (checked with `addingReportingOverflow`,
+so `Int.min` and a `currentIndex` at `Int.max` are both handled). A rejected index performs
+**nothing** — it is never clamped onto a different track, because silently playing the wrong song is
+worse than ignoring an impossible request. The upper-bound no-op is unchanged, and every accepted
+mapping is identical to before.
+
+Command parsing moved into `WatchPlaybackActions.handleSkipToIndexCommand(_:)` so malformed index
+text is testable. It preserves the dispatch contract exactly: text that is not a valid integer is
+still *handled* — it performs nothing rather than falling through to the sleep-timer handler.
 
 ## Remaining direct references by subsystem
 

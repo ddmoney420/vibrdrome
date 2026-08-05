@@ -205,6 +205,131 @@ struct WatchPlaybackMigrationTests {
         }
     }
 
+    // MARK: - skipToIndex bounds hardening
+
+    /// The crash this closes: `currentIndex + 1 + n` with a negative `n` used to reach
+    /// `queue[negative]` and trap, because only the upper bound was checked. A watch message is
+    /// just a dictionary on a wire — `skipToIndex:-1` is as deliverable as `skipToIndex:3`.
+    ///
+    /// Every rejected value must perform **nothing**, never clamp onto a different track.
+    @Test func negativeAndOverflowingIndexesAreRejectedWithoutPlaying() {
+        let rejected: [(name: String, currentIndex: Int, relative: Int)] = [
+            ("minus one", 0, -1),
+            ("far negative", 0, -50),
+            ("Int.min", 0, .min),
+            ("negative past the queue start", 2, -10),
+            ("current index overflow", .max, 0),
+            ("absolute index overflow", Int.max - 1, 5)
+        ]
+
+        for testCase in rejected {
+            #expect(WatchPlaybackActions.skipToIndexAbsolute(
+                currentIndex: testCase.currentIndex, relative: testCase.relative) == nil,
+                    "\(testCase.name) produced an addressable index")
+
+            withRecorder { spy in
+                spy.queue = (0..<5).map { makeSong(id: "q\($0)") }
+                spy.currentIndex = testCase.currentIndex
+                WatchPlaybackActions.skipToIndex(relative: testCase.relative)
+                #expect(spy.playCalls.isEmpty, "\(testCase.name) still started playback")
+                #expect(spy.calls.isEmpty, "\(testCase.name) delegated an operation")
+            }
+        }
+    }
+
+    /// Malformed index text is still a *handled* command — it must not fall through to the timer
+    /// handler — but it performs nothing.
+    @Test func malformedIndexTextIsHandledAndPerformsNothing() {
+        let malformed = [
+            "skipToIndex:", "skipToIndex:abc", "skipToIndex:1.5",
+            "skipToIndex: 2", "skipToIndex:--1", "skipToIndex:99999999999999999999"
+        ]
+        for command in malformed {
+            withRecorder { spy in
+                spy.queue = (0..<5).map { makeSong(id: "q\($0)") }
+                spy.currentIndex = 0
+                #expect(WatchPlaybackActions.handleSkipToIndexCommand(command),
+                        "\(command) fell through instead of being handled")
+                #expect(spy.playCalls.isEmpty, "\(command) started playback")
+                #expect(spy.calls.isEmpty)
+            }
+        }
+        // A command without the prefix must still fall through.
+        #expect(WatchPlaybackActions.handleSkipToIndexCommand("next") == false)
+    }
+
+    /// The negative case that used to crash, driven through the real command string.
+    @Test func negativeIndexCommandPerformsNothing() {
+        withRecorder { spy in
+            spy.queue = (0..<5).map { makeSong(id: "q\($0)") }
+            spy.currentIndex = 0
+            #expect(WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:-1"))
+            #expect(WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:-9223372036854775808"))
+            #expect(spy.playCalls.isEmpty, "a negative index reached the queue")
+            #expect(spy.calls.isEmpty)
+        }
+    }
+
+    /// Valid selection still delegates exactly once, through the command string, and the hardening
+    /// changed none of the accepted mappings.
+    @Test func validIndexCommandStillDelegatesExactlyOnce() {
+        withRecorder { spy in
+            spy.queue = (0..<5).map { makeSong(id: "q\($0)") }
+            spy.currentIndex = 0
+            #expect(WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:2"))
+            #expect(spy.playCalls.count == 1, "a valid selection did not delegate exactly once")
+            #expect(spy.playCalls.first?.songId == "q3")
+            #expect(spy.playCalls.first?.index == 3)
+        }
+        // Nothing playing yet: row 0 is queue position 0.
+        withRecorder { spy in
+            spy.queue = [makeSong(id: "first"), makeSong(id: "second")]
+            spy.currentIndex = -1
+            #expect(WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:0"))
+            #expect(spy.playCalls.count == 1)
+            #expect(spy.playCalls.first?.songId == "first")
+            #expect(spy.playCalls.first?.index == 0)
+        }
+    }
+
+    /// Empty queue and last-track cases: addressable arithmetic, but no such position exists.
+    @Test func emptyQueueAndFinalPositionPerformNothing() {
+        withRecorder { spy in
+            spy.queue = []
+            spy.currentIndex = -1
+            WatchPlaybackActions.skipToIndex(relative: 0)
+            #expect(spy.playCalls.isEmpty, "an empty queue still started playback")
+        }
+        withRecorder { spy in
+            spy.queue = [makeSong(id: "a"), makeSong(id: "b")]
+            spy.currentIndex = 1                       // already the last track
+            WatchPlaybackActions.skipToIndex(relative: 0)
+            #expect(spy.playCalls.isEmpty, "selecting past the final track started playback")
+        }
+    }
+
+    /// A rejected index must not reach the remote-command path either.
+    @Test func rejectedIndexDoesNotDispatchThroughRemoteCommands() {
+        #expect(RemoteCommandManager.shared.playbackOverride == nil,
+                "a previous test leaked a remote-command override")
+        let remoteSpy = PlaybackSpy()
+        RemoteCommandManager.shared.playbackOverride = remoteSpy
+        defer { RemoteCommandManager.shared.playbackOverride = nil }
+        let registrationsBefore = RemoteCommandManager.shared.registrationCount
+
+        withRecorder { watchSpy in
+            watchSpy.queue = (0..<3).map { makeSong(id: "q\($0)") }
+            watchSpy.currentIndex = 0
+            WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:-1")
+            WatchPlaybackActions.handleSkipToIndexCommand("skipToIndex:1")   // valid
+
+            #expect(watchSpy.playCalls.count == 1, "only the valid selection should have played")
+            #expect(remoteSpy.calls.isEmpty, "a Watch index selection dispatched through remote commands")
+            #expect(remoteSpy.playCalls.isEmpty)
+        }
+        #expect(RemoteCommandManager.shared.registrationCount == registrationsBefore)
+    }
+
     /// Duplicate song ids across queue positions stay distinct: the mapping is positional.
     @Test func duplicateSongIdsDoNotCollapseWatchQueuePositions() {
         withRecorder { spy in

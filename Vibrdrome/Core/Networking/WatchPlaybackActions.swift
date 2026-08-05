@@ -71,30 +71,57 @@ enum WatchPlaybackActions {
 
     // MARK: - Queue selection
 
-    /// Absolute queue index for the watch's `skipToIndex:<n>` command.
+    /// Absolute queue index for the watch's `skipToIndex:<n>` command, or `nil` when `n` cannot
+    /// address a queue position at all.
     ///
     /// `n` is **relative to the track after the current one**, the same mapping CarPlay's Up Next
-    /// uses: row `n` is absolute `currentIndex + 1 + n`. Unchanged by this migration.
-    static func skipToIndexAbsolute(currentIndex: Int, relative: Int) -> Int {
-        currentIndex + 1 + relative
+    /// uses: row `n` is absolute `currentIndex + 1 + n`. That mapping is unchanged; what is new is
+    /// that the arithmetic is checked rather than assumed.
+    ///
+    /// Returns `nil` for a negative `n`, for a computed index below zero, and for either addition
+    /// overflowing. The watch's up-next list only ever produces row indices ≥ 0, so no real command
+    /// changes meaning — but `skipToIndex:-9223372036854775808` arrives over the same wire as any
+    /// other message, and previously reached `queue[negative]`.
+    static func skipToIndexAbsolute(currentIndex: Int, relative: Int) -> Int? {
+        guard relative >= 0 else { return nil }
+        let (afterCurrent, currentOverflowed) = currentIndex.addingReportingOverflow(1)
+        guard !currentOverflowed else { return nil }
+        let (absolute, absoluteOverflowed) = afterCurrent.addingReportingOverflow(relative)
+        guard !absoluteOverflowed, absolute >= 0 else { return nil }
+        return absolute
     }
 
     /// Execute `skipToIndex:<relative>`.
     ///
-    /// Preserved exactly, including two details that look like oversights but are existing
-    /// behaviour and are not this lane's to change:
+    /// Calls `play(song:from:at:)` rather than `skipToIndex(_:)`, re-seeding the queue with itself
+    /// at the target position. That is existing behaviour the Watch queue list depends on and is
+    /// deliberately preserved.
     ///
-    /// - it calls `play(song:from:at:)` rather than `skipToIndex(_:)`, so the queue is re-seeded
-    ///   with itself at the target position;
-    /// - it guards only the **upper** bound. A negative `relative` large enough to drive the
-    ///   absolute index below zero would subscript the queue out of range. Our own watch app only
-    ///   ever sends row indices ≥ 0, so it is unreachable in practice — but it is a real gap and is
-    ///   recorded in the migration inventory rather than silently patched here.
+    /// An index that cannot address a queue position — negative, overflowing, or at or beyond the
+    /// end — performs nothing. It is never clamped onto a different track: silently playing the
+    /// wrong song is worse than ignoring an impossible request.
     static func skipToIndex(relative: Int) {
         let playback = playback
-        let absolute = skipToIndexAbsolute(currentIndex: playback.currentIndex, relative: relative)
+        guard let absolute = skipToIndexAbsolute(
+            currentIndex: playback.currentIndex, relative: relative
+        ) else { return }
         guard absolute < playback.queue.count else { return }
         playback.play(song: playback.queue[absolute], from: playback.queue, at: absolute)
+    }
+
+    /// Parse and execute the `skipToIndex:<n>` command.
+    ///
+    /// Returns `true` whenever the command carried the prefix, matching the original dispatch
+    /// contract: text that is not a valid integer is still *handled*, it simply performs nothing
+    /// rather than falling through to the timer handler.
+    @discardableResult
+    static func handleSkipToIndexCommand(_ command: String) -> Bool {
+        let prefix = "skipToIndex:"
+        guard command.hasPrefix(prefix) else { return false }
+        if let relative = Int(command.dropFirst(prefix.count)) {
+            skipToIndex(relative: relative)
+        }
+        return true
     }
 
     // MARK: - Outbound state

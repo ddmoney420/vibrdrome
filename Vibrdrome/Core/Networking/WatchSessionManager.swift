@@ -174,9 +174,7 @@ extension WatchSessionManager: WCSessionDelegate {
         case let cmd where cmd.hasPrefix("playPlaylist:"):
             Task { await playPlaylist(id: String(cmd.dropFirst("playPlaylist:".count))) }
         case let cmd where cmd.hasPrefix("skipToIndex:"):
-            if let index = Int(cmd.dropFirst("skipToIndex:".count)) {
-                WatchPlaybackActions.skipToIndex(relative: index)
-            }
+            WatchPlaybackActions.handleSkipToIndexCommand(cmd)
         default: return false
         }
         return true
