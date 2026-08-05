@@ -22,3 +22,4 @@ PlaybackOwnershipTests
 PlaybackSessionSelectionPlannerTests
 GaplessAudibleBoundaryCallbackTests
 PlaybackSessionPlanExecutorTests
+GaplessBackendFailureRecoveryTests

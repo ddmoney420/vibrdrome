@@ -463,11 +463,11 @@ struct PlaybackSessionPlanExecutorTests {
     /// The production legacy port over the real engine: it reads the live session, and quiescence
     /// leaves transport released while preserving the logical session.
     ///
-    /// **What this cannot show, and does not claim.** A unit-test process has no `AVPlayerItem`s,
-    /// so `isTransportActive` is already false on entry — the release itself is pinned by
-    /// `PlaybackOwnershipTests`, against the same real engine. What is checkable here, and is the
-    /// point of the port, is that capture reads the live queue, that quiescence leaves the queue,
-    /// index and context intact for the adopting session, and that neither step starts transport.
+    /// **Deliberately asserts no entry state.** `AudioEngine.shared` is process-wide and whatever
+    /// ran before this test may have left it playing — observed in the serialized gate, where this
+    /// test entered with `isTransportActive == true` and quiescence released it. Every assertion
+    /// below is a post-condition that holds either way; asserting the entry state instead would
+    /// make the test a report on suite ordering.
     @Test func theProductionLegacyPortReadsTheLiveSessionAndQuiescesWithoutDestroyingIt() {
         let engine = AudioEngine.shared
         let queueBefore = engine.queue
@@ -486,15 +486,11 @@ struct PlaybackSessionPlanExecutorTests {
         let spy = PlaybackSpy()
         let port = AudioEngineLegacySessionPort(engine: engine, transport: spy)
 
-        // Stated rather than assumed: this process holds no items, so the post-quiescence check
-        // below is a "still released", not a "became released".
-        #expect(port.transportState.isTransportActive == false,
-                "this process unexpectedly held transport before the test began")
-
         let snapshot = port.captureSnapshot(startOffsetSeconds: 0)
         port.quiesceForPersistentSession()
 
-        #expect(port.transportState.isTransportActive == false)
+        #expect(port.transportState.isTransportActive == false,
+                "the real engine still held transport after quiescence")
         #expect(snapshot.songs.map(\.id) == ["e0", "e1"],
                 "capture did not read the live queue")
         #expect(snapshot.currentIndex == 1)

@@ -126,16 +126,17 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
         try await assembly.controller.play()
     }
 
-    /// Tear down whatever transport was brought up. `quiesce()` is the adapter's own idempotent
-    /// stop, and the backend's stop is a no-op on a graph that never started.
+    /// Tear down whatever transport was brought up, and leave the retained assembly reusable.
     ///
-    /// The `.failed` case needs the extra step: `GaplessRealTimeBackend.stop()` declines to act
-    /// from `.failed`, so a start that got as far as scheduling before refusing would otherwise
-    /// leave its segments — and the buffers behind them — on the player node. `resetTail()` is the
-    /// one path that drops them irrespective of state, and it touches only structures the failed
-    /// start had already built.
+    /// `quiesce()` is the adapter's own idempotent stop, which routes through
+    /// `GaplessRealTimeBackend.stop()` — that now recovers from `.failed` as well, so a start that
+    /// got as far as scheduling before refusing releases its segments, buffers, source files and
+    /// converters like any other ended session. `resetAfterFailure()` states that requirement
+    /// explicitly and is a no-op once the stop has already done it; it is deliberately not a tail
+    /// reset, which cleared the segments but left the backend stuck in `.failed` and therefore
+    /// unable to start again on the assembly the process keeps for its whole lifetime.
     func tearDown() {
         application.quiesce()
-        if assembly.backend.state == .failed { assembly.backend.resetTail() }
+        assembly.backend.resetAfterFailure()
     }
 }

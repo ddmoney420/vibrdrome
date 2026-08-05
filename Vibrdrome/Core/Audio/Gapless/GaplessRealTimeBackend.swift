@@ -207,26 +207,67 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         state = .playing
     }
 
+    /// End the session and leave the graph reusable.
+    ///
+    /// **`.failed` is a stop-able state, not a dead end.** A start that threw part way still holds
+    /// everything the attempt built — buffers on the player node, open source files, live
+    /// converters, pool tickets — and the assembly that owns this backend is retained for the
+    /// process lifetime, so refusing to stop from `.failed` left those held and made every later
+    /// persistent session on the same instance unusable.
     func stop() {
-        guard state.isActive || state == .prepared else { return }
-        state = .stopping
+        guard state.isActive || state == .prepared || state == .failed else { return }
+        // `.failed` is the one entry that must not pass through `.stopping`: the state machine
+        // permits exactly one exit from it, `.failed -> .idle`, because a start that failed left no
+        // running graph for a "stopping" phase to describe.
+        if state != .failed { state = .stopping }
+        releaseTransportResources()
+        // Set only after everything above has actually been released. A `.failed` backend that
+        // merely *reported* `.idle` while still holding buffers and files would be worse than one
+        // that stayed failed, because the next start would build on top of them.
+        state = .idle
+    }
+
+    /// Return a backend that failed to start to a reusable idle state.
+    ///
+    /// **Only from `.failed`.** A live session must be stopped, not reset: `stop()` is what ends
+    /// audio that is or could still be flowing, and letting a reset stand in for it would tear down
+    /// a playing session as though it had already died. From `.idle` there is nothing to release —
+    /// notably, this does not touch the lazily-built buffer scheduler, so a reset on a backend that
+    /// never ran allocates no pool. Idempotent: the second call sees `.idle` and does nothing.
+    func resetAfterFailure() {
+        guard state == .failed else { return }
+        stop()
+    }
+
+    /// Release everything a session holds. The caller owns the state transition around it.
+    ///
+    /// Ordered node-first: stopping the player node is what discards its pending schedules and
+    /// returns their buffers, so the scheduler's reset — which reclaims the pool and closes the
+    /// sources — must follow it rather than race it.
+    private func releaseTransportResources() {
         engine.player.stop()
         engine.engine.stop()
         fileSegments.removeAll()
+        // Cancels live converters, closes open source files, drops segment and materialization
+        // records, clears in-flight chunks and the recycle inbox, and reclaims every pool buffer.
         bufferScheduler.resetAfterNodeStop(resumeTimelineFrame: 0)
         pendingBoundaryEvents.removeAll()
         reportedInstances.removeAll()
         timelineOffset = 0
         scheduleOriginFrame = 0
         monotonicFrame = 0
+        // Bumped last so any callback or event still in flight from the ended session is recognised
+        // as stale by `isCurrentTail` rather than attributed to whatever starts next.
         tailGeneration += 1
         #if DEBUG
         openFiles.removeAll()
         openFileOrder.removeAll()
         #endif
         engine.gainStage.reset()
+        // The persistent side must hold no audio-session claim once its session has ended, whether
+        // it ended by stopping or by failing. A start that failed before activation deactivates a
+        // session it never activated, which is harmless: the next owner activates on its own start.
         deactivateAudioSession?()
-        state = .idle
     }
 
     // MARK: - Scheduling
