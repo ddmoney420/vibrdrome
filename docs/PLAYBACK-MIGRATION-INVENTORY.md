@@ -604,7 +604,106 @@ queue.isEmpty`) is what makes later ones no-ops. **No once-per-process rule was 
 asserts all three resolve the same `ApplicationPlayback.shared`, so the queue cannot fork, and
 another asserts repeated restore requests are *not* suppressed at the call site.
 
-## Remaining direct references by subsystem
+---
+
+# Lane 2D-B2 — Vibrdrome.swift, the app entry point (done)
+
+**15 direct references → 0.** This was the last application-facing caller.
+
+```
+Vibrdrome app entry → AppCommandPlaybackActions → ApplicationPlayback.shared
+                    → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+## Full member inventory
+
+11 distinct members across 15 occurrences on 13 lines. **All 11 were already on the façade — no
+capability additions were needed**, unlike Lane 2D-B1.
+
+| Member | Kind | Where | Launch phase |
+|---|---|---|---|
+| `play(song:)` | operation | `handleDeepLink` → `case "song"` → `Task` | **URL / deep link** |
+| `togglePlayPause()` ×2 | operation | Playback menu: ⌘P and Space | explicit user command |
+| `next()` | operation | Playback menu: ⌘→ | explicit user command |
+| `previous()` | operation | Playback menu: ⌘← | explicit user command |
+| `seek(to:)`, `duration`, `currentTime` | operation + reads | Seek Forward 10s (⇧⌘→), via a local alias | explicit user command |
+| `seek(to:)`, `currentTime` | operation + read | Seek Backward 10s (⇧⌘←), via a local alias | explicit user command |
+| `toggleShuffle()` | operation | Playback menu: ⇧⌘S | explicit user command |
+| `cycleRepeatMode()` | operation | Playback menu: ⇧⌘R | explicit user command |
+| `volume` get+set ×2 | read + write | Volume Up ⌘↑ / Down ⌘↓ | explicit user command |
+| `currentSong` ×2 | read | `toggleFavorite()` (⌘L), `setRating(_:)` (⌘1–5, ⌘0) | explicit user command |
+
+Two local aliases (`let engine = AudioEngine.shared`, at the seek commands) were enumerated through
+before editing, per the rule that burned Lane 2A and again in Lane 2D-B1.
+
+## Launch-phase classification — the headline finding
+
+| Group | References in this file |
+|---|---|
+| 1. App construction | **0** |
+| 2. Initial scene setup | **0** |
+| 3. Remote-command setup | **0** (it calls `RemoteCommandManager.setup()`, which owns its own playback) |
+| 4. Restoration | **0** — restoration lives in `ContentView`/`MacContentView` and `CarPlaySceneDelegate` |
+| 5. Explicit user command | **14** |
+| 6. Widget command | **0** — `handleWidgetCommand()` is in `ContentView`, not here |
+| 7. URL / deep link | **1** |
+| 8. Background task | **0** |
+| 9. Termination / persistence | **0** |
+| 10. Standalone diagnostic read | **0** — every read is inside an explicit command |
+
+**There is no cold-launch playback path in this file.** `VibrdromeApp.init()` runs credential and
+visualizer migrations, prunes legacy widget keys, and calls `BackgroundSyncScheduler.registerTasks()`.
+Both scenes' `.onAppear` install the image pipeline, call `RemoteCommandManager.shared.setup()`,
+resume downloads, schedule background sync and start library sync. Machine-verified: neither block
+contains a single playback call.
+
+So the zero-activation gate here is not "the launch path was made safe" — it is "the launch path
+never had a playback call to make unsafe", and the tests pin that it stays that way.
+
+## Dependency ordering — unchanged
+
+Nothing was resolved earlier for convenience. `SubsonicClientProvider.shared.client` is set in
+`AppState.swift`, not here; `BGTaskScheduler` registration stays synchronous in `init()` (moving it
+to `.onAppear` would make iOS silently drop a task-triggered launch); `scheduleRefresh()` /
+`scheduleFullSync()` stay in `.onAppear`, after credentials are loaded. `RemoteCommandManager.setup()`
+keeps its position at the top of `.onAppear`, before library sync.
+
+## Naming note
+
+The helper is `AppCommandPlaybackActions`, not `AppPlaybackLifecycleActions`. Every reference in this
+file is an explicit command, and there is no lifecycle playback here at all — naming it "lifecycle"
+would encode a launch-phase relationship that does not exist. Scene-phase lifecycle playback lives in
+`ScenePlaybackLifecycleActions` (Lane 2D-B1), which is correctly named.
+
+## Testability limit, stated plainly
+
+`VibrdromeApp` is **not** constructed in tests. Its `init()` calls
+`BackgroundSyncScheduler.registerTasks()`, and `BGTaskScheduler.register(forTaskWithIdentifier:)`
+raises on a duplicate identifier — the host app already registered at launch, so building a second
+`VibrdromeApp` would take the test process down rather than prove anything. The launch-path tests
+drive what *is* safely re-runnable: the scene root and the idempotent remote-command setup. The
+stronger claim — that `init()` and both `.onAppear` blocks contain no playback call — is a source
+property, established by the enumeration above.
+
+---
+
+# Application-facing migration complete
+
+Every application caller now routes through `ApplicationPlayback.shared`:
+
+| Surface | Lane | Refs migrated |
+|---|---|---|
+| Views (34 files) | 2A | 107 |
+| Remote commands | 2B | 8 |
+| CarPlay manager | 2C-A | 19 |
+| Watch session | 2C-B | 9 |
+| Siri / App Intents | 2C-C | 6 |
+| CarPlay scene | 2D-A | 4 |
+| Main scene phase | 2D-B1 | 2 (9 members via aliases) |
+| App entry | 2D-B2 | 15 |
+
+A test asserts all six seams plus the composition point resolve the **same** object, so the
+application cannot fork into two playback authorities.
 
 ## Remaining direct references by subsystem
 
@@ -612,15 +711,21 @@ another asserts repeated restore requests are *not* suppressed at the call site.
 
 ## Remaining direct references by subsystem
 
-46 references remain (occurrence counts, not line counts):
+## Remaining direct references by subsystem
+
+## Remaining direct references by subsystem
+
+32 references remain (occurrence counts, not line counts). **No application-facing caller is among
+them** — what is left is the legacy implementation, the façade's own files, the documented debug
+exception, and the persistent engine:
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
-| Main app scene entry | `Vibrdrome.swift` | 15 | 2D-B2 |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
+| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3 — the delegation itself), plus 3 doc-comment mentions in `ApplicationPlaybackControlling.swift`, `CarPlayPlaybackActions.swift`, `AppCommandPlaybackActions.swift` | 6 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Main app scene entry | — | **0** | **2D-B2 done** |
 | Main app scene phase | — | **0** | **2D-B1 done** |
 | CarPlay scene / lifecycle | — | **0** | **2D-A done** |
 | Siri / App Intents | — | **0** | **2C-C done** |

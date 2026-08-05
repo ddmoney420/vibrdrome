@@ -386,7 +386,13 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
     func togglePlayPause() { record("togglePlayPause") }
     func next() { record("next") }
     func previous() { record("previous") }
-    func seek(to time: TimeInterval) { record("seek") }
+    /// Seek targets are recorded as well as the call, because the menu's seek commands clamp before
+    /// delegating and the clamped value is the thing under test.
+    private(set) var seekTargets: [TimeInterval] = []
+    func seek(to time: TimeInterval) {
+        record("seek")
+        seekTargets.append(time)
+    }
     /// The index argument is recorded as well as the call, because CarPlay's Up Next mapping is
     /// positional arithmetic and the value passed through is the thing under test.
     private(set) var skipToIndexCalls: [Int] = []

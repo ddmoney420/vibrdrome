@@ -397,7 +397,7 @@ struct VibrdromeApp: App {
                 Task {
                     do {
                         let song = try await appState.subsonicClient.getSong(id: String(songId))
-                        AudioEngine.shared.play(song: song)
+                        AppCommandPlaybackActions.playSong(song)
                     } catch {
                         logger.error("Failed to play song from deep link: \(error)")
                     }
@@ -438,60 +438,58 @@ private struct PlaybackCommands: View {
     var body: some View {
         Group {
             Button("Play/Pause") {
-                AudioEngine.shared.togglePlayPause()
+                AppCommandPlaybackActions.togglePlayPause()
             }
             .keyboardShortcut("p", modifiers: .command)
 
             Button("Play/Pause") {
-                AudioEngine.shared.togglePlayPause()
+                AppCommandPlaybackActions.togglePlayPause()
             }
             .keyboardShortcut(.space, modifiers: [])
 
             Divider()
 
             Button("Next Track") {
-                AudioEngine.shared.next()
+                AppCommandPlaybackActions.nextTrack()
             }
             .keyboardShortcut(.rightArrow, modifiers: .command)
 
             Button("Previous Track") {
-                AudioEngine.shared.previous()
+                AppCommandPlaybackActions.previousTrack()
             }
             .keyboardShortcut(.leftArrow, modifiers: .command)
 
             Button("Seek Forward 10s") {
-                let engine = AudioEngine.shared
-                engine.seek(to: min(engine.duration, engine.currentTime + 10))
+                AppCommandPlaybackActions.seekForward(by: 10)
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command, .shift])
 
             Button("Seek Backward 10s") {
-                let engine = AudioEngine.shared
-                engine.seek(to: max(0, engine.currentTime - 10))
+                AppCommandPlaybackActions.seekBackward(by: 10)
             }
             .keyboardShortcut(.leftArrow, modifiers: [.command, .shift])
 
             Divider()
 
             Button("Shuffle") {
-                AudioEngine.shared.toggleShuffle()
+                AppCommandPlaybackActions.toggleShuffle()
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
 
             Button("Repeat") {
-                AudioEngine.shared.cycleRepeatMode()
+                AppCommandPlaybackActions.cycleRepeatMode()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
 
             Divider()
 
             Button("Volume Up") {
-                AudioEngine.shared.volume = min(1, AudioEngine.shared.volume + 0.1)
+                AppCommandPlaybackActions.volumeUp(by: 0.1)
             }
             .keyboardShortcut(.upArrow, modifiers: .command)
 
             Button("Volume Down") {
-                AudioEngine.shared.volume = max(0, AudioEngine.shared.volume - 0.1)
+                AppCommandPlaybackActions.volumeDown(by: 0.1)
             }
             .keyboardShortcut(.downArrow, modifiers: .command)
         }
@@ -526,7 +524,7 @@ private struct PlaybackCommands: View {
     }
 
     private static func toggleFavorite() {
-        guard let song = AudioEngine.shared.currentSong else { return }
+        guard let song = AppCommandPlaybackActions.currentSong else { return }
         let songId = song.id
         let wasStarred = song.starred != nil
         Task {
@@ -547,7 +545,7 @@ private struct PlaybackCommands: View {
     }
 
     private static func setRating(_ rating: Int) {
-        guard let song = AudioEngine.shared.currentSong else { return }
+        guard let song = AppCommandPlaybackActions.currentSong else { return }
         let songId = song.id
         Task {
             do {
