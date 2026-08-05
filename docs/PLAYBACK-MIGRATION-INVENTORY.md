@@ -984,6 +984,66 @@ Every representative operation still delegates exactly once to the legacy adapte
 preparation, the persistent backend stays `.idle`, and the Lane 3B policy remains unconsulted for
 active routing. Lane 3D will select through this same assembly path.
 
+---
+
+# Checkpoint 3D-B1 — playback ownership and legacy quiescence (partial)
+
+**Lane 3D-B1 is NOT complete.** This checkpoint lands the ownership model and the legacy
+quiescence mechanism, verified. Routing is unchanged: everything still resolves to legacy, the
+DEBUG flag still defaults Off, and Release remains legacy-only.
+
+## Legacy transport lifecycle audit
+
+`tearDownCurrentMode()` is the real transport teardown. It increments the generation (invalidating
+in-flight async EQ tasks that could otherwise replace an item after teardown), tears down the
+periodic time observer, the item-end observer and the property observers (including stall
+recovery), clears the lookahead item, pauses, **removes every current and queued `AVPlayerItem`**,
+and tears down the crossfade controller's secondary player in that mode.
+
+`stop()` does all of that **and** submits a scrobble, clears Now Playing, and nils `currentSong`
+and `currentRadioStation`. That difference is the whole design point: quiescence must not be
+`stop()`, or the handoff would destroy the queue Persistent is about to adopt and double-credit a
+scrobble for a track that has not finished.
+
+| Resource | On quiescence |
+|---|---|
+| `AVQueuePlayer` current + queued items | **released** |
+| Periodic time observer (Now Playing / scrobble progress feed) | **released** |
+| Item-end observer (queue advancement) | **released** |
+| Property observers, stall recovery | **released** |
+| Lookahead item, crossfade secondary player | **released** |
+| Queue, current index, current song, repeat/shuffle, context, volume, EQ | **preserved** |
+| Downloads, predownload, bookmarks, history, radio configuration | **untouched** |
+
+## What landed
+
+- `PlaybackAuthority` — `none` / `legacy` / `persistent`.
+- `PlaybackOwnershipCoordinator` — the 0-or-1 invariant, with audio-session, Now Playing, scrobble
+  and visualizer ownership all *derived* from one authority so they cannot disagree.
+- Audible-boundary latch — fallback is permitted until audio has been heard and prohibited after,
+  and the boundary cannot be reached without an owner.
+- `quiesceForPersistentSession()` and `legacyTransportState` — judged on **items, not the playing
+  flag**, because a paused `AVQueuePlayer` still holds its items, observers and session claim.
+- `PlaybackSessionSnapshot` — captured before teardown, occurrences positional so duplicate song
+  ids stay distinct.
+
+## What remains for Lane 3D-B1
+
+Not implemented, and not stubbed:
+
+- the selection sequence (evaluate → prepare → materialize → confirm → decide → grant → quiesce →
+  start exactly one backend);
+- delivered-representation confirmation at run time;
+- pre-audible legacy fallback;
+- transport routing to `PersistentApplicationPlaybackAdapter`;
+- Now Playing, scrobble and visualizer ownership *transfer*;
+- ownership diagnostics on the Debug screen;
+- exactly-once routing tests against a selected persistent backend.
+
+`ApplicationPlaybackRouter.routed` returns legacy unconditionally and says so, so nothing here
+implies routing that does not exist. Lane 3D-B2 still owns the production soak and the device
+install.
+
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem

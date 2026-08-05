@@ -56,6 +56,10 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// through evaluating → preparing → legacy/persistent before the first audible sample.
     private(set) var sessionSelectionState: PlaybackSessionSelectionState = .idle
 
+    /// Single source of truth for which backend may own audio, the session, Now Playing, scrobble
+    /// credit and the visualizer feed.
+    let ownership = PlaybackOwnershipCoordinator()
+
     init(
         legacy: LegacyAudioEngineAdapter = LegacyAudioEngineAdapter(),
         persistentBuilder: any PersistentPlaybackAssemblyBuilding
@@ -103,18 +107,18 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// Deliberately a `switch` on the decision rather than an identity check on a stored controller:
     /// the policy has to be readable as policy, and a future lane must not be able to change routing
     /// by accidentally reassigning an object reference.
+    /// The destination for the current session.
+    ///
+    /// **Still legacy for everything.** The ownership coordinator and the quiescence mechanism now
+    /// exist and are tested, but the selection sequence that would grant persistent authority is
+    /// not implemented yet — so `ownership.authority` never becomes `.persistent` in production and
+    /// this returns legacy unconditionally. Wiring selection is the remaining half of Lane 3D-B1.
     private var routed: any ApplicationPlaybackControlling {
-        switch selectedBackend {
-        case .legacy:
-            return legacy
-        case .persistent:
-            // Unreachable: nothing can select `.persistent` yet. Trapping in DEBUG makes a premature
-            // selection loud during development, while release falls back to the only implementation
-            // that exists rather than playing through something unbuilt.
-            assertionFailure("persistent backend selected before it is constructed (Lane 3C/3D)")
-            return legacy
-        }
+        legacy
     }
+
+    /// Whether persistent currently owns transport. Always false until selection lands.
+    var isPersistentSessionActive: Bool { ownership.authority == .persistent }
 
     #if DEBUG
     /// The legacy adapter, for tests that need its delegation counters. DEBUG-only, and it is the

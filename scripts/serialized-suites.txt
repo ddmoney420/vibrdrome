@@ -18,3 +18,4 @@ GaplessControllerGapTests
 GaplessRetryStormTests
 PersistentPlaybackAssemblyTests
 PersistentRoutingFlagTests
+PlaybackOwnershipTests
