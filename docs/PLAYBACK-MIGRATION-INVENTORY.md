@@ -179,22 +179,58 @@ and `DebugView.swift`, each of which had the same substring hazard.
 `ApplicationPlayback.shared`; the only remaining direct reference inside a view is the documented
 `DebugView.activePlayer` diagnostic exception.
 
+---
+
+# Lane 2B — RemoteCommandManager (done)
+
+`Core/Audio/RemoteCommandManager.swift`: **8 direct references → 0.** The route is now
+
+```
+MPRemoteCommandCenter → RemoteCommandManager → ApplicationPlayback.shared
+                      → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+Command availability, button presentation and status mapping are byte-for-byte unchanged: the
+`isEnabled` set is identical, skip-forward/backward stay disabled so the lock screen keeps showing
+next/previous, an invalid seek event still maps to `.commandFailed`, and everything else still
+returns `.success`.
+
+**What changed structurally.** Each command body moved out of its `addTarget` closure into a named
+method; the closures now do nothing but call those methods. This exists so the behaviour is
+reachable from a test — `MPRemoteCommandCenter` cannot invoke a registered command and
+`MPRemoteCommandEvent` has no public initialiser, so without the split "one press produces exactly
+one engine call" is unprovable. Registration, ownership and the single `setup()` are untouched.
+
+**State is read live, never cached.** `playback` is a computed property resolving
+`ApplicationPlayback.shared` on every access, so `currentSong` for the Like button is re-read per
+press. A cached copy would favourite whatever was playing when the handler was registered. There is
+a test asserting two presses produce two reads.
+
+**Test seam.** A DEBUG-only `playbackOverride` lets tests substitute a recorder, because `resume`,
+`next` and `previous` would start AVQueuePlayer — impossible while the gapless real-time suites are
+running. Production never sets it and the property does not exist in release builds. A DEBUG
+`registrationCount` proves the `isSetup` guard stops a second set of handlers being attached, which
+is the defect that makes one lock-screen press skip two tracks.
+
 ## Remaining direct references by subsystem
 
-96 references remain outside the migrated view layer (occurrence counts, not line counts):
+85 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
 | CarPlay | `CarPlay/CarPlayManager.swift` (19), `CarPlay/CarPlaySceneDelegate.swift` (4) | 23 | 2C |
-| Legacy implementation | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
+| Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
 | Scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D |
 | Watch session | `Core/Networking/WatchSessionManager.swift` | 9 | 2C |
-| Remote commands | `Core/Audio/RemoteCommandManager.swift` | 8 | 2B |
 | Siri / App Intents | `App/AppIntents.swift` | 6 | 2C |
-| The façade itself | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1) | 4 | — (by design) |
-| Sidebar view (grep artifact) | `Features/Library/SidebarContentView.swift` | 3 | next views pass |
-| Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent exception** |
+| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1) | 4 | — (by design) |
+| Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent engine | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Remote commands | — | **0** | **2B done** |
+| Views | — | **0** | **2A done** |
+
+`GaplessPlaybackController` is constructed in **11 test files and 0 production files** — the
+persistent engine remains unwired.
 
 `DebugView` keeps `AudioEngine.shared.activePlayer` permanently. `activePlayer` returns the
 `AVQueuePlayer` itself; exposing it on the façade would leak the legacy implementation object
@@ -219,7 +255,7 @@ refactor was triggered.
 ## Lane 2 batches
 
 1. **Views** — **complete**: 34 files. The largest group and the lowest risk.
-2. **RemoteCommandManager** — one command per press is the property to preserve; migrate alone.
+2. **RemoteCommandManager** — **complete**: one file, 8 references, one-press-one-call proven by test.
 3. **CarPlay, Watch, Siri** — out-of-process callers; migrate together, each verified separately.
 4. **Scene entry and lifecycle** — restoration and cold launch; migrate last, because the Build 60
    zero-activation behaviour depends on it.

@@ -402,7 +402,17 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
 
     // State
     var isPlaying = false
-    var currentSong: Song?
+    /// Counts reads of `currentSong`, so a caller can be proven to re-read it on every use rather
+    /// than caching a copy that would go stale the moment the track changed.
+    private(set) var currentSongReads = 0
+    private var storedCurrentSong: Song?
+    var currentSong: Song? {
+        get {
+            currentSongReads += 1
+            return storedCurrentSong
+        }
+        set { storedCurrentSong = newValue }
+    }
     var currentTime: TimeInterval = 0
     var smoothCurrentTime: TimeInterval = 0
     var isBuffering = false
