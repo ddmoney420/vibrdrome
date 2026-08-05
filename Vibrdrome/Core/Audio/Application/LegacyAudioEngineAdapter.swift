@@ -169,15 +169,26 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
 /// remain inside `AudioEngine`), and this is where a future selector will be installed rather than
 /// scattered across call sites.
 ///
-/// Resolves to: façade → `LegacyAudioEngineAdapter` → `AudioEngine.shared`.
-/// The persistent PCM controller is **not** constructed here; Lane 1 leaves it unwired.
+/// Resolves to: `ApplicationPlaybackRouter` → `LegacyAudioEngineAdapter` → `AudioEngine.shared`.
+///
+/// **`shared` is one stable object for the process lifetime**, and that is the point of routing
+/// through the router rather than swapping what `shared` returns. Eight surfaces captured this
+/// property during Lane 2; if its identity could change under them the app would end up with two
+/// queue authorities and no way to tell which one the user is looking at. The engine *decision*
+/// lives inside the router; the object callers hold never changes.
+///
+/// The persistent PCM controller is **not** constructed here, and the router cannot select it.
 @MainActor
 enum ApplicationPlayback {
     /// Created once, lazily, on first use.
-    static let shared: ApplicationPlaybackControlling = LegacyAudioEngineAdapter()
+    static let shared: ApplicationPlaybackControlling = ApplicationPlaybackRouter()
 
-    /// The concrete adapter, for DEBUG diagnostics and tests that need the delegation counters.
+    /// The router, for DEBUG diagnostics and the stable-authority tests.
     #if DEBUG
-    static var legacyAdapter: LegacyAudioEngineAdapter? { shared as? LegacyAudioEngineAdapter }
+    static var router: ApplicationPlaybackRouter? { shared as? ApplicationPlaybackRouter }
+
+    /// The legacy adapter behind the router, for tests that need the delegation counters. Reaches
+    /// through the router rather than casting `shared`, which is no longer the adapter itself.
+    static var legacyAdapter: LegacyAudioEngineAdapter? { router?.legacyAdapterForTesting }
     #endif
 }

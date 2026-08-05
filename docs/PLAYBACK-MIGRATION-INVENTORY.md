@@ -705,6 +705,98 @@ Every application caller now routes through `ApplicationPlayback.shared`:
 A test asserts all six seams plus the composition point resolve the **same** object, so the
 application cannot fork into two playback authorities.
 
+---
+
+# Lane 3A — the application playback router (done)
+
+Composition before:
+
+```
+ApplicationPlayback.shared → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+Composition now:
+
+```
+Views / CarPlay / Watch / Siri / Remote commands / Lifecycle / App entry
+                              ↓
+                   ApplicationPlayback.shared
+                              ↓
+                  ApplicationPlaybackRouter        ← the decision lives here
+                              ↓
+                   LegacyAudioEngineAdapter        ← the only destination
+                              ↓
+                      AudioEngine.shared → AVQueuePlayer
+```
+
+**Zero behaviour change.** Every one of the router's 58 members forwards to the legacy adapter.
+
+## Why a router rather than swapping what `shared` returns
+
+Lane 2 moved 170 call sites across eight surfaces onto `ApplicationPlayback.shared`, and those
+surfaces *hold* it. If its identity could change under them, the app would end up with two queue
+authorities and no way to tell which one the user is looking at. So:
+
+- the **authority is stable** for the process lifetime — one router, always the same object;
+- the **decision lives inside it** — a future lane changes what `routed` returns, never what callers
+  hold.
+
+`routed` is a `switch` on an explicit `PlaybackBackend`, not an identity check on a stored
+controller: the policy has to read as policy, and a later lane must not be able to change routing by
+accidentally reassigning a reference. `.persistent` exists as a case so the decision has a name
+before it has a second destination; `selectedBackend` is `private(set)` and never assigned, so
+`.legacy` is the only reachable runtime value. Selecting `.persistent` today trips an
+`assertionFailure` in DEBUG and falls back to legacy in release — a premature selection should be
+loud in development and harmless in the field, never silently routed to something unbuilt.
+
+## The revised invariant
+
+Lane 2's identity test proved *all seams resolve the same façade*. That is now:
+
+```
+All application seams → the same stable ApplicationPlaybackRouter
+                      → the same routing decision (.legacy)
+                      → the same LegacyAudioEngineAdapter
+                      → the same AudioEngine.shared
+```
+
+Both halves are tested. The existing identity test was updated rather than deleted.
+
+**Note for Lane 3D:** once the router can return different destinations, "same authority" stays true
+but "same destination" stops being the invariant — it becomes "same *decision* for the same source".
+That test needs rewriting deliberately at that point, not deleting when it starts failing.
+
+## Diagnostics
+
+The router reports what is actually true:
+
+```
+Application playback router: Active
+Selected backend: Legacy
+Legacy adapter: Active
+Persistent controller: Not constructed
+```
+
+`persistentControllerConstructed` is *read* from `GaplessDiagnosticsRegistry`, not asserted — if
+anything ever does construct a persistent controller, diagnostics must say so rather than keep
+reporting the comfortable answer.
+
+## No source predicate
+
+Lane 3A adds **no** routing predicate. Nothing consults format (FLAC/ALAC/AAC/Opus/MP3), local vs.
+streamed, cache state, radio, live streams, channel count or gapless metadata. That is Lane 3B.
+
+## Planned lanes
+
+| Lane | Scope |
+|---|---|
+| **3B** | Pure backend-routing predicate — a testable function, consulted by nothing yet |
+| **3C** | Construct the persistent engine in production, still unselected; measure cold-launch cost and leaks against the recorded soak numbers |
+| **3D** | First real persistent routing behind a DEBUG/settings flag, then the serialized buffer gate |
+| **4** | Direct-device smoke and regression testing |
+
+## Remaining direct references by subsystem
+
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem
@@ -722,7 +814,7 @@ exception, and the persistent engine:
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
-| Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3 — the delegation itself), plus 3 doc-comment mentions in `ApplicationPlaybackControlling.swift`, `CarPlayPlaybackActions.swift`, `AppCommandPlaybackActions.swift` | 6 | — (by design) |
+| Façade / router internals | `Application/LegacyAudioEngineAdapter.swift` (3 — the delegation itself), plus doc-comment mentions in `ApplicationPlaybackControlling.swift`, `CarPlayPlaybackActions.swift`, `AppCommandPlaybackActions.swift` | 6 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
 | Main app scene entry | — | **0** | **2D-B2 done** |

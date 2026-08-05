@@ -258,8 +258,12 @@ struct AppCommandPlaybackMigrationTests {
                 "the launch path built a persistent playback controller")
     }
 
-    /// Repeated construction of the app and its content views never yields a second façade, and the
-    /// whole application resolves one playback authority across every seam.
+    /// Repeated construction of the app and its content views never yields a second authority, and
+    /// every seam resolves the same one.
+    ///
+    /// Since Lane 3A that authority is the `ApplicationPlaybackRouter` rather than the adapter
+    /// itself. The invariant is unchanged in substance — one object, held by all eight surfaces —
+    /// and `ApplicationPlaybackRouterTests` extends it to the routing decision behind that object.
     @Test func everySeamResolvesTheSameSingleAuthority() {
         #expect(AppCommandPlaybackActions.playbackOverride == nil)
         #expect(ScenePlaybackLifecycleActions.playbackOverride == nil)
