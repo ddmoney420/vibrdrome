@@ -84,6 +84,17 @@ swiftlint lint --quiet > "$LOGDIR/lint.log" 2>&1
 v=$(grep -cE ': (warning|error):' "$LOGDIR/lint.log")
 if [ "$v" -eq 0 ]; then emit PASS "SwiftLint" "0 violations"; else emit FAIL "SwiftLint" "$v violations"; fi
 
+# --- Entitlements ---
+# project.yml GENERATES the entitlement files rather than referencing them, so a spec regression
+# silently drops CarPlay audio and the App Group. Nothing else in this suite would notice: the
+# builds still succeed, and the damage only shows up as the app vanishing from CarPlay or the
+# widget losing the shared container. Checked against the tracked files, not a log message.
+if ./scripts/verify-entitlements.sh > "$LOGDIR/entitlements.log" 2>&1; then
+  emit PASS "entitlements" "CarPlay + App Group present"
+else
+  emit FAIL "entitlements" "required entitlement missing (see $LOGDIR/entitlements.log)"
+fi
+
 # build NAME SCHEME DEST
 build() {
   local name="$1" scheme="$2" dest="$3" log="$LOGDIR/build-$1.log"

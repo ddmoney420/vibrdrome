@@ -78,12 +78,16 @@ SwiftUI refactor of layout-critical player and queue UI was not performed.
 
 | | Before | After |
 |---|---|---|
-| `AudioEngine.shared` in the 33 migrated files | **104** | **0** |
-| `ApplicationPlayback.shared` in the 33 migrated files | 0 | **104** |
-| Typed properties (`: AudioEngine` → `: any ApplicationPlaybackControlling`) | 0 | **17** |
-| `AudioEngine.shared` repository-wide (excluding tests) | 200 | **96** |
+| `AudioEngine.shared` in the 34 migrated view files | **107** | **0** |
+| `ApplicationPlayback.shared` in the 34 migrated view files | 0 | **107** |
+| Typed properties (`: AudioEngine` → `: any ApplicationPlaybackControlling`) | 0 | **18** |
+| `AudioEngine.shared` repository-wide (excluding tests) | 200 | **93** |
 
-The substitution is exactly 1:1 — 104 references out, 104 in — so no call site was lost or doubled.
+The substitution is exactly 1:1 — 107 references out, 107 in — so no call site was lost or doubled.
+
+Phase 3 migrated 33 files (104 references). The Lane 2A closure pass added
+`Features/Library/SidebarContentView.swift` (3 references, 1 typed property), which the original
+unanchored scope grep had silently excluded — see below.
 
 ## Files migrated
 
@@ -101,6 +105,7 @@ The substitution is exactly 1:1 — 104 references out, 104 in — so no call si
 | `Features/Library/MacHomeViewModel.swift` | 5 | 0 |
 | `Features/Library/MacTrackTableRow.swift` | 5 | 0 |
 | `Features/Library/SongDetailView.swift` | 1 | 0 |
+| `Features/Library/SidebarContentView.swift` | 3 | 0 |
 | `Features/Library/SongsView.swift` | 4 | 0 |
 | `Features/Player/LyricsView.swift` | 1 | 0 |
 | `Features/Player/MiniPlayerView.swift` | 9 | 0 |
@@ -128,10 +133,14 @@ The substitution is exactly 1:1 — 104 references out, 104 in — so no call si
 type-level values, not instance members, so they are not façade candidates and are not counted as
 direct singleton access.
 
-## Held back from the 39-file grep scope
+## Held back — six non-view files, deliberately deferred
 
-The scope grep returns 39 files. Six of them are not view-layer code and were deliberately **not**
-migrated:
+The scope grep returns these six alongside the views. None is view-layer code, and all are
+classified below rather than left unexplained. They may continue referencing `AudioEngine.shared`.
+
+**`CarPlaySceneDelegate` — deferred to the CarPlay lane (2C).**
+**The other five — legacy implementation collaborators that must not depend on the
+application-facing façade.**
 
 | File | Refs | Why held |
 |---|---|---|
@@ -147,11 +156,28 @@ Routing `AudioEngine`'s own collaborators back through it would invert the depen
 Lane 3 selector lands it would send implementation-internal calls through engine selection. These
 five `Core/Audio/*` files are legacy-implementation peers and should move (or not) with Lane 3.
 
-## Grep-scope defect worth knowing
+## Grep-scope defect — found and fixed
 
-The scope grep excludes `ContentView\.swift` **unanchored**, so it also silently swallows
-`Features/Library/SidebarContentView.swift` (3 references) — a genuine view file that nothing has
-consciously deferred. Anchor the pattern, or name the file explicitly, before the next lane.
+The original scope grep excluded `ContentView\.swift` **unanchored**, so it also silently swallowed
+`Features/Library/SidebarContentView.swift` — a genuine view file that nothing had consciously
+deferred. Any filename *ending in* `ContentView.swift` was invisible to the sweep.
+
+`SidebarContentView.swift` has since been migrated (3 references), and the pattern is now anchored
+on a path separator so it can only match the two intentionally deferred files:
+
+```bash
+grep -rl "AudioEngine.shared" Vibrdrome VibrdromeWatch | grep -v VibrdromeTests \
+  | grep -vE "RemoteCommandManager|CarPlayManager|WatchSessionManager|AppIntents|/Vibrdrome\.swift$|/ContentView\.swift$|/MacContentView\.swift$|/DebugView\.swift$|Core/Audio/AudioEngine|Core/Audio/Gapless|Core/Audio/Application"
+```
+
+`/ContentView\.swift$` matches `Features/Library/ContentView.swift` and nothing else;
+`SidebarContentView.swift` no longer matches because `/Sidebar…` does not end at a path separator
+before `ContentView.swift`. The same anchoring is applied to `Vibrdrome.swift`, `MacContentView.swift`
+and `DebugView.swift`, each of which had the same substring hazard.
+
+**View migration is now complete.** Every view-layer file reaches playback through
+`ApplicationPlayback.shared`; the only remaining direct reference inside a view is the documented
+`DebugView.activePlayer` diagnostic exception.
 
 ## Remaining direct references by subsystem
 
@@ -192,7 +218,7 @@ refactor was triggered.
 
 ## Lane 2 batches
 
-1. **Views** — *done* (this phase): 33 files, the largest group and the lowest risk.
+1. **Views** — **complete**: 34 files. The largest group and the lowest risk.
 2. **RemoteCommandManager** — one command per press is the property to preserve; migrate alone.
 3. **CarPlay, Watch, Siri** — out-of-process callers; migrate together, each verified separately.
 4. **Scene entry and lifecycle** — restoration and cold launch; migrate last, because the Build 60

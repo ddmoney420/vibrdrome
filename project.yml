@@ -108,8 +108,18 @@ targets:
         platformFilter: iOS
       - target: VibrdromeWatch
         platformFilter: iOS
+    # `entitlements` GENERATES this file — it is not a reference to a hand-maintained one.
+    # With `path` alone and no `properties`, XcodeGen writes an empty <dict/> over it, which is
+    # exactly how the CarPlay and App Group entitlements kept disappearing on every `xcodegen
+    # generate`. Keep every required key listed here; scripts/verify-entitlements.sh fails the
+    # build if one goes missing.
     entitlements:
       path: Vibrdrome/Vibrdrome.entitlements
+      properties:
+        com.apple.developer.carplay-audio: true
+        com.apple.security.application-groups:
+          - group.com.vibrdrome.app
+        com.apple.security.files.user-selected.read-write: true
 
   VibrdromeWidget:
     type: app-extension
@@ -126,8 +136,13 @@ targets:
         CODE_SIGN_ENTITLEMENTS: VibrdromeWidget/VibrdromeWidget.entitlements
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "59"
+    # Generated, not referenced — see the note on the Vibrdrome target above. The widget reads the
+    # shared container, so losing this App Group silently breaks the widget's data access.
     entitlements:
       path: VibrdromeWidget/VibrdromeWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.vibrdrome.app
 
   VibrdromeWatch:
     type: application

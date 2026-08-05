@@ -46,7 +46,7 @@ struct SidebarContentView: View {
         SidebarItem(rawValue: selectionRaw)
     }
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     enum SidebarItem: String, CaseIterable, Hashable {
         case home
@@ -393,7 +393,7 @@ struct SidebarContentView: View {
             guard let album = albums.first else { return }
             let detail = try await appState.subsonicClient.getAlbum(id: album.id)
             if let songs = detail.song, let first = songs.first {
-                AudioEngine.shared.play(song: first, from: songs, at: 0)
+                ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
             }
             detailPath.append(SidebarNavRoute.album(album.id))
         } catch {
@@ -410,7 +410,7 @@ struct SidebarContentView: View {
             let pool = try await appState.subsonicClient.getRandomSongs(size: 200)
             let mix = Self.diversifyMix(pool, target: 50, maxPerArtist: 3)
             guard let first = mix.first else { return }
-            AudioEngine.shared.play(song: first, from: mix, at: 0)
+            ApplicationPlayback.shared.play(song: first, from: mix, at: 0)
             #if os(macOS)
             selectionRaw = SidebarItem.nowPlaying.rawValue
             appState.activeSidePanel = .queue
