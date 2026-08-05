@@ -21,3 +21,4 @@ PersistentRoutingFlagTests
 PlaybackOwnershipTests
 PlaybackSessionSelectionPlannerTests
 GaplessAudibleBoundaryCallbackTests
+PlaybackSessionPlanExecutorTests

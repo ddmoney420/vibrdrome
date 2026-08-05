@@ -151,6 +151,24 @@ actor GaplessTrackPreparer {
         try await provider.localFile(forTrack: trackID)
     }
 
+    /// Adopt a track that has **already** been materialized and described, without re-fetching or
+    /// re-opening it.
+    ///
+    /// Backend selection has to materialize the first source and inspect the real media before it
+    /// can decide whether the session uses the persistent engine at all. Letting the window prepare
+    /// that track again would not merely duplicate the work: the decision would then have been made
+    /// about one reading of the file while the engine scheduled a different one. Adoption hands the
+    /// inspected track straight over, so the track that was judged is the track that plays.
+    ///
+    /// Call it before any preparation for the same track is in flight. It records the ready track
+    /// but does not cancel an in-flight task, and cancelling one would make whoever is awaiting it
+    /// throw — so an overlapping preparation would still write its own result on completion. The
+    /// selection path satisfies that by construction: it materializes through `materializeSource`,
+    /// which does not enter the window's in-flight table at all.
+    func adopt(_ track: GaplessPreparedTrack) {
+        prepared[track.trackID] = track
+    }
+
     func readyTrack(_ trackID: String) -> GaplessPreparedTrack? { prepared[trackID] }
 
     var readyTrackIDs: Set<String> { Set(prepared.keys) }

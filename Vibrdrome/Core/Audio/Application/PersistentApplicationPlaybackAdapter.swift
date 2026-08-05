@@ -16,6 +16,17 @@ enum SafePlaybackRoutingFailure: String, Equatable, Sendable, CaseIterable {
     case sourcePreparationFailed
     case representationUnconfirmed
     case policySelectedLegacy
+    /// Legacy still held transport after quiescence, so persistent was never granted authority.
+    /// Granting it while the old `AVQueuePlayer` still holds items and observers is exactly the
+    /// two-owner state the ownership invariant exists to prevent.
+    case legacyTransportNotReleased
+    /// The persistent backend refused to start. Recoverable only before anything has been heard.
+    case persistentStartFailed
+    /// The plan named a mid-track start, which neither backend can honour in this lane. Starting at
+    /// zero instead would play the wrong audio, which is worse than declining.
+    case midTrackResumeUnsupported
+    /// The plan named no playable occurrence, so there was no session to start.
+    case emptySession
 }
 
 /// How far selection has got for the current session.
