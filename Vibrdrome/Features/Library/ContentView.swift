@@ -25,7 +25,7 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKeys.showGenresTab) private var showGenresTab = false
     @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab = true
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     /// Baseline gap between the mini player and a phone that has a bottom
     /// safe-area inset (notched). These phones get their home-indicator inset
@@ -113,20 +113,16 @@ struct ContentView: View {
         #endif
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
-            switch newPhase {
-            case .background:
-                engine.savePlayQueue(client: appState.subsonicClient)
-                engine.saveQueueLocally()
-                engine.createBookmarkIfNeeded(client: appState.subsonicClient)
-            case .active:
-                engine.restorePlayQueue(client: appState.subsonicClient)
-                engine.refreshPlaybackState()
+            // Playback lifecycle: saves on .background, restores on .active. Runs first so the
+            // .active follow-up below still happens after the restore, as it always has.
+            ScenePlaybackLifecycleActions.handleIOSScenePhase(
+                newPhase, client: appState.subsonicClient
+            )
+            if newPhase == .active {
                 handleWidgetCommand()
                 if !isOffline {
                     autoSyncIfNeeded()
                 }
-            default:
-                break
             }
         }
         .overlay(alignment: .top) {

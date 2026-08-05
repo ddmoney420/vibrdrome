@@ -466,4 +466,10 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
     var recentlyPlayed: [Song] = []
     func addRandomSongPlayed(songId: String) { record("addRandomSongPlayed") }
     func restorePlayQueue(client: SubsonicClient) { record("restorePlayQueue") }
+
+    // Lifecycle persistence
+    func savePlayQueue(client: SubsonicClient) { record("savePlayQueue") }
+    func saveQueueLocally() { record("saveQueueLocally") }
+    func createBookmarkIfNeeded(client: SubsonicClient) { record("createBookmarkIfNeeded") }
+    func refreshPlaybackState() { record("refreshPlaybackState") }
 }

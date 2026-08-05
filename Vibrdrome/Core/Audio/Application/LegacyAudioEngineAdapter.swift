@@ -146,6 +146,19 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
         count("restorePlayQueue")
         engine.restorePlayQueue(client: client)
     }
+
+    // MARK: - Lifecycle persistence
+
+    func savePlayQueue(client: SubsonicClient) {
+        count("savePlayQueue")
+        engine.savePlayQueue(client: client)
+    }
+    func saveQueueLocally() { count("saveQueueLocally"); engine.saveQueueLocally() }
+    func createBookmarkIfNeeded(client: SubsonicClient) {
+        count("createBookmarkIfNeeded")
+        engine.createBookmarkIfNeeded(client: client)
+    }
+    func refreshPlaybackState() { count("refreshPlaybackState"); engine.refreshPlaybackState() }
 }
 
 /// The application's single composition point for playback.

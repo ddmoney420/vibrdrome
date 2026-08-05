@@ -535,21 +535,93 @@ and alters no scene registration, controller ownership or template setup.
 A test also asserts `CarPlayScenePlaybackActions.playback === CarPlayPlaybackActions.playback`, so
 the scene and the manager can never drift onto different playback authorities.
 
-## Remaining direct references by subsystem
+---
+
+# Lane 2D-B1 — scene-phase playback in the two ContentViews (done)
+
+`Features/Library/ContentView.swift` and `Features/Library/MacContentView.swift`:
+**1 direct reference each → 0.**
+
+```
+Scene-phase callback → ScenePlaybackLifecycleActions → ApplicationPlayback.shared
+                     → LegacyAudioEngineAdapter → AudioEngine.shared → AVQueuePlayer
+```
+
+## The reference count understated the work
+
+Each file showed **one** `AudioEngine.shared` occurrence — the alias line
+`private var engine: AudioEngine { AudioEngine.shared }`. Through that alias the two files reached
+**nine distinct members**, and **four were not on the façade**:
+
+| Member | On façade before | |
+|---|---|---|
+| `currentSong`, `currentRadioStation`, `next`, `togglePlayPause`, `restorePlayQueue` | yes | |
+| `savePlayQueue(client:)` | **no** | added |
+| `saveQueueLocally()` | **no** | added |
+| `createBookmarkIfNeeded(client:)` | **no** | added |
+| `refreshPlaybackState()` | **no** | added |
+
+The four are grouped as a new `PlaybackPersistenceControlling` capability — scene-phase persistence,
+driven by the app lifecycle rather than by anything the user did to the queue. This is the same
+alias trap that caused the original Lane 2A revert: counting `AudioEngine.shared` occurrences
+understates the surface whenever a file aliases the singleton.
+
+## Scene-phase behaviour — audited, unchanged
+
+Both files use the **two-argument** closure `\.onChange(of: scenePhase) { _, newPhase in }`, and both
+keep it. That arity is the known trap: rewriting to a zero- or one-argument closure produces the
+misleading `(ScenePhase) -> Void expects 1 argument` error. Neither file's inspected value changed —
+both still switch on the *new* phase.
+
+| | iOS `ContentView` | macOS `MacContentView` |
+|---|---|---|
+| Save phase | **`.background`** | **`.inactive`** |
+| Save operations | `savePlayQueue` → `saveQueueLocally` → `createBookmarkIfNeeded` | identical |
+| Restore phase | `.active` | `.active` |
+| Restore operations | `restorePlayQueue` → `refreshPlaybackState` | identical |
+| Other phases | no-op | no-op |
+| View-local follow-up on `.active` | widget command, auto-sync when online | playlist export sync when enabled |
+| Guard | `appState.isConfigured` | `appState.isConfigured` |
+
+**The platforms are deliberately not merged.** They save on *different phases*: a Mac window rarely
+reaches `.background`, so waiting for it would mean never saving. A single shared handler would have
+to pick one and would silently stop saving on the other platform. Hence two entry points,
+`handleIOSScenePhase` and `handleMacScenePhase`, each pinned by its own test.
+
+All operations are synchronous at the call site; the engine launches its own tasks internally, and
+its own error handling is unchanged. No debounce, deduplication or throttling was added — a repeated
+qualifying phase saves again, exactly as before.
+
+The `.onChange` closures stay in the view files. Only the playback half moved; the widget command,
+offline auto-sync and playlist export remain view-local and still run *after* the restore on
+`.active`, as they always did.
+
+## Restoration overlap — unchanged, now pinned
+
+Three sites request restore: `CarPlaySceneDelegate`, `ContentView`, `MacContentView`. Every request
+still delegates; the engine's own guard (`currentSong == nil, currentRadioStation == nil,
+queue.isEmpty`) is what makes later ones no-ops. **No once-per-process rule was added.** A test
+asserts all three resolve the same `ApplicationPlayback.shared`, so the queue cannot fork, and
+another asserts repeated restore requests are *not* suppressed at the call site.
 
 ## Remaining direct references by subsystem
 
 ## Remaining direct references by subsystem
 
-48 references remain (occurrence counts, not line counts):
+## Remaining direct references by subsystem
+
+## Remaining direct references by subsystem
+
+46 references remain (occurrence counts, not line counts):
 
 | Subsystem | Files | Refs | Lane |
 |---|---|---|---|
-| Main app scene and lifecycle | `Vibrdrome.swift` (15), `Features/Library/ContentView.swift` (1), `Features/Library/MacContentView.swift` (1) | 17 | 2D-B |
+| Main app scene entry | `Vibrdrome.swift` | 15 | 2D-B2 |
 | Legacy implementation collaborators | `Core/Audio/EQEngine.swift` (6), `AudioEngine+Predownload.swift` (6), `AudioSession.swift` (4), `SleepTimer.swift` (2), `NowPlayingManager.swift` (2), `CrossfadeController.swift` (1) | 21 | 3 |
 | Façade internals | `Application/LegacyAudioEngineAdapter.swift` (3), `Application/ApplicationPlaybackControlling.swift` (1), `CarPlay/CarPlayPlaybackActions.swift` (1) | 5 | — (by design) |
 | Debug screen | `Features/Settings/DebugView.swift` | 3 | **permanent diagnostic exception** |
 | Persistent-engine implementation | `Gapless/GaplessRemoteCommandCoordinator.swift` (1), `Gapless/GaplessEQStage.swift` (1) | 2 | — |
+| Main app scene phase | — | **0** | **2D-B1 done** |
 | CarPlay scene / lifecycle | — | **0** | **2D-A done** |
 | Siri / App Intents | — | **0** | **2C-C done** |
 | Watch session | — | **0** | **2C-B done** |

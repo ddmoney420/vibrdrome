@@ -156,6 +156,26 @@ protocol PlaybackHistoryProviding: AnyObject {
     func restorePlayQueue(client: SubsonicClient)
 }
 
+// MARK: - Lifecycle persistence
+
+/// What the app writes when a scene leaves the foreground, and re-reads when it returns.
+///
+/// Separate from `PlaybackHistoryProviding` because these are **scene-phase** operations, driven by
+/// the app lifecycle rather than by anything the user did to the queue. `restorePlayQueue` sits with
+/// history because a restore is also what a cold launch performs; the save side has no other caller.
+@MainActor
+protocol PlaybackPersistenceControlling: AnyObject {
+    /// Persist the queue to the server. Skipped by the engine when the queue is empty, so a
+    /// background transition cannot overwrite good server state with nothing.
+    func savePlayQueue(client: SubsonicClient)
+    /// Persist the queue to the local store — the snapshot `restorePlayQueue` prefers on relaunch.
+    func saveQueueLocally()
+    /// Record a resume position for the current track. The engine ignores it below 30 seconds.
+    func createBookmarkIfNeeded(client: SubsonicClient)
+    /// Re-sync observable playback state with the player after returning to the foreground.
+    func refreshPlaybackState()
+}
+
 /// The composed application-facing contract.
 ///
 /// A future selector implements this by routing supported non-live track playback to the persistent
@@ -165,4 +185,5 @@ protocol PlaybackHistoryProviding: AnyObject {
 protocol ApplicationPlaybackControlling: PlaybackTransportControlling, PlaybackQueueControlling,
                                           PlaybackStateProviding, PlaybackModeControlling,
                                           PlaybackRadioControlling, PlaybackProcessingControlling,
-                                          PlaybackDownloadStateProviding, PlaybackHistoryProviding {}
+                                          PlaybackDownloadStateProviding, PlaybackHistoryProviding,
+                                          PlaybackPersistenceControlling {}
