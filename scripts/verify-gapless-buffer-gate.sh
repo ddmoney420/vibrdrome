@@ -25,16 +25,13 @@ LOG="$LOG_DIR/gapless-buffer-gate.log"
 # however many arguments it has, so the expected minimum is a count of @Test functions, not of cases.
 # Set just below the current total so a suite silently dropping out fails the gate while adding a
 # test does not.
-REQUIRED_SUITES=(
-  "GaplessBufferSchedulerTests"
-  "GaplessBufferMemoryTests"
-  "GaplessConversionTests"
-  "GaplessBufferIntegrationTests"
-  "GaplessControllerGapTests"
-  "GaplessRetryStormTests"
-  "PersistentPlaybackAssemblyTests"
-)
-EXPECTED_MINIMUM=46
+# Read from the shared manifest (scripts/serialized-suites.txt) so this list and verify-build.sh's
+# skip list cannot drift apart — a suite in one but not the other would run nowhere.
+REQUIRED_SUITES=()
+while IFS= read -r _suite; do
+  [ -n "$_suite" ] && REQUIRED_SUITES+=("$_suite")
+done < <(grep -vE '^\s*(#|$)' "$(dirname "$0")/serialized-suites.txt")
+EXPECTED_MINIMUM=52
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"

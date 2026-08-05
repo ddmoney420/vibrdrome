@@ -95,6 +95,15 @@ else
   emit FAIL "entitlements" "required entitlement missing (see $LOGDIR/entitlements.log)"
 fi
 
+# --- Serialized-suite partition ---
+# A suite skipped here but absent from the gate would run nowhere, and the gate's minimum-count
+# check only asserts a floor, so it would not notice. This proves the two paths cover everything.
+if ./scripts/verify-suite-partition.sh > "$LOGDIR/suite-partition.log" 2>&1; then
+  emit PASS "suite partition" "serialized suites covered by the gate"
+else
+  emit FAIL "suite partition" "a suite runs in neither path (see $LOGDIR/suite-partition.log)"
+fi
+
 # build NAME SCHEME DEST
 build() {
   local name="$1" scheme="$2" dest="$3" log="$LOGDIR/build-$1.log"
@@ -110,15 +119,12 @@ build() {
   fi
 }
 
-# Suites that construct a real AVAudioEngine graph and must NOT run in the parallel suite.
-#
-# The gapless real-time tests measure actual gaps against millisecond thresholds. Building audio
-# graphs alongside them perturbs those measurements — GaplessControllerGapTests failed at a 0.44 s
-# gap against a 0.1 s threshold in the parallel run while passing in the serialized gate. These
-# suites therefore run in ./scripts/verify-gapless-buffer-gate.sh, which disables parallel testing.
-SERIALIZED_ONLY_SUITES=(
-  "VibrdromeTests/PersistentPlaybackAssemblyTests"
-)
+# Suites that must run serialized, read from the shared manifest so this list and the gate's cannot
+# drift apart. scripts/verify-suite-partition.sh proves the two paths together cover everything.
+SERIALIZED_ONLY_SUITES=()
+while IFS= read -r _suite; do
+  [ -n "$_suite" ] && SERIALIZED_ONLY_SUITES+=("VibrdromeTests/$_suite")
+done < <(grep -vE '^\s*(#|$)' scripts/serialized-suites.txt)
 
 # runtest NAME ONLY
 runtest() {

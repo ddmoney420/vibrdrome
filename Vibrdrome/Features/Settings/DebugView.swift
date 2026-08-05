@@ -126,6 +126,17 @@ struct DebugView: View {
                     row("Engine state", value: inert.engineState)
                 }
 
+                Toggle("Use Persistent Playback Engine", isOn: Binding(
+                    get: { PersistentRoutingSetting.isEnabled },
+                    set: { PersistentRoutingSetting.setEnabled($0) }
+                ))
+
+                row("Persistent routing enabled",
+                    value: PersistentRoutingSetting.isEnabled ? "Yes" : "No")
+                row("Session selection state", value: router.sessionSelectionState.describedForDiagnostics)
+                row("Active backend",
+                    value: router.sessionSelectionState.backend.map { $0 == .legacy ? "Legacy" : "Persistent" } ?? "Idle")
+
                 Button("Prepare Persistent Engine") {
                     do {
                         try router.preparePersistentBackend()
@@ -145,9 +156,9 @@ struct DebugView: View {
                 Text("Playback Router")
             } footer: {
                 Text("""
-                    Builds the persistent engine without selecting or starting it. Playback keeps \
-                    running through the legacy engine either way; this only measures what \
-                    construction costs and proves the result is inert.
+                    The toggle applies to the next playback session — changing it never switches \
+                    the backend under audible audio. Stop playback, change it, then start the same \
+                    queue again. Prepare builds the engine without selecting or starting it.
                     """)
             }
         }

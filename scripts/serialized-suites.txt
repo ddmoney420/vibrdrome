@@ -1,0 +1,20 @@
+# Suites that construct or drive a real AVAudioEngine graph and MUST run serialized.
+#
+# Single source of truth, read by BOTH scripts so they cannot diverge:
+#   - verify-build.sh   skips these (parallel suite)
+#   - verify-gapless-buffer-gate.sh   runs these (-parallel-testing-enabled NO)
+#
+# A suite listed here is excluded from the parallel run, so omitting it from the gate would make it
+# run nowhere. scripts/verify-suite-partition.sh fails if that ever happens.
+#
+# Why: the gapless real-time tests measure actual gaps against millisecond thresholds. Building or
+# driving audio graphs alongside them perturbs those measurements — GaplessControllerGapTests failed
+# at a 0.44 s gap against a 0.1 s threshold in the parallel run while passing serialized.
+GaplessBufferSchedulerTests
+GaplessBufferMemoryTests
+GaplessConversionTests
+GaplessBufferIntegrationTests
+GaplessControllerGapTests
+GaplessRetryStormTests
+PersistentPlaybackAssemblyTests
+PersistentRoutingFlagTests

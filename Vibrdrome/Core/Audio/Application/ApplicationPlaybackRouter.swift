@@ -49,6 +49,13 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// Watch, App Intents, scene activation, restoration or policy evaluation builds it.
     private(set) var persistentPreparationState: PersistentPreparationState = .notConstructed
 
+    /// How far selection has got for the current playback session.
+    ///
+    /// **Commit A adds the model, not the selection.** Nothing moves this off `.idle` yet: routing
+    /// still always resolves to legacy, and the DEBUG flag changes no behaviour. Commit B drives it
+    /// through evaluating → preparing → legacy/persistent before the first audible sample.
+    private(set) var sessionSelectionState: PlaybackSessionSelectionState = .idle
+
     init(
         legacy: LegacyAudioEngineAdapter = LegacyAudioEngineAdapter(),
         persistentBuilder: any PersistentPlaybackAssemblyBuilding
