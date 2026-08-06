@@ -336,6 +336,8 @@ private extension FilterField {
         case .bitDepth:           return "bitdepth"
         case .sampleRate:         return "samplerate"
         case .bpm:                return "bpm"
+        case .replayGainTrackGain: return "replaygain_track_gain"
+        case .replayGainAlbumGain: return "replaygain_album_gain"
         case .playCount:          return "playcount"
         case .rating:             return "rating"
         case .averageRating:      return "averagerating"
@@ -364,6 +366,7 @@ private extension FilterField {
         case .hasCoverArt:        return "hascoverart"
         case .isCompilation:      return "compilation"
         case .isMissing:          return "missing"
+        case .isPresent:          return "present"
         // ND tag fields
         case .releaseType:        return "releasetype"
         case .releaseCountry:     return "releasecountry"

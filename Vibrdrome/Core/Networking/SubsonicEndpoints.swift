@@ -8,6 +8,7 @@ enum AlbumListType: String, Sendable {
 
 enum SubsonicEndpoint: Sendable {
     case ping
+    case getOpenSubsonicExtensions
     case getArtists(musicFolderId: String? = nil)
     case getArtist(id: String)
     case getAlbum(id: String)
@@ -55,10 +56,15 @@ enum SubsonicEndpoint: Sendable {
     case getMusicDirectory(id: String)
     case jukeboxControl(action: String, index: Int? = nil, offset: Int? = nil,
                         ids: [String]? = nil, gain: Float? = nil)
+    case reportPlayback(mediaId: String, mediaType: String, positionMs: Int,
+                        state: String, playbackRate: Double = 1.0, ignoreScrobble: Bool = false)
+    case getSonicSimilarTracks(id: String, count: Int = 10)
+    case findSonicPath(startSongId: String, endSongId: String, count: Int = 25)
 
     var path: String {
         switch self {
         case .ping: "/rest/ping"
+        case .getOpenSubsonicExtensions: "/rest/getOpenSubsonicExtensions"
         case .getArtists: "/rest/getArtists"
         case .getArtist: "/rest/getArtist"
         case .getAlbum: "/rest/getAlbum"
@@ -97,12 +103,15 @@ enum SubsonicEndpoint: Sendable {
         case .getIndexes: "/rest/getIndexes"
         case .getMusicDirectory: "/rest/getMusicDirectory"
         case .jukeboxControl: "/rest/jukeboxControl"
+        case .reportPlayback: "/rest/reportPlayback"
+        case .getSonicSimilarTracks: "/rest/getSonicSimilarTracks"
+        case .findSonicPath: "/rest/findSonicPath"
         }
     }
 
     var queryItems: [URLQueryItem] {
         switch self {
-        case .ping, .getGenres, .getPlaylists,
+        case .ping, .getOpenSubsonicExtensions, .getGenres, .getPlaylists,
              .getInternetRadioStations, .getPlayQueue, .getBookmarks,
              .getMusicFolders:
             return []
@@ -307,6 +316,30 @@ enum SubsonicEndpoint: Sendable {
             }
             if let gain { items.append(URLQueryItem(name: "gain", value: "\(gain)")) }
             return items
+
+        case .reportPlayback(let mediaId, let mediaType, let positionMs, let state,
+                             let playbackRate, let ignoreScrobble):
+            return [
+                URLQueryItem(name: "mediaId", value: mediaId),
+                URLQueryItem(name: "mediaType", value: mediaType),
+                URLQueryItem(name: "positionMs", value: "\(positionMs)"),
+                URLQueryItem(name: "state", value: state),
+                URLQueryItem(name: "playbackRate", value: "\(playbackRate)"),
+                URLQueryItem(name: "ignoreScrobble", value: ignoreScrobble ? "true" : "false"),
+            ]
+
+        case .getSonicSimilarTracks(let id, let count):
+            return [
+                URLQueryItem(name: "id", value: id),
+                URLQueryItem(name: "count", value: "\(count)"),
+            ]
+
+        case .findSonicPath(let startSongId, let endSongId, let count):
+            return [
+                URLQueryItem(name: "startSongId", value: startSongId),
+                URLQueryItem(name: "endSongId", value: endSongId),
+                URLQueryItem(name: "count", value: "\(count)"),
+            ]
         }
     }
 }

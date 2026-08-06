@@ -714,6 +714,7 @@ struct SettingsView: View {
         UserDefaultsKeys.crossfadeCurve,
         UserDefaultsKeys.replayGainMode,
         UserDefaultsKeys.scrobblingEnabled,
+        UserDefaultsKeys.playbackReportEnabled,
         UserDefaultsKeys.eqEnabled,
         UserDefaultsKeys.eqCurrentPresetId,
         UserDefaultsKeys.eqCurrentGains,

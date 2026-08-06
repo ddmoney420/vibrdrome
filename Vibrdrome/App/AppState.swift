@@ -62,9 +62,11 @@ final class AppState {
     /// Active side panel in the macOS main window (Queue / Lyrics / Artist Info / Album Filters).
     /// Mutually exclusive: setting one closes the others.
     enum SidePanel: String, Equatable {
-        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters
+        case queue, lyrics, artistInfo, albumFilters, artistFilters, songFilters, similarTracks
     }
     var activeSidePanel: SidePanel?
+    /// Seed song for the similarTracks panel — set before activating the panel.
+    var similarTracksSeed: Song?
 
     /// Context currently shown in the popped-out filter window.
     var activeFilterWindowContext: FilterContext?

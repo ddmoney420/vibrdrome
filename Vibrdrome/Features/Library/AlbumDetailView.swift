@@ -835,15 +835,22 @@ struct AlbumDetailView: View {
             if let info = try? await appState.subsonicClient.getAlbumInfo(id: albumId) {
                 albumNotes = info.notes
             }
-            // Load similar albums from first song
+            // Load similar albums from first song — prefer sonicSimilarity when available
             if let firstSong = album?.song?.first {
-                let similar = try await appState.subsonicClient.getSimilarSongs(id: firstSong.id, count: 20)
+                let client = appState.subsonicClient
+                let similarSongs: [Song]
+                if client.supportsSonicSimilarity {
+                    let matches = (try? await client.getSonicSimilarTracks(id: firstSong.id, count: 20)) ?? []
+                    similarSongs = matches.map(\.entry)
+                } else {
+                    similarSongs = (try? await client.getSimilarSongs(id: firstSong.id, count: 20)) ?? []
+                }
                 var albums: [Album] = []
                 var seen = Set<String>()
-                for song in similar {
+                for song in similarSongs {
                     if let aid = song.albumId, !seen.contains(aid), aid != albumId {
                         seen.insert(aid)
-                        if let a = try? await appState.subsonicClient.getAlbum(id: aid) {
+                        if let a = try? await client.getAlbum(id: aid) {
                             albums.append(a)
                             if albums.count >= 6 { break }
                         }

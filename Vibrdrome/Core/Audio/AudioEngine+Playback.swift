@@ -223,6 +223,7 @@ extension AudioEngine {
         isPlaying = false
         disarmStallRecovery(reason: "userPause")   // a user/interruption pause is not a stall
         NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
+        reportPlaybackState("paused")
     }
 
     func resume() {
@@ -273,6 +274,7 @@ extension AudioEngine {
         }
         isPlaying = true
         NowPlayingManager.shared.updatePlaybackState(isPlaying: true, elapsed: currentTime)
+        reportPlaybackState("playing")
     }
 
     private func resumeGaplessMode() {
@@ -522,7 +524,10 @@ extension AudioEngine {
     func handleTrackEnd() {
         SleepTimer.shared.trackDidEnd()
         // Record the outgoing song (it reached its end)
-        if let current = currentSong { recordSongAsPlayed(current) }
+        if let current = currentSong {
+            recordSongAsPlayed(current)
+            reportPlaybackState("stopped", songId: current.id)
+        }
         if !isPlaying { return }
 
         switch repeatMode {
@@ -688,7 +693,13 @@ extension AudioEngine {
             defer { self.isAutoSuggesting = false }
             do {
                 let client = AppState.shared.subsonicClient
-                let similar = try await client.getSimilarSongs(id: lastSong.id, count: 10)
+                let similar: [Song]
+                if client.supportsSonicSimilarity {
+                    let matches = try await client.getSonicSimilarTracks(id: lastSong.id, count: 10)
+                    similar = matches.map(\.entry)
+                } else {
+                    similar = try await client.getSimilarSongs(id: lastSong.id, count: 10)
+                }
                 let existingIds = Set(queue.map(\.id))
                 let newSongs = similar.filter { !existingIds.contains($0.id) }
                 guard !newSongs.isEmpty else {
