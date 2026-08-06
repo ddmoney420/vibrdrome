@@ -104,26 +104,64 @@ struct DebugView: View {
             let diagnostics = router.diagnostics
             Section {
                 row("Persistent preparation", value: diagnostics.preparationDescription)
-                row("Selected backend", value: diagnostics.selectedBackend == .legacy ? "Legacy" : "Persistent")
+                row("Active transport backend",
+                    value: diagnostics.selectedBackend == .legacy ? "Legacy" : "Persistent")
+                row("Playback authority", value: diagnostics.authority.rawValue)
+                row("Audio owner count", value: "\(router.ownership.ownerCount)")
                 row("Legacy adapter", value: diagnostics.legacyAdapterActive ? "Active" : "Inactive")
                 row("Persistent controller",
                     value: diagnostics.persistentControllerConstructed ? "Constructed" : "Not constructed")
-                row("Persistent engine selected",
-                    value: diagnostics.selectedBackend == .persistent ? "Yes" : "No")
+                row("Persistent transport active",
+                    value: router.isPersistentSessionActive ? "Yes" : "No")
+
+                let beat = diagnostics.heartbeat
+                row("Persistent heartbeat", value: beat.isRunning ? "Running" : "Stopped")
+                row("Heartbeat session generation", value: "\(beat.sessionGeneration)")
+                row("Heartbeat tick count", value: "\(beat.tickCount)")
+                row("Last tick age",
+                    value: beat.lastTickAge.map { String(format: "%.2f s", $0) } ?? "never")
+                row("Heartbeat start count", value: "\(beat.startCount)")
+                row("Heartbeat cancellation count", value: "\(beat.cancellationCount)")
+                row("Concurrent heartbeat count", value: "\(beat.peakConcurrentCount)")
+                row("Planning generation",
+                    value: "\(diagnostics.lastCompletedPlanningGeneration)/\(diagnostics.pendingPlanningGeneration)")
+                row("Session replacement in progress",
+                    value: diagnostics.isReplacingSession ? "Yes" : "No")
+                row("Audible boundary reached",
+                    value: diagnostics.audibleBoundaryReached ? "Yes" : "No")
+                row("Fallback permitted", value: diagnostics.isFallbackPermitted ? "Yes" : "No")
 
                 if let assembly = router.persistentAssembly {
-                    let inert = assembly.diagnostics
-                    row("Assembly generation", value: "#\(inert.generation)")
-                    row("Graph format", value: inert.graphFormat)
-                    row("Engine running", value: inert.engineRunning ? "Yes" : "No")
-                    row("Player node playing", value: inert.playerNodePlaying ? "Yes" : "No")
-                    row("Buffer pool", value: inert.bufferPoolAllocated
-                        ? "\(inert.bufferPoolAvailable ?? 0)/\(inert.bufferPoolCapacity ?? 0) available"
-                        : "Not allocated (lazy)")
-                    row("Live source files", value: "\(inert.liveSourceFiles)")
-                    row("Live converters", value: "\(inert.liveConverters)")
-                    row("Scheduled buffers", value: "\(inert.scheduledBuffers)")
-                    row("Engine state", value: inert.engineState)
+                    row("Assembly generation", value: "#\(assembly.generation)")
+                    row("Graph format", value: assembly.diagnostics.graphFormat)
+                    row("Engine running", value: assembly.backend.engine.engine.isRunning ? "Yes" : "No")
+                    row("Player node playing",
+                        value: assembly.backend.engine.player.isPlaying ? "Yes" : "No")
+                    row("Engine state", value: "\(assembly.backend.state)")
+
+                    // The **live** substrate readout, and only once a session has actually run.
+                    //
+                    // Before that it stays on the inert Lane 3C answer, because reaching through to
+                    // the buffer scheduler would build the lazily-allocated pool this screen exists
+                    // to prove does not exist yet. After a session it must be the real numbers: a
+                    // resource-recovery check that reported hardcoded zeros would read as a pass
+                    // whatever the engine was actually still holding, which is worse than no check.
+                    if beat.startCount > 0 {
+                        let scheduler = assembly.backend.bufferScheduler
+                        row("Buffer pool",
+                            value: "\(scheduler.pool.availableCount)/\(scheduler.pool.capacity) available")
+                        row("Pool in flight", value: "\(scheduler.pool.inFlightCount)")
+                        row("Live source files", value: "\(assembly.backend.openFileCount)")
+                        row("Live converters", value: "\(scheduler.activeConverterCount)")
+                        row("Scheduled segments", value: "\(assembly.backend.scheduledSegments.count)")
+                        row("Chunk accounting",
+                            value: scheduler.chunkAccountingBalances ? "Balanced" : "UNBALANCED")
+                    } else {
+                        row("Buffer pool", value: "Not allocated (lazy)")
+                        row("Live source files", value: "0")
+                        row("Live converters", value: "0")
+                        row("Scheduled segments", value: "0")
+                    }
                 }
 
                 Toggle("Use Persistent Playback Engine", isOn: Binding(
@@ -134,8 +172,7 @@ struct DebugView: View {
                 row("Persistent routing enabled",
                     value: PersistentRoutingSetting.isEnabled ? "Yes" : "No")
                 row("Session selection state", value: router.sessionSelectionState.describedForDiagnostics)
-                row("Active backend",
-                    value: router.sessionSelectionState.backend.map { $0 == .legacy ? "Legacy" : "Persistent" } ?? "Idle")
+                row("Now Playing / scrobble / visualizer", value: "Pending")
 
                 Button("Prepare Persistent Engine") {
                     do {
