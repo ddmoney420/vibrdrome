@@ -15,6 +15,8 @@ final class LibraryDataCache {
     private(set) var songFilterYears: [Int]?
     private(set) var songFilterArtists: [String]?
     private(set) var songFilterGenres: [String]?
+    private(set) var labelCounts: [String: Int]?
+    private(set) var labelArt: [String: String]?
 
     /// Incremented after each successful rebuild so views can detect changes via `.onChange`.
     /// Intentionally in-session only (not persisted) — resets to 0 on launch. Views only need
@@ -41,6 +43,8 @@ final class LibraryDataCache {
             songFilterYears = result.years
             songFilterArtists = result.artistNames
             songFilterGenres = result.genres
+            labelCounts = result.labelCounts
+            labelArt = result.labelArt
             generation += 1
             isReady = true
             cacheLog.info("Library cache ready — \(result.songs.count) songs, \(result.artists.count) artists, \(result.albums.count) albums")
@@ -56,6 +60,8 @@ final class LibraryDataCache {
         songFilterYears = nil
         songFilterArtists = nil
         songFilterGenres = nil
+        labelCounts = nil
+        labelArt = nil
         isReady = false
     }
 
@@ -68,6 +74,8 @@ final class LibraryDataCache {
         let years: [Int]
         let artistNames: [String]
         let genres: [String]
+        let labelCounts: [String: Int]
+        let labelArt: [String: String]
     }
 
     nonisolated private static func buildCache(container: ModelContainer) -> CacheResult {
@@ -87,11 +95,17 @@ final class LibraryDataCache {
         // which would race if two contexts are running concurrently.
         var albumDescriptor = FetchDescriptor<CachedAlbum>(sortBy: [SortDescriptor<CachedAlbum>(\.name)])
         albumDescriptor.relationshipKeyPathsForPrefetching = [\.genreLinks]
-        let convertedAlbums: [Album]
-        if let cached = try? context.fetch(albumDescriptor) {
-            convertedAlbums = cached.map { $0.toAlbum() }
-        } else {
-            convertedAlbums = []
+        let cachedAlbums = (try? context.fetch(albumDescriptor)) ?? []
+        let convertedAlbums = cachedAlbums.map { $0.toAlbum() }
+
+        var labelCountsMap: [String: Int] = [:]
+        var labelArtMap: [String: String] = [:]
+        for album in cachedAlbums {
+            guard let label = album.label, !label.isEmpty else { continue }
+            labelCountsMap[label, default: 0] += 1
+            if labelArtMap[label] == nil, let artId = album.coverArtId {
+                labelArtMap[label] = artId
+            }
         }
 
         // Songs — single pass for conversion + year/artist extraction
@@ -130,7 +144,9 @@ final class LibraryDataCache {
             albums: convertedAlbums,
             years: sortedYears,
             artistNames: sortedArtists,
-            genres: sortedGenres
+            genres: sortedGenres,
+            labelCounts: labelCountsMap,
+            labelArt: labelArtMap
         )
     }
 }
