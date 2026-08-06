@@ -123,6 +123,33 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     private var controller: GaplessPlaybackController { assembly.controller }
     private var session: GaplessPlaybackSession { assembly.session }
 
+    // MARK: - Heartbeat
+
+    /// The one thing that drives `tick()` for this session.
+    ///
+    /// Owned here rather than by a view, a scene, the app or a global display timer: this object's
+    /// life is the persistent session's life, so the heartbeat cannot outlive the transport it
+    /// drives, and every path that ends the session already goes through `stop()` or `quiesce()`.
+    private let heartbeat = PersistentPlaybackHeartbeat()
+
+    var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { heartbeat.diagnostics }
+
+    /// Begin driving the session that has just been started.
+    ///
+    /// Called by the session port immediately after the controller's transport start, so the
+    /// heartbeat cannot exist before there is a started session for it to drive — it never runs at
+    /// launch, during planning, during media inspection, or over a passively-constructed assembly.
+    func startHeartbeat(sessionGeneration: UInt64) {
+        heartbeat.start(controller: controller, generation: sessionGeneration)
+    }
+
+    /// Stop driving. Idempotent, and safe when nothing is running.
+    func cancelHeartbeat() { heartbeat.cancel() }
+
+    #if DEBUG
+    var heartbeatForTesting: PersistentPlaybackHeartbeat { heartbeat }
+    #endif
+
     /// Whether this adapter currently owns audible playback.
     var isTransportActive: Bool {
         assembly.backend.engine.player.isPlaying || session.isPlaying
@@ -159,9 +186,23 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         }
     }
 
+    // Pause deliberately leaves the heartbeat running. It is idle-safe while paused and cannot
+    // advance anything: the node is stopped so the render clock is frozen, which means no boundary
+    // is observed and the session advances by zero frames; the in-flight chunk count stays at the
+    // scheduler's target so `pump()` returns immediately without touching the pool; and the
+    // prefetch window is already full so `replenishTail` returns. Keeping one loop across a pause
+    // is also what makes "resume continues the same session" true by construction rather than by
+    // restarting something and hoping it is the same one.
     func pause() { count("pause"); controller.pause() }
     func resume() { count("resume"); try? controller.resume() }
-    func stop() { count("stop"); controller.stop() }
+
+    /// Stop ends the session, so the heartbeat goes with it — before the controller stops, so no
+    /// tick can observe a half-torn-down session.
+    func stop() {
+        count("stop")
+        heartbeat.cancel()
+        controller.stop()
+    }
 
     func togglePlayPause() {
         count("togglePlayPause")
@@ -327,8 +368,14 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     }
 
     /// Quiesce this backend so the other one can own audio. Idempotent.
+    ///
+    /// The heartbeat is cancelled first: every handover path — replacement, a switch to legacy,
+    /// radio, a failed start, pre-audible fallback and the backend reset that follows it — reaches
+    /// here, and a tick landing after the controller had stopped would be a stale session touching
+    /// a backend that no longer belongs to it.
     func quiesce() {
         count("quiesce")
+        heartbeat.cancel()
         controller.stop()
     }
 }

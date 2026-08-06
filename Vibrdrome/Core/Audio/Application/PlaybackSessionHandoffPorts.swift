@@ -29,8 +29,9 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func adopt(preparedSource: GaplessPreparedTrack) async {}
     func installAudibleObserver(_ observer: @escaping @MainActor () -> Void) {}
     func clearAudibleObserver() {}
-    func start() async throws {}
+    func start(sessionGeneration: UInt64) async throws {}
     func tearDown() {}
+    var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { PersistentHeartbeatDiagnostics() }
 
     func play(song: Song, from newQueue: [Song]?, at index: Int) {}
     func pause() {}
@@ -195,8 +196,14 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
     }
 
     /// The only path that activates the audio session, and the only start in the sequence.
-    func start() async throws {
+    ///
+    /// The heartbeat begins immediately after the controller's transport start, per the controller
+    /// contract: `play()` prepares the graph, fills the tail and starts the node, and only once
+    /// there is a running session does driving it mean anything. Starting the heartbeat first would
+    /// tick a controller that had not yet scheduled anything.
+    func start(sessionGeneration: UInt64) async throws {
         try await assembly.controller.play()
+        application.startHeartbeat(sessionGeneration: sessionGeneration)
     }
 
     /// Tear down whatever transport was brought up, and leave the retained assembly reusable.

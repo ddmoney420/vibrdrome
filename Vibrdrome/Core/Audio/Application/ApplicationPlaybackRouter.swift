@@ -373,6 +373,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         var audibleBoundaryReached: Bool
         var isFallbackPermitted: Bool
         var selectionState: String
+        var heartbeat: PersistentHeartbeatDiagnostics
 
         var preparationDescription: String {
             switch persistentPreparationState {
@@ -397,6 +398,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             Fallback permitted: \(isFallbackPermitted ? "Yes" : "No")
             Legacy adapter: \(legacyAdapterActive ? "Active" : "Inactive")
             Persistent controller: \(persistentControllerConstructed ? "Constructed" : "Not constructed")
+            \(heartbeat.summary)
             Now Playing / scrobble / visualizer ownership: Pending (legacy suppressed during \
             persistent transport, persistent publishers dormant)
             """
@@ -418,7 +420,12 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             isReplacingSession: isReplacingSession,
             audibleBoundaryReached: ownership.audibleBoundaryReached,
             isFallbackPermitted: ownership.isFallbackPermitted,
-            selectionState: sessionSelectionState.describedForDiagnostics
+            selectionState: sessionSelectionState.describedForDiagnostics,
+            // Read from the port rather than from the active-transport accessor: a heartbeat that
+            // outlived its session would be invisible if it could only be seen while that session
+            // still held authority, and that is exactly the failure worth surfacing.
+            heartbeat: persistentPort?.transport.heartbeatDiagnostics
+                ?? PersistentHeartbeatDiagnostics()
         )
     }
 

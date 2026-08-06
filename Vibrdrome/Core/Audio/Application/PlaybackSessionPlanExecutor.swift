@@ -106,6 +106,8 @@ protocol PersistentTransportRouting: AnyObject {
     var currentIndex: Int { get }
     var repeatMode: RepeatMode { get }
     var shuffleEnabled: Bool { get }
+    /// What the session's heartbeat is doing. Numeric and closed — safe for diagnostics.
+    var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { get }
 }
 
 /// The persistent side of a handoff, as the executor needs it.
@@ -124,8 +126,15 @@ protocol PersistentPlaybackSessionPort: AnyObject {
     /// the boundary it latches could pass unobserved.
     func installAudibleObserver(_ observer: @escaping @MainActor () -> Void)
     func clearAudibleObserver()
-    /// Begin playback. Throws if the backend refused to start.
-    func start() async throws
+    /// Begin playback, and begin driving the session.
+    ///
+    /// `sessionGeneration` is the planning generation this session was selected under. It travels
+    /// with the start so the heartbeat can be tied to it: a loop belonging to a replaced session
+    /// must not drain boundaries for its successor, and a generation comparison is what makes that
+    /// checkable rather than dependent on cooperative cancellation landing in time.
+    ///
+    /// Throws if the backend refused to start.
+    func start(sessionGeneration: UInt64) async throws
     /// Tear down whatever transport was partially brought up. Idempotent, and safe on a backend
     /// that never started.
     func tearDown()
@@ -272,12 +281,14 @@ final class PlaybackSessionPlanExecutor {
             return fallbackToLegacy(from: snapshot, reason: .legacyTransportNotReleased)
         }
 
-        return await startPersistent(source: source, snapshot: snapshot)
+        return await startPersistent(source: source, snapshot: snapshot,
+                                     sessionGeneration: request.generation)
     }
 
     /// Grant, adopt, observe, start — in that order, with the grant before anything can be heard.
     private func startPersistent(source: PreparedPersistentSource,
-                                 snapshot: PlaybackSessionSnapshot) async
+                                 snapshot: PlaybackSessionSnapshot,
+                                 sessionGeneration: UInt64) async
         -> PlaybackSessionExecutionOutcome {
         ownership.grant(.persistent)
         count("grantPersistent")
@@ -304,7 +315,7 @@ final class PlaybackSessionPlanExecutor {
         count("installAudibleObserver")
 
         do {
-            try await persistent.start()
+            try await persistent.start(sessionGeneration: sessionGeneration)
             count("startPersistent")
             return .started(.persistent)
         } catch {

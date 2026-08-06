@@ -805,6 +805,10 @@ final class PersistentTransportSpy: PersistentTransportRouting {
     var currentIndex = 0
     var repeatMode: RepeatMode = .off
     var shuffleEnabled = false
+
+    /// Reported rather than driven: this double has no controller to tick, so the port double below
+    /// keeps the counters and the heartbeat itself is covered by `PersistentHeartbeatTests`.
+    var heartbeatDiagnostics = PersistentHeartbeatDiagnostics()
 }
 
 /// A handoff port over the transport spy, so a router can reach a persistent session without an
@@ -840,16 +844,26 @@ final class PersistentPortDouble: PersistentPlaybackSessionPort {
         observer = nil
     }
 
-    func start() async throws {
+    func start(sessionGeneration: UInt64) async throws {
         spy.record("start")
         if spy.becomesAudibleBeforeFailing { observer?() }
         if let failure = spy.startFailure { throw failure }
         spy.isPlaying = true
+        // The double owns no controller, so it reports what a heartbeat would have done rather than
+        // running one — enough for the router-level "started once, cancelled on replacement"
+        // assertions, while the real loop is proven in `PersistentHeartbeatTests`.
+        spy.heartbeatDiagnostics.isRunning = true
+        spy.heartbeatDiagnostics.sessionGeneration = sessionGeneration
+        spy.heartbeatDiagnostics.startCount += 1
     }
 
     func tearDown() {
         spy.record("tearDown")
         spy.isPlaying = false
+        if spy.heartbeatDiagnostics.isRunning {
+            spy.heartbeatDiagnostics.isRunning = false
+            spy.heartbeatDiagnostics.cancellationCount += 1
+        }
     }
 }
 

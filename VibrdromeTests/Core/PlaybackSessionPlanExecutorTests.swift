@@ -900,8 +900,11 @@ final class PersistentPortSpy: PersistentPlaybackSessionPort {
         observer = nil
     }
 
-    func start() async throws {
+    private(set) var startedGenerations: [UInt64] = []
+
+    func start(sessionGeneration: UInt64) async throws {
         record("start")
+        startedGenerations.append(sessionGeneration)
         if becomesAudibleBeforeFailing { observer?() }
         if let startFailure { throw startFailure }
         isTransportActive = true
