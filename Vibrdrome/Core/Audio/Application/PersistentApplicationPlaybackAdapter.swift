@@ -98,7 +98,7 @@ enum PersistentRoutingSetting {
 ///
 /// `GaplessPlaybackController` is never exposed to application callers.
 @MainActor
-final class PersistentApplicationPlaybackAdapter {
+final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     private let assembly: PersistentPlaybackAssembly
 
     /// Presentation projection of what was handed to `replaceQueue`. Keyed lookups only — the
@@ -178,6 +178,13 @@ final class PersistentApplicationPlaybackAdapter {
         Task { [controller] in try? await controller.previous(elapsedSeconds: currentElapsed) }
     }
 
+    /// Previous, resolving elapsed from the render clock rather than from the caller.
+    ///
+    /// The 3-second restart threshold is measured against how far into the track playback actually
+    /// is, and while persistent owns audio the legacy engine's `currentTime` is zero — reading it
+    /// would make Previous always skip back a track instead of restarting the current one.
+    func previous() { previous(currentElapsed: currentTime) }
+
     func seek(to time: TimeInterval) {
         count("seek")
         Task { [controller] in try? await controller.seek(toSeconds: time) }
@@ -218,6 +225,43 @@ final class PersistentApplicationPlaybackAdapter {
         }
     }
 
+    /// Remove by absolute queue position.
+    ///
+    /// The position is resolved to the gapless session's own occurrence identity before the removal
+    /// is issued: two positions can hold the same song id, and removing "the song" rather than "the
+    /// occurrence" would drop the wrong one.
+    func removeFromQueue(atAbsolute index: Int) {
+        count("removeFromQueue")
+        guard let item = session.queue.items.indices.contains(index)
+            ? session.queue.items[index] : nil else { return }
+        if queueOrder.indices.contains(index) {
+            let removed = queueOrder.remove(at: index)
+            if !queueOrder.contains(removed) { songsByID[removed] = nil }
+        }
+        Task { [controller] in try? await controller.remove(itemID: item.id) }
+    }
+
+    /// Reorder within Up Next. Positions are relative to the queue as a whole, matching the legacy
+    /// contract, and are resolved to occurrence identities for the same reason as removal.
+    func moveInUpNext(from source: IndexSet, to destination: Int) {
+        count("moveInUpNext")
+        guard let from = source.first,
+              session.queue.items.indices.contains(from) else { return }
+        let item = session.queue.items[from]
+        if queueOrder.indices.contains(from) {
+            let moved = queueOrder.remove(at: from)
+            queueOrder.insert(moved, at: min(max(0, destination), queueOrder.count))
+        }
+        Task { [controller] in try? await controller.move(itemID: item.id, to: destination) }
+    }
+
+    func clearQueue() {
+        count("clearQueue")
+        songsByID.removeAll()
+        queueOrder.removeAll()
+        session.clearQueue()
+    }
+
     // MARK: - Modes
 
     func setRepeatMode(_ mode: RepeatMode) {
@@ -230,11 +274,57 @@ final class PersistentApplicationPlaybackAdapter {
         Task { [controller] in try? await controller.setShuffleEnabled(enabled) }
     }
 
+    // MARK: - Processing
+
+    /// User volume, applied at the player node.
+    ///
+    /// The node rather than the gain stage on purpose: the gain stage carries ReplayGain, scheduled
+    /// per track at its audible boundary, and folding the user's setting into it would make a
+    /// volume change land at the next track instead of now.
+    var userVolume: Float {
+        get { assembly.backend.engine.player.volume }
+        set {
+            count("userVolume")
+            assembly.backend.engine.player.volume = max(0, min(1, newValue))
+        }
+    }
+
+    /// Effective output volume. Identical to `userVolume` here — ReplayGain is a separate stage in
+    /// this graph rather than a multiplier folded into the volume, which is what lets a gain change
+    /// be scheduled at a frame.
+    var volume: Float {
+        get { userVolume }
+        set { userVolume = newValue }
+    }
+
+    func applyEffectiveVolume() {
+        count("applyEffectiveVolume")
+        assembly.backend.engine.player.volume = max(0, min(1, userVolume))
+    }
+
+    /// Toggle EQ mid-playback. Ramped by the stage, and a true transparent bypass rather than flat
+    /// bands, so the change cannot click across a boundary.
+    func applyEQToggle(enabled: Bool) {
+        count("applyEQToggle")
+        assembly.backend.engine.setEQEnabled(enabled)
+    }
+
+    var eqEnabled: Bool { assembly.backend.engine.eqStage.settings.isEnabled }
+
     // MARK: - Observable state, read from the session
 
     var isPlaying: Bool { session.isPlaying }
     var repeatMode: RepeatMode { session.queue.repeatMode }
     var shuffleEnabled: Bool { session.queue.shuffleEnabled }
+
+    /// Elapsed position, from the render clock.
+    ///
+    /// The clock is the only honest source while persistent owns audio: it maps hardware time
+    /// through the scheduled timeline to a position inside the current track, which is what the
+    /// boundary accounting, seek and Previous all read.
+    var currentTime: TimeInterval {
+        assembly.backend.clockReading(generation: session.queue.generation).elapsedSeconds
+    }
 
     /// Quiesce this backend so the other one can own audio. Idempotent.
     func quiesce() {

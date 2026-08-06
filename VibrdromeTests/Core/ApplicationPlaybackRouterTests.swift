@@ -432,7 +432,8 @@ struct ApplicationPlaybackRouterTests {
 
         let summary = diagnostics.summary
         #expect(summary.contains("Application playback router: Active"))
-        #expect(summary.contains("Selected backend: Legacy"))
+        #expect(summary.contains("Active transport backend: Legacy"))
+        #expect(summary.contains("Playback authority:"))
         #expect(summary.contains("Legacy adapter: Active"))
         #expect(summary.contains("Persistent controller: Not constructed"))
         #expect(summary.contains("Persistent engine: Active") == false,

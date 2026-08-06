@@ -436,7 +436,7 @@ struct ApplicationPlaybackRouterIsolationTests {
             return
         }
         let summary = router.diagnostics.summary
-        #expect(summary.contains("Selected backend: Legacy"))
+        #expect(summary.contains("Active transport backend: Legacy"))
         #expect(summary.contains("Persistent controller: Not constructed"))
         #expect(router.diagnostics.persistentControllerConstructed == false)
         #expect(GaplessDiagnosticsRegistry.current == nil,

@@ -189,6 +189,10 @@ enum ApplicationPlayback {
 
     /// The legacy adapter behind the router, for tests that need the delegation counters. Reaches
     /// through the router rather than casting `shared`, which is no longer the adapter itself.
-    static var legacyAdapter: LegacyAudioEngineAdapter? { router?.legacyAdapterForTesting }
+    /// Nil when a test has substituted a recorder for the legacy backend — the production router
+    /// always holds the real adapter.
+    static var legacyAdapter: LegacyAudioEngineAdapter? {
+        router?.legacyAdapterForTesting as? LegacyAudioEngineAdapter
+    }
     #endif
 }

@@ -1,6 +1,68 @@
 import AVFoundation
 import Foundation
 
+extension RepeatMode {
+    /// The next mode in the user-facing cycle, matching `AudioEngine.cycleRepeatMode`.
+    ///
+    /// Shared so the two backends cannot cycle in different orders — the button would then do
+    /// something different depending on which engine happened to be playing.
+    var next: RepeatMode {
+        switch self {
+        case .off: .all
+        case .all: .one
+        case .one: .off
+        }
+    }
+}
+
+/// A persistent side that exists only so a legacy plan can be executed without building an engine.
+///
+/// Every member is a no-op **and unreachable**: the executor's legacy path grants legacy authority,
+/// adopts and starts legacy, and never calls the persistent port. It is a structural stand-in, not
+/// a fallback — if anything here ever ran it would mean a persistent plan was executed against a
+/// backend that does not exist.
+@MainActor
+final class InertPersistentSessionPort: PersistentPlaybackSessionPort, PersistentTransportRouting {
+    var transport: any PersistentTransportRouting { self }
+    var isTransportActive: Bool { false }
+    func adopt(_ snapshot: PlaybackSessionSnapshot) {}
+    func adopt(preparedSource: GaplessPreparedTrack) async {}
+    func installAudibleObserver(_ observer: @escaping @MainActor () -> Void) {}
+    func clearAudibleObserver() {}
+    func start() async throws {}
+    func tearDown() {}
+
+    func play(song: Song, from newQueue: [Song]?, at index: Int) {}
+    func pause() {}
+    func resume() {}
+    func stop() {}
+    func togglePlayPause() {}
+    func next() {}
+    func previous() {}
+    func seek(to time: TimeInterval) {}
+    func skipToIndex(_ index: Int) {}
+    func addToQueue(_ song: Song) {}
+    func addToQueueNext(_ song: Song) {}
+    func removeFromQueue(atAbsolute index: Int) {}
+    func moveInUpNext(from source: IndexSet, to destination: Int) {}
+    func clearQueue() {}
+    func replaceQueue(_ songs: [Song], startIndex: Int) {}
+    func setRepeatMode(_ mode: RepeatMode) {}
+    func setShuffleEnabled(_ enabled: Bool) {}
+    func applyEQToggle(enabled: Bool) {}
+    func applyEffectiveVolume() {}
+    var volume: Float = 1
+    var userVolume: Float = 1
+    var eqEnabled: Bool { false }
+    var isPlaying: Bool { false }
+    var currentSong: Song? { nil }
+    var currentTime: TimeInterval { 0 }
+    var queue: [Song] { [] }
+    var currentIndex: Int { 0 }
+    var repeatMode: RepeatMode { .off }
+    var shuffleEnabled: Bool { false }
+}
+
 /// The production legacy side of a handoff.
 ///
 /// Everything except the transport start is the **real** `AudioEngine`: transport state, snapshot
@@ -85,6 +147,10 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
         self.application = application ?? PersistentApplicationPlaybackAdapter(assembly: assembly)
     }
 
+    /// The adapter is the transport surface: one object owns both the `Song` projection and the
+    /// commands, so the queue the UI reads and the queue the commands act on cannot diverge.
+    var transport: any PersistentTransportRouting { application }
+
     var isTransportActive: Bool { application.isTransportActive }
 
     /// Adopt the queue being handed over. **Starts nothing**, and schedules nothing.
@@ -94,9 +160,9 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
     /// Position is read from the session in both cases, so the projection never becomes a second
     /// queue authority.
     ///
-    /// Repeat, shuffle and playback context are **not** transferred here — moving those with the
-    /// session belongs to the transport-routing lane, and inventing a transfer now would mean
-    /// guessing at how a shuffled legacy order maps onto the persistent session's own ordering.
+    /// Repeat, shuffle, volume and EQ come across with the session. The queue array is the play
+    /// order in both engines and the flags govern how each one picks its own next occurrence, so
+    /// mirroring them is a transfer rather than a second shuffle.
     func adopt(_ snapshot: PlaybackSessionSnapshot) {
         application.adoptQueue(snapshot.songs)
         assembly.session.replaceQueue(songIDs: snapshot.songs.map(\.id),
@@ -107,6 +173,13 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
             guard let duration = song.duration else { continue }
             assembly.session.songDurations[song.id] = TimeInterval(duration)
         }
+        assembly.session.setRepeatMode(snapshot.repeatMode)
+        assembly.session.setShuffleEnabled(snapshot.shuffleEnabled)
+        application.userVolume = snapshot.userVolume
+        // Applied before any audio flows, so the initial state costs no ramp; later changes go
+        // through `applyEQToggle`, which does ramp.
+        assembly.backend.engine.applyEQ(GaplessEQSettings.current())
+        assembly.backend.engine.setEQEnabled(snapshot.eqEnabled)
     }
 
     func adopt(preparedSource: GaplessPreparedTrack) async {

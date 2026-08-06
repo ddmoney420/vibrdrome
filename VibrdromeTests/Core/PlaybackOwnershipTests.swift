@@ -239,16 +239,21 @@ struct PlaybackOwnershipTests {
 
     // MARK: - Routing unchanged
 
-    /// Selection is not wired yet, so production still routes everything to legacy.
+    /// The DEBUG flag defaults Off, so the shared router never selects persistent.
+    ///
+    /// Deliberately asserts "not persistent" rather than "no authority at all": another suite in
+    /// the same process may legitimately have started a legacy session on the shared router, and
+    /// what matters is that nothing reached the persistent engine without a selection.
     @Test func routingRemainsLegacyUntilSelectionIsWired() {
         guard let router = ApplicationPlayback.router else {
             Issue.record("no router")
             return
         }
-        #expect(router.ownership.authority == .none,
-                "something granted playback authority without a selection sequence")
+        #expect(router.ownership.authority != .persistent,
+                "something granted persistent authority with the flag Off")
         #expect(router.isPersistentSessionActive == false)
         #expect(router.selectedBackend == .legacy)
-        #expect(router.sessionSelectionState == .idle)
+        #expect(PersistentRoutingSetting.isEnabled == false,
+                "the persistent routing flag is not Off by default")
     }
 }

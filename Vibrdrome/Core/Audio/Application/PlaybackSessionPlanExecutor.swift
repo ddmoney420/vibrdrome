@@ -66,9 +66,54 @@ protocol LegacyPlaybackSessionPort: AnyObject {
     func start(_ snapshot: PlaybackSessionSnapshot)
 }
 
+/// What the router sends to the persistent backend while it holds authority.
+///
+/// Separate from the handoff port because these are different jobs with different lifetimes: the
+/// handoff port moves ownership once, and this carries every transport command for as long as that
+/// ownership lasts. Keeping them apart is also what lets the executor's tests double a handoff
+/// without implementing a transport surface they never exercise.
+@MainActor
+protocol PersistentTransportRouting: AnyObject {
+    func play(song: Song, from newQueue: [Song]?, at index: Int)
+    func pause()
+    func resume()
+    func stop()
+    func togglePlayPause()
+    func next()
+    func previous()
+    func seek(to time: TimeInterval)
+    func skipToIndex(_ index: Int)
+
+    func addToQueue(_ song: Song)
+    func addToQueueNext(_ song: Song)
+    func removeFromQueue(atAbsolute index: Int)
+    func moveInUpNext(from source: IndexSet, to destination: Int)
+    func clearQueue()
+    func replaceQueue(_ songs: [Song], startIndex: Int)
+
+    func setRepeatMode(_ mode: RepeatMode)
+    func setShuffleEnabled(_ enabled: Bool)
+    func applyEQToggle(enabled: Bool)
+    func applyEffectiveVolume()
+
+    var volume: Float { get set }
+    var userVolume: Float { get set }
+    var eqEnabled: Bool { get }
+    var isPlaying: Bool { get }
+    var currentSong: Song? { get }
+    var currentTime: TimeInterval { get }
+    var queue: [Song] { get }
+    var currentIndex: Int { get }
+    var repeatMode: RepeatMode { get }
+    var shuffleEnabled: Bool { get }
+}
+
 /// The persistent side of a handoff, as the executor needs it.
 @MainActor
 protocol PersistentPlaybackSessionPort: AnyObject {
+    /// Where the router sends transport while this backend holds authority.
+    var transport: any PersistentTransportRouting { get }
+
     var isTransportActive: Bool { get }
     /// Adopt the queue being handed over. Starts nothing.
     func adopt(_ snapshot: PlaybackSessionSnapshot)

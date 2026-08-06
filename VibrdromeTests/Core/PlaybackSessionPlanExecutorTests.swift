@@ -758,10 +758,11 @@ struct PlaybackSessionPlanExecutorTests {
             return
         }
         #expect(router.selectedBackend == .legacy)
-        #expect(router.sessionSelectionState == .idle)
         #expect(router.isPersistentSessionActive == false)
-        #expect(router.ownership.authority == .none,
-                "executing a plan moved the application router's authority")
+        // "Not persistent" rather than "no authority": the shared router is process-wide, and
+        // another suite may legitimately have started a legacy session on it.
+        #expect(router.ownership.authority != .persistent,
+                "executing a plan moved the application router to persistent")
         #expect(executor.ownership !== router.ownership,
                 "the test executor shares the router's ownership coordinator")
     }
@@ -859,6 +860,11 @@ final class PersistentPortSpy: PersistentPlaybackSessionPort {
     private(set) var adoptedSources: [GaplessPreparedTrack] = []
     private(set) var authorityAtCall: [(String, PlaybackAuthority)] = []
     weak var ownership: PlaybackOwnershipCoordinator?
+
+    /// The transport surface. Unused by the executor, which only moves ownership — the router is
+    /// what routes commands, and that is covered by `PlaybackAuthorityRoutingTests`.
+    let transportDouble = PersistentTransportSpy()
+    var transport: any PersistentTransportRouting { transportDouble }
 
     var isTransportActive = false
     /// When set, `start()` throws it.

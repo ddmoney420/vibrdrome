@@ -376,6 +376,15 @@ final class PlaybackSpy: ApplicationPlaybackControlling {
 
     private func record(_ name: String) { calls.append(name) }
 
+    /// Clear the record between phases of a test — used by the routing suite, which asserts on what
+    /// happened *after* a session was established rather than on the whole run.
+    func resetForTesting() {
+        calls.removeAll()
+        playCalls.removeAll()
+        seekTargets.removeAll()
+        skipToIndexCalls.removeAll()
+    }
+
     // Transport
     func play(song: Song, from queue: [Song]?, at index: Int) {
         playCalls.append((song.id, queue?.count, index))

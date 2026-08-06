@@ -205,7 +205,7 @@ struct PersistentPlaybackAssemblyTests {
         let router = makeRouter()
         let before = router.diagnostics
         #expect(before.preparationDescription == "Not constructed")
-        #expect(before.summary.contains("Persistent engine selected: No"))
+        #expect(before.summary.contains("Playback authority: none"))
 
         try router.preparePersistentBackend()
         let after = router.diagnostics
@@ -213,9 +213,10 @@ struct PersistentPlaybackAssemblyTests {
         #expect(after.preparationDescription == "Ready")
         #expect(after.selectedBackend == .legacy)
         #expect(after.summary.contains("Persistent preparation: Ready"))
-        #expect(after.summary.contains("Selected backend: Legacy"))
-        #expect(after.summary.contains("Persistent engine selected: No"))
-        #expect(after.summary.contains("Selected backend: Persistent") == false,
+        #expect(after.summary.contains("Active transport backend: Legacy"))
+        // Constructed is not selected: preparation builds the stack, authority is what routes to it.
+        #expect(after.summary.contains("Playback authority: none"))
+        #expect(after.summary.contains("Active transport backend: Persistent") == false,
                 "diagnostics claimed the persistent engine is selected")
     }
 
