@@ -75,6 +75,7 @@ struct ArtistDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var isStarred = false
+    @State private var appearsOnAlbums: [Album] = []
     #if os(macOS)
     @State private var columnSettings = TrackTableColumnSettings(viewKey: "artist")
     @State private var showFullBio = false
@@ -447,6 +448,34 @@ struct ArtistDetailView: View {
                     }
                 }
 
+                if !appearsOnAlbums.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Appears On (\(appearsOnAlbums.count))")
+                            .font(.title3)
+                            .bold()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 28)
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)],
+                            spacing: 20
+                        ) {
+                            ForEach(appearsOnAlbums) { album in
+                                NavigationLink {
+                                    AlbumDetailView(albumId: album.id)
+                                } label: {
+                                    AlbumGridCard(album: album, cellWidth: 180)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("artistAppearsOnCard_\(album.id)")
+                                .albumGetInfoContextMenu(album: album)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 28)
+                    }
+                }
+
                 if discographyAlbums.isEmpty && topSongs.isEmpty && !isLoading {
                     ContentUnavailableView {
                         Label("No Albums", systemImage: "square.stack")
@@ -551,6 +580,22 @@ struct ArtistDetailView: View {
                 }
             }
 
+            if !appearsOnAlbums.isEmpty {
+                Section {
+                    ForEach(appearsOnAlbums) { album in
+                        NavigationLink {
+                            AlbumDetailView(albumId: album.id)
+                        } label: {
+                            AlbumCard(album: album)
+                        }
+                        .accessibilityIdentifier("artistAppearsOnRow_\(album.id)")
+                        .albumGetInfoContextMenu(album: album)
+                    }
+                } header: {
+                    Text("Appears On (\(appearsOnAlbums.count))")
+                }
+            }
+
             if !similarArtists.isEmpty {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -643,39 +688,7 @@ struct ArtistDetailView: View {
     // MARK: - Data Loading
 
     private func loadArtist() async {
-        if artist == nil {
-            let aid = artistId
-            let artistDesc = FetchDescriptor<CachedArtist>(
-                predicate: #Predicate { $0.id == aid }
-            )
-            if let cached = try? modelContext.fetch(artistDesc).first {
-                let albumDesc = FetchDescriptor<CachedAlbum>(
-                    predicate: #Predicate<CachedAlbum> { $0.artistId == aid },
-                    sortBy: [SortDescriptor(\CachedAlbum.year, order: .reverse)]
-                )
-                let cachedAlbums = (try? modelContext.fetch(albumDesc)) ?? []
-                let albums = cachedAlbums.map { $0.toAlbum() }
-                artist = Artist(
-                    id: cached.id, name: cached.name,
-                    coverArt: cached.coverArtId,
-                    artistImageUrl: cached.artistImageUrl,
-                    albumCount: cached.albumCount,
-                    starred: cached.isStarred ? "true" : nil,
-                    userRating: cached.userRating,
-                    averageRating: cached.averageRating,
-                    album: albums.isEmpty ? nil : albums
-                )
-                #if os(macOS)
-                if headerArtURL == nil {
-                    if let imgUrl = cached.artistImageUrl, let url = URL(string: imgUrl) {
-                        headerArtURL = url
-                    } else if let id = cached.coverArtId {
-                        headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
-                    }
-                }
-                #endif
-            }
-        }
+        loadCachedArtist()
         isLoading = artist == nil
         error = nil
         defer { isLoading = false }
@@ -700,9 +713,51 @@ struct ArtistDetailView: View {
             let info = try? await artistInfoResult
             similarArtists = info?.similarArtist ?? []
             biography = info?.biography
+            appearsOnAlbums = await loadAppearsOn(artistName: loadedArtist.name, ownAlbums: loadedArtist.album ?? [])
         } catch {
             self.error = ErrorPresenter.userMessage(for: error)
         }
+    }
+
+    private func loadCachedArtist() {
+        guard artist == nil else { return }
+        let aid = artistId
+        let artistDesc = FetchDescriptor<CachedArtist>(predicate: #Predicate { $0.id == aid })
+        guard let cached = try? modelContext.fetch(artistDesc).first else { return }
+        let albumDesc = FetchDescriptor<CachedAlbum>(
+            predicate: #Predicate<CachedAlbum> { $0.artistId == aid },
+            sortBy: [SortDescriptor(\CachedAlbum.year, order: .reverse)]
+        )
+        let albums = ((try? modelContext.fetch(albumDesc)) ?? []).map { $0.toAlbum() }
+        artist = Artist(
+            id: cached.id, name: cached.name,
+            coverArt: cached.coverArtId,
+            artistImageUrl: cached.artistImageUrl,
+            albumCount: cached.albumCount,
+            starred: cached.isStarred ? "true" : nil,
+            userRating: cached.userRating,
+            averageRating: cached.averageRating,
+            album: albums.isEmpty ? nil : albums
+        )
+        #if os(macOS)
+        if headerArtURL == nil {
+            if let imgUrl = cached.artistImageUrl, let url = URL(string: imgUrl) {
+                headerArtURL = url
+            } else if let id = cached.coverArtId {
+                headerArtURL = appState.subsonicClient.coverArtURL(id: id, size: 600)
+            }
+        }
+        #endif
+    }
+
+    private func loadAppearsOn(artistName: String, ownAlbums: [Album]) async -> [Album] {
+        let ownAlbumIds = Set(ownAlbums.map(\.id))
+        let searchAlbums = (try? await appState.subsonicClient.search(
+            query: artistName, artistCount: 0, albumCount: 50, songCount: 0
+        ))?.album ?? []
+        return searchAlbums.filter { album in
+            !ownAlbumIds.contains(album.id) && album.artistId != artistId
+        }.sorted { ($0.year ?? 0) > ($1.year ?? 0) }
     }
 
     private func cleanBiography(_ text: String) -> String {
