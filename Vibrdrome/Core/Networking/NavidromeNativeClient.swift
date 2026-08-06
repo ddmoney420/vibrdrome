@@ -339,6 +339,16 @@ final class NavidromeNativeClient {
         }
     }
 
+    // MARK: - Image Upload
+
+    /// Upload a JPEG image for an artist or playlist.
+    /// Navidrome accepts `POST /api/{resource}/{id}/image` with multipart form data.
+    nonisolated func uploadImage(resourceType: String, id: String, imageData: Data, mimeType: String) async throws {
+        let path = "api/\(resourceType)/\(id)/image"
+        _ = try await nativeRequestMultipart(path: path, imageData: imageData, mimeType: mimeType)
+        ndLog.info("Uploaded image for \(resourceType) id: \(id)")
+    }
+
     // MARK: - Private helpers
 
     nonisolated private func buildPlaylistBody(name: String, comment: String, rules: NSPCriteria) -> [String: Any] {
@@ -410,6 +420,60 @@ final class NavidromeNativeClient {
         }
 
         return (data, response)
+    }
+
+    nonisolated private func nativeRequestMultipart(path: String, imageData: Data, mimeType: String) async throws -> Data {
+        var tok = await currentToken()
+        if tok == nil {
+            try await login()
+            tok = await currentToken()
+        }
+        guard let tok else {
+            throw NavidromeNativeError.authFailed("No token after login")
+        }
+
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw NavidromeNativeError.invalidURL
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(tok)", forHTTPHeaderField: "X-ND-Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        let boundaryPrefix = "--\(boundary)\r\n"
+        body.append(contentsOf: boundaryPrefix.utf8)
+        body.append(contentsOf: "Content-Disposition: form-data; name=\"image\"; filename=\"image\"\r\n".utf8)
+        body.append(contentsOf: "Content-Type: \(mimeType)\r\n\r\n".utf8)
+        body.append(imageData)
+        body.append(contentsOf: "\r\n--\(boundary)--\r\n".utf8)
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+
+        if statusCode == 401 {
+            await invalidateToken()
+            try await login()
+            guard let newTok = await currentToken() else {
+                throw NavidromeNativeError.authFailed("Re-login failed")
+            }
+            request.setValue("Bearer \(newTok)", forHTTPHeaderField: "X-ND-Authorization")
+            let (retryData, retryResponse) = try await session.data(for: request)
+            let retryStatus = (retryResponse as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(retryStatus) else {
+                throw NavidromeNativeError.httpError(retryStatus)
+            }
+            return retryData
+        }
+
+        guard (200...299).contains(statusCode) else {
+            throw NavidromeNativeError.httpError(statusCode)
+        }
+
+        return data
     }
 
     private func currentToken() -> String? { token }

@@ -390,6 +390,33 @@ struct PlaylistsView: View {
 
         Divider()
 
+        let shareText = "🎶 \(playlist.name) — \(playlist.songCount ?? 0) songs\nvibrdrome://playlist/\(playlist.id)"
+        ShareLink(item: shareText) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+
+        Button {
+            Task {
+                do {
+                    let detail = try await appState.subsonicClient.getPlaylist(id: playlist.id)
+                    let songIds = detail.entry?.map(\.id) ?? []
+                    guard !songIds.isEmpty else { return }
+                    let share = try await appState.subsonicClient.createShare(ids: songIds)
+                    #if os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(share.url, forType: .string)
+                    #else
+                    UIPasteboard.general.string = share.url
+                    #endif
+                } catch {
+                    Logger(subsystem: "com.vibrdrome.app", category: "Sharing")
+                        .error("Failed to create playlist share: \(error)")
+                }
+            }
+        } label: { Label("Copy Navidrome Share Link", systemImage: "link") }
+
+        Divider()
+
         Button(role: .destructive) {
             deletePlaylist(playlist)
         } label: { Label("Delete", systemImage: "trash") }

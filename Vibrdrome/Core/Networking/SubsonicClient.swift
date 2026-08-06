@@ -572,6 +572,32 @@ final class SubsonicClient {
         return directory
     }
 
+    // MARK: - Shares
+
+    func getShares() async throws -> [Share] {
+        let body = try await request(.getShares)
+        return body.shares?.share ?? []
+    }
+
+    @discardableResult
+    func createShare(ids: [String], description: String? = nil, expires: Date? = nil) async throws -> Share {
+        let expiresMs = expires.map { Int($0.timeIntervalSince1970 * 1000) }
+        let body = try await request(.createShare(ids: ids, description: description, expires: expiresMs))
+        guard let share = body.shares?.share?.first else {
+            throw SubsonicError.apiError(code: 0, message: "No share returned")
+        }
+        return share
+    }
+
+    func updateShare(id: String, description: String? = nil, expires: Date? = nil) async throws {
+        let expiresMs = expires.map { Int($0.timeIntervalSince1970 * 1000) }
+        try await performAction(.updateShare(id: id, description: description, expires: expiresMs))
+    }
+
+    func deleteShare(id: String) async throws {
+        try await performAction(.deleteShare(id: id))
+    }
+
     // MARK: - Jukebox
 
     func jukeboxGet() async throws -> JukeboxPlaylist {
