@@ -28,7 +28,7 @@ The AVQueuePlayer playback path has **two distinct** transition artifacts:
    Isolated harness showed processing ON → freeze at every transition; OFF → seamless.
 2. **Subsequent-transition click** — first transition after a fresh play is seamless; every later
    one clicks. Persists with the tap OFF, on FLAC and ALAC, streamed and downloaded. UNSOLVED at
-   the AVQueuePlayer level.
+   the AVQueuePlayer level — **and RESOLVED by this rewrite: see "Device validation" below.**
 
 **Ruled out for the click** (do not re-investigate): queue construction, dynamic vs preloaded
 insertion, single vs deep lookahead, end observers, queue churn, local vs downloaded material,
@@ -42,6 +42,45 @@ is a custom-engine feature, not reliably bolt-on to the AVPlayer passthrough pat
 all this live on throwaway branch `diag/gapless-queue-matrix @ bc4b2d6` (DEBUG-only; **never merge**).
 
 Memory files: `gapless-click-investigation.md`, `gapless-architecture-reference.md`.
+
+---
+
+## Device validation — 2026-08-23 (the rewrite works)
+
+First end-to-end device test of the persistent engine through the real application path, on
+`feat/persistent-gapless-buffer-scheduler @ 9f3dff8` (Debug, 1.0.0(59), iPhone 17 Pro Max,
+headphones).
+
+**The click is fixed.** Controlled A/B on `Gapless 4-Track Test` (4 × 10 s FLAC, transitions at
+0:10 / 0:20 / 0:30), same album both passes:
+
+| Pass | 0:10 | 0:20 | 0:30 |
+|---|---|---|---|
+| Legacy (flag Off) | seamless | **click** | **click** |
+| Persistent (flag On) | seamless | seamless | seamless |
+
+The legacy pass is the part that makes this conclusive: it reproduces the defect on the same
+material in the same session, so the clean persistent pass is a fix rather than a lucky run. This
+also settles which of the two standing theories was right — AVQueuePlayer cannot hold a persistent
+output stream across a decoded-item handoff. The main-thread-hitch theory (0.5 s periodic observer,
+predownload, Now Playing) was never the cause.
+
+All six smoke tests passed: legacy baseline, three-track automatic advancement on the production
+heartbeat, the original defect, pause/resume, stop-and-recover, and radio staying on legacy.
+
+**Covered:** FLAC, streamed. **Not yet covered:** ALAC, downloaded-vs-streamed.
+
+### What this does NOT mean it is ready to ship
+
+Audio is validated; the session's *signals* are not implemented at all. Before any release:
+
+- **Now Playing** is not published from persistent — lock screen, CarPlay and Watch show nothing.
+- **Scrobbling** does not happen for persistent plays.
+- **Visualizer ownership** is not transferred to the persistent tap.
+- `duration`, `effectiveDuration` and `isBuffering` still read the quiesced legacy engine, so the
+  expanded player's seek bar and remaining time are wrong during persistent playback.
+- **Mid-track resume** is refused, so launch queue-restoration cannot use persistent.
+- The **one-hour soak** has never been run against the real application path.
 
 ---
 
