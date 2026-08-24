@@ -207,6 +207,64 @@ struct PersistentBackgroundStarvationTests {
         }
     }
 
+    // MARK: - Does the boundary survive a stall?
+
+    /// Cross a real automatic track boundary while the main actor is unavailable.
+    ///
+    /// Two different things can starve here and they need separating: the current track's PCM
+    /// refill (`pump`), and preparation of the *next* source (`replenishTail`, which opens the file
+    /// and builds the converter). If the prefetch window has already enqueued the next track before
+    /// the stall begins, the boundary can be sample-continuous even with the main actor frozen —
+    /// that is Outcome A, and it means only `pump` needs to move. If it has not, the boundary
+    /// starves whatever `pump` does, which is Outcome B.
+    @Test func boundaryCharacterisationUnderMainActorStall() async throws {
+        try await withTemporaryDirectory { directory in
+            let ids = ["b0", "b1", "b2"]
+            let files = try makeFiles(ids, in: directory)
+            let assembly = makeAssembly(files: files, directory: directory)
+            defer { assembly.controller.stop() }
+            assembly.session.replaceQueue(songIDs: ids)
+            for id in ids {
+                assembly.session.songDurations[id] = Double(Self.trackFrames) / Self.sampleRate
+            }
+            try await assembly.controller.play()
+            await driveUntilRendering(assembly.controller)
+
+            // Let the window fill exactly as production would, then read what is actually ready
+            // before the stall — that is the margin the decision rule turns on.
+            for _ in 0..<60 {
+                await assembly.controller.tick()
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            let scheduler = assembly.backend.bufferScheduler
+            let sourcesReady = scheduler.liveSourceCount
+            let segmentsReady = scheduler.segments.count
+            let preparedIDs = await assembly.preparer.readyTrackIDs
+            print("BOUNDARY before stall: live sources \(sourcesReady), "
+                  + "scheduled segments \(segmentsReady), prepared tracks \(preparedIDs.count)")
+
+            for window in [500, 1_000, 2_000] {
+                let result = measure(assembly, blockMilliseconds: window)
+                print("BOUNDARY \(result.described)")
+                for _ in 0..<40 {
+                    await assembly.controller.tick()
+                    try? await Task.sleep(for: .milliseconds(5))
+                }
+            }
+
+            let heard = assembly.controller.observedBoundaries.map(\.songID)
+            print("BOUNDARY occurrences heard: \(heard)")
+            let instances = Set(assembly.controller.observedBoundaries.map(\.playInstance))
+            #expect(instances.count == assembly.controller.observedBoundaries.count,
+                    "an occurrence reported a boundary twice")
+            // Order must never regress even if timing does.
+            for (index, songID) in heard.enumerated() where index < ids.count {
+                #expect(songID == ids[index],
+                        "occurrence \(index) was \(songID), expected \(ids[index]) — order broke")
+            }
+        }
+    }
+
     /// A stall shorter than the scheduled lead must not starve audio.
     ///
     /// This is the floor the architecture already claims: ~372 ms of PCM is on the node, so a
