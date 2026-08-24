@@ -26,3 +26,4 @@ GaplessBackendFailureRecoveryTests
 PlaybackAuthorityRoutingTests
 PersistentHeartbeatTests
 LegacyTransportReEntryTests
+PersistentBackgroundStarvationTests
