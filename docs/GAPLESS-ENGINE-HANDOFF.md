@@ -68,7 +68,9 @@ predownload, Now Playing) was never the cause.
 All six smoke tests passed: legacy baseline, three-track automatic advancement on the production
 heartbeat, the original defect, pause/resume, stop-and-recover, and radio staying on legacy.
 
-**Covered:** FLAC, streamed. **Not yet covered:** ALAC, downloaded-vs-streamed.
+**Covered:** FLAC and ALAC (`Gapless 4-Track Test` and `Gapless 4-Track ALAC`) — both container
+families from the original defect's signature. **Not yet confirmed:** downloaded-vs-streamed
+delivery.
 
 ### What this does NOT mean it is ready to ship
 
