@@ -407,6 +407,41 @@ struct PlaybackAuthorityRoutingTests {
                 "the inactive persistent backend received \(persistent.calls)")
     }
 
+    /// Every queue projection resolves against the **same** backend as the queue itself.
+    ///
+    /// Regression: `nextSongIndex()` stayed on legacy while `queue` routed to persistent, so the
+    /// mini player subscripted one backend's array with the other's index and trapped in
+    /// `Array._checkSubscript`. Legacy is deliberately left holding a longer, different queue here —
+    /// which is exactly what a legacy session played before a persistent one leaves behind.
+    @Test func queueProjectionsResolveAgainstTheActiveBackendsQueue() async throws {
+        try await withTemporaryDirectory { directory in
+            try await withRoutingFlag(true) {
+                let (router, legacy, persistent) = makeRoutingRouter()
+                defer { teardown(router) }
+                legacy.queue = (0..<40).map { makeSong(id: "stale\($0)") }
+                legacy.currentIndex = 30
+
+                let songs = ["q0", "q1", "q2"].map { makeSong(id: $0) }
+                let track = try makeTrack(id: "q0", in: directory)
+                await startPersistentSession(router, songs: songs, track: track)
+                persistent.queue = songs
+                persistent.currentIndex = 0
+
+                #expect(router.queue.count == 3,
+                        "the router read the stale legacy queue during a persistent session")
+                if let next = router.nextSongIndex() {
+                    #expect(router.queue.indices.contains(next),
+                            "nextSongIndex() returned \(next), out of range for a \(router.queue.count)-item queue")
+                }
+                for entry in router.upNextEntries {
+                    #expect(router.queue.indices.contains(entry.index),
+                            "upNextEntries carried index \(entry.index), out of range")
+                }
+                #expect(router.upNext.count <= router.queue.count)
+            }
+        }
+    }
+
     /// State the active backend can answer is read from it, not from the quiesced legacy engine.
     @Test func observableStateFollowsTheActiveBackend() async throws {
         try await withTemporaryDirectory { directory in
@@ -805,6 +840,18 @@ final class PersistentTransportSpy: PersistentTransportRouting {
     var currentIndex = 0
     var repeatMode: RepeatMode = .off
     var shuffleEnabled = false
+
+    /// The queue projections travel with `queue` and `currentIndex`, so the double answers them
+    /// from the same array rather than from a second one.
+    func nextSongIndex() -> Int? {
+        queue.indices.contains(currentIndex + 1) ? currentIndex + 1 : nil
+    }
+    var upNext: [Song] {
+        queue.indices.contains(currentIndex + 1) ? Array(queue[(currentIndex + 1)...]) : []
+    }
+    var upNextEntries: [(index: Int, song: Song)] {
+        upNext.enumerated().map { (index: currentIndex + 1 + $0.offset, song: $0.element) }
+    }
 
     /// Reported rather than driven: this double has no controller to tick, so the port double below
     /// keeps the counters and the heartbeat itself is covered by `PersistentHeartbeatTests`.

@@ -504,17 +504,23 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     var currentSong: Song? { activePersistent?.currentSong ?? routed.currentSong }
     var currentTime: TimeInterval { activePersistent?.currentTime ?? routed.currentTime }
     var smoothCurrentTime: TimeInterval { activePersistent?.currentTime ?? routed.smoothCurrentTime }
-    // Still legacy-only, and named here rather than silently wrong: buffering, duration and the
-    // Up Next projections have no persistent equivalent yet. They read the shared engine, which
-    // during a persistent session reports the session it was handed over from.
+    // Still legacy-only, and named here rather than silently wrong: buffering and duration have no
+    // persistent equivalent yet. They read the shared engine, which during a persistent session
+    // reports the session it was handed over from.
     var isBuffering: Bool { routed.isBuffering }
     var duration: TimeInterval { routed.duration }
     var effectiveDuration: TimeInterval { routed.effectiveDuration }
+
+    // The queue and every projection derived from it come from ONE backend. Splitting them is not a
+    // cosmetic inconsistency: `nextSongIndex()` resolved against legacy and used to subscript a
+    // persistent `queue` is an out-of-range crash, which is what it did in the mini player.
     var queue: [Song] { activePersistent?.queue ?? routed.queue }
     var currentIndex: Int { activePersistent?.currentIndex ?? routed.currentIndex }
-    var upNextEntries: [(index: Int, song: Song)] { routed.upNextEntries }
-    var upNext: [Song] { routed.upNext }
-    func nextSongIndex() -> Int? { routed.nextSongIndex() }
+    var upNextEntries: [(index: Int, song: Song)] {
+        activePersistent?.upNextEntries ?? routed.upNextEntries
+    }
+    var upNext: [Song] { activePersistent?.upNext ?? routed.upNext }
+    func nextSongIndex() -> Int? { activePersistent?.nextSongIndex() ?? routed.nextSongIndex() }
     var playingFromContext: String? {
         get { routed.playingFromContext }
         set { routed.playingFromContext = newValue }

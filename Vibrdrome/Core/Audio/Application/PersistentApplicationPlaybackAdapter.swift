@@ -92,19 +92,78 @@ enum PersistentRoutingSetting {
 ///
 /// **The `Song` view is a projection, not a second queue.** This adapter keeps the `[Song]` array it
 /// was handed so it can answer `currentSong`, `queue` and `currentIndex`, but the scheduling
-/// authority is the gapless session — index and playing state are read from it, never stored here.
-/// A stored copy would be a second runtime queue authority, which is the failure this whole lane is
-/// built to avoid.
+/// authority is the gapless session. The mirrored values below are re-read *from* that session and
+/// are never written by anything else, so they are a view of the authority rather than a second
+/// one — which is the failure this whole lane is built to avoid.
 ///
 /// `GaplessPlaybackController` is never exposed to application callers.
+/// **`@Observable` on purpose.** SwiftUI re-renders because it observed a stored property being
+/// read. `AudioEngine` is `@Observable`, so every legacy-routed read registers a dependency and the
+/// UI updates; `GaplessPlaybackSession` is not, so a computed property reading through to it
+/// registers nothing. Routing the application's state reads here without this made the mini player
+/// render once with whatever was current at first draw and then never update again while audio
+/// advanced underneath it. The mirrored values below are what makes the persistent path observable:
+/// they are stored, so reading them is trackable, and the heartbeat refreshes them.
 @MainActor
+@Observable
 final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
-    private let assembly: PersistentPlaybackAssembly
+    @ObservationIgnored private let assembly: PersistentPlaybackAssembly
 
     /// Presentation projection of what was handed to `replaceQueue`. Keyed lookups only — the
     /// gapless session remains the authority on position and playback state.
     private var songsByID: [String: Song] = [:]
     private var queueOrder: [String] = []
+
+    // MARK: - Observable mirror
+    //
+    // Refreshed from the session and the render clock, which remain the authority — these are a
+    // *view* of that authority, not a second copy of it. Nothing writes to them except
+    // `refreshObservedState`, and nothing reads the session directly for presentation, so the two
+    // cannot drift into disagreeing about what is playing.
+
+    private(set) var currentIndex = 0
+    private(set) var currentSong: Song?
+    private(set) var isPlaying = false
+    private(set) var currentTime: TimeInterval = 0
+    private(set) var queue: [Song] = []
+    private(set) var upNext: [Song] = []
+    private(set) var upNextEntries: [(index: Int, song: Song)] = []
+    private(set) var repeatMode: RepeatMode = .off
+    private(set) var shuffleEnabled = false
+    /// Next position in playback order, resolved by the same session that owns the queue.
+    @ObservationIgnored private var nextIndex: Int?
+
+    func nextSongIndex() -> Int? { nextIndex }
+
+    /// Re-read everything the application presents from the session and the clock.
+    ///
+    /// Called after every heartbeat tick and immediately after each transport command, so the UI
+    /// reflects a command at once rather than up to one heartbeat interval later.
+    func refreshObservedState() {
+        let index = session.queue.currentIndex
+        currentIndex = index
+        queue = queueOrder.compactMap { songsByID[$0] }
+        currentSong = queueOrder.indices.contains(index) ? songsByID[queueOrder[index]] : nil
+        isPlaying = session.isPlaying
+        currentTime = assembly.backend
+            .clockReading(generation: session.queue.generation).elapsedSeconds
+        repeatMode = session.queue.repeatMode
+        shuffleEnabled = session.queue.shuffleEnabled
+        nextIndex = session.nextIndex(after: index, manual: false)
+
+        // The linear tail, matching the legacy contract: no shuffle awareness and no cap.
+        upNext = queue.indices.contains(index + 1) ? Array(queue[(index + 1)...]) : []
+
+        // Playback order, capped at five — taken from the session's own planning so repeat and
+        // shuffle are honoured by the component that will actually schedule them, rather than
+        // re-derived here and allowed to disagree with what plays.
+        let planned = session.plannedItemIDs(depth: 6).dropFirst()
+        upNextEntries = planned.compactMap { itemID in
+            guard let position = session.queue.items.firstIndex(where: { $0.id == itemID }),
+                  queue.indices.contains(position) else { return nil }
+            return (index: position, song: queue[position])
+        }
+    }
 
     #if DEBUG
     /// Counts delegated calls, so a test can prove one application operation produces exactly one
@@ -140,7 +199,11 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     /// heartbeat cannot exist before there is a started session for it to drive — it never runs at
     /// launch, during planning, during media inspection, or over a passively-constructed assembly.
     func startHeartbeat(sessionGeneration: UInt64) {
-        heartbeat.start(controller: controller, generation: sessionGeneration)
+        // Weakly captured: the heartbeat is owned by this adapter, so a strong capture here would
+        // be a cycle that keeps a finished session's engine alive.
+        heartbeat.start(controller: controller, generation: sessionGeneration) { [weak self] in
+            self?.refreshObservedState()
+        }
     }
 
     /// Stop driving. Idempotent, and safe when nothing is running.
@@ -161,16 +224,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     func adoptQueue(_ songs: [Song]) {
         songsByID = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         queueOrder = songs.map(\.id)
-    }
-
-    var queue: [Song] { queueOrder.compactMap { songsByID[$0] } }
-
-    var currentIndex: Int { session.queue.currentIndex }
-
-    var currentSong: Song? {
-        let index = session.queue.currentIndex
-        guard queueOrder.indices.contains(index) else { return nil }
-        return songsByID[queueOrder[index]]
+        refreshObservedState()
     }
 
     // MARK: - Transport
@@ -193,8 +247,16 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     // prefetch window is already full so `replenishTail` returns. Keeping one loop across a pause
     // is also what makes "resume continues the same session" true by construction rather than by
     // restarting something and hoping it is the same one.
-    func pause() { count("pause"); controller.pause() }
-    func resume() { count("resume"); try? controller.resume() }
+    func pause() {
+        count("pause")
+        controller.pause()
+        refreshObservedState()
+    }
+    func resume() {
+        count("resume")
+        try? controller.resume()
+        refreshObservedState()
+    }
 
     /// Stop ends the session, so the heartbeat goes with it — before the controller stops, so no
     /// tick can observe a half-torn-down session.
@@ -202,21 +264,31 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("stop")
         heartbeat.cancel()
         controller.stop()
+        refreshObservedState()
     }
 
     func togglePlayPause() {
         count("togglePlayPause")
         if session.isPlaying { controller.pause() } else { try? controller.resume() }
+        refreshObservedState()
     }
 
     func next() {
         count("next")
-        Task { [controller] in try? await controller.next() }
+        Task { [weak self, controller] in
+            try? await controller.next()
+            self?.refreshObservedState()
+        }
     }
 
     func previous(currentElapsed: TimeInterval) {
         count("previous")
-        Task { [controller] in try? await controller.previous(elapsedSeconds: currentElapsed) }
+        Task { [weak self, controller] in
+            // The resolved destination is the controller's own business; the caller only needs the
+            // command issued, and the refresh below is what the UI reads.
+            _ = try? await controller.previous(elapsedSeconds: currentElapsed)
+            self?.refreshObservedState()
+        }
     }
 
     /// Previous, resolving elapsed from the render clock rather than from the caller.
@@ -228,7 +300,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
 
     func seek(to time: TimeInterval) {
         count("seek")
-        Task { [controller] in try? await controller.seek(toSeconds: time) }
+        Task { [weak self, controller] in
+            try? await controller.seek(toSeconds: time)
+            self?.refreshObservedState()
+        }
     }
 
     func skipToIndex(_ index: Int) {
@@ -247,7 +322,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("addToQueue")
         songsByID[song.id] = song
         queueOrder.append(song.id)
-        Task { [controller] in try? await controller.addToQueue(songID: song.id) }
+        Task { [weak self, controller] in
+            try? await controller.addToQueue(songID: song.id)
+            self?.refreshObservedState()
+        }
     }
 
     func addToQueueNext(_ song: Song) {
@@ -255,7 +333,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         songsByID[song.id] = song
         let insertAt = min(session.queue.currentIndex + 1, queueOrder.count)
         queueOrder.insert(song.id, at: insertAt)
-        Task { [controller] in try? await controller.playNext(songID: song.id) }
+        Task { [weak self, controller] in
+            try? await controller.playNext(songID: song.id)
+            self?.refreshObservedState()
+        }
     }
 
     func replaceQueue(_ songs: [Song], startIndex: Int) {
@@ -279,7 +360,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
             let removed = queueOrder.remove(at: index)
             if !queueOrder.contains(removed) { songsByID[removed] = nil }
         }
-        Task { [controller] in try? await controller.remove(itemID: item.id) }
+        Task { [weak self, controller] in
+            try? await controller.remove(itemID: item.id)
+            self?.refreshObservedState()
+        }
     }
 
     /// Reorder within Up Next. Positions are relative to the queue as a whole, matching the legacy
@@ -293,7 +377,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
             let moved = queueOrder.remove(at: from)
             queueOrder.insert(moved, at: min(max(0, destination), queueOrder.count))
         }
-        Task { [controller] in try? await controller.move(itemID: item.id, to: destination) }
+        Task { [weak self, controller] in
+            try? await controller.move(itemID: item.id, to: destination)
+            self?.refreshObservedState()
+        }
     }
 
     func clearQueue() {
@@ -307,12 +394,18 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
 
     func setRepeatMode(_ mode: RepeatMode) {
         count("setRepeatMode")
-        Task { [controller] in try? await controller.setRepeatMode(mode) }
+        Task { [weak self, controller] in
+            try? await controller.setRepeatMode(mode)
+            self?.refreshObservedState()
+        }
     }
 
     func setShuffleEnabled(_ enabled: Bool) {
         count("setShuffleEnabled")
-        Task { [controller] in try? await controller.setShuffleEnabled(enabled) }
+        Task { [weak self, controller] in
+            try? await controller.setShuffleEnabled(enabled)
+            self?.refreshObservedState()
+        }
     }
 
     // MARK: - Processing
@@ -351,21 +444,6 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     }
 
     var eqEnabled: Bool { assembly.backend.engine.eqStage.settings.isEnabled }
-
-    // MARK: - Observable state, read from the session
-
-    var isPlaying: Bool { session.isPlaying }
-    var repeatMode: RepeatMode { session.queue.repeatMode }
-    var shuffleEnabled: Bool { session.queue.shuffleEnabled }
-
-    /// Elapsed position, from the render clock.
-    ///
-    /// The clock is the only honest source while persistent owns audio: it maps hardware time
-    /// through the scheduled timeline to a position inside the current track, which is what the
-    /// boundary accounting, seek and Previous all read.
-    var currentTime: TimeInterval {
-        assembly.backend.clockReading(generation: session.queue.generation).elapsedSeconds
-    }
 
     /// Quiesce this backend so the other one can own audio. Idempotent.
     ///

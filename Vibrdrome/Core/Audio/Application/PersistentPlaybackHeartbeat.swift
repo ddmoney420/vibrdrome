@@ -93,9 +93,16 @@ final class PersistentPlaybackHeartbeat {
     ///
     /// Cancels anything already running first, so calling it twice for the same session — or for a
     /// replacement — can never leave two loops ticking one controller.
-    func start(controller: GaplessPlaybackController, generation: UInt64) {
+    /// Run after every tick, on the main actor. This is where the session's observable presentation
+    /// state is refreshed — SwiftUI only re-renders because a stored property it read has changed,
+    /// and the gapless session is not itself observable.
+    private var afterTick: (@MainActor () -> Void)?
+
+    func start(controller: GaplessPlaybackController, generation: UInt64,
+               afterTick: (@MainActor () -> Void)? = nil) {
         cancel()
         self.controller = controller
+        self.afterTick = afterTick
         sessionGeneration = generation
         startCount += 1
         task = Task { [weak self] in
@@ -115,6 +122,7 @@ final class PersistentPlaybackHeartbeat {
                 guard self.sessionGeneration == generation else { return }
                 self.tickCount += 1
                 self.lastTickAt = Date()
+                self.afterTick?()
                 // Suspends rather than blocks, and throws on cancellation — the loop condition
                 // above is what acts on that.
                 try? await Task.sleep(for: Self.interval)

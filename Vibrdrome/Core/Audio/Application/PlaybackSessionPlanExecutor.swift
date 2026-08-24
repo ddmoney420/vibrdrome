@@ -106,6 +106,13 @@ protocol PersistentTransportRouting: AnyObject {
     var currentIndex: Int { get }
     var repeatMode: RepeatMode { get }
     var shuffleEnabled: Bool { get }
+
+    // The queue projections travel with `queue` and `currentIndex` deliberately. An index resolved
+    // against one backend and used against another backend's array is not a stale reading, it is an
+    // out-of-range crash — which is exactly what a half-routed split produced in the mini player.
+    func nextSongIndex() -> Int?
+    var upNext: [Song] { get }
+    var upNextEntries: [(index: Int, song: Song)] { get }
     /// What the session's heartbeat is doing. Numeric and closed — safe for diagnostics.
     var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { get }
 }

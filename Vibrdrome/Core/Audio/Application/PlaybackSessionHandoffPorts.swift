@@ -31,7 +31,6 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func clearAudibleObserver() {}
     func start(sessionGeneration: UInt64) async throws {}
     func tearDown() {}
-    var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { PersistentHeartbeatDiagnostics() }
 
     func play(song: Song, from newQueue: [Song]?, at index: Int) {}
     func pause() {}
@@ -62,6 +61,10 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     var currentIndex: Int { 0 }
     var repeatMode: RepeatMode { .off }
     var shuffleEnabled: Bool { false }
+    func nextSongIndex() -> Int? { nil }
+    var upNext: [Song] { [] }
+    var upNextEntries: [(index: Int, song: Song)] { [] }
+    var heartbeatDiagnostics: PersistentHeartbeatDiagnostics { PersistentHeartbeatDiagnostics() }
 }
 
 /// The production legacy side of a handoff.
@@ -181,6 +184,9 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
         // through `applyEQToggle`, which does ramp.
         assembly.backend.engine.applyEQ(GaplessEQSettings.current())
         assembly.backend.engine.setEQEnabled(snapshot.eqEnabled)
+        // Last, so the presentation mirror reflects the session queue that was just installed
+        // rather than the empty one it was built against.
+        application.refreshObservedState()
     }
 
     func adopt(preparedSource: GaplessPreparedTrack) async {

@@ -236,6 +236,19 @@ struct PersistentHeartbeatTests {
                 #expect(router.currentIndex == 2,
                         "the router reported index \(router.currentIndex) during a persistent session")
 
+                // The observable mirror followed the session rather than freezing at first draw.
+                // Regression: the persistent path was not `@Observable`, so SwiftUI read these once
+                // and never again — the mini player kept showing whatever was current when it was
+                // first rendered while audio advanced underneath it.
+                #expect(router.currentSong?.id == "a2",
+                        "the router still reports \(router.currentSong?.id ?? "nil") as current")
+                #expect(router.isPlaying, "the mirror never observed playback starting")
+                #expect(router.queue.map(\.id) == ids)
+                if let next = router.nextSongIndex() {
+                    #expect(router.queue.indices.contains(next),
+                            "nextSongIndex() returned \(next), out of range")
+                }
+
                 // Concurrency invariant, over the whole run.
                 #expect(heartbeat(router).peakConcurrentCount <= 1,
                         "\(heartbeat(router).peakConcurrentCount) ticks overlapped")

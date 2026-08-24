@@ -185,8 +185,14 @@ struct MiniPlayerView: View {
 
     private var displaySubtitle: String {
         if let song = engine.currentSong {
-            // Show "Up Next: [title]" if there's a next track, otherwise artist
-            guard let index = engine.nextSongIndex() else {return song.displayArtist ?? ""}
+            // Show "Up Next: [title]" if there's a next track, otherwise artist.
+            //
+            // Range-checked rather than trusted. The index and the queue come from the backend that
+            // owns the session, and a command can land between the two reads — so treating the
+            // index as a guarantee is a trap, not a shortcut. It crashed exactly that way when the
+            // index came from one backend and the queue from another.
+            guard let index = engine.nextSongIndex(),
+                  engine.queue.indices.contains(index) else { return song.displayArtist ?? "" }
             return "Next: \(engine.queue[index].title)"
         }
 
