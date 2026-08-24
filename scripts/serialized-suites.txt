@@ -27,3 +27,4 @@ PlaybackAuthorityRoutingTests
 PersistentHeartbeatTests
 LegacyTransportReEntryTests
 PersistentBackgroundStarvationTests
+GaplessAudioDomainTests

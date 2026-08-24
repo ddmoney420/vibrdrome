@@ -140,7 +140,10 @@ protocol GaplessRenderBackend: AnyObject {
 
 /// Issues play-instance identities. Monotonic and never reused, so a stale event from a previous
 /// play of the same slot can always be told apart from the current one.
-@MainActor
+///
+/// Isolation is the owner's, for the same reason as `GaplessBufferScheduler`: each owner holds a
+/// private allocator and never shares it, so pinning the type to one actor would force the other
+/// across a boundary for a counter increment.
 final class GaplessPlayInstanceAllocator {
     private var next: UInt64 = 1
 

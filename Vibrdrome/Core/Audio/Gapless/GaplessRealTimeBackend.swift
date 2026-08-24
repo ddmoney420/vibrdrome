@@ -92,8 +92,20 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     }
 
     /// The PCM substrate. Built lazily so a backend that is never started allocates no pool.
-    private(set) lazy var bufferScheduler = GaplessBufferScheduler(
-        player: engine.player, renderFormat: engine.renderFormat)
+    ///
+    /// This backend confines its scheduler to the **main actor**, and installs the main-actor
+    /// recycle wakeup to match — which is the behaviour that has always been here, and the
+    /// behaviour that starves when iOS backgrounds the app. `GaplessAudioDomain` confines an
+    /// instance of the same type to `GaplessAudioActor` instead; a later checkpoint moves
+    /// production onto it.
+    private(set) lazy var bufferScheduler: GaplessBufferScheduler = {
+        let scheduler = GaplessBufferScheduler(
+            player: engine.player, renderFormat: engine.renderFormat)
+        scheduler.installRecycleWakeup { [weak self] in
+            Task { @MainActor [weak self] in self?.bufferScheduler.pump() }
+        }
+        return scheduler
+    }()
 
     #if DEBUG
     /// Open `AVAudioFile` objects for the DEBUG file-segment comparison path only.

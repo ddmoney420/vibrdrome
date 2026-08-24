@@ -60,7 +60,15 @@ enum GaplessConverterLifecycle: String, Sendable, CaseIterable {
 /// **What callbacks are for.** Recycling, and nothing else. Audible boundaries stay clock-driven:
 /// a completion callback reports that the node finished with a buffer, which is not the instant the
 /// next track became audible.
-@MainActor
+/// **Isolation is the owner's, not this type's.** The scheduler holds no shared state: each owner
+/// creates its own instance and never hands it to another. Production's `GaplessRealTimeBackend`
+/// confines one on the main actor; `GaplessAudioDomain` confines one on `GaplessAudioActor`, which
+/// is what lets refill keep running when iOS deprioritises main-actor work in the background.
+/// Pinning the type to either actor would make the other impossible.
+///
+/// The owner is therefore also responsible for installing the recycle wakeup — see
+/// `installRecycleWakeup`. That is deliberate: the hop has to land in whichever domain owns this
+/// instance, and only the owner knows which that is.
 final class GaplessBufferScheduler {
     private let player: AVAudioPlayerNode
     let renderFormat: AVAudioFormat
@@ -149,9 +157,15 @@ final class GaplessBufferScheduler {
         self.converterLifecycle = converterLifecycle
         pool = GaplessBufferPool(capacity: targetScheduledChunks + poolHeadroom,
                                  frameCapacity: chunkFrames, format: renderFormat)
-        inbox.onDeposit = { [weak self] in
-            Task { @MainActor [weak self] in self?.pump() }
-        }
+    }
+
+    /// Install the render-thread wakeup, hopping into whatever domain owns this scheduler.
+    ///
+    /// The owner passes a closure that reaches `pump()` from its own isolation. Capturing the
+    /// scheduler directly here would be a non-Sendable capture in a `@Sendable` callback; capturing
+    /// the *owner* — which is properly isolated — is not.
+    func installRecycleWakeup(_ wakeup: @escaping @Sendable () -> Void) {
+        inbox.onDeposit = wakeup
     }
 
     // MARK: - Enqueueing

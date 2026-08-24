@@ -73,7 +73,8 @@ final class GaplessRecycleInbox: @unchecked Sendable {
 /// that does not track tracks, transitions, or session length. `available + inFlight == capacity` is
 /// an invariant, and a caller that loses a token starves the pool rather than silently growing it —
 /// which is the failure mode worth having, because it is visible.
-@MainActor
+/// Isolation is the owner's: the pool is created by, and confined to, one scheduler. See
+/// `GaplessBufferScheduler` for why neither type pins itself to an actor.
 final class GaplessBufferPool {
     let capacity: Int
     let frameCapacity: AVAudioFrameCount

@@ -31,7 +31,7 @@ REQUIRED_SUITES=()
 while IFS= read -r _suite; do
   [ -n "$_suite" ] && REQUIRED_SUITES+=("$_suite")
 done < <(grep -vE '^\s*(#|$)' "$(dirname "$0")/serialized-suites.txt")
-EXPECTED_MINIMUM=178
+EXPECTED_MINIMUM=185
 
 mkdir -p "$LOG_DIR"
 : > "$LOG"
