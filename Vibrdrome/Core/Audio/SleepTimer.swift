@@ -21,6 +21,21 @@ final class SleepTimer {
     /// Volume fade factor: 1.0 (full) → 0.0 (silent) in last 30s
     var fadeFactor: Float = 1.0
 
+    /// The playback façade the timer's transport actions drive. Routed by authority, so a timer set
+    /// during a persistent session fades and pauses the persistent engine rather than a quiesced
+    /// `AVQueuePlayer`.
+    var playback: any ApplicationPlaybackControlling {
+        #if DEBUG
+        if let override = playbackOverrideForTesting { return override }
+        #endif
+        return ApplicationPlayback.shared
+    }
+
+    #if DEBUG
+    /// Test seam, matching `AudioSessionManager.playbackOverrideForTesting`.
+    var playbackOverrideForTesting: (any ApplicationPlaybackControlling)?
+    #endif
+
     private var timer: Timer?
     private let fadeDuration: Int = 30
 
@@ -84,8 +99,10 @@ final class SleepTimer {
     private func expire() {
         timerLog.info("Sleep timer expired")
         fadeFactor = 0
-        AudioEngine.shared.applyEffectiveVolume()
-        AudioEngine.shared.pause()
+        // The fade is applied to whichever backend owns audio, and so is the pause — reaching
+        // AudioEngine directly faded and paused a quiesced player while persistent kept playing.
+        playback.applyEffectiveVolume()
+        playback.pause()
         stop()
         // Restore volume factor after a delay so the pause has fully taken effect
         Task { @MainActor in

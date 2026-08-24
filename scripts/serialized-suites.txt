@@ -25,3 +25,4 @@ PlaybackSessionPlanExecutorTests
 GaplessBackendFailureRecoveryTests
 PlaybackAuthorityRoutingTests
 PersistentHeartbeatTests
+LegacyTransportReEntryTests

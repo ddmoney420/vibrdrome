@@ -415,11 +415,19 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     /// The node rather than the gain stage on purpose: the gain stage carries ReplayGain, scheduled
     /// per track at its audible boundary, and folding the user's setting into it would make a
     /// volume change land at the next track instead of now.
+    /// The user's setting, stored separately from the applied output level.
+    ///
+    /// Split the same way `AudioEngine` splits it: the node's volume is a *product* of the user
+    /// setting and the sleep-timer fade, so reading it back as the user setting would fold the fade
+    /// in again on the next apply and drive the volume to zero.
+    @ObservationIgnored private var storedUserVolume: Float = 1
+
     var userVolume: Float {
-        get { assembly.backend.engine.player.volume }
+        get { storedUserVolume }
         set {
             count("userVolume")
-            assembly.backend.engine.player.volume = max(0, min(1, newValue))
+            storedUserVolume = max(0, min(1, newValue))
+            applyEffectiveVolume()
         }
     }
 
@@ -431,9 +439,17 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         set { userVolume = newValue }
     }
 
+    /// Apply the effective output volume.
+    ///
+    /// The sleep-timer fade is folded in the same way `AudioEngine.applyEffectiveVolume` folds it,
+    /// because the timer now routes through the façade: without this, a sleep timer set during a
+    /// persistent session would count down and cut the audio dead instead of fading it. ReplayGain
+    /// is deliberately *not* folded in here — it is a scheduled gain-stage event on this graph, not
+    /// a volume multiplier.
     func applyEffectiveVolume() {
         count("applyEffectiveVolume")
-        assembly.backend.engine.player.volume = max(0, min(1, userVolume))
+        let faded = storedUserVolume * SleepTimer.shared.fadeFactor
+        assembly.backend.engine.player.volume = max(0, min(1, faded))
     }
 
     /// Toggle EQ mid-playback. Ramped by the stage, and a true transparent bypass rather than flat

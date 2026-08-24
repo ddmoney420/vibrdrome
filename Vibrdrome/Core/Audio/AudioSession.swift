@@ -14,6 +14,25 @@ final class AudioSessionManager: @unchecked Sendable {
     /// leaves the user stuck paused after returning to CarPlay.
     @MainActor private static var wasPlayingBeforeInterruption = false
 
+    /// The playback façade interruption handling drives.
+    ///
+    /// Routed rather than reaching `AudioEngine.shared` directly: an interruption must pause
+    /// whichever backend owns the session, and reaching the engine paused a quiesced player while
+    /// the persistent engine kept playing.
+    @MainActor
+    static var playback: any ApplicationPlaybackControlling {
+        #if DEBUG
+        if let override = playbackOverrideForTesting { return override }
+        #endif
+        return ApplicationPlayback.shared
+    }
+
+    #if DEBUG
+    /// Test seam: lets a test point interruption handling at its own router rather than the
+    /// process-wide composition point.
+    @MainActor static var playbackOverrideForTesting: (any ApplicationPlaybackControlling)?
+    #endif
+
     func configure() {
         guard !isConfigured else { return }
         isConfigured = true
@@ -80,9 +99,12 @@ final class AudioSessionManager: @unchecked Sendable {
         Task { @MainActor in
             switch type {
             case .began:
-                wasPlayingBeforeInterruption = AudioEngine.shared.isPlaying
+                // Through the façade, not the engine: an interruption must pause whichever
+                // backend owns the session. Reaching AudioEngine directly paused a quiesced
+                // player while the persistent engine kept playing.
+                wasPlayingBeforeInterruption = playback.isPlaying
                 sessionLog.info("Interruption began: wasPlaying=\(wasPlayingBeforeInterruption)")
-                AudioEngine.shared.pause()
+                playback.pause()
             case .ended:
                 let shouldRestore = shouldResume || wasPlayingBeforeInterruption
                 sessionLog.info("Interruption ended: shouldResume=\(shouldResume) wasPlaying=\(wasPlayingBeforeInterruption) -> restore=\(shouldRestore)")
@@ -92,7 +114,9 @@ final class AudioSessionManager: @unchecked Sendable {
                     sessionLog.error("Failed to reactivate audio session: \(error.localizedDescription)")
                 }
                 if shouldRestore {
-                    AudioEngine.shared.resume()
+                    // Resume, never re-play: this continues the existing session on its current
+                    // owner and must not start a new one or re-run selection.
+                    playback.resume()
                 }
                 wasPlayingBeforeInterruption = false
             @unknown default:
@@ -117,7 +141,7 @@ final class AudioSessionManager: @unchecked Sendable {
         if reason == .oldDeviceUnavailable && session.currentRoute.outputs.isEmpty {
             sessionLog.info("Pausing: old device unavailable with no remaining outputs")
             Task { @MainActor in
-                AudioEngine.shared.pause()
+                playback.pause()
             }
         }
     }

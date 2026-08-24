@@ -1,6 +1,32 @@
 import AVFoundation
 import Foundation
 
+extension AudioEngine {
+
+    /// Whether legacy is allowed to build transport right now.
+    ///
+    /// **The narrowest stable boundary.** Everything that can put audio on the legacy player passes
+    /// through `replacePlayerItem` (the only place `gaplessPlayer` is constructed or given an item,
+    /// and the only place the observers are re-armed) or `prepareLookahead` (the only place an item
+    /// is inserted ahead of the audible one). Gating those two covers scene restoration, CarPlay
+    /// connection, predownload and any future caller, without a check scattered across call sites
+    /// that a new path could simply forget.
+    ///
+    /// This is not a second routing flag: it is the latch that quiescence closes and that an
+    /// explicit new legacy session opens, so it always follows the handover rather than deciding it.
+    var admitsTransportRebuild: Bool { !isQuiescedForPersistentSession }
+
+    /// Re-admit legacy transport, because it is being given a session of its own.
+    ///
+    /// Deliberately reached only from `play(...)` — an explicit new legacy session is the one
+    /// legitimate way transport comes back, and it is what the router calls when a plan or a
+    /// fallback hands legacy the session. Stop does *not* re-admit: stopping during a persistent
+    /// session must not arm legacy to rebuild behind it.
+    func admitTransportForNewLegacySession() {
+        isQuiescedForPersistentSession = false
+    }
+}
+
 /// Making the legacy transport genuinely passive so the persistent engine can own audio.
 ///
 /// **Pausing is not releasing.** A paused `AVQueuePlayer` still holds its current and queued
@@ -69,10 +95,18 @@ extension AudioEngine {
     func quiesceForPersistentSession() {
         guard !isUITesting else {
             isPlaying = false
+            isQuiescedForPersistentSession = true
             return
         }
         tearDownCurrentMode()
         isPlaying = false
+        // Closed here rather than at each caller because tearing transport down is not the same as
+        // *keeping* it down. Scene activation, a CarPlay connect, an audio interruption, the sleep
+        // timer and the predownload manager can all reach legacy transport without passing the
+        // router, and several of them rebuild an `AVPlayerItem` and re-arm the observers — which
+        // would put a second live transport under an audible persistent session. See
+        // `admitsTransportRebuild`.
+        isQuiescedForPersistentSession = true
         // Deliberately preserved: queue, currentIndex, currentSong, repeat/shuffle,
         // playingFromContext, volume and EQ state. The persistent session adopts them, and a later
         // legacy re-entry rebuilds player items from them.

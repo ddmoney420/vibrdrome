@@ -33,6 +33,11 @@ extension AudioEngine {
     }
 
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
+        // An explicit new legacy session is the one legitimate way transport comes back after a
+        // handover to the persistent backend — it is what the router calls for a legacy plan, for a
+        // pre-audible fallback, and for radio. Everything else stays refused.
+        admitTransportForNewLegacySession()
+
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
             playForUITesting(song: song, newQueue: newQueue, index: index)

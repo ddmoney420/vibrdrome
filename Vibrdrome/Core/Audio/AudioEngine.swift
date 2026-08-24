@@ -29,6 +29,12 @@ final class AudioEngine {
     // MARK: - State
 
     var isPlaying = false
+
+    /// Set while this engine has handed its session to the persistent backend.
+    ///
+    /// Written only by `quiesceForPersistentSession()` and cleared only by an explicit new legacy
+    /// session; read through `admitsTransportRebuild`. See `AudioEngine+Quiescence.swift`.
+    var isQuiescedForPersistentSession = false
     var currentSong: Song? {
         didSet {
             if let old = oldValue, old.id != currentSong?.id {
@@ -602,6 +608,8 @@ final class AudioEngine {
     }
 
     func prepareLookahead() {
+        // Predownload completion calls this directly, so it can arrive during a persistent session.
+        guard admitsTransportRebuild else { return }
         guard activeMode == .gapless,
               gaplessEnabled,
               let nextIdx = nextSongIndex() else {
@@ -677,6 +685,11 @@ final class AudioEngine {
     }
 
     func replacePlayerItem(with url: URL) {
+        // The persistent backend owns audio: building an item here would re-arm the observers and
+        // put a second live transport underneath it. Scene activation and CarPlay connection both
+        // reach this through restoration, so the refusal has to be here rather than at those call
+        // sites.
+        guard admitsTransportRebuild else { return }
         tearDownObservers()
         clearLookahead()
         generation += 1
