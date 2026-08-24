@@ -172,6 +172,20 @@ struct DebugView: View {
                 row("Persistent routing enabled",
                     value: PersistentRoutingSetting.isEnabled ? "Yes" : "No")
                 row("Session selection state", value: router.sessionSelectionState.describedForDiagnostics)
+
+                // The legacy side, read from the same `legacyTransportState` the ownership
+                // assertions use. Items and observers are the evidence, not the playing flag: a
+                // paused `AVQueuePlayer` still holds both, which is exactly how a resurrected
+                // legacy transport would hide underneath an audible persistent session.
+                let legacyState = AudioEngine.shared.legacyTransportState
+                row("Legacy rate", value: String(format: "%.2f", legacyState.rate))
+                row("Legacy current item", value: legacyState.hasCurrentItem ? "Present" : "None")
+                row("Legacy queued items", value: "\(legacyState.queuedItemCount)")
+                row("Legacy transport active",
+                    value: legacyState.isTransportActive ? "YES" : "No")
+                row("Legacy admits transport rebuild",
+                    value: AudioEngine.shared.admitsTransportRebuild ? "Yes" : "No (quiesced)")
+
                 row("Now Playing / scrobble / visualizer", value: "Pending")
 
                 Button("Prepare Persistent Engine") {
