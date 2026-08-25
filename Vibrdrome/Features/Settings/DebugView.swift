@@ -19,6 +19,7 @@ struct DebugView: View {
             serverSection
             audioSection
             playbackRouterSection
+            gaplessSessionSection
             gaplessLeadTimeSection
             cacheSection
             errorsSection
@@ -213,6 +214,56 @@ struct DebugView: View {
                     queue again. Prepare builds the engine without selecting or starting it.
                     """)
             }
+        }
+    }
+
+    /// The gapless session's own view of playback — queue position, boundary application, and the
+    /// counters that distinguish "audio is advancing" from "the session is advancing".
+    ///
+    /// Added for the session-index-freeze investigation: on device the audio domain kept playing
+    /// while the session stopped applying boundaries, and nothing on this screen could show which
+    /// half was moving. These rows read the same session the UI mirror reads, so a frozen title
+    /// with an advancing "observed boundaries" count (or vice versa) localises the break on sight.
+    private var gaplessSessionSection: some View {
+        Section {
+            if let controller = GaplessDiagnosticsRegistry.current {
+                let session = controller.session
+                row("Queue index", value: "\(session.queue.currentIndex + 1)/\(session.queue.count)")
+                row("Queue generation", value: "\(session.queue.generation)")
+                row("Audible item", value: session.audibleItemID.map { "\($0)" } ?? "None")
+                row("Audible play instance",
+                    value: controller.audiblePlayInstance.map { "\($0)" } ?? "None")
+                row("Session render frame",
+                    value: String(format: "%.1f s",
+                                  Double(session.renderFrame) / GaplessRenderFormat.sampleRate))
+                row("Session playing", value: session.isPlaying ? "Yes" : "No")
+                // The clock-epoch discriminators: raw player clock vs logical frame vs offset is
+                // what distinguishes "audio stopped" from "the raw clock rebased and the logical
+                // frame is pinned at its old high-water mark".
+                row("Logical render frame", value: "\(controller.backend.renderFrame)")
+                row("Raw player clock",
+                    value: controller.backend.lastRawSampleTime.map {
+                        "\($0) @ \(Int(controller.backend.lastRawSampleRate ?? 0)) Hz"
+                    } ?? "no reading")
+                row("Timeline offset", value: "\(controller.backend.timelineOffset)")
+                row("Last clock rebase", value: controller.backend.lastClockRebaseDescription)
+                row("Clock discontinuities",
+                    value: "\(controller.backend.clockDiscontinuityCount)")
+                row("Observed boundaries", value: "\(controller.observedBoundaries.count)")
+                row("Stale results dropped", value: "\(controller.staleResultCount)")
+                row("Deadline misses", value: "\(controller.deadlineMisses.count)")
+                row("Permanent preparation failures",
+                    value: "\(controller.preparationGate.permanentFailureCount)")
+            } else {
+                row("Persistent session", value: "Not active")
+            }
+        } header: {
+            Text("Gapless Session")
+        } footer: {
+            Text("""
+                Queue index and audible item come from the session; boundaries are render-observed. \
+                Audio advancing while these freeze means boundary application has stalled.
+                """)
         }
     }
 
@@ -416,8 +467,78 @@ struct DebugView: View {
         lines.append("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
         #endif
 
+        lines.append(contentsOf: persistentDiagnosticsLines())
+
         exportText = lines.joined(separator: "\n")
+        writeExportFile(exportText)
         showExportSheet = true
+    }
+
+    /// The persistent lane, which the original export predated entirely. Everything here is the
+    /// closed diagnostics the Debug screen shows — reasons and counters, never a URL, token or
+    /// path — so the export stays safe to hand over.
+    private func persistentDiagnosticsLines() -> [String] {
+        var lines: [String] = []
+        if let router = ApplicationPlayback.router {
+            lines.append("")
+            lines.append("=== Playback Router ===")
+            lines.append(router.diagnostics.summary)
+        }
+        guard let controller = GaplessDiagnosticsRegistry.current else { return lines }
+        let session = controller.session
+        let backend = controller.backend
+        lines.append("")
+        lines.append("=== Gapless Session ===")
+        lines.append("Queue index: \(session.queue.currentIndex + 1)/\(session.queue.count)")
+        lines.append("Queue generation: \(session.queue.generation)")
+        lines.append("Audible item: \(session.audibleItemID.map { "\($0)" } ?? "None")")
+        lines.append("Audible play instance: "
+                     + (controller.audiblePlayInstance.map { "\($0)" } ?? "None"))
+        lines.append(String(format: "Session render frame: %.1f s",
+                            Double(session.renderFrame) / GaplessRenderFormat.sampleRate))
+        lines.append("Session playing: \(session.isPlaying)")
+        lines.append("Observed boundaries: \(controller.observedBoundaries.count)")
+        lines.append("Stale results dropped: \(controller.staleResultCount)")
+        lines.append("Deadline misses: \(controller.deadlineMisses.count)")
+        lines.append("Permanent preparation failures: "
+                     + "\(controller.preparationGate.permanentFailureCount)")
+        let readout = backend.cachedReadout
+        let snap = readout.snapshot
+        lines.append("")
+        lines.append("=== Persistent Engine ===")
+        lines.append("Backend state: \(backend.state)")
+        lines.append("Backend tail generation: \(backend.tailGeneration)")
+        lines.append("Scheduler tail generation: \(readout.tailGeneration)")
+        lines.append("Scheduled segments: \(readout.segments.count)")
+        lines.append("Logical render frame: \(backend.renderFrame)")
+        lines.append("Raw player clock: "
+                     + (backend.lastRawSampleTime.map {
+                         "\($0) @ \(Int(backend.lastRawSampleRate ?? 0)) Hz"
+                     } ?? "no reading"))
+        lines.append("Timeline offset: \(backend.timelineOffset)")
+        lines.append("Last clock rebase: \(backend.lastClockRebaseDescription)")
+        lines.append("Clock discontinuities: \(backend.clockDiscontinuityCount)")
+        lines.append("Pool: \(snap.poolAvailable)/\(snap.poolCapacity) available, "
+                     + "\(snap.poolInFlight) in flight")
+        lines.append("Live sources: \(snap.liveSources), converters: \(snap.activeConverters), "
+                     + "open files: \(snap.openFiles)")
+        lines.append("Chunks: \(snap.chunksScheduled) scheduled / \(snap.chunksRecycled) recycled "
+                     + "/ \(snap.chunksReclaimedAtStop) reclaimed")
+        lines.append("Render deposits: \(snap.renderDeposits) "
+                     + "(unreconciled \(snap.unreconciledDeposits))")
+        lines.append("Accounting balanced: \(snap.accountingBalances), "
+                     + "starvations: \(snap.poolStarvations), stale recycles: \(snap.staleRecycles)")
+        return lines
+    }
+
+    /// The export is also written to Documents so it can be pulled from a Mac without touching the
+    /// phone (`devicectl device copy files --domain-type appDataContainer`). Fixed name, overwritten
+    /// each export — the timestamp lives inside the file.
+    private func writeExportFile(_ text: String) {
+        guard let documents = FileManager.default.urls(for: .documentDirectory,
+                                                       in: .userDomainMask).first else { return }
+        try? text.write(to: documents.appendingPathComponent("debug-export.txt"),
+                        atomically: true, encoding: .utf8)
     }
 }
 

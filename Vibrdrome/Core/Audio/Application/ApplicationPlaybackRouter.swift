@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Which playback implementation the application is routed to.
 ///
@@ -27,6 +28,12 @@ enum PlaybackBackend: String, Equatable, Sendable, CaseIterable {
 /// behaviour is identical to calling it directly — by construction, not by assertion.
 @MainActor
 final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
+
+    /// Every routing decision, logged. Closed enums and generation numbers only — never a song
+    /// title, URL or credential — so a device log answers "which backend took generation N and
+    /// why" without reconstruction. Added after an acceptance run spent an evening reverse-
+    /// engineering exactly that from screenshots.
+    private let routingLog = Logger(subsystem: "com.vibrdrome.app", category: "PlaybackRouting")
 
     /// The legacy backend. Typed as the application contract rather than the concrete adapter so a
     /// routing test can substitute a recorder for the one step that would otherwise open a real
@@ -271,6 +278,11 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         lastCompletedPlanningGeneration = request.generation
         isReplacingSession = false
         sessionSelectionState = Self.selectionState(for: plan, outcome: outcome)
+        routingLog.info("""
+            generation \(request.generation, privacy: .public): plan \
+            \(plan.describedForDiagnostics, privacy: .public) -> \
+            \(outcome.describedForDiagnostics, privacy: .public)
+            """)
     }
 
     /// Start a session that is legacy by definition — radio and live streams, which the persistent
@@ -300,6 +312,10 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             if grantsAuthority { ownership.grant(.legacy) }
             sessionSelectionState = .legacy(reason: reason)
             lastCompletedPlanningGeneration = generation
+            routingLog.info("""
+                generation \(generation, privacy: .public): legacy-only start \
+                (\(reason.rawValue, privacy: .public))
+                """)
             operation(legacy)
             return
         }
@@ -310,11 +326,21 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             // released one whatever happened to the request — but authority and the start belong
             // only to the newest request.
             await self.releasePersistentIfActive()
-            guard generation == self.pendingPlanningGeneration else { return }
+            guard generation == self.pendingPlanningGeneration else {
+                self.routingLog.info("""
+                    generation \(generation, privacy: .public): legacy replacement superseded \
+                    after persistent teardown
+                    """)
+                return
+            }
             if grantsAuthority { self.ownership.grant(.legacy) }
             self.sessionSelectionState = .legacy(reason: reason)
             self.lastCompletedPlanningGeneration = generation
             self.isReplacingSession = false
+            self.routingLog.info("""
+                generation \(generation, privacy: .public): legacy-only start replaced a \
+                persistent session (\(reason.rawValue, privacy: .public))
+                """)
             operation(self.legacy)
         }
     }

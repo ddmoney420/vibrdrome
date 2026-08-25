@@ -521,6 +521,15 @@ final class GaplessPlaybackController {
             // A superseded tail must never move the session forward.
             guard backend.isCurrentTail(event.tailGeneration) else {
                 staleResultCount += 1
+                // Loud on purpose: a dropped boundary is unrecoverable — the backend reports each
+                // play instance once, so an event discarded here means the session will never
+                // advance past this occurrence. A healthy session logs this at most around a tail
+                // rebuild; a stream of these is the session-index freeze in progress.
+                log.warning("""
+                    dropped boundary for \(event.playInstance.rawValue, privacy: .public): \
+                    event tail \(event.tailGeneration, privacy: .public) vs \
+                    backend tail \(self.backend.tailGeneration, privacy: .public)
+                    """)
                 return false
             }
             return true

@@ -395,6 +395,63 @@ struct PersistentBackgroundStarvationTests {
         }
     }
 
+    /// The device freeze scenario: iOS stops an idle `AVAudioEngine` during a long pause; resume
+    /// restarts the engine; if the node's raw sample clock reset across that restart, the
+    /// monotonic clamp pins the logical frame at its old high-water mark — elapsed freezes,
+    /// boundaries die, the queue index never advances, while the domain plays on.
+    ///
+    /// The engine stop is the SYSTEM's action, simulated directly; everything else is the
+    /// production path. If this reproduces, the logical clock stalls and the boundary below is
+    /// never applied.
+    @Test func engineRestartAcrossPauseMustNotFreezeTheClock() async throws {
+        try await withTemporaryDirectory { directory in
+            let ids = ["c0", "c1", "c2"]
+            let files = try makeFiles(ids, frames: 220_500, in: directory)   // 5 s tracks
+            let assembly = makeAssembly(files: files, directory: directory)
+            defer { assembly.controller.stop() }
+            assembly.session.replaceQueue(songIDs: ids)
+            for id in ids { assembly.session.songDurations[id] = 5 }
+            try await assembly.controller.play()
+            await driveUntilRendering(assembly.controller)
+            for _ in 0..<40 {
+                await assembly.controller.tick()
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            let indexBefore = assembly.session.queue.currentIndex
+            let frameBefore = assembly.backend.renderFrame
+            #expect(frameBefore > 0, "the fixture never rendered")
+
+            assembly.controller.pause()
+            await assembly.backend.settleTransport()
+            // iOS reclaims the idle engine during a long pause. The app is not consulted.
+            assembly.backend.engine.engine.stop()
+
+            try assembly.controller.resume()
+            await assembly.backend.settleTransport()
+
+            // Track 0 has under 5 s left; a healthy clock crosses its boundary well inside this.
+            let deadline = Date().addingTimeInterval(8)
+            while Date() < deadline, assembly.session.queue.currentIndex == indexBefore {
+                await assembly.controller.tick()
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+
+            let frameAfter = assembly.backend.renderFrame
+            print("""
+                CLOCKRESTART frame \(frameBefore) -> \(frameAfter), \
+                index \(indexBefore) -> \(assembly.session.queue.currentIndex), \
+                raw \(assembly.backend.lastRawSampleTime.map(String.init) ?? "none"), \
+                offset \(assembly.backend.timelineOffset), \
+                discontinuities \(assembly.backend.clockDiscontinuityCount), \
+                rebase '\(assembly.backend.lastClockRebaseDescription)'
+                """)
+            #expect(frameAfter > frameBefore + 88_200,
+                    "the logical clock froze across the engine restart: \(frameBefore) -> \(frameAfter)")
+            #expect(assembly.session.queue.currentIndex > indexBefore,
+                    "the boundary was never applied after the engine restart")
+        }
+    }
+
     // MARK: - Single-owner production proof
 
     /// Every production player-node mutation — scheduleBuffer, play, pause, stop — executes inside

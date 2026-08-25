@@ -67,7 +67,58 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
 
     /// Timeline frames completed by schedules that have since been torn down (seek, skip). The
     /// player node's own sample clock resets on `stop()`, so this keeps the timeline monotonic.
-    private var timelineOffset: AVAudioFramePosition = 0
+    /// Readable for diagnostics: raw clock vs `timelineOffset` vs logical frame is what
+    /// distinguishes "audio stopped" from "the raw clock rebased and nobody rebased the epoch".
+    private(set) var timelineOffset: AVAudioFramePosition = 0
+
+    // MARK: - Raw-clock forensics (detect-only)
+    //
+    // The session-index freeze observed on device is consistent with the node's raw sample clock
+    // rebasing UNCOMMANDED (route/engine reconfiguration) while the monotonic clamp pins the
+    // logical frame at its old high-water mark. The commanded paths — `resetTail()` and teardown —
+    // already rebase `timelineOffset` correctly. Until the mechanism is proven, this block only
+    // OBSERVES: it retains the previous raw reading, flags the two commanded windows, and records a
+    // material raw regression outside them. It changes no behaviour.
+
+    /// Raw `playerTime` retained from the previous read, for discontinuity comparison. Cleared
+    /// around commanded resets so the first post-reset reading is a new epoch, not a regression.
+    private(set) var lastRawSampleTime: AVAudioFramePosition?
+    private(set) var lastRawSampleRate: Double?
+    /// True inside `resetTail()` and teardown, the two paths that legitimately reset the raw clock.
+    private(set) var commandedClockResetInProgress = false
+    /// What last rebased (or failed to rebase) the clock epoch, for the Debug screen and export.
+    private(set) var lastClockRebaseDescription = "none"
+    private(set) var clockDiscontinuityCount = 0
+    /// A raw regression must exceed measured jitter by a wide margin to count. Jitter was measured
+    /// at under ~1,000 frames; one second is 44,100.
+    private static let discontinuityThresholdFrames: AVAudioFramePosition = 44_100
+
+    /// Retain the raw reading and record — never act on — a material uncommanded regression.
+    private func noteRawClockReading(_ playerTime: AVAudioTime) {
+        defer {
+            lastRawSampleTime = playerTime.sampleTime
+            lastRawSampleRate = playerTime.sampleRate
+        }
+        guard !commandedClockResetInProgress, clockOverride == nil,
+              let previous = lastRawSampleTime else { return }
+        let regressed = previous - playerTime.sampleTime > Self.discontinuityThresholdFrames
+        let rateChanged = lastRawSampleRate.map { $0 != playerTime.sampleRate } ?? false
+        guard regressed || rateChanged else { return }
+        clockDiscontinuityCount += 1
+        lastClockRebaseDescription = """
+            DISCONTINUITY observed (unhandled): raw \(previous) -> \(playerTime.sampleTime) \
+            @ \(lastRawSampleRate ?? 0) -> \(playerTime.sampleRate) Hz, \
+            logical \(monotonicFrame), offset \(timelineOffset), tail \(tailGeneration)
+            """
+        log.warning("""
+            raw-clock discontinuity (unhandled): raw \(previous, privacy: .public) -> \
+            \(playerTime.sampleTime, privacy: .public), rate \
+            \(self.lastRawSampleRate ?? 0, privacy: .public) -> \
+            \(playerTime.sampleRate, privacy: .public), logical frame \
+            \(self.monotonicFrame, privacy: .public), timeline offset \
+            \(self.timelineOffset, privacy: .public), tail \(self.tailGeneration, privacy: .public)
+            """)
+    }
     /// Frame at which the current schedule begins on the timeline.
     private(set) var scheduleOriginFrame: AVAudioFramePosition = 0
     /// Identity of the current scheduled tail. Bumped by every replacement, so audio and callbacks
@@ -352,6 +403,13 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// closes the sources — follows it on the same actor turn rather than racing it. A refill
     /// wakeup that arrives mid-teardown waits its turn on the actor and then finds nothing to do.
     private func releaseTransportResources() async {
+        commandedClockResetInProgress = true
+        lastRawSampleTime = nil
+        lastRawSampleRate = nil
+        defer {
+            lastClockRebaseDescription = "commanded teardown"
+            commandedClockResetInProgress = false
+        }
         if let audioDomain {
             await audioDomain.stopAndReset()
             await refreshReadout(from: audioDomain)
@@ -449,6 +507,15 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     func resetTail() async -> AVAudioFramePosition {
         let resumeFrame = renderFrame
         let wasPlaying = state == .playing
+        // A commanded epoch change: the raw clock is about to reset because we are stopping the
+        // node, and the offset arithmetic below rebases for it. The forensics must not count it.
+        commandedClockResetInProgress = true
+        lastRawSampleTime = nil
+        lastRawSampleRate = nil
+        defer {
+            lastClockRebaseDescription = "commanded tail reset at frame \(resumeFrame)"
+            commandedClockResetInProgress = false
+        }
         let domain = await ensureAudioDomain()
         // EVERY segment record is dropped, including the audible one — the node stop discards its
         // remaining audio along with the rest, so keeping its record would describe audio that no
@@ -514,6 +581,7 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         let sampled: AVAudioFramePosition
         if let nodeTime = engine.player.lastRenderTime,
            let playerTime = engine.player.playerTime(forNodeTime: nodeTime) {
+            noteRawClockReading(playerTime)
             sampled = timelineOffset + playerTime.sampleTime
         } else {
             sampled = timelineOffset
