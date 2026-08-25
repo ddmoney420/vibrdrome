@@ -130,13 +130,13 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(false) {
                 let files = try makeFiles(["t0"], in: directory)
                 let (router, legacy) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "t0"), from: [makeSong(id: "t0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
 
                 #expect(legacy.playCalls.count == 1, "flag Off did not start legacy")
                 #expect(heartbeat(router).startCount == 0, "flag Off started a heartbeat")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -151,7 +151,6 @@ struct PersistentHeartbeatTests {
                     url: url, frequency: 440, frames: Self.trackFrames,
                     sampleRate: Self.sampleRate, channelCount: 6)
                 let (router, legacy) = makeProductionRouter(files: ["s0": url], directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "s0"), from: [makeSong(id: "s0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
@@ -160,6 +159,7 @@ struct PersistentHeartbeatTests {
                 #expect(legacy.playCalls.count == 1)
                 #expect(heartbeat(router).startCount == 0,
                         "a legacy session started a persistent heartbeat")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -171,7 +171,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["t0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 let assembly = try router.preparePersistentBackend()
                 let planner = PlaybackSessionSelectionPlanner(
@@ -184,6 +183,7 @@ struct PersistentHeartbeatTests {
                         "planning or construction started a heartbeat")
                 #expect(assembly.backend.state == .idle,
                         "planning started the backend")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -200,7 +200,6 @@ struct PersistentHeartbeatTests {
                 let ids = ["a0", "a1", "a2"]
                 let files = try makeFiles(ids, in: directory)
                 let (router, legacy) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let songs = ids.map { makeSong(id: $0) }
 
                 router.play(song: songs[0], from: songs, at: 0)
@@ -211,6 +210,7 @@ struct PersistentHeartbeatTests {
                 #expect(legacy.playCalls.isEmpty, "legacy transport was started")
                 guard let assembly = router.persistentAssembly else {
                     Issue.record("no persistent assembly")
+                    await router.releaseSessionForTesting()
                     return
                 }
                 let beatAfterStart = heartbeat(router)
@@ -259,23 +259,25 @@ struct PersistentHeartbeatTests {
                 let afterStop = heartbeat(router)
                 #expect(afterStop.isRunning == false, "the heartbeat outlived Stop")
                 #expect(afterStop.cancellationCount >= 1)
-                #expect(assembly.backend.scheduledSegments.isEmpty)
-                #expect(assembly.backend.bufferScheduler.pool.inFlightCount == 0,
+                await assembly.backend.settleTransport()
+                let snap = await assembly.backend.domainSnapshotForTesting
+                #expect(snap.scheduledSegments == 0)
+                #expect(snap.poolInFlight == 0,
                         "buffers stayed out of the pool after Stop")
-                #expect(assembly.backend.bufferScheduler.pool.availableCount
-                        == assembly.backend.bufferScheduler.pool.capacity,
+                #expect(snap.poolAvailable == snap.poolCapacity,
                         "the pool did not fully recover after Stop")
-                #expect(assembly.backend.bufferScheduler.liveSourceCount == 0,
+                #expect(snap.liveSources == 0,
                         "source files stayed live after Stop")
-                #expect(assembly.backend.bufferScheduler.activeConverterCount == 0,
+                #expect(snap.activeConverters == 0,
                         "converters stayed live after Stop")
-                #expect(assembly.backend.openFileCount == 0)
+                #expect(snap.openFiles == 0)
 
                 // And it really is stopped: the tick count stops moving.
                 let ticksAtStop = heartbeat(router).tickCount
                 try? await Task.sleep(for: .milliseconds(300))
                 #expect(heartbeat(router).tickCount == ticksAtStop,
                         "ticks continued after Stop")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -286,7 +288,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["b0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let song = makeSong(id: "b0")
 
                 router.play(song: song, from: [song], at: 0)
@@ -302,6 +303,7 @@ struct PersistentHeartbeatTests {
                         "the audible callback never reached the ownership latch")
                 #expect(router.ownership.isFallbackPermitted == false)
                 #expect(router.diagnostics.audibleBoundaryReached)
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -314,7 +316,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["c0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let song = makeSong(id: "c0")
 
                 router.play(song: song, from: [song], at: 0)
@@ -330,6 +331,7 @@ struct PersistentHeartbeatTests {
                         "\(beat.peakConcurrentCount) heartbeats ticked at once")
                 #expect(beat.cancellationCount >= 1,
                         "the replaced session's heartbeat was never cancelled")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -340,13 +342,13 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["d0", "d1"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let songs = ["d0", "d1"].map { makeSong(id: $0) }
 
                 router.play(song: songs[0], from: songs, at: 0)
                 await router.awaitPendingSelectionForTesting()
                 guard let assembly = router.persistentAssembly else {
                     Issue.record("no assembly")
+                    await router.releaseSessionForTesting()
                     return
                 }
                 await waitFor(seconds: 10) { router.ownership.audibleBoundaryReached }
@@ -378,6 +380,7 @@ struct PersistentHeartbeatTests {
                         "automatic progression did not resume")
                 let heard = assembly.controller.observedBoundaries.map(\.songID)
                 #expect(heard == ["d0", "d1"], "boundaries after resume were \(heard)")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -390,7 +393,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["e0", "e1"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "e0"), from: [makeSong(id: "e0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
@@ -406,6 +408,7 @@ struct PersistentHeartbeatTests {
                 #expect(beat.cancellationCount >= 1, "the old heartbeat was never cancelled")
                 #expect(beat.peakConcurrentCount <= 1,
                         "\(beat.peakConcurrentCount) heartbeats ticked at once during replacement")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -416,7 +419,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["f0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "f0"), from: [makeSong(id: "f0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
@@ -430,6 +432,7 @@ struct PersistentHeartbeatTests {
                 #expect(router.ownership.authority == .legacy)
                 #expect(heartbeat(router).isRunning == false,
                         "the heartbeat survived a switch to legacy")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -440,17 +443,20 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["g0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "g0"), from: [makeSong(id: "g0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
                 #expect(heartbeat(router).isRunning)
 
                 router.startRadio(artistName: "Probe")
+                // Replacing the live persistent session is an ordered transition now — teardown
+                // (which cancels the heartbeat) is awaited before legacy takes the session.
+                await router.awaitPendingSelectionForTesting()
 
                 #expect(router.ownership.authority == .legacy)
                 #expect(heartbeat(router).isRunning == false,
                         "the heartbeat survived a radio session")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -461,7 +467,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["h0"], in: directory)
                 let (router, legacy) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 // Build the assembly first so its start can be made to fail.
                 let assembly = try router.preparePersistentBackend()
                 assembly.backend.activateAudioSession = { throw CocoaError(.fileNoSuchFile) }
@@ -476,7 +481,9 @@ struct PersistentHeartbeatTests {
                 #expect(heartbeat(router).startCount == 0,
                         "a heartbeat started for a session that never played")
                 // And the backend the fallback reset is idle, with nothing ticking it.
+                await assembly.backend.settleTransport()
                 #expect(assembly.backend.state == .idle)
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -534,7 +541,6 @@ struct PersistentHeartbeatTests {
             try await withRoutingFlag(true) {
                 let files = try makeFiles(["j0"], in: directory)
                 let (router, _) = makeProductionRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
 
                 router.play(song: makeSong(id: "j0"), from: [makeSong(id: "j0")], at: 0)
                 await router.awaitPendingSelectionForTesting()
@@ -556,6 +562,7 @@ struct PersistentHeartbeatTests {
 
                 router.stop()
                 #expect(router.diagnostics.summary.contains("Persistent heartbeat: Stopped"))
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -573,7 +580,7 @@ struct PersistentHeartbeatTests {
                 await router.awaitPendingSelectionForTesting()
                 #expect(heartbeat(router).isRunning, "the fixture never started a heartbeat")
 
-                router.releaseSessionForTesting()
+                await router.releaseSessionForTesting()
 
                 let beat = heartbeat(router)
                 #expect(beat.isRunning == false, "teardown left a heartbeat running")
@@ -581,7 +588,8 @@ struct PersistentHeartbeatTests {
                 if let assembly = router.persistentAssembly {
                     #expect(assembly.backend.state == .idle)
                     #expect(assembly.backend.engine.engine.isRunning == false)
-                    #expect(assembly.backend.bufferScheduler.pool.inFlightCount == 0)
+                    let snap = await assembly.backend.domainSnapshotForTesting
+                    #expect(snap.poolInFlight == 0)
                 }
                 // And no tick lands afterwards.
                 let ticks = beat.tickCount

@@ -91,6 +91,7 @@ struct GaplessLeakProbeTests {
                      openFiles, backend.scheduledSegments.count,
                      controller.observedBoundaries.count))
         controller.stop()
+        await backend.settleTransport()
         if visualizer { backend.engine.uninstallVisualizerFeed() }
     }
 

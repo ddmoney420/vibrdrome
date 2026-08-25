@@ -69,14 +69,14 @@ struct GaplessControllerGapTests {
         return nil
     }
 
-    /// The invariants every mutation test shares, checked against the scheduler rather than described.
-    static func assertHealthy(_ rig: Rig, label: String) {
-        let scheduler = rig.backend.bufferScheduler
-        #expect(scheduler.staleRecycles == 0, "\(label): \(scheduler.staleRecycles) stale recycles")
-        #expect(scheduler.pool.availableCount + scheduler.pool.inFlightCount == scheduler.pool.capacity,
-                "\(label): buffers lost — \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)")
-        #expect(scheduler.chunkAccountingBalances,
-                "\(label): \(scheduler.chunksScheduled) scheduled vs \(scheduler.chunksRecycled) recycled + \(scheduler.chunksReclaimedAtStop) reclaimed")
+    /// The invariants every mutation test shares, checked against the domain rather than described.
+    static func assertHealthy(_ rig: Rig, label: String) async {
+        let snap = await rig.backend.domainSnapshotForTesting
+        #expect(snap.staleRecycles == 0, "\(label): \(snap.staleRecycles) stale recycles")
+        #expect(snap.poolAvailable + snap.poolInFlight == snap.poolCapacity,
+                "\(label): buffers lost — \(snap.poolAvailable)+\(snap.poolInFlight)")
+        #expect(snap.accountingBalances,
+                "\(label): \(snap.chunksScheduled) scheduled vs \(snap.chunksRecycled) recycled + \(snap.chunksReclaimedAtStop) reclaimed")
     }
 
     enum Mutation: String, CaseIterable {
@@ -92,14 +92,13 @@ struct GaplessControllerGapTests {
     func mutationsNearBoundaryKeepOnlyTheFinalTail(mutation: Mutation, lead: Double) async throws {
         let rig = try GaplessBufferIntegrationTests.makeRig(trackCount: 6, frames: 22_050)
         defer { GaplessBufferIntegrationTests.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
 
         let capture = GaplessRealTimeCapture(engine: rig.engine)
         capture.start()
         try await rig.controller.play()
         await GaplessBufferIntegrationTests.run(rig, seconds: 0.4)
 
-        let tailBefore = scheduler.tailGeneration
+        let tailBefore = (await rig.backend.domainReadoutForTesting).tailGeneration
         let aimed = await Self.runUntilBeforeBoundary(rig, milliseconds: lead)
         #expect(aimed != nil, "never reached a boundary at lead \(Int(lead)) ms — the mutation would land at an arbitrary moment")
         let frameAtMutation = rig.backend.renderFrame
@@ -130,16 +129,18 @@ struct GaplessControllerGapTests {
         let boundaries = rig.controller.observedBoundaries
         let instances = boundaries.map(\.playInstance)
         let gap = capture.longestSilenceSeconds(sampleRate: Self.sampleRate)
+        let readout = await rig.backend.domainReadoutForTesting
+        let snap = readout.snapshot
         print("""
             CIMUT \(mutation.rawValue)@\(Int(lead))ms  aimed \(aimed.map(String.init) ?? "none")  \
             frameAtMutation \(frameAtMutation)  \
             heard \(boundaries.map(\.songID))  \
             instances \(instances.count) distinct \(Set(instances).count)  \
-            tail \(tailBefore)->\(scheduler.tailGeneration)  \
+            tail \(tailBefore)->\(readout.tailGeneration)  \
             gap \(String(format: "%.4f", gap))s  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)+\(scheduler.chunksReclaimedAtStop)  \
-            stale \(scheduler.staleRecycles)  starv \(scheduler.poolStarvations)
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)+\(snap.chunksReclaimedAtStop)  \
+            stale \(snap.staleRecycles)  starv \(snap.poolStarvations)
             """)
 
         // One play instance per actual play — never reused across two plays.
@@ -152,12 +153,12 @@ struct GaplessControllerGapTests {
         // A mutation that touches the tail must advance the tail generation; a repeat-mode change
         // that does not need a rebuild legitimately may not.
         if mutation != .repeatModeChange {
-            #expect(scheduler.tailGeneration > tailBefore,
+            #expect(readout.tailGeneration > tailBefore,
                     "\(mutation.rawValue)@\(Int(lead))ms did not rebuild the tail")
         }
         // Audible continuity: the documented limit is the hardware buffer, well under 100 ms.
         #expect(gap < 0.1, "\(mutation.rawValue)@\(Int(lead))ms left a \(gap)s gap")
-        Self.assertHealthy(rig, label: "\(mutation.rawValue)@\(Int(lead))ms")
+        await Self.assertHealthy(rig, label: "\(mutation.rawValue)@\(Int(lead))ms")
         #expect(rig.backend.state == .playing, "engine was replaced or stopped")
     }
 
@@ -174,11 +175,10 @@ struct GaplessControllerGapTests {
         let rig = try GaplessBufferIntegrationTests.makeRig(trackCount: 4, frames: 96_000,
                                                             sampleRate: 48_000, channels: 1)
         defer { GaplessBufferIntegrationTests.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
 
         try await rig.controller.play()
         await GaplessBufferIntegrationTests.run(rig, seconds: 0.6)
-        let tailBefore = scheduler.tailGeneration
+        let tailBefore = (await rig.backend.domainReadoutForTesting).tailGeneration
         let boundariesBefore = rig.controller.observedBoundaries.count
         let wasPlaying = rig.backend.state == .playing
 
@@ -223,13 +223,15 @@ struct GaplessControllerGapTests {
         let elapsed = rig.backend.clockReading(generation: rig.session.queue.generation).elapsedSeconds
         await GaplessBufferIntegrationTests.run(rig, seconds: 0.6)
 
+        let readout = await rig.backend.domainReadoutForTesting
+        let snap = readout.snapshot
         print("""
             CISEEK \(seekCase.rawValue)  state \(rig.backend.state)  \
             elapsed \(String(format: "%.3f", elapsed))s  \
-            tail \(tailBefore)->\(scheduler.tailGeneration)  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)+\(scheduler.chunksReclaimedAtStop)  \
-            stale \(scheduler.staleRecycles)  starv \(scheduler.poolStarvations)  \
+            tail \(tailBefore)->\(readout.tailGeneration)  \
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)+\(snap.chunksReclaimedAtStop)  \
+            stale \(snap.staleRecycles)  starv \(snap.poolStarvations)  \
             liveFiles \(GaplessPCMChunkSource.liveFileCount)  \
             liveConverters \(GaplessPCMConverter.liveCount)
             """)
@@ -257,16 +259,19 @@ struct GaplessControllerGapTests {
         } else if seekCase != .beyondDuration {
             #expect(rig.backend.state == .playing || !wasPlaying)
         }
-        #expect(scheduler.tailGeneration > tailBefore, "seek did not rebuild the tail")
-        for segment in scheduler.segments {
+        #expect(readout.tailGeneration > tailBefore, "seek did not rebuild the tail")
+        for segment in readout.segments {
             #expect(segment.frameCount > 0, "seek produced a zero-length span for \(segment.songID)")
         }
-        Self.assertHealthy(rig, label: "seek \(seekCase.rawValue)")
+        await Self.assertHealthy(rig, label: "seek \(seekCase.rawValue)")
 
         rig.controller.stop()
-        scheduler.reconcileLateCallbacks()
-        #expect(scheduler.pool.availableCount == scheduler.pool.capacity,
-                "seek \(seekCase.rawValue) left \(scheduler.pool.inFlightCount) buffers out after stop")
+        // The ordered teardown reconciles the node's late callbacks itself; settling is what makes
+        // the recovery below a post-teardown fact rather than a race.
+        await rig.backend.settleTransport()
+        let recovered = await rig.backend.domainSnapshotForTesting
+        #expect(recovered.poolAvailable == recovered.poolCapacity,
+                "seek \(seekCase.rawValue) left \(recovered.poolInFlight) buffers out after stop")
     }
 
     /// The same matrix reduced to forward/backward, on **real encoded** media where trimming is real:
@@ -320,14 +325,15 @@ struct GaplessControllerGapTests {
         for _ in 0..<60 { await controller.tick(); try? await Task.sleep(for: .milliseconds(4)) }
         let afterBackward = backend.clockReading(generation: session.queue.generation).elapsedSeconds
 
-        let scheduler = backend.bufferScheduler
+        let readout = await backend.domainReadoutForTesting
+        let snap = readout.snapshot
         print("""
             CISEEKREAL \(album)  trims \(trims)  \
             afterForward \(String(format: "%.3f", afterForward))s  \
             afterBackward \(String(format: "%.3f", afterBackward))s  \
-            tail \(scheduler.tailGeneration)  stale \(scheduler.staleRecycles)  \
-            starv \(scheduler.poolStarvations)  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)
+            tail \(readout.tailGeneration)  stale \(snap.staleRecycles)  \
+            starv \(snap.poolStarvations)  \
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)
             """)
 
         // Elapsed maps into the track, near where we asked, and the backward seek genuinely moved
@@ -335,8 +341,8 @@ struct GaplessControllerGapTests {
         #expect(afterForward >= 3.9, "forward seek landed at \(afterForward)s")
         #expect(afterBackward < afterForward, "backward seek did not move back: \(afterBackward)s")
         #expect(afterBackward >= 0.9, "backward seek landed at \(afterBackward)s")
-        #expect(scheduler.staleRecycles == 0)
-        #expect(scheduler.pool.availableCount + scheduler.pool.inFlightCount == scheduler.pool.capacity)
+        #expect(snap.staleRecycles == 0)
+        #expect(snap.poolAvailable + snap.poolInFlight == snap.poolCapacity)
     }
 
     // MARK: - Controller-level conversion failure
@@ -358,7 +364,6 @@ struct GaplessControllerGapTests {
             GaplessPCMConverter.injectedFailure = nil
             GaplessBufferIntegrationTests.teardown(rig)
         }
-        let scheduler = rig.backend.bufferScheduler
         if context == .repeatAll { rig.session.setRepeatMode(.all) }
 
         let capture = GaplessRealTimeCapture(engine: rig.engine)
@@ -374,7 +379,7 @@ struct GaplessControllerGapTests {
         GaplessPCMConverter.injectedFailure = .beforeFirstOutput
         await GaplessBufferIntegrationTests.run(rig, seconds: 1.5)
 
-        let failuresDuringInjection = scheduler.failures.count
+        let failuresDuringInjection = (await rig.backend.domainSnapshotForTesting).sourceFailures
         let boundariesDuringInjection = rig.controller.observedBoundaries.count
         let audibleDuring = rig.session.audibleItemID
 
@@ -385,29 +390,31 @@ struct GaplessControllerGapTests {
         capture.stop()
 
         let recovered = rig.controller.observedBoundaries.count - boundariesDuringInjection
+        let readout = await rig.backend.domainReadoutForTesting
+        let snap = readout.snapshot
         print("""
             CIFAIL \(context.rawValue)  audibleBefore \(String(describing: audibleBefore))  \
             audibleDuring \(String(describing: audibleDuring))  \
             failures \(failuresDuringInjection)  \
             boundaries \(boundariesBefore)->\(boundariesDuringInjection) recovered +\(recovered)  \
             heard \(rig.controller.observedBoundaries.map(\.songID))  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)+\(scheduler.chunksReclaimedAtStop)  \
-            stale \(scheduler.staleRecycles)  \
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)+\(snap.chunksReclaimedAtStop)  \
+            stale \(snap.staleRecycles)  \
             liveConverters \(GaplessPCMConverter.liveCount)  \
             liveFiles \(GaplessPCMChunkSource.liveFileCount)
             """)
 
         // Every boundary names a song that genuinely produced audio — no phantom item.
         for boundary in rig.controller.observedBoundaries {
-            let segment = scheduler.segments.first { $0.playInstance == boundary.playInstance }
+            let segment = readout.segments.first { $0.playInstance == boundary.playInstance }
             if let segment { #expect(segment.frameCount > 0, "\(boundary.songID) claims a zero span") }
         }
         // The engine is still playing the track it was playing; the failure did not take it down.
         #expect(rig.backend.state == .playing || rig.backend.state == .paused)
         // Recovery works: after the fault is cleared a queue replacement produces new audio.
         #expect(recovered > 0, "no recovery after the conversion fault was cleared")
-        Self.assertHealthy(rig, label: "failure \(context.rawValue)")
+        await Self.assertHealthy(rig, label: "failure \(context.rawValue)")
     }
 
     // MARK: - Compact transport stress
@@ -418,7 +425,6 @@ struct GaplessControllerGapTests {
     func compactTransportStress() async throws {
         let rig = try GaplessBufferIntegrationTests.makeRig(trackCount: 12, frames: 22_050)
         defer { GaplessBufferIntegrationTests.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
         rig.session.setRepeatMode(.all)
 
         try await rig.controller.play()
@@ -440,7 +446,11 @@ struct GaplessControllerGapTests {
         for _ in 0..<50 { try await rig.controller.next(); await settle() }
         for _ in 0..<50 { _ = try await rig.controller.previous(elapsedSeconds: 5); await settle() }
         for index in 0..<50 { try await rig.controller.seek(toSeconds: Double(index % 4) * 0.1); await settle() }
-        for _ in 0..<50 { rig.backend.resetTail(); await rig.controller.replenishTail(); await settle(2) }
+        for _ in 0..<50 {
+            await rig.backend.resetTail()
+            await rig.controller.replenishTail()
+            await settle(2)
+        }
         for index in 0..<50 { try await rig.controller.playNext(songID: "s\(index % 12)"); await settle(2) }
         for _ in 0..<50 {
             if let item = rig.session.queue.items.dropFirst(2).first {
@@ -475,14 +485,16 @@ struct GaplessControllerGapTests {
         let growthMB = Double(Int64(GaplessBufferFixtures.physFootprint()) - Int64(baseline)) / 1_048_576
         let descriptorGrowth = GaplessBufferFixtures.openFileDescriptorCount() - baselineDescriptors
         let instances = rig.controller.observedBoundaries.map(\.playInstance)
+        let readout = await rig.backend.domainReadoutForTesting
+        let snap = readout.snapshot
 
         print("""
             CISTRESS commands 375  growth \(String(format: "%.2f", growthMB)) MB  \
             fdDelta \(descriptorGrowth)  peakConverters \(peakConverters)  peakFiles \(peakFiles)  \
-            tail \(scheduler.tailGeneration)  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)+\(scheduler.chunksReclaimedAtStop)  \
-            stale \(scheduler.staleRecycles)  starv \(scheduler.poolStarvations)  \
+            tail \(readout.tailGeneration)  \
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)+\(snap.chunksReclaimedAtStop)  \
+            stale \(snap.staleRecycles)  starv \(snap.poolStarvations)  \
             boundaries \(instances.count) distinct \(Set(instances).count)  \
             queue \(rig.session.queue.count)  state \(rig.backend.state)
             """)
@@ -492,9 +504,9 @@ struct GaplessControllerGapTests {
         #expect(descriptorGrowth <= 8, "descriptors grew \(descriptorGrowth)")
         #expect(peakConverters <= 6, "converters accumulated to \(peakConverters)")
         #expect(peakFiles <= 6, "files accumulated to \(peakFiles)")
-        #expect(scheduler.staleRecycles == 0)
-        #expect(scheduler.pool.availableCount + scheduler.pool.inFlightCount == scheduler.pool.capacity)
-        #expect(scheduler.chunkAccountingBalances)
+        #expect(snap.staleRecycles == 0)
+        #expect(snap.poolAvailable + snap.poolInFlight == snap.poolCapacity)
+        #expect(snap.accountingBalances)
         #expect(rig.session.queue.count > 0, "queue was corrupted")
     }
 
@@ -508,42 +520,35 @@ struct GaplessControllerGapTests {
     @Test func chunkAccountingReconcilesThroughStop() async throws {
         let rig = try GaplessBufferIntegrationTests.makeRig(trackCount: 6, frames: 22_050)
         defer { GaplessBufferIntegrationTests.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
         rig.session.setRepeatMode(.all)
+
+        func sample() async -> (scheduled: Int, recycled: Int, reclaimed: Int, available: Int,
+                                inFlight: Int, outstanding: Int, inbox: Int, files: Int,
+                                converters: Int) {
+            let snap = await rig.backend.domainSnapshotForTesting
+            return (scheduled: snap.chunksScheduled, recycled: snap.chunksRecycled,
+                    reclaimed: snap.chunksReclaimedAtStop,
+                    available: snap.poolAvailable, inFlight: snap.poolInFlight,
+                    outstanding: snap.scheduledDepth, inbox: snap.pendingRecycleTokens,
+                    files: GaplessPCMChunkSource.liveFileCount,
+                    converters: GaplessPCMConverter.liveCount)
+        }
 
         try await rig.controller.play()
         await GaplessBufferIntegrationTests.run(rig, seconds: 4)
 
-        let beforeStop = (scheduled: scheduler.chunksScheduled, recycled: scheduler.chunksRecycled,
-                          reclaimed: scheduler.chunksReclaimedAtStop,
-                          available: scheduler.pool.availableCount,
-                          inFlight: scheduler.pool.inFlightCount,
-                          outstanding: scheduler.outstandingCallbackCount,
-                          inbox: scheduler.inbox.pendingCount,
-                          files: GaplessPCMChunkSource.liveFileCount,
-                          converters: GaplessPCMConverter.liveCount)
+        let beforeStop = await sample()
 
+        // The stop is a synchronous façade over an ordered teardown; the "after stop" ledger is the
+        // one the completed teardown leaves, which settling is what makes readable.
         rig.controller.stop()
-        let afterStop = (scheduled: scheduler.chunksScheduled, recycled: scheduler.chunksRecycled,
-                         reclaimed: scheduler.chunksReclaimedAtStop,
-                         available: scheduler.pool.availableCount,
-                         inFlight: scheduler.pool.inFlightCount,
-                         outstanding: scheduler.outstandingCallbackCount,
-                         inbox: scheduler.inbox.pendingCount,
-                         files: GaplessPCMChunkSource.liveFileCount,
-                         converters: GaplessPCMConverter.liveCount)
+        await rig.backend.settleTransport()
+        let afterStop = await sample()
 
         // Let any completion handlers the node delivered as it stopped arrive, then fold them in.
         try? await Task.sleep(for: .milliseconds(500))
-        let late = scheduler.reconcileLateCallbacks()
-        let afterDrain = (scheduled: scheduler.chunksScheduled, recycled: scheduler.chunksRecycled,
-                          reclaimed: scheduler.chunksReclaimedAtStop,
-                          available: scheduler.pool.availableCount,
-                          inFlight: scheduler.pool.inFlightCount,
-                          outstanding: scheduler.outstandingCallbackCount,
-                          inbox: scheduler.inbox.pendingCount,
-                          files: GaplessPCMChunkSource.liveFileCount,
-                          converters: GaplessPCMConverter.liveCount)
+        let late = await rig.backend.audioDomain?.reconcileLateCallbacks() ?? 0
+        let afterDrain = await sample()
 
         print("""
             CIRECON before  sched \(beforeStop.scheduled) recycled \(beforeStop.recycled) reclaimed \(beforeStop.reclaimed)  \
@@ -568,7 +573,8 @@ struct GaplessControllerGapTests {
         #expect(afterDrain.scheduled == afterDrain.recycled + afterDrain.reclaimed,
                 "after drain: \(afterDrain.scheduled) != \(afterDrain.recycled) + \(afterDrain.reclaimed)")
         // Everything else returns to its resting state.
-        #expect(afterDrain.available == scheduler.pool.capacity, "pool not full: \(afterDrain.available)")
+        let capacity = (await rig.backend.domainSnapshotForTesting).poolCapacity
+        #expect(afterDrain.available == capacity, "pool not full: \(afterDrain.available)")
         #expect(afterDrain.inFlight == 0)
         #expect(afterDrain.outstanding == 0)
         #expect(afterDrain.inbox == 0)

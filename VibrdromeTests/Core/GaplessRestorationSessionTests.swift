@@ -350,14 +350,14 @@ struct GaplessRestorationSessionTests {
     // MARK: - Passive reconstruction
 
     /// A configuration change or media-services reset rebuilds the graph without activating.
-    @Test func reconstructionIsPassiveAndProducesExactlyOneOfEachComponent() throws {
+    @Test func reconstructionIsPassiveAndProducesExactlyOneOfEachComponent() async throws {
         let audio = GaplessAudioSessionCoordinator()
         var activated = 0
         audio.activateSession = { activated += 1 }
         let backend = GaplessRealTimeBackend()
         backend.activateAudioSession = { try audio.activateForPlayback() }
         try backend.prepareGraph()
-        try backend.start()
+        try await backend.start()
         #expect(activated == 1)
 
         // Capture the tail identity BEFORE teardown — stop() bumps it, which is precisely how
@@ -365,6 +365,7 @@ struct GaplessRestorationSessionTests {
         let staleTail = backend.tailGeneration
         // The engine goes away, as a configuration change or media-services reset forces.
         backend.stop()
+        await backend.settleTransport()
 
         // Rebuild — passively.
         try backend.prepareGraph()
@@ -384,7 +385,7 @@ struct GaplessRestorationSessionTests {
     }
 
     /// Repeated reset notifications must not accumulate components or observers.
-    @Test func repeatedResetsDoNotAccumulateComponents() throws {
+    @Test func repeatedResetsDoNotAccumulateComponents() async throws {
         let audio = GaplessAudioSessionCoordinator()
         var activated = 0
         audio.activateSession = { activated += 1 }
@@ -398,6 +399,7 @@ struct GaplessRestorationSessionTests {
             try backend.prepareGraph()
             backend.engine.installVisualizerFeed()
             backend.stop()
+            await backend.settleTransport()
             backend.engine.uninstallVisualizerFeed()
         }
 
@@ -409,7 +411,7 @@ struct GaplessRestorationSessionTests {
     }
 
     /// Queue, position and metadata survive a reset; only the engine is rebuilt.
-    @Test func resetPreservesQueuePositionAndMetadata() throws {
+    @Test func resetPreservesQueuePositionAndMetadata() async throws {
         let session = Self.makeSession(["a", "b", "c"], duration: 10)
         let coordinator = GaplessRestorationCoordinator(session: session)
         coordinator.restorePassively(Self.state(["a", "b", "c"], index: 1, elapsed: 4),
@@ -426,6 +428,7 @@ struct GaplessRestorationSessionTests {
         // Simulate the reset: the engine is discarded, the logical state is not.
         let backend = GaplessRealTimeBackend()
         backend.stop()
+        await backend.settleTransport()
         try backend.prepareGraph()
 
         #expect(session.queue.count == 3)

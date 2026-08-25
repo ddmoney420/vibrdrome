@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+@testable import Vibrdrome
 
 /// Stereo 44.1 kHz fixtures for the buffer-scheduler proof.
 ///
@@ -141,5 +142,44 @@ enum GaplessBufferFixtures {
         var zone = malloc_statistics_t()
         malloc_zone_statistics(nil, &zone)
         return UInt64(zone.size_in_use)
+    }
+}
+
+// MARK: - Domain readback for tests
+
+@MainActor
+extension GaplessRealTimeBackend {
+    /// Live domain truth for assertions.
+    ///
+    /// Awaits the audio actor rather than trusting the backend's cached readout, because an
+    /// assertion about resource recovery or accounting must read what the domain actually holds
+    /// *now* — the cache is refreshed only after backend operations and is legitimately stale
+    /// between them. A backend that never scheduled has no domain; that reads as an empty snapshot,
+    /// which is exactly what "nothing allocated" should look like.
+    var domainSnapshotForTesting: GaplessAudioDomainSnapshot {
+        get async {
+            guard let audioDomain else { return GaplessAudioDomainSnapshot() }
+            return await audioDomain.snapshot()
+        }
+    }
+
+    /// Live timeline truth — segments, materialized instances and the tail generation — for tests
+    /// that assert on scheduling rather than resources.
+    var domainReadoutForTesting: GaplessAudioDomainReadout {
+        get async {
+            guard let audioDomain else { return GaplessAudioDomainReadout() }
+            return await audioDomain.readout()
+        }
+    }
+
+    /// Schedule with the current tail generation — for tests exercising the schedule path itself
+    /// rather than the supersede fence. Production callers capture the generation before their
+    /// suspensions; a test calling back-to-back on the main actor has nothing suspended, so the
+    /// current value is the honest one.
+    @discardableResult
+    func scheduleForTesting(
+        _ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID, generation: UInt64)]
+    ) async throws -> [GaplessScheduledSegment] {
+        try await schedule(tracks, expectedTailGeneration: cachedReadout.tailGeneration)
     }
 }

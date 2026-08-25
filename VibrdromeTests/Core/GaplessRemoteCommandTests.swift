@@ -125,7 +125,7 @@ struct GaplessRemoteCommandTests {
 
     /// Engine rebuilds must not duplicate handlers — registration lives above the engine precisely
     /// so a reconstruction cannot touch it.
-    @Test func engineReconstructionDoesNotDuplicateHandlers() throws {
+    @Test func engineReconstructionDoesNotDuplicateHandlers() async throws {
         let coordinator = GaplessRemoteCommandCoordinator()
         let token = coordinator.registerIfNeeded()
         let backend = GaplessRealTimeBackend()
@@ -133,6 +133,7 @@ struct GaplessRemoteCommandTests {
         for _ in 0..<5 {
             try backend.prepareGraph()
             backend.stop()
+            await backend.settleTransport()
             coordinator.registerIfNeeded()          // as app code would call on each lifecycle event
         }
 
@@ -409,6 +410,7 @@ struct GaplessRemoteCommandTests {
         try await rig.app.play()
         await Self.run(rig, until: "audio") { rig.controller.backend.renderFrame > 2_000 }
         rig.app.stop()
+        await rig.controller.backend.settleTransport()
 
         #expect(!rig.app.isTrackAudible)
         #expect(rig.app.selectEngine(for: .capable, sourceDescription: "s", trimReason: .wholeFile))

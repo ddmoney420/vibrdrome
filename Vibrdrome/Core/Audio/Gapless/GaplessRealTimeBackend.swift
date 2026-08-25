@@ -30,6 +30,14 @@ struct GaplessClockReading: Sendable, Equatable {
 /// launching the app — or restoring a queue, or preparing the lookahead — cannot interrupt whatever
 /// the user is already listening to. That is the Build 60 cold-launch behaviour, and it is preserved
 /// by making activation an explicit, separate step rather than a side effect of being ready.
+///
+/// **Division of labour with `GaplessAudioDomain`.** This backend owns the lifecycle state machine,
+/// the audio session, the engine, the render clock and boundary observation — all main-actor
+/// concerns. The domain owns the PCM pipeline and is the **only** thing that mutates the player
+/// node (`scheduleBuffer`, `play`, `pause`, `stop`), on `GaplessAudioActor`, so refill keeps
+/// running when iOS deprioritises main-actor work in the background. The backend never touches the
+/// node directly on the production path; it awaits the domain, and answers its own synchronous
+/// reads from an immutable cached readout.
 @MainActor
 final class GaplessRealTimeBackend: GaplessRenderBackend {
     let engine: PersistentGaplessEngine
@@ -42,13 +50,15 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
 
     /// Segments currently on the timeline, in play order.
     ///
-    /// Under the PCM substrate these are the scheduler's own records, whose lengths are **actually
-    /// produced output** rather than declared or ratio-estimated.
+    /// Under the PCM substrate these are the domain scheduler's own records — lengths are
+    /// **actually produced output** — read from the cached readout, which is refreshed after every
+    /// awaited domain operation and on every heartbeat tick. Boundary observation tolerates that
+    /// staleness by design; anything needing strong ordering awaits the domain instead.
     var scheduledSegments: [GaplessScheduledSegment] {
         #if DEBUG
         if schedulingMode == .fileSegment { return fileSegments }
         #endif
-        return bufferScheduler.segments
+        return cachedReadout.segments
     }
     private var pendingBoundaryEvents: [GaplessBoundaryEvent] = []
     /// Boundaries already reported, keyed by play instance so a Repeat One replay is never
@@ -91,21 +101,76 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         return true
     }
 
-    /// The PCM substrate. Built lazily so a backend that is never started allocates no pool.
+    // MARK: - The audio domain
+
+    /// The PCM substrate's owner: the one `GaplessAudioDomain` this backend ever constructs.
     ///
-    /// This backend confines its scheduler to the **main actor**, and installs the main-actor
-    /// recycle wakeup to match — which is the behaviour that has always been here, and the
-    /// behaviour that starves when iOS backgrounds the app. `GaplessAudioDomain` confines an
-    /// instance of the same type to `GaplessAudioActor` instead; a later checkpoint moves
-    /// production onto it.
-    private(set) lazy var bufferScheduler: GaplessBufferScheduler = {
-        let scheduler = GaplessBufferScheduler(
-            player: engine.player, renderFormat: engine.renderFormat)
-        scheduler.installRecycleWakeup { [weak self] in
-            Task { @MainActor [weak self] in self?.bufferScheduler.pump() }
+    /// Built on first use — a backend that is never started allocates no pool — and retained for
+    /// the backend's lifetime, so every session on this assembly reuses the same domain, the same
+    /// scheduler and the same pool. Every production player-node mutation happens inside it.
+    private(set) var audioDomain: GaplessAudioDomain?
+    /// Construction in flight, so two callers suspended across the actor hop cannot build two
+    /// domains over one node.
+    private var audioDomainConstruction: Task<GaplessAudioDomain, Never>?
+
+    private func ensureAudioDomain() async -> GaplessAudioDomain {
+        if let audioDomain { return audioDomain }
+        let construction: Task<GaplessAudioDomain, Never>
+        if let inFlight = audioDomainConstruction {
+            construction = inFlight
+        } else {
+            let handle = GaplessGraphHandle(engine: engine.engine, player: engine.player,
+                                            renderFormat: engine.renderFormat)
+            construction = Task { await GaplessAudioDomain(graph: handle) }
+            audioDomainConstruction = construction
         }
-        return scheduler
-    }()
+        let built = await construction.value
+        if audioDomain == nil { audioDomain = built }
+        audioDomainConstruction = nil
+        return built
+    }
+
+    /// The immutable readout this backend's synchronous reads are answered from.
+    ///
+    /// Refreshed after every awaited domain operation and on every tick. Good for diagnostics and
+    /// boundary scanning; never the basis for a teardown or resource decision — those await the
+    /// domain and read its answer directly.
+    private(set) var cachedReadout = GaplessAudioDomainReadout()
+
+    private func refreshReadout(from domain: GaplessAudioDomain) async {
+        cachedReadout = await domain.readout()
+    }
+
+    // MARK: - Ordered transport lane
+
+    /// The one ordered lane for transport work started by a synchronous façade call.
+    ///
+    /// `stop()`, `pause()` and `resume()` keep their synchronous application contract by enqueueing
+    /// their domain work here; each operation runs strictly after the previous one, so a teardown
+    /// and a node resume can never interleave. `settleTransport()` is the honest completion seam:
+    /// awaiting it means every transition ordered so far — including a stop's full teardown — has
+    /// finished.
+    private var orderedTransportTail: Task<Void, Never>?
+
+    private func orderTransport(_ operation: @escaping @MainActor () async -> Void) {
+        let previous = orderedTransportTail
+        orderedTransportTail = Task { @MainActor in
+            await previous?.value
+            await operation()
+        }
+    }
+
+    /// Await every transport operation ordered so far. After this returns with no new work
+    /// enqueued, a preceding `stop()` has completed its teardown and `.idle` is real.
+    func settleTransport() async {
+        while let tail = orderedTransportTail {
+            await tail.value
+            if orderedTransportTail == tail {
+                orderedTransportTail = nil
+                break
+            }
+        }
+    }
 
     #if DEBUG
     /// Open `AVAudioFile` objects for the DEBUG file-segment comparison path only.
@@ -141,7 +206,7 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         #if DEBUG
         if schedulingMode == .fileSegment { return openFiles.count }
         #endif
-        return bufferScheduler.openFileCount
+        return cachedReadout.snapshot.openFiles
     }
 
     /// Injected so tests can drive the clock deterministically instead of sleeping.
@@ -176,11 +241,19 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     }
 
     /// Begin playback. The only operation permitted to activate the audio session.
-    func start() throws {
+    ///
+    /// The ordering is the design: audio session and engine start on the main actor — the two steps
+    /// that can fail, and the application's job — then the node plays inside the audio domain, after
+    /// whatever PCM is already enqueued has been produced. The node is never played before the
+    /// engine is running.
+    func start() async throws {
+        // A stop ordered just before this start must finish tearing down first, or this start
+        // would build on state the teardown is about to clear.
+        await settleTransport()
         if state == .playing { return }                       // duplicate Play is a no-op
         guard state != .starting else { return }               // a start is already in flight
         if state == .idle { try prepareGraph() }
-        if state == .paused { try resume(); return }
+        if state == .paused { try resume(); await settleTransport(); return }
         try transition(to: .starting)
 
         do {
@@ -195,18 +268,27 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             state = .failed
             throw GaplessEngineFailure.engineStartFailed(error.localizedDescription)
         }
-        engine.player.play()
+        let domain = await ensureAudioDomain()
+        await domain.play()
+        await refreshReadout(from: domain)
         try transition(to: .playing)
     }
 
+    /// Pause the node, not the engine: the graph, the scheduled tail, the EQ and ReplayGain state
+    /// and the visualizer feed all stay exactly as they are. Synchronous façade — the node pause is
+    /// ordered onto the audio domain, guarded so a resume issued straight after wins.
     func pause() {
         guard state == .playing else { return }
-        // Pausing the node, not the engine: the graph, the scheduled tail, the EQ and ReplayGain
-        // state and the visualizer feed all stay exactly as they are.
-        engine.player.pause()
         state = .paused
+        orderTransport { [weak self] in
+            guard let self, self.state == .paused else { return }
+            await self.audioDomain?.pause()
+        }
     }
 
+    /// Resume the same session. The engine restart — the only part that can fail — stays
+    /// synchronous on the main actor, preserving the throwing contract; the node resume is ordered
+    /// onto the audio domain behind whatever transition is already in flight.
     func resume() throws {
         guard state == .paused else { return }
         if !engine.engine.isRunning {
@@ -215,28 +297,39 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
                 throw GaplessEngineFailure.engineStartFailed(error.localizedDescription)
             }
         }
-        engine.player.play()
         state = .playing
+        orderTransport { [weak self] in
+            guard let self, self.state == .playing else { return }
+            await self.audioDomain?.resume()
+        }
     }
 
-    /// End the session and leave the graph reusable.
+    /// End the session and leave the graph reusable. Synchronous façade over an ordered, awaited
+    /// teardown: `.stopping` is published immediately, `.idle` only once the domain has actually
+    /// stopped the node, drained refill, reconciled recycle tokens, reclaimed the pool and closed
+    /// its sources. `settleTransport()` is how a caller waits for that completion.
     ///
     /// **`.failed` is a stop-able state, not a dead end.** A start that threw part way still holds
     /// everything the attempt built — buffers on the player node, open source files, live
     /// converters, pool tickets — and the assembly that owns this backend is retained for the
-    /// process lifetime, so refusing to stop from `.failed` left those held and made every later
-    /// persistent session on the same instance unusable.
+    /// process lifetime, so refusing to stop from `.failed` would leave those held and make every
+    /// later persistent session on the same instance unusable.
     func stop() {
         guard state.isActive || state == .prepared || state == .failed else { return }
+        // A teardown is already ordered; a second would only release the same nothing again.
+        if state == .stopping { return }
         // `.failed` is the one entry that must not pass through `.stopping`: the state machine
         // permits exactly one exit from it, `.failed -> .idle`, because a start that failed left no
         // running graph for a "stopping" phase to describe.
         if state != .failed { state = .stopping }
-        releaseTransportResources()
-        // Set only after everything above has actually been released. A `.failed` backend that
-        // merely *reported* `.idle` while still holding buffers and files would be worse than one
-        // that stayed failed, because the next start would build on top of them.
-        state = .idle
+        orderTransport { [weak self] in
+            guard let self else { return }
+            await self.releaseTransportResources()
+            // Published only after everything above has actually been released. A backend that
+            // merely *reported* `.idle` while the domain still held buffers and files would be
+            // worse than one that stayed failed, because the next start would build on top of them.
+            self.state = .idle
+        }
     }
 
     /// Return a backend that failed to start to a reusable idle state.
@@ -244,8 +337,9 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// **Only from `.failed`.** A live session must be stopped, not reset: `stop()` is what ends
     /// audio that is or could still be flowing, and letting a reset stand in for it would tear down
     /// a playing session as though it had already died. From `.idle` there is nothing to release —
-    /// notably, this does not touch the lazily-built buffer scheduler, so a reset on a backend that
-    /// never ran allocates no pool. Idempotent: the second call sees `.idle` and does nothing.
+    /// notably, this never constructs the audio domain, so a reset on a backend that never ran
+    /// allocates no pool. Idempotent: the second call sees `.idle` and does nothing. Completion is
+    /// awaited through `settleTransport()`, same as `stop()`.
     func resetAfterFailure() {
         guard state == .failed else { return }
         stop()
@@ -253,16 +347,17 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
 
     /// Release everything a session holds. The caller owns the state transition around it.
     ///
-    /// Ordered node-first: stopping the player node is what discards its pending schedules and
-    /// returns their buffers, so the scheduler's reset — which reclaims the pool and closes the
-    /// sources — must follow it rather than race it.
-    private func releaseTransportResources() {
-        engine.player.stop()
+    /// Ordered node-first, inside the domain: stopping the player node is what discards its pending
+    /// schedules and returns their buffers, so the scheduler's reset — which reclaims the pool and
+    /// closes the sources — follows it on the same actor turn rather than racing it. A refill
+    /// wakeup that arrives mid-teardown waits its turn on the actor and then finds nothing to do.
+    private func releaseTransportResources() async {
+        if let audioDomain {
+            await audioDomain.stopAndReset()
+            await refreshReadout(from: audioDomain)
+        }
         engine.engine.stop()
         fileSegments.removeAll()
-        // Cancels live converters, closes open source files, drops segment and materialization
-        // records, clears in-flight chunks and the recycle inbox, and reclaims every pool buffer.
-        bufferScheduler.resetAfterNodeStop(resumeTimelineFrame: 0)
         pendingBoundaryEvents.removeAll()
         reportedInstances.removeAll()
         timelineOffset = 0
@@ -284,42 +379,38 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
 
     // MARK: - Scheduling
 
-    /// Append prepared tracks to the timeline.
+    /// Append prepared tracks to the timeline, as one atomic domain operation.
     ///
-    /// `scheduleSegment` is used rather than `scheduleFile` because the schedulable range is not
-    /// always the whole file — an MP3 with a valid Xing/LAME header must have its encoder delay and
-    /// padding excluded, and only the segment API can express that. The frame count comes from
-    /// `GaplessPreparedTrack.trim`, which preparation resolved from the decoded file, so the count
-    /// is the true audio length rather than the container's.
-    ///
-    /// `completionCallbackType: .dataRendered` is used because `.dataConsumed` fires when the node
-    /// has merely *taken* the data, which on this architecture happens a whole track early. Even so,
-    /// the callback is not treated as the audible boundary — boundaries come from the clock (see
-    /// `observeBoundaries`), because a completion callback tells you a segment finished, not when
-    /// the next one became audible.
+    /// `expectedTailGeneration` is the fence for work planned before a suspension: the caller
+    /// captures `cachedReadout.tailGeneration` before its awaits, and a batch whose tail has since
+    /// been replaced by a stop or reset is refused (`GaplessEngineFailure.scheduleSuperseded`)
+    /// rather than scheduled into the replacement tail. The check happens inside the domain, in the
+    /// same actor turn as the enqueue.
     @discardableResult
     func schedule(_ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
-                              generation: UInt64)]) throws -> [GaplessScheduledSegment] {
+                              generation: UInt64)],
+                  expectedTailGeneration: UInt64) async throws -> [GaplessScheduledSegment] {
         #if DEBUG
         if schedulingMode == .fileSegment { return try scheduleAsFileSegments(tracks) }
         #endif
-        var created: [GaplessScheduledSegment] = []
-        for entry in tracks {
-            do {
-                created.append(try bufferScheduler.enqueue(track: entry.track, itemID: entry.itemID,
-                                                           generation: entry.generation))
-            } catch {
-                throw GaplessEngineFailure.scheduleFailed(error.localizedDescription)
-            }
+        let domain = await ensureAudioDomain()
+        do {
+            let created = try await domain.schedule(batch: tracks,
+                                                    expectedTailGeneration: expectedTailGeneration)
+            await refreshReadout(from: domain)
+            return created
+        } catch is GaplessAudioDomainError {
+            await refreshReadout(from: domain)
+            throw GaplessEngineFailure.scheduleSuperseded
+        } catch {
+            throw GaplessEngineFailure.scheduleFailed(error.localizedDescription)
         }
-        // Produce immediately so the lead is filled before the boundary rather than at it.
-        bufferScheduler.pump()
-        return created
     }
 
     #if DEBUG
     /// The original substrate, retained for comparison only. Unsafe for long persistent sessions:
-    /// every file handed to the node is retained until the node stops.
+    /// every file handed to the node is retained until the node stops. This is the one deliberate
+    /// node mutation outside the audio domain, and it cannot be selected in a release build.
     private func scheduleAsFileSegments(
         _ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID, generation: UInt64)]
     ) throws -> [GaplessScheduledSegment] {
@@ -350,31 +441,30 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
 
     /// Drop everything not yet audible. The player node cannot remove a single future buffer, so the
     /// narrowest available operation is to stop the node — which discards *all* pending schedules —
-    /// and re-schedule from the audible position. The timeline offset preserves monotonic frame
-    /// accounting across that, so elapsed time and boundary identity survive the rebuild.
+    /// and re-schedule from the audible position. The stop, the scheduler reset and the optional
+    /// restart happen as one domain operation, so a refill wakeup cannot land between them; the
+    /// timeline offset preserves monotonic frame accounting across the rebuild, so elapsed time and
+    /// boundary identity survive it.
     @discardableResult
-    func resetTail() -> AVAudioFramePosition {
+    func resetTail() async -> AVAudioFramePosition {
         let resumeFrame = renderFrame
         let wasPlaying = state == .playing
-        // `AVAudioPlayerNode` has no surgical per-buffer cancellation: `stop()` discards *every*
-        // pending schedule, including the audible one. That is the only mechanism available, so a
-        // tail replacement is always a stop-and-reschedule, and the audible position is preserved by
-        // arithmetic (the timeline offset) rather than by the node.
-        engine.player.stop()
+        let domain = await ensureAudioDomain()
+        // EVERY segment record is dropped, including the audible one — the node stop discards its
+        // remaining audio along with the rest, so keeping its record would describe audio that no
+        // longer exists. A caller that wants the current track to continue must re-schedule it from
+        // `audibleOffset(of:)`, read *before* this call.
+        await domain.resetTail(resumeTimelineFrame: resumeFrame,
+                               resumePlaying: wasPlaying && engine.engine.isRunning)
+        await refreshReadout(from: domain)
+        // Main-actor bookkeeping lands after the node has actually stopped; a clock read that
+        // interleaved with the hop above saw the old schedule's coherent reading, and the monotonic
+        // clamp absorbs the node's sample-clock reset.
         tailGeneration += 1
         timelineOffset = resumeFrame
         scheduleOriginFrame = resumeFrame
-        // EVERY segment record is dropped, including the audible one — `stop()` discarded its
-        // remaining audio along with the rest, so keeping its record would describe audio that no
-        // longer exists and place the replacement at the wrong timeline frame. A caller that wants
-        // the current track to continue must re-schedule it from `audibleOffset(of:)`.
         fileSegments.removeAll()
-        // Every discarded chunk token is invalidated with the tail bump, every safe buffer returns
-        // to the pool exactly once, and any conversion still running for the old tail is cancelled
-        // so it cannot write into a buffer that now belongs to a newer generation.
-        bufferScheduler.resetAfterNodeStop(resumeTimelineFrame: resumeFrame)
         reportedInstances.removeAll()
-        if wasPlaying, engine.engine.isRunning { engine.player.play() }
         return resumeFrame
     }
 
@@ -386,8 +476,9 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     }
 
     /// Drop segment records for audio that has already played, so the timeline record stays bounded
-    /// across a long run. The audible segment and everything after it are kept.
-    func pruneSegments(before instance: GaplessPlayInstanceID) {
+    /// across a long run. The audible segment and everything after it are kept. The cached readout
+    /// gates the hop: when it shows nothing before the audible instance, there is nothing to prune.
+    func pruneSegments(before instance: GaplessPlayInstanceID) async {
         #if DEBUG
         if schedulingMode == .fileSegment {
             guard let index = fileSegments.firstIndex(where: { $0.playInstance == instance }),
@@ -396,7 +487,11 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             return
         }
         #endif
-        bufferScheduler.pruneSegments(before: instance)
+        guard let audioDomain,
+              let index = cachedReadout.segments.firstIndex(where: { $0.playInstance == instance }),
+              index > 0 else { return }
+        await audioDomain.pruneSegments(before: instance)
+        await refreshReadout(from: audioDomain)
     }
 
     /// Whether a callback or event carrying `tailGeneration` still describes live audio.
@@ -457,22 +552,26 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// finished feeding, which is not the same instant the next one became audible. Identity is the
     /// **play instance**, so a Repeat One replay of the same slot produces a genuinely new event
     /// instead of being suppressed as a duplicate.
-    func observeBoundaries() {
+    func observeBoundaries() async {
         #if DEBUG
         let usingBuffers = schedulingMode == .pcmBuffer
         #else
         let usingBuffers = true
         #endif
-        // Top the schedule up first: the pump is what turns enqueued tracks into scheduled audio,
-        // and a boundary can only be observed against audio that exists.
-        if usingBuffers { bufferScheduler.pump() }
+        // Top the schedule up first: refill is what turns enqueued tracks into scheduled audio, and
+        // a boundary can only be observed against audio that exists. This also refreshes the cached
+        // readout, which is what the scan below runs on.
+        if usingBuffers, let audioDomain {
+            await audioDomain.refill()
+            await refreshReadout(from: audioDomain)
+        }
         let frame = renderFrame
         for segment in scheduledSegments
         where segment.startFrame <= frame && !reportedInstances.contains(segment.playInstance) {
             // A record whose start is still the enqueue-time estimate describes audio that has not
             // been scheduled yet. Observing a boundary against an estimate would name a track as
             // audible at a frame it may never occupy.
-            if usingBuffers, !bufferScheduler.materializedInstances.contains(segment.playInstance) {
+            if usingBuffers, !cachedReadout.materializedInstances.contains(segment.playInstance) {
                 continue
             }
             reportedInstances.insert(segment.playInstance)

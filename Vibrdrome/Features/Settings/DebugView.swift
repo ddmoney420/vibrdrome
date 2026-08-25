@@ -141,21 +141,22 @@ struct DebugView: View {
 
                     // The **live** substrate readout, and only once a session has actually run.
                     //
-                    // Before that it stays on the inert Lane 3C answer, because reaching through to
-                    // the buffer scheduler would build the lazily-allocated pool this screen exists
-                    // to prove does not exist yet. After a session it must be the real numbers: a
-                    // resource-recovery check that reported hardcoded zeros would read as a pass
-                    // whatever the engine was actually still holding, which is worse than no check.
+                    // Before that it stays on the inert Lane 3C answer, because the audio domain —
+                    // and the pool it owns — is built lazily on first use, and this screen exists
+                    // to prove it does not exist yet. After a session these are the domain's own
+                    // numbers, read from the backend's cached readout (SwiftUI cannot await the
+                    // audio actor from a body): a resource-recovery check that reported hardcoded
+                    // zeros would read as a pass whatever the engine was actually still holding.
                     if beat.startCount > 0 {
-                        let scheduler = assembly.backend.bufferScheduler
+                        let readout = assembly.backend.cachedReadout.snapshot
                         row("Buffer pool",
-                            value: "\(scheduler.pool.availableCount)/\(scheduler.pool.capacity) available")
-                        row("Pool in flight", value: "\(scheduler.pool.inFlightCount)")
+                            value: "\(readout.poolAvailable)/\(readout.poolCapacity) available")
+                        row("Pool in flight", value: "\(readout.poolInFlight)")
                         row("Live source files", value: "\(assembly.backend.openFileCount)")
-                        row("Live converters", value: "\(scheduler.activeConverterCount)")
+                        row("Live converters", value: "\(readout.activeConverters)")
                         row("Scheduled segments", value: "\(assembly.backend.scheduledSegments.count)")
                         row("Chunk accounting",
-                            value: scheduler.chunkAccountingBalances ? "Balanced" : "UNBALANCED")
+                            value: readout.accountingBalances ? "Balanced" : "UNBALANCED")
                     } else {
                         row("Buffer pool", value: "Not allocated (lazy)")
                         row("Live source files", value: "0")

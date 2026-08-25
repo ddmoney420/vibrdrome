@@ -374,6 +374,7 @@ struct GaplessRealTimeTransportTests {
         let playerBefore = ObjectIdentifier(rig.controller.backend.engine.player)
 
         rig.controller.stop()
+        await rig.controller.backend.settleTransport()
 
         #expect(rig.controller.backend.state == .idle)
         #expect(rig.controller.backend.scheduledSegments.isEmpty)
@@ -399,6 +400,7 @@ struct GaplessRealTimeTransportTests {
             await rig.controller.tick()
             rig.controller.stop()
         }
+        await rig.controller.backend.settleTransport()
 
         #expect(ObjectIdentifier(rig.controller.backend.engine.player) == playerBefore)
         #expect(ObjectIdentifier(rig.controller.backend.engine.eq) == eqBefore)
@@ -415,6 +417,7 @@ struct GaplessRealTimeTransportTests {
         try await Task.sleep(for: .milliseconds(100))
 
         rig.controller.pause()
+        await rig.controller.backend.settleTransport()
         let atPause = rig.controller.backend.renderFrame
         let tailAtPause = rig.controller.backend.scheduledSegments.count
         try await Task.sleep(for: .milliseconds(250))

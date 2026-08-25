@@ -30,7 +30,7 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func installAudibleObserver(_ observer: @escaping @MainActor () -> Void) {}
     func clearAudibleObserver() {}
     func start(sessionGeneration: UInt64) async throws {}
-    func tearDown() {}
+    func tearDown() async {}
 
     func play(song: Song, from newQueue: [Song]?, at index: Int) {}
     func pause() {}
@@ -215,14 +215,22 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
     /// Tear down whatever transport was brought up, and leave the retained assembly reusable.
     ///
     /// `quiesce()` is the adapter's own idempotent stop, which routes through
-    /// `GaplessRealTimeBackend.stop()` — that now recovers from `.failed` as well, so a start that
-    /// got as far as scheduling before refusing releases its segments, buffers, source files and
+    /// `GaplessRealTimeBackend.stop()` — that recovers from `.failed` as well, so a start that got
+    /// as far as scheduling before refusing releases its segments, buffers, source files and
     /// converters like any other ended session. `resetAfterFailure()` states that requirement
     /// explicitly and is a no-op once the stop has already done it; it is deliberately not a tail
     /// reset, which cleared the segments but left the backend stuck in `.failed` and therefore
     /// unable to start again on the assembly the process keeps for its whole lifetime.
-    func tearDown() {
+    ///
+    /// The two `settleTransport()` awaits are what make this honest: the backend's `stop()` is a
+    /// synchronous façade over an ordered teardown, and this returns only once that teardown — node
+    /// stopped, refill drained, recycle reconciled, pool reclaimed, sources closed, backend idle —
+    /// has actually completed. A replacement granted before that would be built on a graph the old
+    /// session still holds.
+    func tearDown() async {
         application.quiesce()
+        await assembly.backend.settleTransport()
         assembly.backend.resetAfterFailure()
+        await assembly.backend.settleTransport()
     }
 }

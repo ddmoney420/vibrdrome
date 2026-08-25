@@ -152,7 +152,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["s0", "s1"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let engine = AudioEngine.shared
                 let songs = ["s0", "s1"].map { makeSong(id: $0) }
 
@@ -183,6 +182,7 @@ struct LegacyTransportReEntryTests {
                 #expect(router.diagnostics.heartbeat.isRunning,
                         "lifecycle activity killed the persistent heartbeat")
                 #expect(legacySpy.playCalls.isEmpty, "lifecycle activity started legacy transport")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -193,7 +193,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["c0"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let engine = AudioEngine.shared
                 let song = makeSong(id: "c0")
 
@@ -210,6 +209,7 @@ struct LegacyTransportReEntryTests {
                 expectLegacyFullyQuiescent(engine, "after a CarPlay connect")
                 #expect(router.ownership.authority == .persistent)
                 #expect(legacySpy.playCalls.isEmpty)
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -220,7 +220,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["p0", "p1"], in: directory)
                 let (router, _) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let engine = AudioEngine.shared
                 let songs = ["p0", "p1"].map { makeSong(id: $0) }
 
@@ -231,6 +230,7 @@ struct LegacyTransportReEntryTests {
                 for _ in 0..<5 { engine.prepareLookahead() }
 
                 expectLegacyFullyQuiescent(engine, "after repeated lookahead attempts")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -243,13 +243,14 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["i0"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let song = makeSong(id: "i0")
 
                 router.play(song: song, from: [song], at: 0)
                 await router.awaitPendingSelectionForTesting()
                 guard let assembly = router.persistentAssembly else {
                     Issue.record("no assembly")
+                    // The now-async release cannot live in a defer; this exit must still clean up.
+                    await router.releaseSessionForTesting()
                     return
                 }
                 let heartbeatStarts = router.diagnostics.heartbeat.startCount
@@ -274,6 +275,7 @@ struct LegacyTransportReEntryTests {
                 #expect(legacySpy.calls.contains("pause") == false,
                         "the interruption reached the quiesced legacy engine")
                 #expect(legacySpy.calls.contains("resume") == false)
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -284,13 +286,13 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["t0"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let song = makeSong(id: "t0")
 
                 router.play(song: song, from: [song], at: 0)
                 await router.awaitPendingSelectionForTesting()
                 guard let assembly = router.persistentAssembly else {
                     Issue.record("no assembly")
+                    await router.releaseSessionForTesting()
                     return
                 }
 
@@ -305,6 +307,7 @@ struct LegacyTransportReEntryTests {
                         "the sleep timer did not pause persistent")
                 #expect(legacySpy.calls.contains("pause") == false,
                         "the sleep timer paused the quiesced legacy engine")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -315,7 +318,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: true) {
                 let files = try makeFiles(["f0"], in: directory)
                 let (router, _) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let fadeBefore = SleepTimer.shared.fadeFactor
                 defer {
                     SleepTimer.shared.fadeFactor = fadeBefore
@@ -327,6 +329,7 @@ struct LegacyTransportReEntryTests {
                 await router.awaitPendingSelectionForTesting()
                 guard let assembly = router.persistentAssembly else {
                     Issue.record("no assembly")
+                    await router.releaseSessionForTesting()
                     return
                 }
                 SleepTimer.shared.playbackOverrideForTesting = router
@@ -344,6 +347,7 @@ struct LegacyTransportReEntryTests {
                         "the fade compounded on a second apply")
                 #expect(router.userVolume == 1,
                         "the fade overwrote the user's volume setting")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -381,7 +385,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: false) {
                 let files = try makeFiles(["l0"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let engine = AudioEngine.shared
                 engine.quiesceForPersistentSession()
                 let song = makeSong(id: "l0")
@@ -393,6 +396,7 @@ struct LegacyTransportReEntryTests {
                 #expect(router.ownership.authority != .persistent)
                 #expect(router.diagnostics.heartbeat.startCount == 0,
                         "flag Off started a persistent heartbeat")
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -403,7 +407,6 @@ struct LegacyTransportReEntryTests {
             try await withCleanState(flag: false) {
                 let files = try makeFiles(["m0"], in: directory)
                 let (router, legacySpy) = makeRouter(files: files, directory: directory)
-                defer { router.releaseSessionForTesting() }
                 let song = makeSong(id: "m0")
 
                 router.play(song: song, from: [song], at: 0)
@@ -416,6 +419,7 @@ struct LegacyTransportReEntryTests {
                 #expect(legacySpy.calls.filter { $0 == "pause" }.count == 1,
                         "legacy stopped receiving its own interruption pause")
                 #expect(legacySpy.calls.filter { $0 == "resume" }.count == 1)
+                await router.releaseSessionForTesting()
             }
         }
     }
@@ -434,14 +438,17 @@ struct LegacyTransportReEntryTests {
                 await router.awaitPendingSelectionForTesting()
                 #expect(router.ownership.authority == .persistent)
 
-                router.releaseSessionForTesting()
+                await router.releaseSessionForTesting()
 
                 #expect(router.ownership.authority == PlaybackAuthority.none)
                 #expect(router.diagnostics.heartbeat.isRunning == false)
                 if let assembly = router.persistentAssembly {
+                    // Post-teardown truth: settle the ordered teardown, then read the domain live.
+                    await assembly.backend.settleTransport()
+                    let snapshot = await assembly.backend.domainSnapshotForTesting
                     #expect(assembly.backend.state == .idle)
                     #expect(assembly.backend.engine.engine.isRunning == false)
-                    #expect(assembly.backend.bufferScheduler.pool.inFlightCount == 0)
+                    #expect(snapshot.poolInFlight == 0)
                 }
                 AudioEngine.shared.quiesceForPersistentSession()
                 expectLegacyFullyQuiescent(AudioEngine.shared, "suite teardown")

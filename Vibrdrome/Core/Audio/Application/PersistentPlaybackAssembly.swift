@@ -28,9 +28,9 @@ enum PersistentPreparationState: Equatable, Sendable {
 /// Construction attaches and connects the fixed 44.1 kHz stereo Float32 graph (that is
 /// `PersistentGaplessEngine.init`'s job) and builds the controller, session and preparer. It does
 /// **not** prepare the graph, start the engine, activate the audio session, open a source file,
-/// create a converter, or allocate the buffer pool — the scheduler that owns the pool is a `lazy
-/// var` on the backend, documented there as "built lazily so a backend that is never started
-/// allocates no pool", and nothing here touches it.
+/// create a converter, or allocate the buffer pool — the audio domain that owns the scheduler and
+/// its pool is built by the backend on first use, so a backend that is never started allocates no
+/// pool, and nothing here touches it.
 ///
 /// Holding this object is therefore inert. `GaplessPlaybackController.play()` is the only path that
 /// activates the session, and Lane 3C never calls it.

@@ -46,6 +46,9 @@ enum GaplessEngineFailure: Error, Equatable, Sendable {
     case engineStartFailed(String)
     case audioSessionActivationFailed(String)
     case scheduleFailed(String)
+    /// The batch was planned against a scheduled tail that a stop or reset has since replaced.
+    /// Not a fault: the world moved on while the batch was suspended, and the new state re-plans.
+    case scheduleSuperseded
     case illegalTransition(from: GaplessEngineState, to: GaplessEngineState)
 }
 
@@ -118,13 +121,18 @@ protocol GaplessRenderBackend: AnyObject {
     /// Build the graph. Must not activate an audio session or start anything.
     func prepareGraph() throws
 
-    /// Append prepared tracks to the timeline.
+    /// Append prepared tracks to the timeline. `expectedTailGeneration` is captured by the caller
+    /// before its suspensions; a batch whose tail has since been replaced is refused with
+    /// `GaplessEngineFailure.scheduleSuperseded` rather than scheduled into the replacement.
     @discardableResult
     func schedule(_ tracks: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
-                              generation: UInt64)]) throws -> [GaplessScheduledSegment]
+                              generation: UInt64)],
+                  expectedTailGeneration: UInt64) async throws -> [GaplessScheduledSegment]
 
     /// Begin playback. The ONLY operation permitted to activate the audio session.
-    func start() throws
+    func start() async throws
+    /// Synchronous façades: the node-side work is ordered internally, and `stop()`'s completed
+    /// teardown is awaited through the backend's settle seam.
     func pause()
     func resume() throws
     func stop()
@@ -132,7 +140,7 @@ protocol GaplessRenderBackend: AnyObject {
     /// Drop everything not yet audible, keeping the audible position. Returns the frame from which
     /// re-scheduling must resume.
     @discardableResult
-    func resetTail() -> AVAudioFramePosition
+    func resetTail() async -> AVAudioFramePosition
 
     /// Boundary events observed since the last drain.
     func drainBoundaryEvents() -> [GaplessBoundaryEvent]

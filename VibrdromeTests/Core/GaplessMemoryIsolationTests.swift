@@ -215,8 +215,10 @@ struct GaplessMemoryIsolationTests {
 
         // Stop releases the cache entirely.
         controller.stop()
-        #expect(backend.openFileCount == 0)
-        #expect(backend.scheduledSegments.isEmpty)
+        await backend.settleTransport()
+        let snap = await backend.domainSnapshotForTesting
+        #expect(snap.openFiles == 0)
+        #expect(snap.scheduledSegments == 0)
     }
 
     // MARK: - Application layer: do the diagnostic histories contribute?

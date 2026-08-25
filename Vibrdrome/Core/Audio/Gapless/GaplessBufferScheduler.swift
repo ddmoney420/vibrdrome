@@ -419,11 +419,19 @@ final class GaplessBufferScheduler {
             // Released regardless of staleness: the memory must come back even when the accounting
             // says the chunk belonged to a tail that has since been discarded. Losing it would
             // starve the pool permanently.
-            pool.release(token.bufferIndex)
+            let released = pool.release(token.bufferIndex)
             if let index = inFlightChunks.firstIndex(where: {
                 $0.playInstance == token.playInstance && $0.chunkIndex == token.chunkIndex
             }) {
                 inFlightChunks.remove(at: index)
+            }
+            if !released {
+                // A callback the node delivered after `resetAfterNodeStop`: `reclaimAll` already
+                // returned this buffer, so it was counted reclaimed-at-stop. The node has now said
+                // it genuinely finished with it — fold it from reclaimed into recycled, exactly as
+                // `reconcileLateCallbacks` does, so a straggler drained by a later pump cannot
+                // unbalance the scheduled == recycled + reclaimed identity.
+                chunksReclaimedAtStop -= min(1, chunksReclaimedAtStop)
             }
             chunksRecycled += 1
         }

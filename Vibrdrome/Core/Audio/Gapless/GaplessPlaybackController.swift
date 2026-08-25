@@ -193,10 +193,15 @@ final class GaplessPlaybackController {
     // MARK: - Transport
 
     /// Start playback. The only path that activates the audio session.
+    ///
+    /// Settles the backend's ordered transport lane first: a stop issued just before this play must
+    /// finish its teardown, so the graph is prepared on a genuinely idle backend and the PCM
+    /// scheduled below lands in the tail that will actually play.
     func play() async throws {
+        await backend.settleTransport()
         try backend.prepareGraph()
         await replenishTail()
-        try backend.start()
+        try await backend.start()
         session.play()
     }
 
@@ -320,12 +325,13 @@ final class GaplessPlaybackController {
     /// current item is measured first, then re-scheduled from that offset — the listener hears it
     /// continue, and the timeline stays consistent with the audio.
     private func rebuildTailPreservingAudibleItem() async throws {
+        await backend.settleTransport()
         guard let audibleID = session.audibleItemID,
               let offset = backend.audibleOffset(of: audibleID) else {
             try await restartFromCurrentItem()
             return
         }
-        backend.resetTail()
+        await backend.resetTail()
         await replenishTail(sourceOffsetFrames: offset)
     }
 
@@ -333,10 +339,11 @@ final class GaplessPlaybackController {
     /// of the audible item, and queue replacement. The graph is never rebuilt.
     private func restartFromCurrentItem(sourceOffsetFrames: AVAudioFramePosition = 0,
                                         resumePlaying: Bool = true) async throws {
-        backend.resetTail()
+        await backend.settleTransport()
+        await backend.resetTail()
         await replenishTail(sourceOffsetFrames: sourceOffsetFrames)
         if resumePlaying, backend.state == .prepared || backend.state == .idle {
-            try backend.start()
+            try await backend.start()
         }
     }
 
@@ -345,6 +352,10 @@ final class GaplessPlaybackController {
         let planned = session.plannedItemIDs(depth: window.size)
         guard !planned.isEmpty else { return }
         let generation = session.queue.generation
+        // Captured before any suspension: if a stop or tail reset lands while preparation below is
+        // awaited, the batch carries this stale value and the domain refuses it whole, instead of
+        // scheduling audio the world has moved on from into the replacement tail.
+        let expectedTailGeneration = backend.cachedReadout.tailGeneration
         // A queue edit abandons every occurrence planned under the old generation, so a retry
         // deadline that expires afterwards cannot start work for a queue that no longer exists.
         preparationGate.cancelAll(except: generation)
@@ -410,16 +421,19 @@ final class GaplessPlaybackController {
         }
 
         guard !toSchedule.isEmpty else { return }
-        scheduleBatch(toSchedule, identities: identities, generation: generation)
+        await scheduleBatch(toSchedule, identities: identities, generation: generation,
+                            expectedTailGeneration: expectedTailGeneration)
     }
 
     /// Hand a prepared batch to the backend and record what happened to each occurrence.
     private func scheduleBatch(_ batch: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
                                           generation: UInt64)],
                                identities: [GaplessQueueItemID: GaplessPreparationIdentity],
-                               generation: UInt64) {
+                               generation: UInt64,
+                               expectedTailGeneration: UInt64) async {
         do {
-            let segments = try backend.schedule(batch)
+            let segments = try await backend.schedule(
+                batch, expectedTailGeneration: expectedTailGeneration)
             for segment in segments {
                 session.markScheduled(segment.itemID, startFrame: segment.startFrame,
                                       generation: generation)
@@ -430,6 +444,13 @@ final class GaplessPlaybackController {
                     occurrenceEpochs[segment.itemID] = (occurrenceEpochs[segment.itemID] ?? 0) + 1
                 }
                 scheduleGainEvent(for: segment)
+            }
+        } catch GaplessEngineFailure.scheduleSuperseded {
+            // The tail was replaced (stop, skip, or seek) while this batch was suspended. Not a
+            // fault, and the occurrences are not failed: whatever replaced the tail re-plans, and
+            // marking these failed would poison items the new plan may legitimately include.
+            for entry in batch {
+                if let identity = identities[entry.itemID] { preparationGate.cancel(identity) }
             }
         } catch {
             log.error("scheduling failed: \(error.localizedDescription, privacy: .public)")
@@ -489,7 +510,7 @@ final class GaplessPlaybackController {
     /// Boundaries come from the clock, so the window advances on **audible** progress rather than on
     /// scheduling callbacks — a track is "current" when it is being heard, not when it was queued.
     func tick() async {
-        backend.observeBoundaries()
+        await backend.observeBoundaries()
         let events = backend.drainBoundaryEvents()
         let clockFrame = backend.renderFrame
 
@@ -529,7 +550,7 @@ final class GaplessPlaybackController {
         }
         // Segments before the audible one describe audio that has already gone by; dropping them
         // keeps the timeline record bounded over a long run.
-        if let instance = audiblePlayInstance { backend.pruneSegments(before: instance) }
+        if let instance = audiblePlayInstance { await backend.pruneSegments(before: instance) }
         backend.engine.gainStage.advance(toRenderFrame: clockFrame)
         // Replenish on EVERY tick, not only after a boundary. Under `controlledWait` a slow item
         // lets the graph run dry, and no further boundary can fire while nothing is scheduled — so

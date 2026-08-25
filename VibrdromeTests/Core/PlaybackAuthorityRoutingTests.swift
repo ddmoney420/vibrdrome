@@ -175,7 +175,7 @@ struct PlaybackAuthorityRoutingTests {
                 let router = ApplicationPlaybackRouter(
                     legacy: legacy,
                     persistentBuilder: LocalFileAssemblyBuilder(files: files, directory: directory))
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let song = makeSong(id: "p0")
 
                 router.play(song: song, from: [song], at: 0)
@@ -187,6 +187,9 @@ struct PlaybackAuthorityRoutingTests {
                 #expect(legacy.playCalls.isEmpty, "legacy was started for a persistent session")
                 #expect(router.lastCompletedPlanningGeneration == 1)
                 #expect(router.isReplacingSession == false, "the replacement never completed")
+                // Real audio played on a real assembly: release it to completion before the next
+                // serialized test, rather than leaving the scheduled defer racing it.
+                await teardown(router)
             }
         }
     }
@@ -205,7 +208,7 @@ struct PlaybackAuthorityRoutingTests {
                     legacy: legacy,
                     persistentBuilder: LocalFileAssemblyBuilder(files: ["s0": url],
                                                                 directory: directory))
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let song = makeSong(id: "s0")
 
                 router.play(song: song, from: [song], at: 0)
@@ -215,6 +218,8 @@ struct PlaybackAuthorityRoutingTests {
                 #expect(router.selectedBackend == .legacy)
                 #expect(legacy.playCalls.count == 1,
                         "legacy was started \(legacy.playCalls.count) times")
+                // A real assembly inspected real media here; release it to completion.
+                await teardown(router)
             }
         }
     }
@@ -223,7 +228,7 @@ struct PlaybackAuthorityRoutingTests {
     @Test func aFailedPlanStartsLegacyOnce() async {
         await withRoutingFlag(true) {
             let (router, legacy, persistent) = makeRoutingRouter()
-            defer { teardown(router) }
+            defer { scheduleTeardown(router) }
             router.planOverrideForTesting = { _ in .failed(reason: .sourcePreparationFailed) }
             let song = makeSong(id: "a")
 
@@ -241,7 +246,7 @@ struct PlaybackAuthorityRoutingTests {
     @Test func aMidTrackStartRoutesToLegacyWithoutPlanning() async {
         await withRoutingFlag(true) {
             let (router, legacy, persistent) = makeRoutingRouter()
-            defer { teardown(router) }
+            defer { scheduleTeardown(router) }
             var planned = false
             router.planOverrideForTesting = { _ in
                 planned = true
@@ -265,7 +270,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "a", in: directory)
                 let source = PreparedPersistentSource(track: track, deliveredContainer: "wav")
                 // The plan resolves only after a newer request has already superseded it.
@@ -298,7 +303,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, _, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "x", in: directory)
                 var sources: [PreparedPersistentSource] = []
                 router.planOverrideForTesting = { request in
@@ -342,7 +347,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let songs = [makeSong(id: "t0"), makeSong(id: "t1")]
                 let track = try makeTrack(id: "t0", in: directory)
                 await startPersistentSession(router, songs: songs, track: track)
@@ -390,7 +395,7 @@ struct PlaybackAuthorityRoutingTests {
     /// at all.
     @Test func transportRoutesToLegacyWhenPersistentDoesNotOwnTheSession() {
         let (router, legacy, persistent) = makeRoutingRouter()
-        defer { teardown(router) }
+        defer { scheduleTeardown(router) }
 
         router.pause()
         router.resume()
@@ -417,7 +422,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 legacy.queue = (0..<40).map { makeSong(id: "stale\($0)") }
                 legacy.currentIndex = 30
 
@@ -447,7 +452,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let songs = [makeSong(id: "s0"), makeSong(id: "s1")]
                 let track = try makeTrack(id: "s0", in: directory)
                 await startPersistentSession(router, songs: songs, track: track)
@@ -473,7 +478,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "p0", in: directory)
                 await startPersistentSession(router, songs: [makeSong(id: "p0")], track: track)
                 #expect(router.ownership.authority == .persistent)
@@ -505,7 +510,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 router.planOverrideForTesting = { _ in .legacy(reason: .supportedLocalSource) }
                 let first = makeSong(id: "l0")
                 router.play(song: first, from: [first], at: 0)
@@ -530,7 +535,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, _, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let first = try makeTrack(id: "p0", in: directory)
                 await startPersistentSession(router, songs: [makeSong(id: "p0")], track: first)
                 persistent.reset()
@@ -561,13 +566,17 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "p0", in: directory)
                 await startPersistentSession(router, songs: [makeSong(id: "p0")], track: track)
                 legacy.resetForTesting()
                 persistent.reset()
 
                 router.startRadio(artistName: "Probe")
+                // Replacing a live persistent session is this request's ordered transition: the
+                // persistent teardown is awaited to completion before legacy is granted and
+                // started, and this is the seam that awaits it.
+                await router.awaitPendingSelectionForTesting()
 
                 #expect(router.ownership.authority == .legacy)
                 #expect(persistent.calls.contains("tearDown"))
@@ -584,7 +593,7 @@ struct PlaybackAuthorityRoutingTests {
     @Test func everyRadioEntryPointStartsExactlyOneLegacySession() async {
         await withRoutingFlag(true) {
             let (router, legacy, persistent) = makeRoutingRouter()
-            defer { teardown(router) }
+            defer { scheduleTeardown(router) }
             var planned = false
             router.planOverrideForTesting = { _ in
                 planned = true
@@ -613,7 +622,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "p0", in: directory)
                 await startPersistentSession(router, songs: [makeSong(id: "p0")], track: track)
                 #expect(router.ownership.authority == .persistent)
@@ -638,7 +647,7 @@ struct PlaybackAuthorityRoutingTests {
     @Test func continuingOperationsNeverPlan() async {
         await withRoutingFlag(true) {
             let (router, _, _) = makeRoutingRouter()
-            defer { teardown(router) }
+            defer { scheduleTeardown(router) }
             var planCount = 0
             router.planOverrideForTesting = { _ in
                 planCount += 1
@@ -669,7 +678,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, legacy, persistent) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 persistent.becomesAudibleBeforeFailing = true
                 persistent.startFailure = GaplessEngineFailure.engineStartFailed("after audio")
                 let track = try makeTrack(id: "p0", in: directory)
@@ -694,7 +703,7 @@ struct PlaybackAuthorityRoutingTests {
         try await withTemporaryDirectory { directory in
             try await withRoutingFlag(true) {
                 let (router, _, _) = makeRoutingRouter()
-                defer { teardown(router) }
+                defer { scheduleTeardown(router) }
                 let track = try makeTrack(id: "p0", in: directory)
                 await startPersistentSession(router, songs: [makeSong(id: "p0")], track: track)
 
@@ -738,7 +747,7 @@ struct PlaybackAuthorityRoutingTests {
                 await router.awaitPendingSelectionForTesting()
                 #expect(router.ownership.authority == .persistent, "the fixture never started")
 
-                teardown(router)
+                await teardown(router)
 
                 #expect(router.ownership.authority == PlaybackAuthority.none,
                         "teardown left authority granted")
@@ -748,7 +757,8 @@ struct PlaybackAuthorityRoutingTests {
                     #expect(assembly.backend.engine.engine.isRunning == false)
                     #expect(assembly.controller.onFirstAudibleSample == nil,
                             "teardown left an audible callback installed")
-                    #expect(assembly.backend.bufferScheduler.pool.inFlightCount == 0,
+                    let snap = await assembly.backend.domainSnapshotForTesting
+                    #expect(snap.poolInFlight == 0,
                             "teardown left pool buffers out")
                 }
                 #expect(PersistentRoutingSetting.isEnabled,
@@ -761,9 +771,18 @@ struct PlaybackAuthorityRoutingTests {
     }
 
     /// Release every resource a routing test may have taken: authority, persistent transport,
-    /// the audible callback and any selection still in flight.
-    private func teardown(_ router: ApplicationPlaybackRouter) {
-        router.releaseSessionForTesting()
+    /// the audible callback and any selection still in flight. Awaited, so on return the
+    /// persistent side is genuinely clean.
+    private func teardown(_ router: ApplicationPlaybackRouter) async {
+        await router.releaseSessionForTesting()
+    }
+
+    /// Cleanup for `defer`, which cannot await: schedules the same release on the main actor.
+    /// Spy-backed fixtures release in one hop, so this drains before the next serialized test does
+    /// real work; tests that play real audio or assert post-release state await `teardown(_:)`
+    /// explicitly instead (the scheduled release is idempotent behind it).
+    private func scheduleTeardown(_ router: ApplicationPlaybackRouter) {
+        Task { @MainActor in await router.releaseSessionForTesting() }
     }
 }
 
@@ -904,7 +923,7 @@ final class PersistentPortDouble: PersistentPlaybackSessionPort {
         spy.heartbeatDiagnostics.startCount += 1
     }
 
-    func tearDown() {
+    func tearDown() async {
         spy.record("tearDown")
         spy.isPlaying = false
         if spy.heartbeatDiagnostics.isRunning {

@@ -307,6 +307,7 @@ struct GaplessFailureAndSoakTests {
         // Simulate the engine going away underneath us, as a configuration change does.
         rig.controller.backend.engine.engine.stop()
         rig.controller.stop()
+        await rig.controller.backend.settleTransport()
 
         #expect(rig.controller.backend.state == .idle)
         #expect(!rig.controller.session.isPlaying)
@@ -331,6 +332,7 @@ struct GaplessFailureAndSoakTests {
         let staleTail = rig.controller.backend.tailGeneration
 
         rig.controller.stop()                       // what a reset forces
+        await rig.controller.backend.settleTransport()
         try rig.controller.backend.prepareGraph()   // reconstruct, passively
 
         #expect(activations == 1, "reconstruction must not activate the session")
@@ -528,10 +530,12 @@ struct GaplessFailureAndSoakTests {
             await rig.controller.tick()
             rig.controller.stop()
         }
+        await rig.controller.backend.settleTransport()
+        let snap = await rig.controller.backend.domainSnapshotForTesting
 
         #expect(ObjectIdentifier(rig.controller.backend.engine.player) == playerBefore)
         #expect(rig.controller.backend.state == .idle)
-        #expect(rig.controller.backend.scheduledSegments.isEmpty)
+        #expect(snap.scheduledSegments == 0)
         #expect(rig.controller.session.queue.count == 2)
     }
 }

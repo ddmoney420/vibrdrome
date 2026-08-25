@@ -127,7 +127,7 @@ struct GaplessBackendFailureRecoveryTests {
             assembly.backend.activateAudioSession = nil
 
             var thrown: Error?
-            do { try assembly.backend.start() } catch { thrown = error }
+            do { try await assembly.backend.start() } catch { thrown = error }
 
             #expect(thrown != nil, "a start from .failed was allowed to proceed")
             #expect(assembly.backend.state == .failed)
@@ -148,44 +148,47 @@ struct GaplessBackendFailureRecoveryTests {
             let backend = assembly.backend
 
             await failAStart(assembly, songIDs: ["t0"])
-            let scheduler = backend.bufferScheduler
             let staleTail = backend.tailGeneration
+            let held = await backend.domainSnapshotForTesting
 
             // Preconditions: the failed attempt really is holding things. A fixture that scheduled
             // nothing would make every assertion below pass for the wrong reason.
             #expect(backend.scheduledSegments.isEmpty == false,
                     "the fixture failed before anything was scheduled")
-            #expect(scheduler.liveSourceCount > 0, "no live source to release")
-            #expect(scheduler.activeConverterCount > 0,
+            #expect(held.liveSources > 0, "no live source to release")
+            #expect(held.activeConverters > 0,
                     "no converter was built for a 48 kHz source, so the fixture proves nothing")
-            #expect(scheduler.pool.inFlightCount > 0, "no pool buffers were out")
+            #expect(held.poolInFlight > 0, "no pool buffers were out")
             #expect(backend.openFileCount > 0, "no source file was open")
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
+            let readout = await backend.domainReadoutForTesting
+            let released = readout.snapshot
 
             #expect(backend.state == .idle, "state was \(backend.state), expected idle")
             #expect(backend.engine.player.isPlaying == false)
             #expect(backend.engine.engine.isRunning == false)
             // Tail and timeline.
-            #expect(backend.scheduledSegments.isEmpty,
-                    "\(backend.scheduledSegments.count) segments survived the reset")
-            #expect(scheduler.inFlightChunks.isEmpty,
-                    "\(scheduler.inFlightChunks.count) chunks were never reconciled")
+            #expect(readout.segments.isEmpty,
+                    "\(readout.segments.count) segments survived the reset")
+            #expect(released.scheduledDepth == 0,
+                    "\(released.scheduledDepth) chunks were never reconciled")
             #expect(backend.renderFrame == 0, "the timeline did not return to zero")
             // Pool.
-            #expect(scheduler.pool.inFlightCount == 0, "buffers stayed out of the pool")
-            #expect(scheduler.pool.availableCount == scheduler.pool.capacity,
-                    "pool recovered \(scheduler.pool.availableCount) of \(scheduler.pool.capacity)")
-            #expect(scheduler.chunkAccountingBalances,
+            #expect(released.poolInFlight == 0, "buffers stayed out of the pool")
+            #expect(released.poolAvailable == released.poolCapacity,
+                    "pool recovered \(released.poolAvailable) of \(released.poolCapacity)")
+            #expect(released.accountingBalances,
                     "scheduled chunks did not reconcile against recycled + reclaimed")
             // Sources and converters.
-            #expect(scheduler.liveSourceCount == 0,
-                    "\(scheduler.liveSourceCount) sources stayed live")
-            #expect(scheduler.activeConverterCount == 0,
-                    "\(scheduler.activeConverterCount) converters stayed live")
-            #expect(backend.openFileCount == 0, "\(backend.openFileCount) files stayed open")
+            #expect(released.liveSources == 0,
+                    "\(released.liveSources) sources stayed live")
+            #expect(released.activeConverters == 0,
+                    "\(released.activeConverters) converters stayed live")
+            #expect(released.openFiles == 0, "\(released.openFiles) files stayed open")
             // Occurrence identity.
-            #expect(scheduler.materializedInstances.isEmpty,
+            #expect(readout.materializedInstances.isEmpty,
                     "materialized-instance records survived the failed session")
             #expect(backend.drainBoundaryEvents().isEmpty, "boundary events survived")
             #expect(backend.isCurrentTail(staleTail) == false,
@@ -204,14 +207,17 @@ struct GaplessBackendFailureRecoveryTests {
             await failAStart(assembly, songIDs: ["t0"])
 
             // Observed from the deactivation hook, which the release path runs as its last step.
+            // The hook is synchronous, so the pool is read from the cached readout — refreshed from
+            // the domain earlier in this same teardown, after the node stop and pool reclaim.
             var stateAtRelease: GaplessEngineState?
             var inFlightAtRelease: Int?
             backend.deactivateAudioSession = {
                 stateAtRelease = backend.state
-                inFlightAtRelease = backend.bufferScheduler.pool.inFlightCount
+                inFlightAtRelease = backend.cachedReadout.snapshot.poolInFlight
             }
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
 
             #expect(stateAtRelease == .failed,
                     "the backend published .idle before its resources were released")
@@ -232,27 +238,31 @@ struct GaplessBackendFailureRecoveryTests {
             await failAStart(assembly, songIDs: ["t0"])
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
             let tailAfterFirst = backend.tailGeneration
-            let availableAfterFirst = backend.bufferScheduler.pool.availableCount
+            let availableAfterFirst = (await backend.domainSnapshotForTesting).poolAvailable
 
             for _ in 0..<5 { backend.resetAfterFailure() }
+            await backend.settleTransport()
+            let settled = await backend.domainSnapshotForTesting
 
             #expect(backend.state == .idle)
             #expect(backend.tailGeneration == tailAfterFirst,
                     "a no-op reset still churned the tail generation")
-            #expect(backend.bufferScheduler.pool.availableCount == availableAfterFirst)
-            #expect(backend.bufferScheduler.pool.inFlightCount == 0)
+            #expect(settled.poolAvailable == availableAfterFirst)
+            #expect(settled.poolInFlight == 0)
         }
     }
 
     /// A reset on a backend that never ran is harmless, and starts nothing.
-    @Test func resetFromIdleIsHarmless() {
+    @Test func resetFromIdleIsHarmless() async {
         let backend = GaplessRealTimeBackend()
         var deactivations = 0
         backend.deactivateAudioSession = { deactivations += 1 }
 
         backend.resetAfterFailure()
         backend.resetAfterFailure()
+        await backend.settleTransport()
 
         #expect(backend.state == .idle)
         #expect(backend.engine.engine.isRunning == false)
@@ -272,9 +282,10 @@ struct GaplessBackendFailureRecoveryTests {
             try await assembly.controller.play()
             #expect(backend.state == .playing, "the fixture did not reach .playing")
             let segmentsBefore = backend.scheduledSegments.count
-            let inFlightBefore = backend.bufferScheduler.pool.inFlightCount
+            let inFlightBefore = (await backend.domainSnapshotForTesting).poolInFlight
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
 
             #expect(backend.state == .playing,
                     "a live session was reset as though it had already failed")
@@ -282,7 +293,8 @@ struct GaplessBackendFailureRecoveryTests {
             #expect(backend.engine.player.isPlaying, "the reset stopped an audible node")
             #expect(backend.scheduledSegments.count == segmentsBefore,
                     "the reset discarded a playing session's tail")
-            #expect(backend.bufferScheduler.pool.inFlightCount == inFlightBefore)
+            let liveAfter = await backend.domainSnapshotForTesting
+            #expect(liveAfter.poolInFlight == inFlightBefore)
         }
     }
 
@@ -301,6 +313,7 @@ struct GaplessBackendFailureRecoveryTests {
             let segmentsBefore = backend.scheduledSegments.count
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
 
             #expect(backend.state == .paused, "a paused session was reset as though it had failed")
             #expect(backend.scheduledSegments.count == segmentsBefore)
@@ -320,14 +333,15 @@ struct GaplessBackendFailureRecoveryTests {
             #expect(backend.state == .playing)
 
             backend.stop()
+            await backend.settleTransport()
+            let released = await backend.domainSnapshotForTesting
 
             #expect(backend.state == .idle)
             #expect(backend.engine.engine.isRunning == false)
-            #expect(backend.scheduledSegments.isEmpty)
-            #expect(backend.bufferScheduler.pool.inFlightCount == 0)
-            #expect(backend.bufferScheduler.pool.availableCount
-                    == backend.bufferScheduler.pool.capacity)
-            #expect(backend.bufferScheduler.liveSourceCount == 0)
+            #expect(released.scheduledSegments == 0)
+            #expect(released.poolInFlight == 0)
+            #expect(released.poolAvailable == released.poolCapacity)
+            #expect(released.liveSources == 0)
         }
     }
 
@@ -345,6 +359,7 @@ struct GaplessBackendFailureRecoveryTests {
             await failAStart(assembly, songIDs: ["t0"])
             #expect(backend.state == .failed)
             backend.resetAfterFailure()
+            await backend.settleTransport()
             #expect(backend.state == .idle)
 
             // Second session on the same instance, with the failure cause removed.
@@ -389,6 +404,7 @@ struct GaplessBackendFailureRecoveryTests {
             backend.deactivateAudioSession = { deactivations += 1 }
 
             backend.resetAfterFailure()
+            await backend.settleTransport()
 
             #expect(deactivations == 1,
                     "the failed session kept its audio-session claim (\(deactivations) releases)")
@@ -440,15 +456,16 @@ struct GaplessBackendFailureRecoveryTests {
 
             #expect(outcome == .fellBackToLegacy(.persistentStartFailed))
             #expect(executor.ownership.authority == .legacy)
-            // The assembly is reusable, not merely quiet.
+            // The assembly is reusable, not merely quiet. The port's tearDown settled the ordered
+            // teardown before the executor granted legacy, so these are already post-teardown facts.
             #expect(backend.state == .idle,
                     "fallback left the retained backend in \(backend.state)")
+            let released = await backend.domainSnapshotForTesting
             #expect(backend.scheduledSegments.isEmpty)
-            #expect(backend.bufferScheduler.pool.inFlightCount == 0)
-            #expect(backend.bufferScheduler.pool.availableCount
-                    == backend.bufferScheduler.pool.capacity)
-            #expect(backend.bufferScheduler.liveSourceCount == 0)
-            #expect(backend.openFileCount == 0)
+            #expect(released.poolInFlight == 0)
+            #expect(released.poolAvailable == released.poolCapacity)
+            #expect(released.liveSources == 0)
+            #expect(released.openFiles == 0)
             #expect(assembly.controller.onFirstAudibleSample == nil,
                     "the failed session's audible callback outlived it")
 

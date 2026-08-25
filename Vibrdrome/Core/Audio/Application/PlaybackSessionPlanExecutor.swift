@@ -144,7 +144,12 @@ protocol PersistentPlaybackSessionPort: AnyObject {
     func start(sessionGeneration: UInt64) async throws
     /// Tear down whatever transport was partially brought up. Idempotent, and safe on a backend
     /// that never started.
-    func tearDown()
+    ///
+    /// **Honestly asynchronous:** it returns only once the persistent side is genuinely clean —
+    /// node stopped, refill drained, recycle tokens reconciled, pool reclaimed, sources and
+    /// converters closed, backend idle. Replacement paths await it before granting another backend,
+    /// which is what keeps the owner count at one *in resources*, not just in authority.
+    func tearDown() async
 }
 
 // MARK: - Executor
@@ -285,7 +290,7 @@ final class PlaybackSessionPlanExecutor {
         // `AVQueuePlayer` still holds its items, its observers and its claim on the session.
         guard !legacy.transportState.isTransportActive else {
             source.release()
-            return fallbackToLegacy(from: snapshot, reason: .legacyTransportNotReleased)
+            return await fallbackToLegacy(from: snapshot, reason: .legacyTransportNotReleased)
         }
 
         return await startPersistent(source: source, snapshot: snapshot,
@@ -303,7 +308,7 @@ final class PlaybackSessionPlanExecutor {
         guard let track = source.consume() else {
             // Unreachable via `execute`, which validates consumability first; handled rather than
             // forced because an unadoptable source must never leave persistent holding authority.
-            return fallbackToLegacy(from: snapshot, reason: .representationUnconfirmed)
+            return await fallbackToLegacy(from: snapshot, reason: .representationUnconfirmed)
         }
         persistent.adopt(snapshot)
         count("adoptPersistentQueue")
@@ -326,7 +331,7 @@ final class PlaybackSessionPlanExecutor {
             count("startPersistent")
             return .started(.persistent)
         } catch {
-            return fallbackToLegacy(from: snapshot, reason: .persistentStartFailed)
+            return await fallbackToLegacy(from: snapshot, reason: .persistentStartFailed)
         }
     }
 
@@ -334,14 +339,14 @@ final class PlaybackSessionPlanExecutor {
     ///
     /// Once the render clock has reported a first audible sample the latch is closed and this
     /// refuses: cutting over to a different engine mid-track is a worse outcome for the listener
-    /// than an error. Persistent authority is revoked **before** legacy is rebuilt, so the owner
-    /// count never transiently reads two.
+    /// than an error. Persistent teardown is **awaited to completion** and authority revoked before
+    /// legacy is rebuilt, so the owner count never transiently reads two — in resources or in name.
     private func fallbackToLegacy(from snapshot: PlaybackSessionSnapshot,
-                                  reason: SafePlaybackRoutingFailure)
+                                  reason: SafePlaybackRoutingFailure) async
         -> PlaybackSessionExecutionOutcome {
         guard ownership.isFallbackPermitted else { return .persistentRetained(reason) }
 
-        persistent.tearDown()
+        await persistent.tearDown()
         count("tearDownPersistent")
         persistent.clearAudibleObserver()
         count("clearAudibleObserver")

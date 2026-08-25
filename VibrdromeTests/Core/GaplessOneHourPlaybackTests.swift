@@ -179,6 +179,7 @@ struct GaplessOneHourPlaybackTests {
             try? await Task.sleep(for: .milliseconds(4))
         }
         controller.stop()
+        await backend.settleTransport()
         try? await Task.sleep(for: .milliseconds(300))
         // The warm-up advanced the queue; the measured run must start from a known position or the
         // expected Repeat All order would be offset by however many tracks the warm-up consumed.
@@ -228,6 +229,7 @@ struct GaplessOneHourPlaybackTests {
         let wallSeconds = Date().timeIntervalSince(started)
 
         controller.stop()
+        await backend.settleTransport()
         native.deactivate()
         try? await Task.sleep(for: .milliseconds(200))
         let afterStopMemory = Self.residentBytes()

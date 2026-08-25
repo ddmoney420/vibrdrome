@@ -714,8 +714,9 @@ struct PlaybackSessionPlanExecutorTests {
             #expect(assembly.backend.engine.player.isPlaying == false)
             #expect(assembly.controller.onFirstAudibleSample == nil,
                     "the audible callback outlived the torn-down persistent session")
-            #expect(assembly.backend.scheduledSegments.isEmpty,
-                    "the failed start left \(assembly.backend.scheduledSegments.count) segments on the node")
+            let domainSnapshot = await assembly.backend.domainSnapshotForTesting
+            #expect(domainSnapshot.scheduledSegments == 0,
+                    "the failed start left \(domainSnapshot.scheduledSegments) segments on the node")
             #expect(executor.ownership.authority == .legacy)
             #expect(executor.stepCounts["startLegacy"] == 1)
         }
@@ -910,7 +911,7 @@ final class PersistentPortSpy: PersistentPlaybackSessionPort {
         isTransportActive = true
     }
 
-    func tearDown() {
+    func tearDown() async {
         record("tearDown")
         isTransportActive = false
     }

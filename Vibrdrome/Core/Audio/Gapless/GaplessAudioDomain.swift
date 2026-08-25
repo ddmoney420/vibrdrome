@@ -39,11 +39,10 @@ actor GaplessAudioActor {
 ///   and stopping the engine, and activating the audio session, remain the application's job and
 ///   stay outside this actor.
 ///
-/// **The remaining gap, stated plainly:** production's `GaplessRealTimeBackend` still mutates the
-/// same player node from the main actor. Until the following checkpoint moves production onto this
-/// domain, both paths exist — they are simply never live at the same time, because nothing yet
-/// constructs a domain over the production graph. That migration is what makes this conformance
-/// fully honest rather than conditionally so.
+/// Production honours this: `GaplessRealTimeBackend` constructs exactly one domain over its graph
+/// and routes every Persistent node mutation through it — the backend itself no longer calls
+/// `scheduleBuffer`, `play`, `pause` or `stop` on the node. (The one deliberate exception is the
+/// DEBUG-only file-segment comparison substrate, which cannot be selected in a release build.)
 struct GaplessGraphHandle: @unchecked Sendable {
     let engine: AVAudioEngine
     let player: AVAudioPlayerNode
@@ -74,6 +73,44 @@ struct GaplessAudioDomainSnapshot: Sendable, Equatable {
     var chunksScheduled = 0
     var poolStarvations = 0
     var accountingBalances = true
+    /// Recycle callbacks that named a superseded tail. Diagnostic, not an error: buffers are
+    /// released regardless of staleness.
+    var staleRecycles = 0
+    var chunksRecycled = 0
+    /// Chunks whose buffer came back because the node was stopped rather than because it finished
+    /// playing them — the third term of the scheduled == recycled + reclaimed identity.
+    var chunksReclaimedAtStop = 0
+    /// Recycle tokens deposited by the render thread but not yet drained. Zero at rest.
+    var pendingRecycleTokens = 0
+    /// Tracks that failed during decode or conversion.
+    var sourceFailures = 0
+}
+
+/// Everything the main actor may know about the domain's timeline, as one immutable value.
+///
+/// The production backend caches one of these and answers its synchronous reads — `scheduledSegments`,
+/// `openFileCount`, boundary scanning — from the cache, refreshing it after every awaited domain
+/// operation and on every heartbeat tick. Boundary observation tolerates that staleness by design:
+/// a boundary not visible this tick is observed on the next, and events from a superseded tail are
+/// dropped by generation. **A teardown or resource decision must never be made from this value** —
+/// for strong ordering, await the domain directly.
+struct GaplessAudioDomainReadout: Sendable {
+    var snapshot = GaplessAudioDomainSnapshot()
+    /// Segment records in play order, lengths reconciled to actually-produced output.
+    var segments: [GaplessScheduledSegment] = []
+    /// Play instances whose PCM has genuinely been scheduled — the only starts boundaries may be
+    /// observed against.
+    var materializedInstances: Set<GaplessPlayInstanceID> = []
+    /// The scheduler's own tail generation. A schedule batch carrying an older value is refused,
+    /// which is what stops work suspended across a stop or tail reset from landing in the
+    /// replacement tail.
+    var tailGeneration: UInt64 = 1
+}
+
+/// Why the domain refused an operation.
+enum GaplessAudioDomainError: Error, Equatable {
+    /// The batch was planned against a tail that a stop or reset has since replaced.
+    case supersededTail(expected: UInt64, current: UInt64)
 }
 
 /// Owns the persistent graph's player node and its PCM pipeline, on `GaplessAudioActor`.
@@ -83,9 +120,9 @@ struct GaplessAudioDomainSnapshot: Sendable, Equatable {
 /// `GaplessAudioActor`. That is the property the ownership test pins: it fails if one of those
 /// mutations is ever reachable from anywhere else.
 ///
-/// **Not yet wired.** Nothing in production constructs one. `GaplessRealTimeBackend` still owns its
-/// own main-actor scheduler and mutates the node itself, so the background defect is still live on
-/// device. This checkpoint proves the replacement; the next adopts it.
+/// **Wired.** `GaplessRealTimeBackend` constructs exactly one of these over the production graph on
+/// first use and retains it for the backend's lifetime, so a Persistent session's refill keeps
+/// running when iOS deprioritises main-actor work in the background.
 @GaplessAudioActor
 final class GaplessAudioDomain {
 
@@ -132,6 +169,29 @@ final class GaplessAudioDomain {
     func enqueue(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
                  generation: UInt64) throws -> GaplessScheduledSegment {
         try scheduler.enqueue(track: track, itemID: itemID, generation: generation)
+    }
+
+    /// Enqueue a prepared batch and produce immediately, as one atomic domain operation.
+    ///
+    /// `expectedTailGeneration` is the fence: the caller captures it before its awaits, and a batch
+    /// whose tail has since been replaced — a stop or reset ran while the caller was suspended — is
+    /// refused whole rather than scheduled into a tail it was never planned against. The check and
+    /// the enqueue happen in one actor turn, so nothing can replace the tail between them.
+    func schedule(batch: [(track: GaplessPreparedTrack, itemID: GaplessQueueItemID,
+                           generation: UInt64)],
+                  expectedTailGeneration: UInt64) throws -> [GaplessScheduledSegment] {
+        guard scheduler.tailGeneration == expectedTailGeneration else {
+            throw GaplessAudioDomainError.supersededTail(expected: expectedTailGeneration,
+                                                         current: scheduler.tailGeneration)
+        }
+        var created: [GaplessScheduledSegment] = []
+        for entry in batch {
+            created.append(try scheduler.enqueue(track: entry.track, itemID: entry.itemID,
+                                                 generation: entry.generation))
+        }
+        // Produce immediately so the lead is filled before the boundary rather than at it.
+        refill()
+        return created
     }
 
     /// Recycle finished buffers and top the schedule back up to its target depth.
@@ -197,6 +257,31 @@ final class GaplessAudioDomain {
         reconciledDeposits = scheduler.inbox.totalDeposits
     }
 
+    /// Replace the scheduled tail: stop the node, discard every pending schedule, and resume the
+    /// timeline from the audible frame — the seek/skip mechanism, kept whole on this actor so a
+    /// refill wakeup cannot land between the stop and the reset.
+    ///
+    /// `resumePlaying` restarts the node immediately (the caller re-schedules from the audible
+    /// offset); it is honoured only while the engine is running, same as `resume()`.
+    func resetTail(resumeTimelineFrame: AVAudioFramePosition, resumePlaying: Bool) {
+        graph.player.stop()
+        record(.stop)
+        isPlaying = false
+        scheduler.resetAfterNodeStop(resumeTimelineFrame: resumeTimelineFrame)
+        scheduler.reconcileLateCallbacks()
+        reconciledDeposits = scheduler.inbox.totalDeposits
+        if resumePlaying, graph.engine.isRunning {
+            graph.player.play()
+            isPlaying = true
+            record(.play)
+        }
+    }
+
+    /// Drop timeline records for audio already played, keeping the record bounded over a long run.
+    func pruneSegments(before instance: GaplessPlayInstanceID) {
+        scheduler.pruneSegments(before: instance)
+    }
+
     // MARK: - Readout
 
     func snapshot() -> GaplessAudioDomainSnapshot {
@@ -215,7 +300,30 @@ final class GaplessAudioDomain {
             refillExecutions: refillExecutions,
             chunksScheduled: scheduler.chunksScheduled,
             poolStarvations: scheduler.poolStarvations,
-            accountingBalances: scheduler.chunkAccountingBalances)
+            accountingBalances: scheduler.chunkAccountingBalances,
+            staleRecycles: scheduler.staleRecycles,
+            chunksRecycled: scheduler.chunksRecycled,
+            chunksReclaimedAtStop: scheduler.chunksReclaimedAtStop,
+            pendingRecycleTokens: scheduler.inbox.pendingCount,
+            sourceFailures: scheduler.failures.count)
+    }
+
+    /// Fold in completion callbacks the node delivered after a reset had already reclaimed their
+    /// buffers. Returns how many were folded. The drain path handles stragglers with the same
+    /// accounting on its own; this exists so a caller can force the fold at a known point.
+    @discardableResult
+    func reconcileLateCallbacks() -> Int {
+        let late = scheduler.reconcileLateCallbacks()
+        reconciledDeposits = scheduler.inbox.totalDeposits
+        return late
+    }
+
+    /// The full timeline readout the production backend caches on the main actor.
+    func readout() -> GaplessAudioDomainReadout {
+        GaplessAudioDomainReadout(snapshot: snapshot(),
+                                  segments: scheduler.segments,
+                                  materializedInstances: scheduler.materializedInstances,
+                                  tailGeneration: scheduler.tailGeneration)
     }
 
     /// Bounded: the proof only needs which kinds happened and in what order, not every repetition.

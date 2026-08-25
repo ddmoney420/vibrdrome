@@ -113,6 +113,7 @@ struct GaplessBufferIntegrationTests {
         #expect(rig.backend.schedulingMode == .pcmBuffer)
         #endif
         rig.controller.stop()
+        await rig.backend.settleTransport()
         #if DEBUG
         #expect(rig.backend.setSchedulingMode(.fileSegment) == true)
         #expect(rig.backend.setSchedulingMode(.pcmBuffer) == true)
@@ -137,13 +138,14 @@ struct GaplessBufferIntegrationTests {
         let instances = Set(boundaries.map(\.playInstance))
         let songOrder = boundaries.map(\.songID)
         let expectedCycle = (0..<5).map { "s\($0)" }
+        let snap = await rig.backend.domainSnapshotForTesting
         print("""
             CIREPEAT boundaries \(boundaries.count)  distinct instances \(instances.count)  \
             order \(songOrder.prefix(12))  \
             openFiles \(rig.backend.openFileCount)  \
-            pool \(rig.backend.bufferScheduler.pool.availableCount)/\(rig.backend.bufferScheduler.pool.capacity)  \
-            starvations \(rig.backend.bufferScheduler.poolStarvations)  \
-            chunks \(rig.backend.bufferScheduler.chunksScheduled)/\(rig.backend.bufferScheduler.chunksRecycled)  \
+            pool \(snap.poolAvailable)/\(snap.poolCapacity)  \
+            starvations \(snap.poolStarvations)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)  \
             gap \(String(format: "%.4f", capture.longestSilenceSeconds(sampleRate: Self.sampleRate)))s
             """)
 
@@ -156,7 +158,7 @@ struct GaplessBufferIntegrationTests {
             #expect(songID == expectedCycle[index % 5],
                     "position \(index) played \(songID), expected \(expectedCycle[index % 5])")
         }
-        #expect(rig.backend.bufferScheduler.staleRecycles == 0)
+        #expect(snap.staleRecycles == 0)
     }
 
     /// Repeat One replays the same slot as separate play instances, positionally tracked.
@@ -171,10 +173,11 @@ struct GaplessBufferIntegrationTests {
         let boundaries = rig.controller.observedBoundaries
         let songs = Set(boundaries.map(\.songID))
         let instances = Set(boundaries.map(\.playInstance))
+        let snap = await rig.backend.domainSnapshotForTesting
         print("""
             CIREPEATONE boundaries \(boundaries.count)  songs \(songs)  \
             distinct instances \(instances.count)  \
-            starvations \(rig.backend.bufferScheduler.poolStarvations)
+            starvations \(snap.poolStarvations)
             """)
         #expect(boundaries.count >= 3, "only \(boundaries.count) replays")
         #expect(songs == ["s0"], "Repeat One left the current item: \(songs)")
@@ -188,7 +191,6 @@ struct GaplessBufferIntegrationTests {
     @Test func transportRebuildsTailWithoutLeakingBuffers() async throws {
         let rig = try Self.makeRig(trackCount: 6, frames: 22_050)
         defer { Self.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
 
         try await rig.controller.play()
         await Self.run(rig, seconds: 0.5)
@@ -206,25 +208,29 @@ struct GaplessBufferIntegrationTests {
             lastFrame = frame
         }
 
+        let readout = await rig.backend.domainReadoutForTesting
+        let snap = readout.snapshot
         print("""
-            CITRANSPORT tail \(scheduler.tailGeneration)  \
-            pool \(scheduler.pool.availableCount)+\(scheduler.pool.inFlightCount)/\(scheduler.pool.capacity)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)  \
-            staleRecycles \(scheduler.staleRecycles)  \
+            CITRANSPORT tail \(readout.tailGeneration)  \
+            pool \(snap.poolAvailable)+\(snap.poolInFlight)/\(snap.poolCapacity)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)  \
+            staleRecycles \(snap.staleRecycles)  \
             openFiles \(rig.backend.openFileCount)  \
             liveFiles \(GaplessPCMChunkSource.liveFileCount)  \
             liveConverters \(GaplessPCMConverter.liveCount)
             """)
 
-        #expect(scheduler.tailGeneration > 1, "no tail replacement happened")
+        #expect(readout.tailGeneration > 1, "no tail replacement happened")
         // Buffers are conserved: available + in-flight is always exactly the pool.
-        #expect(scheduler.pool.availableCount + scheduler.pool.inFlightCount == scheduler.pool.capacity)
+        #expect(snap.poolAvailable + snap.poolInFlight == snap.poolCapacity)
 
         rig.controller.stop()
-        #expect(scheduler.pool.availableCount == scheduler.pool.capacity,
-                "stop left \(scheduler.pool.inFlightCount) buffers out")
-        #expect(rig.backend.openFileCount == 0)
-        #expect(scheduler.segments.isEmpty)
+        await rig.backend.settleTransport()
+        let after = await rig.backend.domainReadoutForTesting
+        #expect(after.snapshot.poolAvailable == after.snapshot.poolCapacity,
+                "stop left \(after.snapshot.poolInFlight) buffers out")
+        #expect(after.snapshot.openFiles == 0)
+        #expect(after.segments.isEmpty)
     }
 
     /// Stop and restart repeatedly: the pool, the files and the converters must all come back every
@@ -232,20 +238,22 @@ struct GaplessBufferIntegrationTests {
     @Test func repeatedStopRestartLeavesNoResidue() async throws {
         let rig = try Self.makeRig(trackCount: 3, frames: 4_410)
         defer { Self.teardown(rig) }
-        let scheduler = rig.backend.bufferScheduler
         let descriptorsBefore = GaplessBufferFixtures.openFileDescriptorCount()
 
         for cycle in 0..<100 {
             try await rig.controller.play()
             await rig.controller.tick()
             rig.controller.stop()
-            #expect(scheduler.pool.availableCount == scheduler.pool.capacity,
-                    "cycle \(cycle) left \(scheduler.pool.inFlightCount) buffers out")
-            #expect(rig.backend.openFileCount == 0, "cycle \(cycle) left a file open")
+            await rig.backend.settleTransport()
+            let snap = await rig.backend.domainSnapshotForTesting
+            #expect(snap.poolAvailable == snap.poolCapacity,
+                    "cycle \(cycle) left \(snap.poolInFlight) buffers out")
+            #expect(snap.openFiles == 0, "cycle \(cycle) left a file open")
         }
         let descriptorGrowth = GaplessBufferFixtures.openFileDescriptorCount() - descriptorsBefore
+        let snap = await rig.backend.domainSnapshotForTesting
         print("""
-            CISTOPCYCLE 100 cycles  pool \(scheduler.pool.availableCount)/\(scheduler.pool.capacity)  \
+            CISTOPCYCLE 100 cycles  pool \(snap.poolAvailable)/\(snap.poolCapacity)  \
             fdDelta \(descriptorGrowth)  liveFiles \(GaplessPCMChunkSource.liveFileCount)  \
             liveConverters \(GaplessPCMConverter.liveCount)
             """)
@@ -276,6 +284,7 @@ struct GaplessBufferIntegrationTests {
         }
         let transitions = rig.controller.observedBoundaries.count
         rig.controller.stop()
+        await rig.backend.settleTransport()
         try? await Task.sleep(for: .milliseconds(200))
 
         print("""
@@ -300,7 +309,6 @@ struct GaplessBufferIntegrationTests {
         let rig = try Self.makeRig(trackCount: 40, frames: 4_800, sampleRate: 48_000, channels: 1)
         defer { Self.teardown(rig) }
         rig.session.setRepeatMode(.all)
-        let scheduler = rig.backend.bufferScheduler
 
         try await rig.controller.play()
         // Warm up before the baseline: the audio stack's one-time allocation is not growth.
@@ -329,24 +337,25 @@ struct GaplessBufferIntegrationTests {
         let growthMB = Double(Int64(GaplessBufferFixtures.physFootprint()) - Int64(baseline)) / 1_048_576
         let heapMB = Double(Int64(GaplessBufferFixtures.liveHeapBytes()) - Int64(baselineHeap)) / 1_048_576
         let descriptorGrowth = GaplessBufferFixtures.openFileDescriptorCount() - baselineDescriptors
+        let snap = await rig.backend.domainSnapshotForTesting
 
         print("""
             CISOAK transitions \(transitions)  growth \(String(format: "%.2f", growthMB)) MB  \
             heapDelta \(String(format: "%.2f", heapMB)) MB  fdDelta \(descriptorGrowth)  \
             windows \(samples.map { String(format: "%.1f", $0) })  \
             peakOpenFiles \(peakOpenFiles)  peakConverters \(peakConverters)  \
-            pool \(scheduler.pool.availableCount)/\(scheduler.pool.capacity)  \
-            inbox \(scheduler.inbox.pendingCount)  outstanding \(scheduler.outstandingCallbackCount)  \
-            segments \(scheduler.segments.count)  starvations \(scheduler.poolStarvations)  \
-            staleRecycles \(scheduler.staleRecycles)  \
-            chunks \(scheduler.chunksScheduled)/\(scheduler.chunksRecycled)
+            pool \(snap.poolAvailable)/\(snap.poolCapacity)  \
+            unreconciled \(snap.unreconciledDeposits)  outstanding \(snap.scheduledDepth)  \
+            segments \(snap.scheduledSegments)  starvations \(snap.poolStarvations)  \
+            staleRecycles \(snap.staleRecycles)  \
+            chunks \(snap.chunksScheduled)/\(snap.chunksRecycled)
             """)
 
         #expect(transitions >= 900, "only \(transitions) transitions")
         #expect(growthMB < 40, "footprint grew \(growthMB) MB")
         #expect(descriptorGrowth <= 8, "descriptors grew \(descriptorGrowth)")
         #expect(peakOpenFiles <= 4, "open files peaked at \(peakOpenFiles)")
-        #expect(scheduler.staleRecycles == 0)
-        #expect(scheduler.segments.count < 64, "segment records grew to \(scheduler.segments.count)")
+        #expect(snap.staleRecycles == 0)
+        #expect(snap.scheduledSegments < 64, "segment records grew to \(snap.scheduledSegments)")
     }
 }

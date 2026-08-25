@@ -52,10 +52,10 @@ struct GaplessRealTimeBackendTests {
     /// this keeps it bounded and reports a timeout rather than hanging.
     @discardableResult
     static func waitUntil(_ description: String, timeout: TimeInterval = 10,
-                          _ predicate: () -> Bool) async -> Bool {
+                          _ predicate: () async -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if predicate() { return true }
+            if await predicate() { return true }
             try? await Task.sleep(for: .milliseconds(10))
         }
         Issue.record("timed out waiting for \(description)")
@@ -96,7 +96,7 @@ struct GaplessRealTimeBackendTests {
     }
 
     /// Preparing and scheduling audio is likewise passive — only Play activates.
-    @Test func schedulingWithoutPlayingNeverActivatesTheAudioSession() throws {
+    @Test func schedulingWithoutPlayingNeverActivatesTheAudioSession() async throws {
         let (urls, tracks) = try Self.makeTracks(count: 2)
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = GaplessRealTimeBackend()
@@ -104,7 +104,7 @@ struct GaplessRealTimeBackendTests {
         backend.activateAudioSession = { activated = true }
 
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
+        try await backend.scheduleForTesting(Self.entries(tracks))
 
         #expect(!activated)
         #expect(backend.state == .prepared)
@@ -120,10 +120,10 @@ struct GaplessRealTimeBackendTests {
         backend.activateAudioSession = { activationCount += 1; try realActivation?() }
 
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
+        try await backend.scheduleForTesting(Self.entries(tracks))
         #expect(activationCount == 0)
 
-        try backend.start()
+        try await backend.start()
         defer { backend.stop() }
 
         #expect(activationCount == 1)
@@ -140,11 +140,11 @@ struct GaplessRealTimeBackendTests {
         let realActivation = backend.activateAudioSession
         backend.activateAudioSession = { activationCount += 1; try realActivation?() }
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
+        try await backend.scheduleForTesting(Self.entries(tracks))
 
-        try backend.start()
-        try backend.start()
-        try backend.start()
+        try await backend.start()
+        try await backend.start()
+        try await backend.start()
         defer { backend.stop() }
 
         #expect(activationCount == 1)
@@ -159,17 +159,17 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        let segments = try backend.schedule(Self.entries(tracks))
+        let segments = try await backend.scheduleForTesting(Self.entries(tracks))
 
         let playerBefore = ObjectIdentifier(backend.engine.player)
         let eqBefore = ObjectIdentifier(backend.engine.eq)
-        try backend.start()
+        try await backend.start()
         defer { backend.stop() }
 
         let total = AVAudioFramePosition(4 * Self.partFrames)
         var startCount = 0
         await Self.waitUntil("all four parts to render") {
-            backend.observeBoundaries()
+            await backend.observeBoundaries()
             if backend.engine.engine.isRunning { startCount = max(startCount, 1) }
             return backend.renderFrame >= total
         }
@@ -193,15 +193,15 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        let segments = try backend.schedule(Self.entries(tracks))
+        let segments = try await backend.scheduleForTesting(Self.entries(tracks))
         let playerBefore = ObjectIdentifier(backend.engine.player)
 
-        try backend.start()
+        try await backend.start()
         defer { backend.stop() }
 
         let total = AVAudioFramePosition(partCount * Self.partFrames)
         await Self.waitUntil("21 parts to render", timeout: 30) {
-            backend.observeBoundaries()
+            await backend.observeBoundaries()
             return backend.renderFrame >= total
         }
 
@@ -225,12 +225,12 @@ struct GaplessRealTimeBackendTests {
         // Same slot ID, same file, three times — exactly what Repeat One does.
         let slot = GaplessQueueItemID(rawValue: 1)
         let repeated = (0..<3).map { _ in (track: tracks[0], itemID: slot, generation: UInt64(1)) }
-        let segments = try backend.schedule(repeated)
+        let segments = try await backend.scheduleForTesting(repeated)
 
-        try backend.start()
+        try await backend.start()
         defer { backend.stop() }
         await Self.waitUntil("three replays to render", timeout: 15) {
-            backend.observeBoundaries()
+            await backend.observeBoundaries()
             return backend.renderFrame >= AVAudioFramePosition(3 * Self.partFrames)
         }
 
@@ -248,12 +248,12 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        let segments = try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        let segments = try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         defer { backend.stop() }
 
         await Self.waitUntil("three parts", timeout: 15) {
-            backend.observeBoundaries()
+            await backend.observeBoundaries()
             return backend.renderFrame >= AVAudioFramePosition(3 * Self.partFrames)
         }
 
@@ -272,12 +272,13 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         defer { backend.stop() }
 
         await Self.waitUntil("playback to begin") { backend.renderFrame > 1_000 }
         backend.pause()
+        await backend.settleTransport()
         let atPause = backend.renderFrame
         let tailAtPause = backend.scheduledSegments.count
 
@@ -302,14 +303,15 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         defer { backend.stop() }
 
         var last: AVAudioFramePosition = 0
         for _ in 0..<3 {
             await Self.waitUntil("advance") { backend.renderFrame > last + 2_000 }
             backend.pause()
+            await backend.settleTransport()
             let paused = backend.renderFrame
             #expect(paused >= last)
             try await Task.sleep(for: .milliseconds(80))
@@ -326,11 +328,12 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         await Self.waitUntil("playback to begin") { backend.renderFrame > 1_000 }
 
         backend.stop()
+        await backend.settleTransport()
 
         #expect(backend.state == .idle)
         #expect(backend.scheduledSegments.isEmpty)
@@ -340,8 +343,8 @@ struct GaplessRealTimeBackendTests {
 
         // Reusable: the same graph starts again cleanly.
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks, generation: 2))
-        try backend.start()
+        try await backend.scheduleForTesting(Self.entries(tracks, generation: 2))
+        try await backend.start()
         defer { backend.stop() }
         #expect(backend.state == .playing)
         await Self.waitUntil("second run to advance") { backend.renderFrame > 1_000 }
@@ -356,19 +359,19 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         defer { backend.stop() }
         await Self.waitUntil("playback to begin") { backend.renderFrame > 2_000 }
 
         let before = backend.renderFrame
-        let resumeFrame = backend.resetTail()
+        let resumeFrame = await backend.resetTail()
 
         #expect(resumeFrame >= before)
         // The clock does not jump backwards after the rebuild.
         #expect(backend.renderFrame >= before)
         // A fresh tail can be scheduled from the new origin.
-        try backend.schedule(Self.entries(Array(tracks.suffix(2)), generation: 2))
+        try await backend.scheduleForTesting(Self.entries(Array(tracks.suffix(2)), generation: 2))
         #expect(backend.scheduledSegments.last?.generation == 2)
     }
 
@@ -379,8 +382,8 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        let segments = try backend.schedule(Self.entries(tracks))
-        try backend.start()
+        let segments = try await backend.scheduleForTesting(Self.entries(tracks))
+        try await backend.start()
         defer { backend.stop() }
 
         // Wait until the clock is inside the second segment.
@@ -401,25 +404,25 @@ struct GaplessRealTimeBackendTests {
 
     // MARK: - Failure paths
 
-    @Test func audioSessionActivationFailureLeavesAKnownState() throws {
+    @Test func audioSessionActivationFailureLeavesAKnownState() async throws {
         let backend = GaplessRealTimeBackend()
         struct Boom: Error {}
         backend.activateAudioSession = { throw Boom() }
         try backend.prepareGraph()
 
-        #expect(throws: GaplessEngineFailure.self) { try backend.start() }
+        await #expect(throws: GaplessEngineFailure.self) { try await backend.start() }
         #expect(backend.state == .failed)
         // A failed engine is not left looking like it is playing.
         #expect(!backend.engine.engine.isRunning)
         #expect(!GaplessEngineState.failed.canTransition(to: .playing))
     }
 
-    @Test func schedulingAMissingFileFailsWithoutCorruptingTheTimeline() throws {
+    @Test func schedulingAMissingFileFailsWithoutCorruptingTheTimeline() async throws {
         let (urls, tracks) = try Self.makeTracks(count: 1)
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = GaplessRealTimeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
+        try await backend.scheduleForTesting(Self.entries(tracks))
         let goodCount = backend.scheduledSegments.count
 
         let missing = GaplessPreparedTrack(
@@ -427,11 +430,13 @@ struct GaplessRealTimeBackendTests {
             trim: GaplessTrim(startFrame: 0, frameCount: 100, reason: .wholeFile),
             sourceSampleRate: Self.sampleRate, sourceChannelCount: 1, renderFrames: 100)
 
-        #expect(throws: GaplessEngineFailure.self) {
-            try backend.schedule([(missing, GaplessQueueItemID(rawValue: 99), 1)])
+        await #expect(throws: GaplessEngineFailure.self) {
+            try await backend.scheduleForTesting([(missing, GaplessQueueItemID(rawValue: 99), 1)])
         }
-        // The good segment is untouched — a failed schedule does not corrupt the timeline.
-        #expect(backend.scheduledSegments.count == goodCount)
+        // The good segment is untouched — a failed schedule does not corrupt the timeline. Read the
+        // domain directly: the cached readout is not refreshed on the failure path.
+        let readout = await backend.domainReadoutForTesting
+        #expect(readout.segments.count == goodCount)
     }
 
     // MARK: - No per-item processing tap
@@ -442,14 +447,14 @@ struct GaplessRealTimeBackendTests {
         defer { GaplessPipelineOfflineTests.cleanUp(urls) }
         let backend = Self.makeBackend()
         try backend.prepareGraph()
-        try backend.schedule(Self.entries(tracks))
+        try await backend.scheduleForTesting(Self.entries(tracks))
         backend.engine.installVisualizerFeed()
         defer { backend.engine.uninstallVisualizerFeed() }
-        try backend.start()
+        try await backend.start()
         defer { backend.stop() }
 
         await Self.waitUntil("two boundaries") {
-            backend.observeBoundaries()
+            await backend.observeBoundaries()
             return backend.renderFrame > AVAudioFramePosition(2 * Self.partFrames)
         }
 

@@ -115,14 +115,14 @@ struct GaplessLeadTimeDiagnosticsTests {
 
         let boundaries = rig.controller.observedBoundaries
         let instances = boundaries.map(\.playInstance)
-        let scheduler = rig.backend.bufferScheduler
+        let snap = await rig.backend.domainSnapshotForTesting
         #expect(Set(instances).count == instances.count, "a play instance was reused")
         for (index, boundary) in boundaries.enumerated() {
             #expect(boundary.songID == "s\(index % 5)",
                     "position \(index) played \(boundary.songID)")
         }
-        #expect(scheduler.staleRecycles == 0)
-        #expect(scheduler.pool.availableCount + scheduler.pool.inFlightCount == scheduler.pool.capacity)
+        #expect(snap.staleRecycles == 0)
+        #expect(snap.poolAvailable + snap.poolInFlight == snap.poolCapacity)
     }
 
     /// The registry holds the controller weakly — a strong reference would keep a stopped engine,
@@ -132,6 +132,7 @@ struct GaplessLeadTimeDiagnosticsTests {
             let rig = try GaplessBufferIntegrationTests.makeRig(trackCount: 2, frames: 4_410)
             #expect(GaplessDiagnosticsRegistry.current === rig.controller)
             GaplessBufferIntegrationTests.teardown(rig)
+            await rig.backend.settleTransport()
         }
         // Allow the autorelease pool to drain the controller.
         for _ in 0..<5 { try? await Task.sleep(for: .milliseconds(50)) }

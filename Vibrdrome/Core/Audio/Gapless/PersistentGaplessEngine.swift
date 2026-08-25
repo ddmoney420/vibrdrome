@@ -130,6 +130,12 @@ final class PersistentGaplessEngine {
         visualizerFeed.uninstall()
     }
 
+    #if DEBUG
+    // The offline manual-rendering harness below is the objective frame-continuity gate the offline
+    // test suites drive. It mutates the player node directly, which production must never do — the
+    // audio domain is the sole production owner of node mutations — so the whole surface is
+    // DEBUG-only: no production caller exists, and a release build cannot acquire one.
+
     /// Schedule local files consecutively into the running player node and record their exact
     /// render-frame ranges.
     ///
@@ -249,4 +255,5 @@ final class PersistentGaplessEngine {
         engine.stop()
         return out
     }
+    #endif
 }

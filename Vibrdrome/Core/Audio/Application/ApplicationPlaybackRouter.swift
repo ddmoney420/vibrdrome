@@ -106,11 +106,12 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     ///
     /// The teardown a routing test owes the next suite: no selection in flight, no authority
     /// granted, no persistent transport running, no audible callback installed, and the persistent
-    /// backend back in a startable state.
-    func releaseSessionForTesting() {
+    /// backend back in a startable state. Awaits the port's teardown, so on return the persistent
+    /// side is genuinely clean rather than merely told to clean up.
+    func releaseSessionForTesting() async {
         supersedePendingSelection()
         if let port = persistentPort {
-            port.tearDown()
+            await port.tearDown()
             port.clearAudibleObserver()
         }
         ownership.release()
@@ -208,15 +209,20 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             return
         }
 
-        // Flag Off, Release, or a mid-track start: today's behaviour exactly — no planner, no
-        // persistent construction, one legacy start. Authority is left alone so a build that never
-        // enables the flag behaves as it did before this lane.
+        // Flag Off, Release, or a mid-track start: no planner, no persistent construction, one
+        // legacy start. Authority is left alone so a build that never enables the flag behaves as
+        // it did before this lane. When a persistent session IS active, its teardown must complete
+        // before legacy starts — that replacement runs as this request's ordered transition,
+        // fenced by the same planning generation as any other session start.
         guard PersistentRoutingSetting.isEnabled, startOffsetSeconds <= 0 else {
-            releasePersistentIfActive()
-            sessionSelectionState = .legacy(reason: startOffsetSeconds > 0
-                                            ? .requiredMediaPropertiesUnknown : .supportedLocalSource)
-            lastCompletedPlanningGeneration = generation
-            legacy.play(song: first, from: songs, at: startIndex)
+            let reason: PlaybackBackendDecisionReason = startOffsetSeconds > 0
+                ? .requiredMediaPropertiesUnknown : .supportedLocalSource
+            // `grantsAuthority: false` preserves the flag-off contract: authority is left alone so
+            // a build that never enables the flag behaves as it did before this lane.
+            beginLegacyReplacement(reason: reason, generation: generation,
+                                   grantsAuthority: false) {
+                $0.play(song: first, from: songs, at: startIndex)
+            }
             return
         }
 
@@ -256,8 +262,9 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
                              for request: PlaybackSessionSelectionRequest) async {
         // Persistent → anything is a replacement, and the old session must let go *before* the new
         // one is executed: the executor's handoff quiesces legacy, not persistent, so leaving the
-        // old persistent session holding authority would put two engines on the same graph.
-        releasePersistentIfActive()
+        // old persistent session holding authority would put two engines on the same graph. The
+        // await is the point — the old domain is clean before the new source is adopted.
+        await releasePersistentIfActive()
 
         let outcome = await executor(for: plan).execute(
             plan: plan, request: request, currentGeneration: pendingPlanningGeneration)
@@ -269,12 +276,47 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// Start a session that is legacy by definition — radio and live streams, which the persistent
     /// engine cannot schedule because they have no finite timeline.
     private func beginLegacyOnlySession(reason: PlaybackBackendDecisionReason,
-                                        _ operation: (any ApplicationPlaybackControlling) -> Void) {
-        lastCompletedPlanningGeneration = supersedePendingSelection()
-        releasePersistentIfActive()
-        ownership.grant(.legacy)
-        sessionSelectionState = .legacy(reason: reason)
-        operation(legacy)
+                                        _ operation: @escaping @MainActor
+                                            (any ApplicationPlaybackControlling) -> Void) {
+        let generation = supersedePendingSelection()
+        beginLegacyReplacement(reason: reason, generation: generation, grantsAuthority: true,
+                               operation)
+    }
+
+    /// The one legacy-start path for synchronous entry points, honest about persistent teardown.
+    ///
+    /// No persistent session active: exactly today's behaviour — record, start (and for the paths
+    /// that own authority, grant it), all synchronously. A persistent session active: the request
+    /// becomes this generation's ordered transition — persistent teardown is awaited to completion,
+    /// the generation re-checked (a newer request wins and this one starts nothing), and only then
+    /// does legacy start. The transition lives in `planningTask`, so the next request supersedes it
+    /// exactly like a planned selection.
+    private func beginLegacyReplacement(reason: PlaybackBackendDecisionReason,
+                                        generation: UInt64,
+                                        grantsAuthority: Bool,
+                                        _ operation: @escaping @MainActor
+                                            (any ApplicationPlaybackControlling) -> Void) {
+        guard ownership.authority == .persistent, persistentPort != nil else {
+            if grantsAuthority { ownership.grant(.legacy) }
+            sessionSelectionState = .legacy(reason: reason)
+            lastCompletedPlanningGeneration = generation
+            operation(legacy)
+            return
+        }
+        isReplacingSession = true
+        planningTask = Task { [weak self] in
+            guard let self else { return }
+            // Teardown always completes — a half-released persistent session is worse than a
+            // released one whatever happened to the request — but authority and the start belong
+            // only to the newest request.
+            await self.releasePersistentIfActive()
+            guard generation == self.pendingPlanningGeneration else { return }
+            if grantsAuthority { self.ownership.grant(.legacy) }
+            self.sessionSelectionState = .legacy(reason: reason)
+            self.lastCompletedPlanningGeneration = generation
+            self.isReplacingSession = false
+            operation(self.legacy)
+        }
     }
 
     /// Take the next planning generation and invalidate whatever was in flight.
@@ -289,11 +331,13 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// Release a persistent session so another backend can own audio.
     ///
     /// Ordered exactly like the executor's fallback, and for the same reason: the transport goes
-    /// first, the callback is cleared so a boundary from the dead session cannot latch against the
-    /// next one, and authority is revoked before anything else is granted.
-    private func releasePersistentIfActive() {
+    /// first — and its teardown is **awaited to completion**, so the node is stopped, the pool
+    /// reclaimed and the sources closed before anything else happens — then the callback is cleared
+    /// so a boundary from the dead session cannot latch against the next one, and authority is
+    /// revoked before anything else is granted.
+    private func releasePersistentIfActive() async {
         guard ownership.authority == .persistent, let port = persistentPort else { return }
-        port.tearDown()
+        await port.tearDown()
         port.clearAudibleObserver()
         ownership.release()
     }
