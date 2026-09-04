@@ -391,6 +391,29 @@ struct PlaybackAuthorityRoutingTests {
         }
     }
 
+    /// Durations and buffering follow authority: during a persistent session they come from the
+    /// persistent side, never from the quiesced legacy engine — whose stale duration is how the
+    /// full player showed 0:00 remaining early while audio continued (device capture, 2026-08-29).
+    @Test func durationsRouteToPersistentWhileItOwnsTheSession() async throws {
+        try await withTemporaryDirectory { directory in
+            try await withRoutingFlag(true) {
+                let (router, _, persistent) = makeRoutingRouter()
+                defer { scheduleTeardown(router) }
+                let track = try makeTrack(id: "d0", in: directory)
+                await startPersistentSession(router, songs: [makeSong(id: "d0")], track: track)
+                #expect(router.ownership.authority == .persistent, "the fixture never took authority")
+
+                persistent.duration = 123
+                persistent.effectiveDuration = 456
+
+                #expect(router.duration == 123, "duration was not answered by the session owner")
+                #expect(router.effectiveDuration == 456)
+                #expect(router.isBuffering == false,
+                        "a persistent session reported the legacy engine's buffering state")
+            }
+        }
+    }
+
     /// With no persistent session, the same operations reach legacy exactly once and persistent not
     /// at all.
     @Test func transportRoutesToLegacyWhenPersistentDoesNotOwnTheSession() {
@@ -721,7 +744,7 @@ struct PlaybackAuthorityRoutingTests {
                 #expect(summary.contains("Active transport backend: Persistent"))
                 #expect(summary.lowercased().contains("pending"),
                         "the summary stopped saying the signal integrations are pending")
-                #expect(summary.contains("/") == false || summary.contains("scrobble"),
+                #expect(summary.contains("/") == false || summary.lowercased().contains("scrobble"),
                         "diagnostics leaked something path-like: \(summary)")
             }
         }
@@ -855,6 +878,8 @@ final class PersistentTransportSpy: PersistentTransportRouting {
     var isPlaying = false
     var currentSong: Song?
     var currentTime: TimeInterval = 0
+    var duration: TimeInterval = 0
+    var effectiveDuration: TimeInterval = 0
     var queue: [Song] = []
     var currentIndex = 0
     var repeatMode: RepeatMode = .off

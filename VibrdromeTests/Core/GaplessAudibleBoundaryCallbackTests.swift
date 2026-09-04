@@ -267,4 +267,69 @@ struct GaplessAudibleBoundaryCallbackTests {
             #expect(backend.engine.engine.isRunning)
         }
     }
+
+    // MARK: - Now Playing publication
+
+    private func makeSong(id: String) -> Song {
+        Song(id: id, parent: nil, title: "Track \(id)",
+             album: "Album", artist: "Artist", albumArtist: nil, albumId: nil, artistId: nil,
+             track: nil, year: nil, genre: nil, coverArt: nil,
+             size: nil, contentType: nil, suffix: nil,
+             duration: 1, bitRate: nil, path: nil,
+             discNumber: nil, created: nil, starred: nil, userRating: nil,
+             bpm: nil, replayGain: nil, musicBrainzId: nil)
+    }
+
+    /// Now Playing publishes once per audible boundary, in play order, with elapsed ticking and a
+    /// real duration — and a user Stop clears the published session.
+    ///
+    /// The bridge's system-facing closures are overridden so the test observes exactly what would
+    /// reach `NowPlayingManager` without writing to the real `MPNowPlayingInfoCenter`.
+    @Test func nowPlayingPublishesAtAudibleBoundariesInOrder() async throws {
+        try await withTemporaryDirectory { directory in
+            let ids = ["t0", "t1", "t2"]
+            let files = try makeParts(3, in: directory)
+            let assembly = PersistentPlaybackAssembly(
+                session: GaplessPlaybackSession(sampleRate: Self.sampleRate),
+                backend: GaplessRealTimeBackend(),
+                preparer: GaplessTrackPreparer(
+                    provider: GaplessLocalFileProvider(filesByTrackID: files),
+                    renderSampleRate: Self.sampleRate),
+                cacheDirectory: directory)
+            let adapter = PersistentApplicationPlaybackAdapter(assembly: assembly)
+            defer { adapter.stop() }
+
+            var publishedSongs: [String] = []
+            var elapsedPublishes = 0
+            adapter.nowPlaying.publishMetadata = { update in publishedSongs.append(update.songID) }
+            adapter.nowPlaying.publishElapsed = { _, _ in elapsedPublishes += 1 }
+
+            adapter.adoptQueue(ids.map(makeSong))
+            assembly.session.replaceQueue(songIDs: ids)
+            for id in ids {
+                assembly.session.songDurations[id] = Double(Self.partFrames) / Self.sampleRate
+            }
+            try await assembly.controller.play()
+
+            // Drive exactly as the heartbeat does: tick, then refresh the observable mirror —
+            // which is where boundary events become Now Playing publishes.
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline, publishedSongs.count < ids.count {
+                await assembly.controller.tick()
+                adapter.refreshObservedState()
+                try? await Task.sleep(for: .milliseconds(4))
+            }
+
+            #expect(publishedSongs == ids,
+                    "published \(publishedSongs), expected each track once in play order")
+            #expect(adapter.nowPlaying.rejectedStaleUpdates == 0)
+            #expect(elapsedPublishes >= 1, "elapsed never reached the system")
+            #expect(adapter.effectiveDuration > 0, "no duration for the audible track")
+            #expect(adapter.duration > 0)
+
+            adapter.stop()
+            #expect(adapter.nowPlaying.publishedInstance == nil,
+                    "Stop left a published play instance behind")
+        }
+    }
 }

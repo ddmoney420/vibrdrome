@@ -57,6 +57,8 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     var isPlaying: Bool { false }
     var currentSong: Song? { nil }
     var currentTime: TimeInterval { 0 }
+    var duration: TimeInterval { 0 }
+    var effectiveDuration: TimeInterval { 0 }
     var queue: [Song] { [] }
     var currentIndex: Int { 0 }
     var repeatMode: RepeatMode { .off }

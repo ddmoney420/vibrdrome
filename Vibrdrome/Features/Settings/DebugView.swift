@@ -188,7 +188,8 @@ struct DebugView: View {
                 row("Legacy admits transport rebuild",
                     value: AudioEngine.shared.admitsTransportRebuild ? "Yes" : "No (quiesced)")
 
-                row("Now Playing / scrobble / visualizer", value: "Pending")
+                row("Now Playing", value: "Active (boundary-published)")
+                row("Scrobble / visualizer", value: "Pending")
 
                 Button("Prepare Persistent Engine") {
                     do {

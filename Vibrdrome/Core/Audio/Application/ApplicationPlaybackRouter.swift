@@ -469,8 +469,8 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             Legacy adapter: \(legacyAdapterActive ? "Active" : "Inactive")
             Persistent controller: \(persistentControllerConstructed ? "Constructed" : "Not constructed")
             \(heartbeat.summary)
-            Now Playing / scrobble / visualizer ownership: Pending (legacy suppressed during \
-            persistent transport, persistent publishers dormant)
+            Now Playing ownership: Active (persistent publishes at render-observed boundaries)
+            Scrobble / visualizer ownership: Pending (legacy suppressed during persistent transport)
             """
         }
     }
@@ -574,12 +574,18 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     var currentSong: Song? { activePersistent?.currentSong ?? routed.currentSong }
     var currentTime: TimeInterval { activePersistent?.currentTime ?? routed.currentTime }
     var smoothCurrentTime: TimeInterval { activePersistent?.currentTime ?? routed.smoothCurrentTime }
-    // Still legacy-only, and named here rather than silently wrong: buffering and duration have no
-    // persistent equivalent yet. They read the shared engine, which during a persistent session
-    // reports the session it was handed over from.
-    var isBuffering: Bool { routed.isBuffering }
-    var duration: TimeInterval { routed.duration }
-    var effectiveDuration: TimeInterval { routed.effectiveDuration }
+    // Buffering stays a legacy concept: the persistent engine schedules decoded PCM ahead of the
+    // boundary, and its "not ready" state is a controlled wait, not a buffering spinner. During a
+    // persistent session the honest answer is false — reading the quiesced legacy engine here
+    // would report the stale session it was handed over from.
+    var isBuffering: Bool { activePersistent != nil ? false : routed.isBuffering }
+    // Durations follow authority like the queue does: a quiesced legacy engine answers with a
+    // days-old track's duration, which is how the full player showed 0:00 remaining early while
+    // persistent audio played on (proven by device export, 2026-08-29).
+    var duration: TimeInterval { activePersistent?.duration ?? routed.duration }
+    var effectiveDuration: TimeInterval {
+        activePersistent?.effectiveDuration ?? routed.effectiveDuration
+    }
 
     // The queue and every projection derived from it come from ONE backend. Splitting them is not a
     // cosmetic inconsistency: `nextSongIndex()` resolved against legacy and used to subscript a

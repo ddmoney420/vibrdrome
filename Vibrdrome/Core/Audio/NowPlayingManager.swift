@@ -131,7 +131,10 @@ final class NowPlayingManager {
         npLog.info("Loading cover art for \(song.title) (id: \(songId))")
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard AudioEngine.shared.currentSong?.id == songId else {
+            // Through the façade, which answers by authority: during a persistent session the
+            // legacy engine's currentSong is a stale snapshot, and guarding on it silently
+            // rejected every artwork load for persistent playback.
+            guard ApplicationPlayback.shared.currentSong?.id == songId else {
                 npLog.warning("Song changed during art load, skipping (was: \(songId))")
                 return
             }
@@ -223,7 +226,7 @@ final class NowPlayingManager {
             title: song.title,
             artist: song.displayArtist ?? "Unknown Artist",
             album: song.album ?? "",
-            isPlaying: AudioEngine.shared.isPlaying,
+            isPlaying: ApplicationPlayback.shared.isPlaying,
             coverArtData: jpegData
         )
     }

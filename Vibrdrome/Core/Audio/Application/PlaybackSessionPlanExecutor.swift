@@ -102,6 +102,12 @@ protocol PersistentTransportRouting: AnyObject {
     var isPlaying: Bool { get }
     var currentSong: Song? { get }
     var currentTime: TimeInterval { get }
+    /// Duration of the audible track — decoded frames when its segment is materialized, server
+    /// metadata before that. Answered here because the quiesced legacy engine's answer is stale.
+    var duration: TimeInterval { get }
+    /// `max(decoded, server)` — the issue-#90 production notion, so under-reporting files cannot
+    /// show 0:00 remaining while audio continues.
+    var effectiveDuration: TimeInterval { get }
     var queue: [Song] { get }
     var currentIndex: Int { get }
     var repeatMode: RepeatMode { get }

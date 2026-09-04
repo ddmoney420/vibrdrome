@@ -130,6 +130,12 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
     private(set) var upNextEntries: [(index: Int, song: Song)] = []
     private(set) var repeatMode: RepeatMode = .off
     private(set) var shuffleEnabled = false
+    /// Duration of the audible track: **decoded** frames when its segment is on the timeline
+    /// (authoritative — the audio that will actually render), else the server metadata.
+    private(set) var duration: TimeInterval = 0
+    /// The production notion from issue #90: the larger of decoded and server-reported durations,
+    /// because some VBR/FLAC files under-report and the UI would show 0:00 remaining early.
+    private(set) var effectiveDuration: TimeInterval = 0
     /// Next position in playback order, resolved by the same session that owns the queue.
     @ObservationIgnored private var nextIndex: Int?
 
@@ -150,6 +156,8 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         repeatMode = session.queue.repeatMode
         shuffleEnabled = session.queue.shuffleEnabled
         nextIndex = session.nextIndex(after: index, manual: false)
+        refreshDurations()
+        publishNowPlaying()
 
         // The linear tail, matching the legacy contract: no shuffle awareness and no cap.
         upNext = queue.indices.contains(index + 1) ? Array(queue[(index + 1)...]) : []
@@ -165,6 +173,69 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         }
     }
 
+    // MARK: - Now Playing
+
+    /// The persistent session's Now Playing publisher — dormant until this adapter wires it.
+    ///
+    /// Driven from **render-observed boundaries** (`controller.observedBoundaries`), never from
+    /// preparation or scheduling: on this architecture the next track is decoded and handed to the
+    /// node long before it is heard, and publishing at that point would show the wrong song on the
+    /// lock screen for the rest of the outgoing track.
+    @ObservationIgnored let nowPlaying = GaplessNowPlayingBridge()
+    /// How many observed boundaries have been published. The controller's list is append-only for
+    /// the life of a session and cleared only by `controller.stop()`, which this adapter always
+    /// accompanies with a reset of this cursor.
+    @ObservationIgnored private var publishedBoundaryCount = 0
+
+    private func wireNowPlaying() {
+        nowPlaying.publishMetadata = { [weak self] update in
+            guard let self, let song = self.songsByID[update.songID] else { return }
+            NowPlayingManager.shared.update(song: song, isPlaying: update.isPlaying)
+            // `update(song:)` writes the server duration; correct it to the effective one so the
+            // system's remaining time matches the audio that will actually render (issue #90).
+            if self.effectiveDuration > 0 {
+                NowPlayingManager.shared.updateDuration(self.effectiveDuration)
+            }
+        }
+        nowPlaying.publishElapsed = { seconds, _ in
+            NowPlayingManager.shared.updateElapsedTime(seconds)
+        }
+    }
+
+    /// Publish boundaries that became audible since the last refresh, then the elapsed tick.
+    private func publishNowPlaying() {
+        let boundaries = controller.observedBoundaries
+        if publishedBoundaryCount > boundaries.count { publishedBoundaryCount = 0 }
+        for event in boundaries[publishedBoundaryCount...] {
+            nowPlaying.trackBecameAudible(GaplessNowPlayingUpdate(
+                songID: event.songID, itemID: event.itemID, playInstance: event.playInstance,
+                queueGeneration: event.generation, tailGeneration: event.tailGeneration,
+                scheduledStartFrame: event.scheduledStartFrame,
+                observedRenderFrame: event.observedRenderFrame,
+                queueIndex: currentIndex, elapsedSeconds: 0, isPlaying: isPlaying))
+        }
+        publishedBoundaryCount = boundaries.count
+        // Rate-limited by the bridge to 1 Hz, matching the legacy periodic observer's cadence.
+        if nowPlaying.publishedInstance != nil {
+            nowPlaying.publishElapsed(seconds: currentTime, isPlaying: isPlaying)
+        }
+    }
+
+    /// Duration of the audible track. Decoded frames from its timeline segment are authoritative
+    /// (that is the audio that will render); server metadata fills in before materialization.
+    private func refreshDurations() {
+        let server = currentSong.flatMap { song in
+            session.songDurations[song.id] ?? song.duration.map(TimeInterval.init)
+        } ?? 0
+        let decoded = controller.audiblePlayInstance.flatMap { instance in
+            assembly.backend.cachedReadout.segments
+                .first { $0.playInstance == instance }
+                .map { Double($0.frameCount) / GaplessRenderFormat.sampleRate }
+        } ?? 0
+        duration = decoded > 0 ? decoded : server
+        effectiveDuration = max(decoded, server)
+    }
+
     #if DEBUG
     /// Counts delegated calls, so a test can prove one application operation produces exactly one
     /// controller operation — the same property the legacy adapter's counters give.
@@ -177,6 +248,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
 
     init(assembly: PersistentPlaybackAssembly) {
         self.assembly = assembly
+        wireNowPlaying()
     }
 
     private var controller: GaplessPlaybackController { assembly.controller }
@@ -251,11 +323,21 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("pause")
         controller.pause()
         refreshObservedState()
+        publishPlaybackStateNow()
     }
     func resume() {
         count("resume")
         try? controller.resume()
         refreshObservedState()
+        publishPlaybackStateNow()
+    }
+
+    /// Rate and elapsed, published immediately — pause, resume and seek cannot wait a tick, or the
+    /// lock screen visibly shows the old state. Mirrors the legacy `updatePlaybackState` calls.
+    private func publishPlaybackStateNow() {
+        guard nowPlaying.publishedInstance != nil else { return }
+        nowPlaying.publishElapsedImmediately(seconds: currentTime, isPlaying: isPlaying)
+        NowPlayingManager.shared.updatePlaybackState(isPlaying: isPlaying, elapsed: currentTime)
     }
 
     /// Stop ends the session, so the heartbeat goes with it — before the controller stops, so no
@@ -264,6 +346,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("stop")
         heartbeat.cancel()
         controller.stop()
+        // A user Stop ends what the system should display; a handoff does not (see `quiesce`).
+        nowPlaying.reset()
+        publishedBoundaryCount = 0
+        NowPlayingManager.shared.clear()
         refreshObservedState()
     }
 
@@ -271,6 +357,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("togglePlayPause")
         if session.isPlaying { controller.pause() } else { try? controller.resume() }
         refreshObservedState()
+        publishPlaybackStateNow()
     }
 
     func next() {
@@ -303,6 +390,9 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         Task { [weak self, controller] in
             try? await controller.seek(toSeconds: time)
             self?.refreshObservedState()
+            // Same play instance continues from a new position — no metadata change, but the
+            // system's elapsed must jump now rather than at the next rate-limited tick.
+            self?.publishPlaybackStateNow()
         }
     }
 
@@ -471,5 +561,10 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         count("quiesce")
         heartbeat.cancel()
         controller.stop()
+        // Handoff, not a user Stop: the bridge forgets its session so nothing stale is accepted
+        // later, but the system display is left for the next owner to overwrite — clearing it here
+        // would blank the lock screen in the instant between backends.
+        nowPlaying.reset()
+        publishedBoundaryCount = 0
     }
 }
