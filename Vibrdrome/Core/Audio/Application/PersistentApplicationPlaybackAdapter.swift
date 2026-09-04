@@ -158,6 +158,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         nextIndex = session.nextIndex(after: index, manual: false)
         refreshDurations()
         publishNowPlaying()
+        processCompletedPlays()
 
         // The linear tail, matching the legacy contract: no shuffle awareness and no cap.
         upNext = queue.indices.contains(index + 1) ? Array(queue[(index + 1)...]) : []
@@ -213,12 +214,77 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
                 scheduledStartFrame: event.scheduledStartFrame,
                 observedRenderFrame: event.observedRenderFrame,
                 queueIndex: currentIndex, elapsedSeconds: 0, isPlaying: isPlaying))
+            // Announce "now playing" to the scrobble services at the same render-observed moment.
+            // The boundary cursor is the once-per-play-instance guarantee.
+            if let song = songsByID[event.songID] {
+                if let announceNowPlaying {
+                    announceNowPlaying(song)
+                } else {
+                    Self.announceToServices(song)
+                }
+            }
         }
         publishedBoundaryCount = boundaries.count
         // Rate-limited by the bridge to 1 Hz, matching the legacy periodic observer's cadence.
         if nowPlaying.publishedInstance != nil {
             nowPlaying.publishElapsed(seconds: currentTime, isPlaying: isPlaying)
         }
+    }
+
+    // MARK: - Scrobbles, play history, sleep timer
+
+    /// How many session events have been acted on. The session's event list is an append-only
+    /// ledger for the life of the assembly — never cleared, which is what makes a cursor an
+    /// exactly-once guarantee: each completed play is submitted from one consumption, ever.
+    @ObservationIgnored private var processedEventCount = 0
+
+    /// The submission side effects, injected so tests observe them without the network. Defaults
+    /// are the exact legacy trio (`AudioEngine.autoScrobbleIfNeeded`) plus play history.
+    @ObservationIgnored var submitPlay: (@MainActor (Song) -> Void)?
+    @ObservationIgnored var announceNowPlaying: (@MainActor (Song) -> Void)?
+
+    /// Act on plays the session has closed out since the last refresh.
+    ///
+    /// Eligibility was already decided by the session's completion policy from **audible frames**
+    /// — the same half-duration-capped-at-240 s rule legacy uses — so this only carries the verdict
+    /// to the services. Announcements happen in `publishNowPlaying` at the audible boundary; here
+    /// is only what a play's *end* owes: the scrobble submission, the local play record, and the
+    /// sleep timer's end-of-track trigger (natural ends only — a manual skip must not pause).
+    private func processCompletedPlays() {
+        let events = session.events
+        if processedEventCount > events.count { processedEventCount = 0 }
+        for event in events[processedEventCount...] {
+            guard case .completed(_, let songID, _, let eligible, let naturalEnd) = event else {
+                continue
+            }
+            if naturalEnd { SleepTimer.shared.trackDidEnd() }
+            guard eligible, let song = songsByID[songID] else { continue }
+            if let submitPlay {
+                submitPlay(song)
+            } else {
+                Self.submitPlayToServices(song)
+            }
+        }
+        processedEventCount = events.count
+    }
+
+    /// The legacy submission trio plus play history, verbatim from `autoScrobbleIfNeeded`.
+    private static func submitPlayToServices(_ song: Song) {
+        PersistenceController.shared.recordPlay(song: song)
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.scrobblingEnabled) {
+            Task { try? await OfflineActionQueue.shared.scrobble(id: song.id, submission: true) }
+        }
+        Task { await OfflineActionQueue.shared.listenBrainzScrobble(song: song) }
+        Task { await OfflineActionQueue.shared.lastFmScrobble(song: song) }
+    }
+
+    /// The legacy now-playing announcement trio, verbatim from `scrobbleNowPlaying`.
+    private static func announceToServices(_ song: Song) {
+        if UserDefaults.standard.bool(forKey: UserDefaultsKeys.scrobblingEnabled) {
+            Task { try? await OfflineActionQueue.shared.scrobble(id: song.id, submission: false) }
+        }
+        Task { await ListenBrainzClient.shared.submitNowPlaying(song: song) }
+        Task { await LastFmClient.shared.updateNowPlaying(song: song) }
     }
 
     /// Duration of the audible track. Decoded frames from its timeline segment are authoritative

@@ -327,7 +327,7 @@ struct GaplessSystemIntegrationTests {
         // Feed the session's own completion events into the reporter.
         var instance: UInt64 = 0
         for event in session.events {
-            if case .completed(let itemID, let songID, let frames, let eligible) = event {
+            if case .completed(let itemID, let songID, let frames, let eligible, _) = event {
                 instance += 1
                 let submission = reporter.playEnded(
                     songID: songID, itemID: itemID,

@@ -12,9 +12,12 @@ import os.log
 enum GaplessPlaybackEvent: Sendable, Equatable {
     /// The item is now the audible one. Now Playing metadata switches here, and nowhere else.
     case becameAudible(itemID: GaplessQueueItemID, songID: String, atFrame: AVAudioFramePosition)
-    /// The item finished rendering. `audibleFrames` is what was actually heard.
+    /// The item finished rendering. `audibleFrames` is what was actually heard. `naturalEnd`
+    /// distinguishes a track playing out from a manual skip — the sleep timer's end-of-track mode
+    /// must fire on the former and never on the latter.
     case completed(itemID: GaplessQueueItemID, songID: String,
-                   audibleFrames: AVAudioFramePosition, eligibleForScrobble: Bool)
+                   audibleFrames: AVAudioFramePosition, eligibleForScrobble: Bool,
+                   naturalEnd: Bool)
     /// The queue ran out under Repeat Off.
     case queueEnded
 }
@@ -378,9 +381,9 @@ final class GaplessPlaybackSession {
             if eligible { entry.scrobbleSubmitted = true }
         }
         events.append(.completed(itemID: audibleItemID, songID: item.songID,
-                                 audibleFrames: item.audibleFrames, eligibleForScrobble: eligible))
+                                 audibleFrames: item.audibleFrames, eligibleForScrobble: eligible,
+                                 naturalEnd: reason == .naturalEnd))
         self.audibleItemID = nil
-        _ = reason
     }
 
     // MARK: - Schedule invalidation

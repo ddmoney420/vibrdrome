@@ -332,4 +332,55 @@ struct GaplessAudibleBoundaryCallbackTests {
                     "Stop left a published play instance behind")
         }
     }
+
+    /// Completed plays reach the scrobble seam exactly once each, and every play announces once at
+    /// its audible boundary. The fixture's tracks are far shorter than any real threshold, so the
+    /// session's own eligibility policy is exercised: these plays are heard end-to-end (audible
+    /// frames exceed half their sub-second durations) and must submit; a track cut short must not.
+    @Test func completedPlaysSubmitOnceAndAnnounceOncePerBoundary() async throws {
+        try await withTemporaryDirectory { directory in
+            let ids = ["t0", "t1", "t2"]
+            let files = try makeParts(3, in: directory)
+            let assembly = PersistentPlaybackAssembly(
+                session: GaplessPlaybackSession(sampleRate: Self.sampleRate),
+                backend: GaplessRealTimeBackend(),
+                preparer: GaplessTrackPreparer(
+                    provider: GaplessLocalFileProvider(filesByTrackID: files),
+                    renderSampleRate: Self.sampleRate),
+                cacheDirectory: directory)
+            let adapter = PersistentApplicationPlaybackAdapter(assembly: assembly)
+            defer { adapter.stop() }
+
+            var submitted: [String] = []
+            var announced: [String] = []
+            adapter.submitPlay = { submitted.append($0.id) }
+            adapter.announceNowPlaying = { announced.append($0.id) }
+            adapter.nowPlaying.publishMetadata = { _ in }
+            adapter.nowPlaying.publishElapsed = { _, _ in }
+
+            adapter.adoptQueue(ids.map(makeSong))
+            assembly.session.replaceQueue(songIDs: ids)
+            for id in ids {
+                assembly.session.songDurations[id] = Double(Self.partFrames) / Self.sampleRate
+            }
+            try await assembly.controller.play()
+
+            // The first two tracks end naturally; their plays were fully heard and must submit.
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline, submitted.count < 2 {
+                await assembly.controller.tick()
+                adapter.refreshObservedState()
+                try? await Task.sleep(for: .milliseconds(4))
+            }
+
+            #expect(submitted == ["t0", "t1"],
+                    "submissions were \(submitted), expected each finished play exactly once")
+            #expect(announced == ids || announced == ["t0", "t1"],
+                    "announcements were \(announced), expected once per audible boundary")
+
+            // Draining again without new events submits nothing — the cursor is the dedup.
+            adapter.refreshObservedState()
+            #expect(submitted.count == 2, "a repeated refresh double-submitted a play")
+        }
+    }
 }

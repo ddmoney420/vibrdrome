@@ -47,7 +47,7 @@ struct GaplessPlaybackSessionTests {
 
     static func scrobbledSongs(_ session: GaplessPlaybackSession) -> [String] {
         session.events.compactMap {
-            if case .completed(_, let songID, _, let eligible) = $0, eligible { return songID }
+            if case .completed(_, let songID, _, let eligible, _) = $0, eligible { return songID }
             return nil
         }
     }
