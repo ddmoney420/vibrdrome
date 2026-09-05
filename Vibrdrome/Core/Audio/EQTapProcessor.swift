@@ -313,8 +313,12 @@ enum EQTapProcessor {
             }
         }
 
-        // Extract PCM for FFT spectrum analysis (first channel only)
-        if !bufferList.isEmpty, let data = bufferList[0].mData {
+        // Extract PCM for FFT spectrum analysis (first channel only). Gated on visualizer
+        // ownership: while the persistent engine owns the session, this quiesced-side tap must not
+        // write into the shared spectrum — one owner, one publisher. A relaxed atomic load,
+        // real-time safe like everything else on this thread.
+        if VisualizerOwnershipGate.shared.legacyMayPublish,
+           !bufferList.isEmpty, let data = bufferList[0].mData {
             let samples = data.assumingMemoryBound(to: Float.self)
             let sampleRate = Unmanaged<TapContext>.fromOpaque(
                 MTAudioProcessingTapGetStorage(tap)
@@ -323,13 +327,14 @@ enum EQTapProcessor {
         }
 
         // Feed the visualizer PCM ring (post-EQ / post-effects, same as
-        // the spectrum above). DOUBLY GATED: the visualizer must be on AND this
+        // the spectrum above). TRIPLY GATED: the visualizer must be on, this
         // tap must be the designated single audible source (so crossfade overlap
-        // never double-feeds). Both are relaxed atomic loads — no registry access,
-        // no allocation, locks, logging, async, MainActor, ObjC, or Swift arrays
-        // on this real-time thread. When it passes, only a lock-free, alloc-free
-        // ring write of the planar channels.
-        if VisualizerPCMSource.shared.active,
+        // never double-feeds), and legacy must own visualizer publication. All are
+        // relaxed atomic loads — no registry access, no allocation, locks, logging,
+        // async, MainActor, ObjC, or Swift arrays on this real-time thread. When it
+        // passes, only a lock-free, alloc-free ring write of the planar channels.
+        if VisualizerOwnershipGate.shared.legacyMayPublish,
+           VisualizerPCMSource.shared.active,
            ctx.isVisualizerSource.load(ordering: .relaxed),
            !bufferList.isEmpty, let channel0 = bufferList[0].mData {
             let left = channel0.assumingMemoryBound(to: Float.self)

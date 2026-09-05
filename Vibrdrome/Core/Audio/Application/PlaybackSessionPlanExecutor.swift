@@ -95,6 +95,9 @@ protocol PersistentTransportRouting: AnyObject {
     func setShuffleEnabled(_ enabled: Bool)
     func applyEQToggle(enabled: Bool)
     func applyEffectiveVolume()
+    /// Whether the visualizer UI is open. The persistent side activates its feed consumers on
+    /// this; publication itself stays gated on visualizer ownership at every drain.
+    var visualizerActive: Bool { get set }
 
     var volume: Float { get set }
     var userVolume: Float { get set }

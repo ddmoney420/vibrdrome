@@ -189,7 +189,26 @@ struct DebugView: View {
                     value: AudioEngine.shared.admitsTransportRebuild ? "Yes" : "No (quiesced)")
 
                 row("Now Playing", value: "Active (boundary-published)")
-                row("Scrobble / visualizer", value: "Pending")
+                row("Scrobble", value: "Active (completed-play events)")
+                row("Visualizer owner",
+                    value: VisualizerOwnershipGate.shared.persistentMayPublish
+                        ? "Persistent" : "Legacy/none")
+                if let adapter = router.persistentAdapterForDiagnostics,
+                   let assembly = router.persistentAssembly {
+                    let feedStats = assembly.backend.engine.visualizerFeed.stats
+                    row("Persistent visualizer",
+                        value: adapter.visualizerActive ? "Active" : "Idle")
+                    row("Visualizer frames produced", value: "\(feedStats.framesDelivered)")
+                    row("Visualizer frames published", value: "\(adapter.visualizerFramesPublished)")
+                    row("Visualizer publish cycles", value: "\(adapter.visualizerPublishCycles)")
+                    row("Visualizer ownership rejections",
+                        value: "\(adapter.visualizerOwnershipRejections)")
+                    row("Visualizer contended callbacks", value: "\(feedStats.contendedCallbacks)")
+                    row("Last visualizer frame age",
+                        value: adapter.lastVisualizerPublish.map {
+                            String(format: "%.1f s", Date().timeIntervalSince($0))
+                        } ?? "never")
+                }
 
                 Button("Prepare Persistent Engine") {
                     do {

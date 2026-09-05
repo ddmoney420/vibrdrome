@@ -383,4 +383,101 @@ struct GaplessAudibleBoundaryCallbackTests {
             #expect(submitted.count == 2, "a repeated refresh double-submitted a play")
         }
     }
+
+    /// The persistent visualizer publishes real frames across gapless boundaries when persistent
+    /// owns publication; pause freezes it (legacy parity), resume continues it, ownership loss
+    /// silences it, and Stop ends it with nothing publishing afterwards.
+    @Test func persistentVisualizerPublishesAcrossBoundariesAndFencesOwnership() async throws {
+        try await withTemporaryDirectory { directory in
+            let ids = ["t0", "t1", "t2"]
+            let files = try makeParts(3, in: directory)
+            let assembly = PersistentPlaybackAssembly(
+                session: GaplessPlaybackSession(sampleRate: Self.sampleRate),
+                backend: GaplessRealTimeBackend(),
+                preparer: GaplessTrackPreparer(
+                    provider: GaplessLocalFileProvider(filesByTrackID: files),
+                    renderSampleRate: Self.sampleRate),
+                cacheDirectory: directory)
+            let adapter = PersistentApplicationPlaybackAdapter(assembly: assembly)
+            defer {
+                adapter.stop()
+                VisualizerOwnershipGate.shared.authorityChanged(to: .none)
+            }
+            adapter.nowPlaying.publishMetadata = { _ in }
+            adapter.nowPlaying.publishElapsed = { _, _ in }
+            adapter.submitPlay = { _ in }
+            adapter.announceNowPlaying = { _ in }
+
+            // Persistent owns visualizer publication, and the visualizer UI is open.
+            VisualizerOwnershipGate.shared.authorityChanged(to: .persistent)
+            adapter.visualizerActive = true
+
+            adapter.adoptQueue(ids.map(makeSong))
+            assembly.session.replaceQueue(songIDs: ids)
+            for id in ids {
+                assembly.session.songDurations[id] = Double(Self.partFrames) / Self.sampleRate
+            }
+            try await assembly.controller.play()
+            #expect(assembly.backend.engine.visualizerFeed.isInstalled,
+                    "starting the persistent engine did not install the visualizer tap")
+
+            @MainActor func drive(until predicate: () -> Bool, seconds: Double) async {
+                let deadline = Date().addingTimeInterval(seconds)
+                while Date() < deadline, !predicate() {
+                    await assembly.controller.tick()
+                    adapter.refreshObservedState()
+                    try? await Task.sleep(for: .milliseconds(4))
+                }
+            }
+
+            // Frames flow across all three tracks — the last boundary included.
+            await drive(until: {
+                adapter.visualizerFramesPublished > 0
+                    && assembly.session.queue.currentIndex >= 2
+            }, seconds: 6)
+            let acrossBoundaries = adapter.visualizerFramesPublished
+            #expect(acrossBoundaries > 0, "no visualizer frames published during playback")
+            #expect(assembly.session.queue.currentIndex >= 2, "fixture never crossed its boundaries")
+
+            // Pause: publication freezes (legacy parity — its tap stops on pause).
+            adapter.pause()
+            adapter.refreshObservedState()
+            let atPause = adapter.visualizerFramesPublished
+            for _ in 0..<10 {
+                await assembly.controller.tick()
+                adapter.refreshObservedState()
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            #expect(adapter.visualizerFramesPublished == atPause,
+                    "the visualizer kept publishing while paused")
+
+            // Resume: publication continues on the same adapters.
+            adapter.resume()
+            await drive(until: { adapter.visualizerFramesPublished > atPause }, seconds: 3)
+            #expect(adapter.visualizerFramesPublished > atPause,
+                    "publication did not resume after resume")
+
+            // Ownership loss mid-session: every subsequent drain is rejected, publishing nothing.
+            VisualizerOwnershipGate.shared.authorityChanged(to: .legacy)
+            let atLoss = adapter.visualizerFramesPublished
+            let rejectionsBefore = adapter.visualizerOwnershipRejections
+            for _ in 0..<5 {
+                await assembly.controller.tick()
+                adapter.refreshObservedState()
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(adapter.visualizerFramesPublished == atLoss,
+                    "persistent published without owning visualizer publication")
+            #expect(adapter.visualizerOwnershipRejections > rejectionsBefore,
+                    "rejections were not recorded")
+
+            // Stop with ownership restored: publication ends and stays ended.
+            VisualizerOwnershipGate.shared.authorityChanged(to: .persistent)
+            adapter.stop()
+            let atStop = adapter.visualizerFramesPublished
+            adapter.refreshObservedState()
+            #expect(adapter.visualizerFramesPublished == atStop,
+                    "a frame published after Stop")
+        }
+    }
 }

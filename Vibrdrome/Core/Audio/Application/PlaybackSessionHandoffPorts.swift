@@ -51,6 +51,7 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func setShuffleEnabled(_ enabled: Bool) {}
     func applyEQToggle(enabled: Bool) {}
     func applyEffectiveVolume() {}
+    var visualizerActive: Bool = false
     var volume: Float = 1
     var userVolume: Float = 1
     var eqEnabled: Bool { false }

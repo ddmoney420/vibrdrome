@@ -414,6 +414,42 @@ struct PlaybackAuthorityRoutingTests {
         }
     }
 
+    /// The visualizer ownership gate follows authority, and the two publishers are mutually
+    /// exclusive in every state — including `.none`, where legacy keeps its historical right to
+    /// publish (the flag-off production path plays with no explicit grant).
+    @Test func visualizerPublicationFollowsAuthority() async throws {
+        try await withTemporaryDirectory { directory in
+            try await withRoutingFlag(true) {
+                let (router, _, _) = makeRoutingRouter()
+                defer { scheduleTeardown(router) }
+                let gate = VisualizerOwnershipGate.shared
+
+                // Cold state: no authority — legacy publishes, persistent must not.
+                router.ownership.release()
+                #expect(gate.legacyMayPublish)
+                #expect(gate.persistentMayPublish == false)
+
+                let track = try makeTrack(id: "v0", in: directory)
+                await startPersistentSession(router, songs: [makeSong(id: "v0")], track: track)
+                #expect(router.ownership.authority == .persistent)
+                #expect(gate.persistentMayPublish, "persistent authority did not open its gate")
+                #expect(gate.legacyMayPublish == false,
+                        "legacy could still publish under persistent authority")
+
+                // Radio replaces the session: teardown is awaited, then legacy owns — and the gate
+                // must flip with the authority, never leaving both open.
+                router.startRadio(artistName: "Probe")
+                await router.awaitPendingSelectionForTesting()
+                #expect(router.ownership.authority == .legacy)
+                #expect(gate.legacyMayPublish)
+                #expect(gate.persistentMayPublish == false,
+                        "persistent could still publish after losing the session")
+                #expect(!(gate.legacyMayPublish && gate.persistentMayPublish),
+                        "both publishers were open at once")
+            }
+        }
+    }
+
     /// With no persistent session, the same operations reach legacy exactly once and persistent not
     /// at all.
     @Test func transportRoutesToLegacyWhenPersistentDoesNotOwnTheSession() {
@@ -742,8 +778,8 @@ struct PlaybackAuthorityRoutingTests {
                 let summary = diagnostics.summary
                 #expect(summary.contains("Playback authority: persistent"))
                 #expect(summary.contains("Active transport backend: Persistent"))
-                #expect(summary.lowercased().contains("pending"),
-                        "the summary stopped saying the signal integrations are pending")
+                #expect(summary.lowercased().contains("single owner"),
+                        "the summary stopped stating the single-owner signal contract")
                 #expect(summary.contains("/") == false || summary.lowercased().contains("scrobble"),
                         "diagnostics leaked something path-like: \(summary)")
             }
@@ -880,6 +916,9 @@ final class PersistentTransportSpy: PersistentTransportRouting {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     var effectiveDuration: TimeInterval = 0
+    var visualizerActive: Bool = false {
+        didSet { record("visualizerActive") }
+    }
     var queue: [Song] = []
     var currentIndex = 0
     var repeatMode: RepeatMode = .off

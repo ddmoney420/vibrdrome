@@ -29,6 +29,10 @@ protocol GaplessVisualizerAdapter: AnyObject {
     /// adapter's cadence, never from the render thread.
     @discardableResult
     func drain() -> Int
+    /// Drop everything buffered without touching the downstream visualizer's own state — used
+    /// after a pause, where the feed kept delivering engine silence the consumer must not replay.
+    /// Distinct from `deactivate()`, which also resets the visualizer and would blank it.
+    func flush()
 }
 
 /// Feeds the Classic (FFT) visualizer from the shared feed.
@@ -64,6 +68,8 @@ final class GaplessClassicVisualizerAdapter: GaplessVisualizerAdapter {
         consumer.buffer.reset()
         spectrum.reset()
     }
+
+    func flush() { consumer.buffer.reset() }
 
     @discardableResult
     func drain() -> Int {
@@ -110,6 +116,8 @@ final class GaplessNativeVisualizerAdapter: GaplessVisualizerAdapter {
         consumer.buffer.reset()
         source.endRenderConsumer()
     }
+
+    func flush() { consumer.buffer.reset() }
 
     @discardableResult
     func drain() -> Int {

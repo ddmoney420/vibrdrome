@@ -193,6 +193,12 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// The legacy backend, for tests that need its delegation counters. DEBUG-only, and it is the
     /// adapter — never `AudioEngine` and never `AVQueuePlayer`.
     var legacyAdapterForTesting: any ApplicationPlaybackControlling { legacy }
+
+    /// The persistent application adapter, for the Debug screen's visualizer counters. Nil until a
+    /// persistent session has been built, and nil when the port is a test double.
+    var persistentAdapterForDiagnostics: PersistentApplicationPlaybackAdapter? {
+        (persistentPort as? PersistentAssemblySessionPort)?.application
+    }
     #endif
 
     // MARK: - Starting a session
@@ -469,8 +475,9 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             Legacy adapter: \(legacyAdapterActive ? "Active" : "Inactive")
             Persistent controller: \(persistentControllerConstructed ? "Constructed" : "Not constructed")
             \(heartbeat.summary)
-            Now Playing ownership: Active (persistent publishes at render-observed boundaries)
-            Scrobble / visualizer ownership: Pending (legacy suppressed during persistent transport)
+            Now Playing / scrobble / visualizer ownership: Authority-gated, single owner \
+            (persistent publishes at render-observed boundaries; legacy suppressed while \
+            persistent owns)
             """
         }
     }
@@ -665,8 +672,15 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         set { routed.playbackRate = newValue }
     }
     var visualizerActive: Bool {
-        get { routed.visualizerActive }
-        set { routed.visualizerActive = newValue }
+        // The UI's open/closed intent fans out to BOTH sides, deliberately: the legacy flag is
+        // harmless while legacy is quiesced (its tap only runs when it owns transport), and keeping
+        // it current means a handoff in either direction resumes the visualizer without the view
+        // re-toggling. Which side actually publishes is decided per frame by the ownership gate.
+        get { activePersistent?.visualizerActive ?? routed.visualizerActive }
+        set {
+            routed.visualizerActive = newValue
+            persistentPort?.transport.visualizerActive = newValue
+        }
     }
     func applyEQToggle(enabled: Bool) {
         onActiveBackend(persistent: { $0.applyEQToggle(enabled: enabled) },

@@ -319,6 +319,10 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
             state = .failed
             throw GaplessEngineFailure.engineStartFailed(error.localizedDescription)
         }
+        // The one permanent visualizer tap, installed with the engine's first start and idempotent
+        // after that. Consumers (the visualizer adapters) come and go; the tap and the graph never
+        // change for them — that per-track churn was the proven cause of the old transition freeze.
+        engine.installVisualizerFeed()
         let domain = await ensureAudioDomain()
         await domain.play()
         await refreshReadout(from: domain)
@@ -429,6 +433,9 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         openFileOrder.removeAll()
         #endif
         engine.gainStage.reset()
+        // Engine teardown is the one sanctioned uninstall point for the visualizer tap — never a
+        // visualizer closing, never a track boundary. The next start reinstalls it.
+        engine.uninstallVisualizerFeed()
         // The persistent side must hold no audio-session claim once its session has ended, whether
         // it ended by stopping or by failing. A start that failed before activation deactivates a
         // session it never activated, which is harmless: the next owner activates on its own start.

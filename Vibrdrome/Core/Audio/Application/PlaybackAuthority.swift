@@ -1,4 +1,36 @@
 import Foundation
+import Synchronization
+
+/// The one gate every visualizer producer consults before publishing into the shared consumers
+/// (`AudioSpectrum.shared`, `VisualizerPCMSource.shared`).
+///
+/// **Why an atomic mirror of the ownership coordinator exists at all:** the legacy producer is an
+/// `MTAudioProcessingTap` callback on a real-time thread, which cannot touch a `@MainActor`
+/// coordinator. This gate is written from the main actor (only by
+/// `PlaybackOwnershipCoordinator.grant`/`release`) and read with relaxed atomic loads anywhere —
+/// including the render thread — so the ownership decision is central instead of scattered per
+/// call site.
+///
+/// **Semantics are asymmetric on purpose.** Legacy has always published without any explicit
+/// grant — the flag-off production path plays with authority `.none` — so suppressing legacy on
+/// anything but an explicit persistent grant would silence the visualizer for every existing user.
+/// Legacy may publish unless persistent owns the session; persistent may publish only while it
+/// does. The owner count still never exceeds one: the two conditions are mutually exclusive.
+final class VisualizerOwnershipGate: Sendable {
+    static let shared = VisualizerOwnershipGate()
+
+    private let persistentOwns = Atomic<Bool>(false)
+
+    /// Real-time safe. The legacy EQ tap checks this before feeding the shared consumers.
+    var legacyMayPublish: Bool { !persistentOwns.load(ordering: .relaxed) }
+    /// The persistent adapters check this before draining into the shared consumers.
+    var persistentMayPublish: Bool { persistentOwns.load(ordering: .relaxed) }
+
+    /// Written only by the ownership coordinator, on the main actor, as part of grant/release.
+    func authorityChanged(to authority: PlaybackAuthority) {
+        persistentOwns.store(authority == .persistent, ordering: .relaxed)
+    }
+}
 
 /// Who owns audible playback right now.
 ///
@@ -74,6 +106,7 @@ final class PlaybackOwnershipCoordinator {
     func grant(_ newAuthority: PlaybackAuthority) {
         authority = newAuthority
         audibleBoundaryReached = false
+        VisualizerOwnershipGate.shared.authorityChanged(to: newAuthority)
     }
 
     /// Record that the owning backend has produced audio.
@@ -85,6 +118,7 @@ final class PlaybackOwnershipCoordinator {
     func release() {
         authority = .none
         audibleBoundaryReached = false
+        VisualizerOwnershipGate.shared.authorityChanged(to: .none)
     }
 
     /// Whether `backend` may execute transport right now.

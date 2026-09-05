@@ -159,6 +159,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         refreshDurations()
         publishNowPlaying()
         processCompletedPlays()
+        drainVisualizer()
 
         // The linear tail, matching the legacy contract: no shuffle awareness and no cap.
         upNext = queue.indices.contains(index + 1) ? Array(queue[(index + 1)...]) : []
@@ -229,6 +230,94 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         if nowPlaying.publishedInstance != nil {
             nowPlaying.publishElapsed(seconds: currentTime, isPlaying: isPlaying)
         }
+    }
+
+    // MARK: - Visualizer
+
+    /// The two bridges from the persistent feed into the app's existing visualizer consumers
+    /// (`AudioSpectrum.shared` for Classic, `VisualizerPCMSource.shared` for Native). Built lazily:
+    /// a session whose visualizer never opens registers no consumers.
+    @ObservationIgnored private var classicVisualizer: GaplessClassicVisualizerAdapter?
+    @ObservationIgnored private var nativeVisualizer: GaplessNativeVisualizerAdapter?
+    /// Whether the visualizer UI is open, as the façade told us. Stored so a handoff can restore it.
+    @ObservationIgnored private var visualizerRequested = false
+    /// Set at pause so the first drain after resume drops the pause-era ring contents — the
+    /// persistent tap keeps delivering silence while the engine idles, and publishing that would
+    /// show a dip legacy never shows (its tap simply stops on pause).
+    @ObservationIgnored private var visualizerNeedsResumeFlush = false
+    /// Diagnostics: drains that delivered at least one frame, frames handed to consumers, and
+    /// drains rejected because persistent did not own visualizer publication.
+    @ObservationIgnored private(set) var visualizerFramesPublished = 0
+    @ObservationIgnored private(set) var visualizerPublishCycles = 0
+    @ObservationIgnored private(set) var visualizerOwnershipRejections = 0
+    @ObservationIgnored private(set) var lastVisualizerPublish: Date?
+
+    /// The visualizer UI opened or closed. Mirrors `AudioEngine.visualizerActive` for the
+    /// persistent side; activation is additionally gated on ownership at every drain, so a stored
+    /// `true` on a session that has lost authority publishes nothing.
+    var visualizerActive: Bool {
+        get { visualizerRequested }
+        set {
+            count("visualizerActive")
+            visualizerRequested = newValue
+            if newValue {
+                ensureVisualizerAdapters()
+                classicVisualizer?.activate()
+                nativeVisualizer?.activate()
+            } else {
+                classicVisualizer?.deactivate()
+                nativeVisualizer?.deactivate()
+            }
+        }
+    }
+
+    private func ensureVisualizerAdapters() {
+        let feed = assembly.backend.engine.visualizerFeed
+        if classicVisualizer == nil {
+            classicVisualizer = GaplessClassicVisualizerAdapter(feed: feed)
+        }
+        if nativeVisualizer == nil {
+            nativeVisualizer = GaplessNativeVisualizerAdapter(feed: feed)
+        }
+    }
+
+    /// Drain the feed into the visualizer consumers, on the heartbeat cadence.
+    ///
+    /// Runs entirely on the main actor over bounded rings the render thread filled — no actor
+    /// hop, no audio-domain access, and a stalled UI merely lets the rings drop oldest frames.
+    /// Pause parity with legacy: legacy's tap stops on pause, freezing the spectrum, so drains
+    /// stop while paused and the pause-era silence is flushed on resume.
+    private func drainVisualizer() {
+        guard visualizerRequested else { return }
+        guard VisualizerOwnershipGate.shared.persistentMayPublish else {
+            visualizerOwnershipRejections += 1
+            return
+        }
+        guard isPlaying else {
+            visualizerNeedsResumeFlush = true
+            return
+        }
+        if visualizerNeedsResumeFlush {
+            visualizerNeedsResumeFlush = false
+            // Ring-only: the spectrum keeps its frozen last frame, exactly as legacy resumes.
+            classicVisualizer?.flush()
+            nativeVisualizer?.flush()
+            return
+        }
+        let frames = (classicVisualizer?.drain() ?? 0) + (nativeVisualizer?.drain() ?? 0)
+        if frames > 0 {
+            visualizerFramesPublished += frames
+            visualizerPublishCycles += 1
+            lastVisualizerPublish = Date()
+        }
+    }
+
+    /// End this session's visualizer publication. Deactivation resets the consumer rings, so a
+    /// frame produced under the old session can never publish into its successor.
+    private func endVisualizerSession() {
+        classicVisualizer?.deactivate()
+        nativeVisualizer?.deactivate()
+        visualizerNeedsResumeFlush = false
     }
 
     // MARK: - Scrobbles, play history, sleep timer
@@ -416,6 +505,7 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         nowPlaying.reset()
         publishedBoundaryCount = 0
         NowPlayingManager.shared.clear()
+        endVisualizerSession()
         refreshObservedState()
     }
 
@@ -632,5 +722,9 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         // would blank the lock screen in the instant between backends.
         nowPlaying.reset()
         publishedBoundaryCount = 0
+        // Visualizer publication ends with the session; the rings reset so no frame produced here
+        // can surface under the next owner. `visualizerRequested` survives, so a session this
+        // adapter later regains resumes publishing without the UI re-toggling.
+        endVisualizerSession()
     }
 }
