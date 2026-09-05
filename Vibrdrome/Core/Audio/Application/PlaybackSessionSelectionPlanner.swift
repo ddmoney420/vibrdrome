@@ -112,12 +112,24 @@ struct PlaybackSessionSelectionPlanner {
     /// Whether persistent routing is permitted at all. Defaults to the DEBUG setting.
     let isPersistentRoutingEnabled: () -> Bool
 
+    /// How long Play may wait for the first source to become local before falling back to legacy.
+    ///
+    /// The persistent engine plays whole local files, so a fresh, uncached track must download
+    /// completely before a persistent session can start. Bounded because that download can be
+    /// enormous — a 680 MB continuous-mix FLAC turned Play into minutes of dead silence on device
+    /// (2026-09-04). Cached, downloaded and small sources finish well inside the deadline and are
+    /// unaffected; anything slower streams on legacy this session (instant start, not gapless) and
+    /// plans persistent again once cached.
+    let materializationDeadline: TimeInterval
+
     init(
         prepareAssembly: @escaping () throws -> PersistentPlaybackAssembly,
-        isPersistentRoutingEnabled: @escaping () -> Bool = { PersistentRoutingSetting.isEnabled }
+        isPersistentRoutingEnabled: @escaping () -> Bool = { PersistentRoutingSetting.isEnabled },
+        materializationDeadline: TimeInterval = 4.0
     ) {
         self.prepareAssembly = prepareAssembly
         self.isPersistentRoutingEnabled = isPersistentRoutingEnabled
+        self.materializationDeadline = materializationDeadline
     }
 
     func plan(request: PlaybackSessionSelectionRequest) async -> PlaybackSessionSelectionPlan {
@@ -147,28 +159,38 @@ struct PlaybackSessionSelectionPlanner {
         }
         guard !Task.isCancelled else { return .failed(reason: .sourcePreparationFailed) }
 
-        // 4. Materialize the first source completely. The provider returns only once the bytes are
-        //    fully written — a partial file decodes short and would corrupt boundary accounting —
-        //    and names the file from the response's content type, which is what makes the delivered
-        //    container knowable at all.
+        // 4. Materialize the first source completely — under a deadline. The provider returns only
+        //    once the bytes are fully written (a partial file decodes short and would corrupt
+        //    boundary accounting), and a fresh uncached track means a whole-file download that can
+        //    be enormous. Play must never hang on it: past the deadline the fetch is cancelled and
+        //    this session streams on legacy instead.
         let fileURL: URL
         do {
-            fileURL = try await assembly.preparer.materializeSource(forTrack: song.id)
+            guard let materialized = try await Self.withDeadline(
+                seconds: materializationDeadline,
+                work: { try await assembly.preparer.materializeSource(forTrack: song.id) })
+            else {
+                return .legacy(reason: .sourceMaterializationTimedOut)
+            }
+            fileURL = materialized
         } catch {
             return .failed(reason: .sourcePreparationFailed)
         }
         guard !Task.isCancelled else { return .failed(reason: .sourcePreparationFailed) }
+        return Self.decide(fileURL: fileURL, songID: song.id)
+    }
 
+    /// Steps 5–6: inspect the real media and build the routing decision from what was confirmed.
+    ///
+    /// `describe` opens an `AVAudioFile`, reads the processing format, applies the trim policy and
+    /// computes the render frame count — so sample rate, channel count, finite length and MP3 trim
+    /// status all come from the file rather than from metadata or a request parameter.
+    private static func decide(fileURL: URL, songID: String) -> PlaybackSessionSelectionPlan {
         let deliveredContainer = fileURL.pathExtension.lowercased()
-
-        // 5. Open and inspect the real media. `describe` opens an `AVAudioFile`, reads the
-        //    processing format, applies the trim policy and computes the render frame count — so
-        //    sample rate, channel count, finite length and MP3 trim status all come from the file
-        //    rather than from metadata or a request parameter. It closes the file when it returns.
         let track: GaplessPreparedTrack
         do {
             track = try GaplessTrackPreparer.describe(
-                trackID: song.id, fileURL: fileURL,
+                trackID: songID, fileURL: fileURL,
                 renderSampleRate: GaplessRenderFormat.sampleRate
             )
         } catch {
@@ -176,7 +198,6 @@ struct PlaybackSessionSelectionPlanner {
             return .legacy(reason: .decoderUnavailable)
         }
 
-        // 6. Build the final routing facts from what was confirmed, never from what was requested.
         let source = PlaybackRoutingSource(
             contentKind: .finiteTrack,
             delivery: .cachedPrepared,
@@ -189,8 +210,6 @@ struct PlaybackSessionSelectionPlanner {
         )
 
         let decision = PlaybackBackendPolicy.decision(for: source)
-        guard !Task.isCancelled else { return .failed(reason: .sourcePreparationFailed) }
-
         guard decision.backend == .persistent else {
             // Nothing is retained: a legacy decision holds no prepared source.
             return .legacy(reason: decision.reason)
@@ -201,6 +220,24 @@ struct PlaybackSessionSelectionPlanner {
             ),
             decision: decision
         )
+    }
+
+    /// Race `work` against a deadline. Returns nil on timeout, with the work task cancelled —
+    /// `URLSession`'s async download honours that cooperatively, cleaning up its temporary file.
+    private static func withDeadline<T: Sendable>(
+        seconds: TimeInterval, work: @escaping @Sendable () async throws -> T
+    ) async throws -> T? {
+        try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            // First finisher decides; the loser is cancelled either way.
+            let first = try await group.next().flatMap { $0 }
+            group.cancelAll()
+            return first
+        }
     }
 
     /// The delivered container, mapped to a codec the policy understands. Taken from the

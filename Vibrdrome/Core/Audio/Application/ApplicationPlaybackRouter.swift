@@ -574,11 +574,19 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     var currentSong: Song? { activePersistent?.currentSong ?? routed.currentSong }
     var currentTime: TimeInterval { activePersistent?.currentTime ?? routed.currentTime }
     var smoothCurrentTime: TimeInterval { activePersistent?.currentTime ?? routed.smoothCurrentTime }
-    // Buffering stays a legacy concept: the persistent engine schedules decoded PCM ahead of the
-    // boundary, and its "not ready" state is a controlled wait, not a buffering spinner. During a
-    // persistent session the honest answer is false — reading the quiesced legacy engine here
+    // Buffering stays a legacy concept during playback: the persistent engine schedules decoded
+    // PCM ahead of the boundary, and its "not ready" state is a controlled wait, not a spinner.
+    // But while a session is still being SELECTED — which can include materializing an uncached
+    // source — the honest answer is "buffering": that wait was invisible and read as a dead app.
+    // During a settled persistent session the answer is false; reading the quiesced legacy engine
     // would report the stale session it was handed over from.
-    var isBuffering: Bool { activePersistent != nil ? false : routed.isBuffering }
+    var isBuffering: Bool {
+        switch sessionSelectionState {
+        case .evaluating, .preparing: return true
+        default: break
+        }
+        return activePersistent != nil ? false : routed.isBuffering
+    }
     // Durations follow authority like the queue does: a quiesced legacy engine answers with a
     // days-old track's duration, which is how the full player showed 0:00 remaining early while
     // persistent audio played on (proven by device export, 2026-08-29).

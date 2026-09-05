@@ -258,6 +258,48 @@ struct PlaybackSessionSelectionPlannerTests {
         }
     }
 
+    /// A provider that never delivers — the shape of a huge uncached download in progress.
+    private struct StalledProvider: GaplessFileProviding {
+        func localFile(forTrack trackID: String) async throws -> URL {
+            // Sleeps far past any test deadline; cancellation (from the planner's deadline race)
+            // throws out of the sleep, ending the stalled work the way a cancelled download would.
+            try await Task.sleep(for: .seconds(60))
+            throw GaplessPreparationError.noLocalFile(trackID: trackID)
+        }
+    }
+
+    /// Play must not hang on a source that cannot be made local promptly: past the deadline the
+    /// plan is legacy — this session streams — with the reason recorded, and nothing retained.
+    /// The regression this pins: a 680 MB uncached FLAC turned Play into minutes of silence.
+    @Test func aSourceThatCannotMaterializeInTimePlansLegacy() async {
+        let planner = PlaybackSessionSelectionPlanner(
+            prepareAssembly: {
+                PersistentPlaybackAssembly(
+                    session: GaplessPlaybackSession(sampleRate: GaplessRenderFormat.sampleRate),
+                    backend: GaplessRealTimeBackend(),
+                    preparer: GaplessTrackPreparer(
+                        provider: StalledProvider(),
+                        renderSampleRate: GaplessRenderFormat.sampleRate),
+                    cacheDirectory: FileManager.default.temporaryDirectory)
+            },
+            isPersistentRoutingEnabled: { true },
+            materializationDeadline: 0.2
+        )
+
+        let started = Date()
+        let plan = await planner.plan(request: request([makeSong(id: "huge")]))
+        let waited = Date().timeIntervalSince(started)
+
+        #expect(waited < 2, "the deadline did not bound the wait: \(waited)s")
+        #expect(plan.plannedBackend == .legacy)
+        #expect(plan.retainsPreparedSource == false)
+        if case .legacy(let reason) = plan {
+            #expect(reason == .sourceMaterializationTimedOut)
+        } else {
+            Issue.record("expected legacy(timeout), got \(plan.describedForDiagnostics)")
+        }
+    }
+
     /// Materialization failure is a routing failure, and retains nothing.
     @Test func materializationFailureRetainsNothing() async {
         let planner = makePlanner(files: [:])   // provider has no file for this track

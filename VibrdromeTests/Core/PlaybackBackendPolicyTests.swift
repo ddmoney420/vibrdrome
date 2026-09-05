@@ -348,12 +348,20 @@ struct PlaybackBackendPolicyTests {
 
     /// Every reason in the closed set is reachable, so none is dead and none is a catch-all that
     /// swallowed a case the matrix meant to distinguish.
+    ///
+    /// One reason lives outside the matrix by design: `sourceMaterializationTimedOut` is produced
+    /// by the planner's deadline — a statement about *time*, which the pure policy function cannot
+    /// see. Its reachability is pinned by
+    /// `PlaybackSessionSelectionPlannerTests.aSourceThatCannotMaterializeInTimePlansLegacy`.
     @Test func everyDecisionReasonIsReachable() {
         var seen = Set<PlaybackBackendDecisionReason>()
         for row in Self.rows {
             seen.insert(PlaybackBackendPolicy.decision(for: row.source).reason)
         }
-        let unreachable = Set(PlaybackBackendDecisionReason.allCases).subtracting(seen)
+        let plannerProduced: Set<PlaybackBackendDecisionReason> = [.sourceMaterializationTimedOut]
+        let unreachable = Set(PlaybackBackendDecisionReason.allCases)
+            .subtracting(seen)
+            .subtracting(plannerProduced)
         #expect(unreachable.isEmpty,
                 "these reasons are never produced by the matrix: \(unreachable.map(\.rawValue).sorted())")
     }

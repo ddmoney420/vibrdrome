@@ -191,6 +191,9 @@ enum PlaybackBackendDecisionReason: String, Equatable, Sendable, CaseIterable {
     case radioContent
     case liveStreamContent
     case indefiniteStream
+    /// The source could not be made local within the planner's deadline. Play must not hang on a
+    /// large uncached file — legacy streams this session; a later (cached) session goes persistent.
+    case sourceMaterializationTimedOut
     case unknownContentKind
     case unknownDelivery
     case unconfirmedTranscode
