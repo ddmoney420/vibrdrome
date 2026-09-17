@@ -177,6 +177,15 @@ extension AudioEngine {
         submitScrobbleIfNeeded()
         guard let url = URL(string: station.streamUrl) else { return }
 
+        // Activate the session before starting transport, exactly as `play(song:)` does. Radio was
+        // the one start path that relied on an already-active session — harmless for years, but the
+        // persistent engine now deactivates the session on teardown, so a Persistent → radio
+        // handoff started the stream into an inactive session and played silently. Activate here so
+        // radio never depends on inherited session state; the order is activate-then-start.
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+
         if activeMode != .gapless {
             tearDownCurrentMode()
             activeMode = .gapless
