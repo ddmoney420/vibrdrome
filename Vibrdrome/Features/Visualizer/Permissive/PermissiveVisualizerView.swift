@@ -18,6 +18,13 @@ struct NativeVisualizerSurface: View {
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
 
+    /// DEBUG-only breadcrumbs for the manual-swipe-to-black investigation. Bounded (the transition
+    /// machine ticks at 10 Hz and only logs on state changes), no rendering effect. Read on device
+    /// with: `log stream --predicate 'category == "NativeViz"'`. Distinguishes a stalled transition
+    /// (begin without a matching complete) from a completed transition that still shows black
+    /// (which would implicate the scene/renderer, not this state machine).
+    private static let vizLog = Logger(subsystem: "com.vibrdrome.app", category: "NativeViz")
+
     // ── Auto-Transitions v1 (DEBUG-only, host-side; A12). Shuffle-bag over the native scenes
     // (sceneMode ≥ 1), fade-to-black between them. All logic lives in this View — no renderer,
     // shader, uniform, preset, or test changes. ──────────────────────────────────────────────
@@ -35,6 +42,9 @@ struct NativeVisualizerSurface: View {
     @State private var transitionStart: Date?     // non-nil while a fade is in progress
     @State private var didSwitch = false          // whether the scene was already swapped (at full black)
     @State private var dwellDeadline = Date()
+    /// DEBUG: counts autoTicker firings so the breadcrumb log can show the 10 Hz timer is still
+    /// alive (heartbeat every ~2 s) — the difference between a dead timer and a stuck transition.
+    @State private var tickHeartbeat = 0
 
     // ── Overlay/Compositing v1 (A13): one fixed audio-reactive spectrum ribbon, SwiftUI-only,
     // reading AudioSpectrum.shared.bands. Sits UNDER the A12 fade so transitions cover it. ──────
@@ -87,6 +97,7 @@ struct NativeVisualizerSurface: View {
         }
         presetIndex = idx
         lastFamily = family(idx)
+        Self.vizLog.debug("advanceToNext -> presetIndex \(idx) sceneMode \(self.presets[idx].sceneMode)")
     }
 
     private func nextDwell() -> Double {
@@ -96,26 +107,39 @@ struct NativeVisualizerSurface: View {
     /// Start a fade-to-black. The visual tween is `withAnimation`; the *switch* and *reset* are
     /// decided by elapsed time in tick(), so a dropped animation completion can never strand it.
     @MainActor private func beginTransition() {
-        guard transitionStart == nil else { return }
+        guard transitionStart == nil else {
+            Self.vizLog.debug("beginTransition IGNORED (already transitioning)")
+            return
+        }
         transitionStart = Date()
         didSwitch = false
         withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 1.0 }
+        Self.vizLog.debug("beginTransition START fadeOpacity->1")
     }
 
     /// Combine tick (~0.1s): advances any in-flight transition by elapsed time, else auto-advances
     /// when the dwell deadline passes. Purely time-driven → cannot get stuck.
     private func tick() {
+        tickHeartbeat += 1
+        if tickHeartbeat % 20 == 0 {
+            Self.vizLog.debug("""
+                tick alive #\(self.tickHeartbeat) transitionStart=\(self.transitionStart != nil) \
+                fadeOpacity=\(String(format: "%.2f", self.fadeOpacity)) presetIndex=\(self.presetIndex)
+                """)
+        }
         if let start = transitionStart {
             let elapsed = Date().timeIntervalSince(start)
             if elapsed >= Self.fadeSeconds, !didSwitch {
                 advanceToNext()                           // switch only at full black
                 didSwitch = true
                 withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 0.0 }
+                Self.vizLog.debug("tick SWITCH at full black, fadeOpacity->0")
             }
             if elapsed >= 2 * Self.fadeSeconds {          // fade-in done → transition complete
                 transitionStart = nil
                 didSwitch = false
                 fadeOpacity = 0.0
+                Self.vizLog.debug("tick COMPLETE, transition cleared")
             }
             return
         }
@@ -126,6 +150,7 @@ struct NativeVisualizerSurface: View {
     }
 
     private func manualNext() {
+        Self.vizLog.debug("manualNext (swipe) transitionStart=\(self.transitionStart != nil)")
         dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual swipe restarts the dwell
         beginTransition()
     }
@@ -149,6 +174,7 @@ struct NativeVisualizerSurface: View {
             .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
             // Seed the bag + jump into the native rotation when the surface appears.
             .onAppear {
+                Self.vizLog.debug("surface onAppear (bagEmpty=\(self.bag.isEmpty))")
                 if bag.isEmpty {
                     refillBag()
                     advanceToNext()    // jump into the native rotation at startup
