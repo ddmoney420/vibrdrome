@@ -106,15 +106,24 @@ final class GaplessNativeVisualizerAdapter: GaplessVisualizerAdapter {
         scratch = [Float](repeating: 0, count: Self.drainFrames * 2)
     }
 
+    /// Activation deliberately does NOT touch `beginRenderConsumer`/`endRenderConsumer`.
+    ///
+    /// Those flags belong to the **renderer** — the Native surface claims the ring's consumer role
+    /// itself when it appears, and it *refuses* to attach while `hasActiveConsumer` is already
+    /// true. The first device QA proved what claiming it here does: the renderer never attached,
+    /// drained nothing, and every scene fell back to its synthesized idle animation — "reactivity
+    /// diminished, only some scenes move". This adapter is purely the ring's producer under the
+    /// persistent engine; consumer lifecycle stays with the surface that reads it.
     func activate() {
         consumer.isActive = true
-        source.beginRenderConsumer()
+        // The Debug PCM overlay reports these; under legacy the EQ tap sets them in its prepare.
+        source.sampleRate = GaplessRenderFormat.sampleRate
+        source.sourceChannelCount = 2
     }
 
     func deactivate() {
         consumer.isActive = false
         consumer.buffer.reset()
-        source.endRenderConsumer()
     }
 
     func flush() { consumer.buffer.reset() }
