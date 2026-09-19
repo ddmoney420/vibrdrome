@@ -85,6 +85,14 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     private var persistentPort: (any PersistentPlaybackSessionPort)?
     private var planExecutor: PlaybackSessionPlanExecutor?
 
+    /// DEBUG diagnostics: a process-local identity so a capture can prove whether it came from the
+    /// same router instance that played Persistent, or a reconstructed one (e.g. after relaunch) —
+    /// the ambiguity the first J capture could not resolve. Never used for behavior.
+    #if DEBUG
+    nonisolated(unsafe) private static var instanceCounter = 0
+    let routerInstanceID: Int
+    #endif
+
     init(
         legacy: any ApplicationPlaybackControlling = LegacyAudioEngineAdapter(),
         persistentBuilder: any PersistentPlaybackAssemblyBuilding
@@ -92,6 +100,10 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     ) {
         self.legacy = legacy
         self.persistentBuilder = persistentBuilder
+        #if DEBUG
+        Self.instanceCounter += 1
+        self.routerInstanceID = Self.instanceCounter
+        #endif
     }
 
     #if DEBUG
@@ -237,6 +249,12 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
                 generation \(generation, privacy: .public): persistent denied \
                 (\(gate, privacy: .public)) -> legacy
                 """)
+            #if DEBUG
+            PlaybackEventLog.record("""
+                play gen \(generation): persistent denied (\(gate)) -> legacy; \
+                authority-before=\(ownership.authority.rawValue) prep=\(persistentPreparationState)
+                """)
+            #endif
             // `grantsAuthority: false` preserves the flag-off contract: authority is left alone so
             // a build that never enables the flag behaves as it did before this lane.
             beginLegacyReplacement(reason: reason, generation: generation,
@@ -296,6 +314,13 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             \(plan.describedForDiagnostics, privacy: .public) -> \
             \(outcome.describedForDiagnostics, privacy: .public)
             """)
+        #if DEBUG
+        PlaybackEventLog.record("""
+            play gen \(request.generation): beta=\(PersistentRoutingSetting.isEnabled ? "on" : "off") \
+            plan=\(plan.describedForDiagnostics) -> \(outcome.describedForDiagnostics) \
+            authority=\(ownership.authority.rawValue) prep=\(persistentPreparationState)
+            """)
+        #endif
     }
 
     /// Start a session that is legacy by definition — radio and live streams, which the persistent

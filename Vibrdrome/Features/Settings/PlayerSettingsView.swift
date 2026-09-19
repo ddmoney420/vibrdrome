@@ -314,6 +314,21 @@ struct PlayerSettingsView: View {
                     .foregroundColor(.primary)
             }
             .accessibilityIdentifier("gaplessEngineBetaToggle")
+            .onChange(of: gaplessEngineBeta) { _, newValue in
+                // Observational only — the preference already changed via @AppStorage; this records
+                // the transition and the live playback context for the beta-OFF investigation. It
+                // must not stop playback, replan, or move authority (it does none of those).
+                #if DEBUG
+                let router = ApplicationPlayback.router
+                PlaybackEventLog.record("""
+                    beta \(newValue ? "OFF->ON" : "ON->OFF"): \
+                    playing=\(ApplicationPlayback.shared.isPlaying) \
+                    authority=\(router?.ownership.authority.rawValue ?? "?") \
+                    backend=\(router?.selectedBackend.rawValue ?? "?") \
+                    gen=\(router?.pendingPlanningGeneration ?? 0)
+                    """)
+                #endif
+            }
         } footer: {
             Text("Uses the new gapless playback engine for supported music.")
         }

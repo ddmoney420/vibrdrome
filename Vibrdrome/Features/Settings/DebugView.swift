@@ -495,10 +495,103 @@ struct DebugView: View {
         #endif
 
         lines.append(contentsOf: persistentDiagnosticsLines())
+        lines.append(contentsOf: legacyTransportAndSessionLines())
 
         exportText = lines.joined(separator: "\n")
         writeExportFile(exportText)
         showExportSheet = true
+    }
+
+    /// The CarPlay-J / beta-OFF silent-Legacy diagnostics: the application-vs-Legacy disagreement
+    /// snapshot, audio-session believed state, router identity and the recent event log — all the
+    /// fields the first inconclusive capture lacked. Sanitized: no URLs, tokens or credentials.
+    private func legacyTransportAndSessionLines() -> [String] {
+        var lines: [String] = []
+        let engine = AudioEngine.shared
+        let router = ApplicationPlayback.router
+
+        lines.append("")
+        lines.append("=== Router Identity ===")
+        #if DEBUG
+        lines.append("Router instance ID: \(router?.routerInstanceID ?? -1)")
+        #endif
+        lines.append("Planning generation: "
+                     + "\(router?.lastCompletedPlanningGeneration ?? 0)"
+                     + "/\(router?.pendingPlanningGeneration ?? 0)")
+        let prep = (router?.persistentPreparationState).map { String(describing: $0) } ?? "unknown"
+        lines.append("Persistent preparation: \(prep)")
+
+        lines.append("")
+        lines.append("=== Playback-State Disagreement ===")
+        lines.append("Application isPlaying: \(ApplicationPlayback.shared.isPlaying)")
+        lines.append("Application currentSong: \(ApplicationPlayback.shared.currentSong?.title ?? "none")")
+        lines.append("Playback authority: \(router?.ownership.authority.rawValue ?? "?")")
+        lines.append("Audio owner count: \(router?.ownership.ownerCount ?? 0)")
+        lines.append("Active transport backend: \(router?.selectedBackend.rawValue ?? "?")")
+
+        let player = engine.activePlayer
+        let state = engine.legacyTransportState
+        lines.append("")
+        lines.append("=== Legacy Transport ===")
+        lines.append("Legacy rate: \(player?.rate ?? 0)")
+        lines.append("Legacy timeControlStatus: \(Self.describe(player?.timeControlStatus))")
+        lines.append("Legacy reasonForWaitingToPlay: \(player?.reasonForWaitingToPlay?.rawValue ?? "none")")
+        lines.append("Legacy current item present: \(state.hasCurrentItem)")
+        lines.append("Legacy current-item status: \(Self.describe(player?.currentItem?.status))")
+        lines.append("Legacy current-item error: "
+                     + (player?.currentItem?.error.map { "\($0._domain) code \($0._code)" } ?? "none"))
+        lines.append("Legacy current playback time: "
+                     + (player?.currentItem != nil ? String(format: "%.1f s", player!.currentTime().seconds) : "n/a"))
+        lines.append("Legacy queued items: \(state.queuedItemCount)")
+        lines.append("Legacy transport active: \(state.isTransportActive)")
+        lines.append("Legacy admits transport rebuild: \(engine.admitsTransportRebuild)")
+
+        lines.append("")
+        lines.append("=== Audio Session ===")
+        lines.append("App-believed state: \(AudioSessionDiagnostics.believedState.rawValue)")
+        lines.append("Last operation: \(AudioSessionDiagnostics.lastOperation?.rawValue ?? "none")")
+        lines.append("Last operation source: \(AudioSessionDiagnostics.lastSource?.rawValue ?? "none")")
+        lines.append("Last operation result: \(AudioSessionDiagnostics.lastResult)")
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        lines.append("Category: \(session.category.rawValue)")
+        lines.append("Mode: \(session.mode.rawValue)")
+        let route = session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+        lines.append("Output route: \(route.isEmpty ? "none" : route)")
+        lines.append("Sample rate: \(Int(session.sampleRate)) Hz")
+        #endif
+
+        lines.append("")
+        lines.append("=== Connection context ===")
+        // `isConnected` is the last request's status, reset to false on server switch until the next
+        // successful request — a stale last-result flag, NOT a live streamability check.
+        lines.append("Server isConnected (last-result, not live): \(appState.subsonicClient.isConnected)")
+
+        let events = PlaybackEventLog.snapshot
+        lines.append("")
+        lines.append("=== Recent playback events (oldest first) ===")
+        lines.append(contentsOf: events.isEmpty ? ["none"] : events)
+        return lines
+    }
+
+    private static func describe(_ status: AVPlayer.TimeControlStatus?) -> String {
+        switch status {
+        case .paused: "paused"
+        case .waitingToPlayAtSpecifiedRate: "waitingToPlayAtSpecifiedRate"
+        case .playing: "playing"
+        case nil: "none"
+        @unknown default: "unknown"
+        }
+    }
+
+    private static func describe(_ status: AVPlayerItem.Status?) -> String {
+        switch status {
+        case .unknown: "unknown"
+        case .readyToPlay: "readyToPlay"
+        case .failed: "failed"
+        case nil: "no item"
+        @unknown default: "unknown"
+        }
     }
 
     /// The persistent lane, which the original export predated entirely. Everything here is the

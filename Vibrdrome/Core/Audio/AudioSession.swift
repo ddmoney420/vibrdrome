@@ -110,7 +110,9 @@ final class AudioSessionManager: @unchecked Sendable {
                 sessionLog.info("Interruption ended: shouldResume=\(shouldResume) wasPlaying=\(wasPlayingBeforeInterruption) -> restore=\(shouldRestore)")
                 do {
                     try AVAudioSession.sharedInstance().setActive(true)
+                    AudioSessionDiagnostics.record(.activate, source: .interruptionEnded, error: nil)
                 } catch {
+                    AudioSessionDiagnostics.record(.activate, source: .interruptionEnded, error: error)
                     sessionLog.error("Failed to reactivate audio session: \(error.localizedDescription)")
                 }
                 if shouldRestore {

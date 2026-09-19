@@ -169,11 +169,22 @@ struct ProductionPersistentPlaybackAssemblyBuilder: PersistentPlaybackAssemblyBu
         #if os(iOS)
         backend.activateAudioSession = {
             let audio = AVAudioSession.sharedInstance()
-            try audio.setCategory(.playback, mode: .default, policy: .longFormAudio)
-            try audio.setActive(true)
+            do {
+                try audio.setCategory(.playback, mode: .default, policy: .longFormAudio)
+                try audio.setActive(true)
+                AudioSessionDiagnostics.record(.activate, source: .persistentStart, error: nil)
+            } catch {
+                AudioSessionDiagnostics.record(.activate, source: .persistentStart, error: error)
+                throw error
+            }
         }
         backend.deactivateAudioSession = {
-            try? AVAudioSession.sharedInstance().setActive(false)
+            do {
+                try AVAudioSession.sharedInstance().setActive(false)
+                AudioSessionDiagnostics.record(.deactivate, source: .persistentTeardown, error: nil)
+            } catch {
+                AudioSessionDiagnostics.record(.deactivate, source: .persistentTeardown, error: error)
+            }
         }
         #endif
 

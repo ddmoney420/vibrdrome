@@ -46,7 +46,12 @@ extension AudioEngine {
 
         // Ensure audio session is active (may have been deactivated since app launch)
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .legacyPlay, error: nil)
+        } catch {
+            AudioSessionDiagnostics.record(.activate, source: .legacyPlay, error: error)
+        }
         #endif
 
         submitScrobbleIfNeeded()
@@ -190,7 +195,12 @@ extension AudioEngine {
         // otherwise relied on an already-active session, which the persistent engine now
         // deactivates on teardown. Secondary to the admit above, but keeps parity with play(song:).
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .radio, error: nil)
+        } catch {
+            AudioSessionDiagnostics.record(.activate, source: .radio, error: error)
+        }
         #endif
 
         if activeMode != .gapless {
@@ -253,7 +263,9 @@ extension AudioEngine {
         #if os(iOS)
         do {
             try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .legacyResume, error: nil)
         } catch {
+            AudioSessionDiagnostics.record(.activate, source: .legacyResume, error: error)
             playbackLog.error("Failed to reactivate audio session: \(error)")
         }
         #endif
