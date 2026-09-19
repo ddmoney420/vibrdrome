@@ -2,8 +2,15 @@ import Combine
 import MetalKit
 import QuartzCore
 import SwiftUI
+import Synchronization
 import os
 import simd
+
+/// DEBUG: counts every `NativeVisualizerSurface` value SwiftUI constructs. File-scope + atomic so
+/// the struct's nonisolated `init` can bump it. Stamped into each breadcrumb: if this jumps by
+/// hundreds across the swipe-to-black stall, the surface is being recreated ~10×/s and resetting
+/// its `autoTicker` (a plain `let` publisher); if it barely moves, the timer is starved instead.
+private let nativeVizSurfaceInits = Atomic<Int>(0)
 
 /// Production host for the native Metal feedback visualizer. Embedded as the "Native"
 /// mode inside `VisualizerView`, which supplies the close/playback controls. Auto-rotates
@@ -27,7 +34,8 @@ enum NativeVizTrace {
     static func record(_ message: String) {
         vizLog.debug("\(message, privacy: .public)")
         let stamp = String(format: "%.2f", Date().timeIntervalSince(startedAt))
-        lines.append("[\(stamp)] \(message)")
+        let inits = nativeVizSurfaceInits.load(ordering: .relaxed)
+        lines.append("[\(stamp)] (inits=\(inits)) \(message)")
         if lines.count > 200 { lines.removeFirst(lines.count - 200) }
         guard let documents = FileManager.default.urls(for: .documentDirectory,
                                                        in: .userDomainMask).first else { return }
@@ -40,6 +48,13 @@ enum NativeVizTrace {
 struct NativeVisualizerSurface: View {
     /// Incremented by the host (VisualizerView) on a manual "next scene" gesture.
     var advanceToken: Int = 0
+
+    /// DEBUG: bump the recreation counter each time SwiftUI constructs this value. `init` is
+    /// nonisolated; the counter is a file-scope atomic so this is race-free without isolation.
+    init(advanceToken: Int = 0) {
+        self.advanceToken = advanceToken
+        nativeVizSurfaceInits.wrappingAdd(1, ordering: .relaxed)
+    }
 
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
@@ -75,9 +90,16 @@ struct NativeVisualizerSurface: View {
     @State private var field = ParticleField(count: 80)
     private static let particlesEnabled = true
     private static let particleIntensity = 0.7
-    // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME — it can't die and
-    // never depends on animation-completion callbacks (those were dropping → scenes got stuck).
-    private let autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME, never by animation-
+    // completion callbacks (those were dropping → scenes got stuck).
+    //
+    // **`@State`, not `let`.** SwiftUI reconstructs this surface value ~17×/s (the host re-renders
+    // continuously), and a `let` publisher was rebuilt on every reconstruction — cancelled and
+    // recreated faster than its own 0.1 s interval, so `tick()` almost never fired and a
+    // fade-to-black sat black until the re-render storm happened to pause >0.1 s (measured: ~31 s).
+    // `@State` is created once and preserved across reconstructions, so the timer actually ticks —
+    // which is what "it can't die" was always meant to guarantee.
+    @State private var autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     /// Preset indices eligible for the auto-rotation bag.
     private var eligibleIndices: [Int] {
