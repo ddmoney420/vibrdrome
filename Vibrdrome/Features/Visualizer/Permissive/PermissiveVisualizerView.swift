@@ -11,19 +11,38 @@ import simd
 /// spectrum ribbon + particle swarm over the Metal field. Reads `AudioSpectrum` scalar
 /// bass/mid/treble (with a synthesized fallback when nothing is playing). A horizontal
 /// swipe in the host bumps `advanceToken` to jump to the next scene.
+/// DEBUG-only breadcrumb trace for the manual-swipe-to-black investigation.
+///
+/// Both channels, because device log streaming is unreliable on this iOS/host pairing (`log collect`
+/// needs sudo the harness can't supply, `idevicesyslog` never attaches, and `Logger.debug` isn't
+/// streamed): each breadcrumb goes to os_log AND to a bounded file the Mac pulls with
+/// `devicectl device copy from ... Documents/nativeviz-trace.txt` — the channel the debug export
+/// already proved. Only the meaningful, low-frequency transition steps call this.
+@MainActor
+enum NativeVizTrace {
+    private static let vizLog = Logger(subsystem: "com.vibrdrome.app", category: "NativeViz")
+    private static var lines: [String] = []
+    private static let startedAt = Date()
+
+    static func record(_ message: String) {
+        vizLog.debug("\(message, privacy: .public)")
+        let stamp = String(format: "%.2f", Date().timeIntervalSince(startedAt))
+        lines.append("[\(stamp)] \(message)")
+        if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+        guard let documents = FileManager.default.urls(for: .documentDirectory,
+                                                       in: .userDomainMask).first else { return }
+        try? lines.joined(separator: "\n").write(
+            to: documents.appendingPathComponent("nativeviz-trace.txt"),
+            atomically: true, encoding: .utf8)
+    }
+}
+
 struct NativeVisualizerSurface: View {
     /// Incremented by the host (VisualizerView) on a manual "next scene" gesture.
     var advanceToken: Int = 0
 
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
-
-    /// DEBUG-only breadcrumbs for the manual-swipe-to-black investigation. Bounded (the transition
-    /// machine ticks at 10 Hz and only logs on state changes), no rendering effect. Read on device
-    /// with: `log stream --predicate 'category == "NativeViz"'`. Distinguishes a stalled transition
-    /// (begin without a matching complete) from a completed transition that still shows black
-    /// (which would implicate the scene/renderer, not this state machine).
-    private static let vizLog = Logger(subsystem: "com.vibrdrome.app", category: "NativeViz")
 
     // ── Auto-Transitions v1 (DEBUG-only, host-side; A12). Shuffle-bag over the native scenes
     // (sceneMode ≥ 1), fade-to-black between them. All logic lives in this View — no renderer,
@@ -97,7 +116,7 @@ struct NativeVisualizerSurface: View {
         }
         presetIndex = idx
         lastFamily = family(idx)
-        Self.vizLog.debug("advanceToNext -> presetIndex \(idx) sceneMode \(self.presets[idx].sceneMode)")
+        NativeVizTrace.record("advanceToNext -> presetIndex \(idx) sceneMode \(self.presets[idx].sceneMode)")
     }
 
     private func nextDwell() -> Double {
@@ -108,13 +127,13 @@ struct NativeVisualizerSurface: View {
     /// decided by elapsed time in tick(), so a dropped animation completion can never strand it.
     @MainActor private func beginTransition() {
         guard transitionStart == nil else {
-            Self.vizLog.debug("beginTransition IGNORED (already transitioning)")
+            NativeVizTrace.record("beginTransition IGNORED (already transitioning)")
             return
         }
         transitionStart = Date()
         didSwitch = false
         withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 1.0 }
-        Self.vizLog.debug("beginTransition START fadeOpacity->1")
+        NativeVizTrace.record("beginTransition START fadeOpacity->1")
     }
 
     /// Combine tick (~0.1s): advances any in-flight transition by elapsed time, else auto-advances
@@ -122,7 +141,7 @@ struct NativeVisualizerSurface: View {
     private func tick() {
         tickHeartbeat += 1
         if tickHeartbeat % 20 == 0 {
-            Self.vizLog.debug("""
+            NativeVizTrace.record("""
                 tick alive #\(self.tickHeartbeat) transitionStart=\(self.transitionStart != nil) \
                 fadeOpacity=\(String(format: "%.2f", self.fadeOpacity)) presetIndex=\(self.presetIndex)
                 """)
@@ -133,13 +152,13 @@ struct NativeVisualizerSurface: View {
                 advanceToNext()                           // switch only at full black
                 didSwitch = true
                 withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 0.0 }
-                Self.vizLog.debug("tick SWITCH at full black, fadeOpacity->0")
+                NativeVizTrace.record("tick SWITCH at full black, fadeOpacity->0")
             }
             if elapsed >= 2 * Self.fadeSeconds {          // fade-in done → transition complete
                 transitionStart = nil
                 didSwitch = false
                 fadeOpacity = 0.0
-                Self.vizLog.debug("tick COMPLETE, transition cleared")
+                NativeVizTrace.record("tick COMPLETE, transition cleared")
             }
             return
         }
@@ -150,7 +169,7 @@ struct NativeVisualizerSurface: View {
     }
 
     private func manualNext() {
-        Self.vizLog.debug("manualNext (swipe) transitionStart=\(self.transitionStart != nil)")
+        NativeVizTrace.record("manualNext (swipe) transitionStart=\(self.transitionStart != nil)")
         dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual swipe restarts the dwell
         beginTransition()
     }
@@ -174,7 +193,7 @@ struct NativeVisualizerSurface: View {
             .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
             // Seed the bag + jump into the native rotation when the surface appears.
             .onAppear {
-                Self.vizLog.debug("surface onAppear (bagEmpty=\(self.bag.isEmpty))")
+                NativeVizTrace.record("surface onAppear (bagEmpty=\(self.bag.isEmpty))")
                 if bag.isEmpty {
                     refillBag()
                     advanceToNext()    // jump into the native rotation at startup
