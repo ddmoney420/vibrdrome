@@ -165,6 +165,15 @@ extension AudioEngine {
     }
 
     func playRadio(station: InternetRadioStation) {
+        // Un-quiesce legacy transport, exactly as `play(song:)` does. This is the real fix for
+        // silent radio after a Persistent → radio handoff: the handoff quiesces legacy
+        // (`admitsTransportRebuild` → false), and `replacePlayerItem` refuses to build a player
+        // item while quiesced — so the stream never started. `play(song:)` already admits here for
+        // artist/mix radio; the internet-station path was the one start that missed it (its own
+        // comment even claimed radio was covered). Must run before the isUITesting return, matching
+        // `play(song:)`, and before `replacePlayerItem`.
+        admitTransportForNewLegacySession()
+
         if isUITesting {
             currentSong = nil
             currentRadioStation = station
@@ -177,11 +186,9 @@ extension AudioEngine {
         submitScrobbleIfNeeded()
         guard let url = URL(string: station.streamUrl) else { return }
 
-        // Activate the session before starting transport, exactly as `play(song:)` does. Radio was
-        // the one start path that relied on an already-active session — harmless for years, but the
-        // persistent engine now deactivates the session on teardown, so a Persistent → radio
-        // handoff started the stream into an inactive session and played silently. Activate here so
-        // radio never depends on inherited session state; the order is activate-then-start.
+        // Activate the session before starting transport, exactly as `play(song:)` does — radio
+        // otherwise relied on an already-active session, which the persistent engine now
+        // deactivates on teardown. Secondary to the admit above, but keeps parity with play(song:).
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif

@@ -736,4 +736,25 @@ struct AudioEngineTests {
         AudioEngine.configureExternalPlayback(queue)
         #expect(queue.allowsExternalPlayback == false)
     }
+
+    /// Radio after a persistent handoff must re-admit legacy transport, or `replacePlayerItem`
+    /// refuses to build the stream item and the station plays silently. Regression for the device
+    /// bug where internet radio was inaudible after a persistent session: `playRadio(station:)`
+    /// missed the `admitTransportForNewLegacySession()` that `play(song:)` already performs.
+    @Test @MainActor func playRadioReAdmitsTransportAfterQuiesce() async {
+        resetEngine()
+        let engine = AudioEngine.shared
+        engine.quiesceForPersistentSession()
+        #expect(engine.admitsTransportRebuild == false, "precondition: legacy should be quiesced")
+
+        let station = InternetRadioStation(
+            id: "r1", name: "Probe FM", streamUrl: "https://example.invalid/stream",
+            homePageUrl: nil, coverArt: nil)
+        engine.playRadio(station: station)
+
+        #expect(engine.admitsTransportRebuild,
+                "playRadio left legacy quiesced — replacePlayerItem would refuse the stream")
+        #expect(engine.currentRadioStation?.id == "r1")
+        engine.admitTransportForNewLegacySession()   // leave the shared engine in its default state
+    }
 }
