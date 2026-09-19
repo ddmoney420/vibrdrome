@@ -230,6 +230,13 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         guard PersistentRoutingSetting.isEnabled, startOffsetSeconds <= 0 else {
             let reason: PlaybackBackendDecisionReason = startOffsetSeconds > 0
                 ? .requiredMediaPropertiesUnknown : .supportedLocalSource
+            // Name the gate in the log so "why is this Legacy" is unambiguous: beta opt-in Off is
+            // the common case and must be distinguishable from a mid-track start.
+            let gate = PersistentRoutingSetting.isEnabled ? "mid-track start" : "gapless beta opt-in Off"
+            routingLog.info("""
+                generation \(generation, privacy: .public): persistent denied \
+                (\(gate, privacy: .public)) -> legacy
+                """)
             // `grantsAuthority: false` preserves the flag-off contract: authority is left alone so
             // a build that never enables the flag behaves as it did before this lane.
             beginLegacyReplacement(reason: reason, generation: generation,
@@ -449,6 +456,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         var audibleBoundaryReached: Bool
         var isFallbackPermitted: Bool
         var selectionState: String
+        var gaplessBetaOptIn: Bool
         var heartbeat: PersistentHeartbeatDiagnostics
 
         var preparationDescription: String {
@@ -467,6 +475,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             Active transport backend: \(selectedBackend == .legacy ? "Legacy" : "Persistent")
             Playback authority: \(authority.rawValue)
             Selection state: \(selectionState)
+            Gapless beta opt-in: \(gaplessBetaOptIn ? "On" : "Off")
             Planning generation: \(lastCompletedPlanningGeneration) completed \
             of \(pendingPlanningGeneration) requested
             Session replacement in progress: \(isReplacingSession ? "Yes" : "No")
@@ -482,14 +491,27 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         }
     }
 
+    /// Whether a persistent controller is currently constructed. The witnessing registry is a
+    /// DEBUG-only seam; Release cannot see it, so it reports false there (nothing in Release reads
+    /// this — the diagnostics screen is DEBUG-only — but the type must still compile for Release).
+    private var persistentControllerConstructedForDiagnostics: Bool {
+        #if DEBUG
+        GaplessDiagnosticsRegistry.current != nil
+        #else
+        false
+        #endif
+    }
+
     var diagnostics: Diagnostics {
         Diagnostics(
             routerActive: true,
             selectedBackend: selectedBackend,
             legacyAdapterActive: true,
             // Read, never asserted: if anything ever does construct a persistent controller, this
-            // must say so rather than keep reporting the comfortable answer.
-            persistentControllerConstructed: GaplessDiagnosticsRegistry.current != nil,
+            // must say so rather than keep reporting the comfortable answer. The registry is a
+            // DEBUG-only diagnostic seam, so in Release — where nothing reads this field but it must
+            // still compile now that the beta ships in Release — it reports false.
+            persistentControllerConstructed: persistentControllerConstructedForDiagnostics,
             persistentPreparationState: persistentPreparationState,
             pendingPlanningGeneration: pendingPlanningGeneration,
             lastCompletedPlanningGeneration: lastCompletedPlanningGeneration,
@@ -498,6 +520,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
             audibleBoundaryReached: ownership.audibleBoundaryReached,
             isFallbackPermitted: ownership.isFallbackPermitted,
             selectionState: sessionSelectionState.describedForDiagnostics,
+            gaplessBetaOptIn: PersistentRoutingSetting.isEnabled,
             // Read from the port rather than from the active-transport accessor: a heartbeat that
             // outlived its session would be invisible if it could only be seen while that session
             // still held authority, and that is exactly the failure worth surfacing.

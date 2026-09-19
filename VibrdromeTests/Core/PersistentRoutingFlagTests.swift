@@ -37,6 +37,30 @@ struct PersistentRoutingFlagTests {
         #expect(GaplessDiagnosticsRegistry.current == nil)
     }
 
+    /// The preference round-trips through UserDefaults in both directions — the proxy for
+    /// terminate/relaunch persistence, since the value lives in `UserDefaults.standard` under the
+    /// one shared key rather than in memory.
+    @Test func theBetaPreferencePersistsBothWays() {
+        let original = PersistentRoutingSetting.isEnabled
+        defer { PersistentRoutingSetting.setEnabled(original) }
+
+        PersistentRoutingSetting.setEnabled(true)
+        #expect(UserDefaults.standard.bool(forKey: PersistentRoutingSetting.defaultsKey))
+        #expect(PersistentRoutingSetting.isEnabled)
+
+        PersistentRoutingSetting.setEnabled(false)
+        #expect(UserDefaults.standard.bool(forKey: PersistentRoutingSetting.defaultsKey) == false)
+        #expect(PersistentRoutingSetting.isEnabled == false)
+    }
+
+    /// The router's DEBUG diagnostics report the opt-in, so a device capture shows why Persistent
+    /// was or was not eligible.
+    @Test func diagnosticsReportTheBetaOptIn() {
+        guard let router = ApplicationPlayback.router else { Issue.record("no router"); return }
+        withFlag(true) { #expect(router.diagnostics.gaplessBetaOptIn) }
+        withFlag(false) { #expect(router.diagnostics.gaplessBetaOptIn == false) }
+    }
+
     /// Enabling it starts nothing and constructs nothing on its own.
     @Test func enablingTheFlagStartsNothing() {
         guard let router = ApplicationPlayback.router else {

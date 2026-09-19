@@ -135,17 +135,16 @@ struct PlaybackAuthorityRoutingTests {
         }
     }
 
-    /// Release has no flag path at all, so persistent routing is unreachable there by construction.
-    @Test func releaseConfigurationIsLegacyOnly() {
-        #if DEBUG
-        // The flag exists only in DEBUG; what Release guarantees is that `isEnabled` is a constant
-        // false with no setter, which is what the compiled-out branch below asserts structurally.
-        #expect(PersistentRoutingSetting.defaultsKey == "debugUsePersistentPlaybackEngine")
-        #else
-        #expect(PersistentRoutingSetting.isEnabled == false,
-                "Release exposed a persistent routing path")
-        #endif
-        // In both configurations a router that has planned nothing owns nothing.
+    /// The beta preference is one key, identical in every build configuration — no `#if DEBUG`
+    /// fork — which is what makes the Release opt-in reachable. Its key is the fresh
+    /// `gaplessEngineBeta`, deliberately NOT the old debug key, so a prior debug opt-in cannot leak
+    /// into Release.
+    @Test func gaplessBetaPreferenceIsOneReleaseVisibleKey() {
+        #expect(PersistentRoutingSetting.defaultsKey == "gaplessEngineBeta")
+        #expect(PersistentRoutingSetting.defaultsKey == UserDefaultsKeys.gaplessEngineBeta)
+        #expect(PersistentRoutingSetting.defaultsKey != "debugUsePersistentPlaybackEngine",
+                "the old DEBUG key must not govern the Release beta")
+        // A router that has planned nothing owns nothing, whatever the preference says.
         let (router, _, _) = makeRoutingRouter()
         #expect(router.selectedBackend == .legacy)
         #expect(router.ownership.authority == PlaybackAuthority.none)
@@ -190,6 +189,38 @@ struct PlaybackAuthorityRoutingTests {
                 // Real audio played on a real assembly: release it to completion before the next
                 // serialized test, rather than leaving the scheduled defer racing it.
                 await teardown(router)
+            }
+        }
+    }
+
+    /// The Release-equivalent pair for `anEligibleSourceIsPlannedAndExecutedOnce`: the *same* real
+    /// eligible source, but with beta opt-in OFF, must stay Legacy and construct no persistent
+    /// stack. Together these two prove the opt-in gate opens and closes the Release path through
+    /// the real `PersistentRoutingSetting` preference — not an injected test closure. There is no
+    /// `#if DEBUG` fork in that preference, so this is exactly the Release behavior.
+    @Test func anEligibleSourceWithBetaOffStaysLegacyAndConstructsNothing() async throws {
+        try await withTemporaryDirectory { directory in
+            try await withRoutingFlag(false) {
+                let files = try makeFiles(["p0"], in: directory)
+                let legacy = PlaybackSpy()
+                let router = ApplicationPlaybackRouter(
+                    legacy: legacy,
+                    persistentBuilder: LocalFileAssemblyBuilder(files: files, directory: directory))
+                defer { scheduleTeardown(router) }
+                let song = makeSong(id: "p0")
+
+                router.play(song: song, from: [song], at: 0)
+                await router.awaitPendingSelectionForTesting()
+
+                #expect(router.selectedBackend == .legacy,
+                        "beta OFF must keep an eligible source on Legacy")
+                #expect(router.ownership.authority != .persistent)
+                #expect(legacy.playCalls.count == 1, "Legacy did not start the source")
+                #expect(router.persistentAssembly == nil,
+                        "beta OFF constructed the persistent stack for an eligible source")
+                #expect(router.persistentPreparationState == .notConstructed,
+                        "beta OFF left the audio domain non-lazy")
+                #expect(GaplessDiagnosticsRegistry.current == nil)
             }
         }
     }

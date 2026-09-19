@@ -166,13 +166,15 @@ struct DebugView: View {
                     }
                 }
 
-                Toggle("Use Persistent Playback Engine", isOn: Binding(
+                // The same preference as Settings ▸ Gapless Engine (Beta); this mirror is a debug
+                // convenience and writes the identical UserDefaults key.
+                Toggle("Gapless Engine (Beta)", isOn: Binding(
                     get: { PersistentRoutingSetting.isEnabled },
                     set: { PersistentRoutingSetting.setEnabled($0) }
                 ))
 
-                row("Persistent routing enabled",
-                    value: PersistentRoutingSetting.isEnabled ? "Yes" : "No")
+                row("Gapless beta opt-in",
+                    value: PersistentRoutingSetting.isEnabled ? "On" : "Off")
                 row("Session selection state", value: router.sessionSelectionState.describedForDiagnostics)
 
                 // The legacy side, read from the same `legacyTransportState` the ownership

@@ -59,15 +59,21 @@ enum PlaybackSessionSelectionState: Equatable, Sendable {
     }
 }
 
-/// The DEBUG-only rollout switch for persistent routing.
+/// The opt-in gate for the Persistent gapless engine — the "Gapless Engine (Beta)" Settings toggle.
 ///
-/// **Defaults to Off, and does not exist in Release.** Reading it constructs nothing, enabling it
-/// starts nothing, and changing it mid-playback does not move the current session — the new value
-/// applies to the *next* explicit playback request, because switching a backend under audible audio
-/// is precisely what this whole design exists to prevent.
+/// **One preference, both configurations.** There is no longer any `#if DEBUG` fork: the getter and
+/// setter compiled into Release are identical to what the tests exercise, which is what makes the
+/// Release opt-in reachable rather than a constant `false`. The Settings toggle writes the same key
+/// through `@AppStorage`, so UI and routing read one value that cannot disagree.
+///
+/// **Defaults to Off, and never migrates.** The key is new (`gaplessEngineBeta`), distinct from the
+/// old DEBUG key, so a prior debug opt-in cannot carry into a Release build: absent value → `false`
+/// for every existing, upgraded, fresh and TestFlight install. Reading it constructs nothing;
+/// enabling it starts nothing. It is an *availability gate above the existing planner*, not a
+/// replacement for it — an eligible source still has to pass every routing check, and the value is
+/// applied at the *next* playback planning decision, never by hot-swapping an audible session.
 enum PersistentRoutingSetting {
-    #if DEBUG
-    static let defaultsKey = "debugUsePersistentPlaybackEngine"
+    static let defaultsKey = UserDefaultsKeys.gaplessEngineBeta
 
     static var isEnabled: Bool {
         UserDefaults.standard.bool(forKey: defaultsKey)
@@ -76,10 +82,6 @@ enum PersistentRoutingSetting {
     static func setEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: defaultsKey)
     }
-    #else
-    /// Release has no flag path at all: persistent routing is unreachable.
-    static var isEnabled: Bool { false }
-    #endif
 }
 
 /// The application-facing adapter over the persistent gapless controller.

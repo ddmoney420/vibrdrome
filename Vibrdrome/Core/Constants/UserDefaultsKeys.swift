@@ -30,6 +30,10 @@ enum UserDefaultsKeys {
     // MARK: - Audio Playback
 
     static let gaplessPlayback = "gaplessPlayback"
+    /// Opt-in for the Persistent gapless engine beta. A fresh key (not the old DEBUG one) so no
+    /// prior debug opt-in leaks into Release: absent → OFF for every install. `PersistentRoutingSetting`
+    /// reads it; the Settings toggle writes it via `@AppStorage`.
+    static let gaplessEngineBeta = "gaplessEngineBeta"
     static let crossfadeDuration = "crossfadeDuration"
     static let crossfadeCurve = "crossfadeCurve"
     /// When the server has no lyrics, look them up on LRCLIB (sends track metadata
