@@ -12,6 +12,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         // C3: Clean up any existing manager before creating a new one
         carPlayManager?.tearDown()
+        CarPlayConnectionState.shared.recordConnect()
         self.interfaceController = interfaceController
         self.carPlayManager = CarPlayManager(interfaceController: interfaceController)
         carPlayManager?.setupRootTemplate()
@@ -32,6 +33,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         didDisconnectInterfaceController interfaceController: CPInterfaceController
     ) {
         carPlayManager?.tearDown()
+        CarPlayConnectionState.shared.recordDisconnect()
         self.carPlayManager = nil
         self.interfaceController = nil
     }

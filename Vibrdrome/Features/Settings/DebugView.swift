@@ -114,6 +114,11 @@ struct DebugView: View {
                     value: diagnostics.persistentControllerConstructed ? "Constructed" : "Not constructed")
                 row("Persistent transport active",
                     value: router.isPersistentSessionActive ? "Yes" : "No")
+                #if os(iOS)
+                row("CarPlay connected",
+                    value: CarPlayConnectionState.shared.isConnected ? "Yes" : "No")
+                row("CarPlay last event", value: CarPlayConnectionState.shared.lastEvent)
+                #endif
 
                 let beat = diagnostics.heartbeat
                 row("Persistent heartbeat", value: beat.isRunning ? "Running" : "Stopped")
