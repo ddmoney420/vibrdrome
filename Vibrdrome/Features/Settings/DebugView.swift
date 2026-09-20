@@ -26,6 +26,18 @@ struct DebugView: View {
             actionsSection
         }
         .navigationTitle("Debug")
+        // The in-list Export button sits at the bottom of the List, where the mini-player and tab bar
+        // overlay it — unreachable exactly when a capture must be grabbed while a failure is live.
+        // This nav-bar copy is always tappable; both call the same exportLogs().
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    exportLogs()
+                } label: {
+                    Label("Export Debug Info", systemImage: "square.and.arrow.up")
+                }
+            }
+        }
         .onAppear { loadCacheSize() }
         .sheet(isPresented: $showExportSheet) {
             DebugShareSheetView(text: exportText)
