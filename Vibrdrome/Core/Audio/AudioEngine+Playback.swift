@@ -592,8 +592,15 @@ extension AudioEngine {
         // Explicitly record the outgoing song (it fully played to completion)
         if let current = currentSong { recordSongAsPlayed(current) }
 
+        #if DEBUG
+        PlaybackEventLog.record("autoAdvance begin \(PlaybackStateDescribe.snapshot(gaplessPlayer))")
+        #endif
+
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
             playbackLog.warning("Auto-advance but no valid lookahead index")
+            #if DEBUG
+            PlaybackEventLog.record("autoAdvance abort: no valid lookahead index")
+            #endif
             return
         }
 
@@ -636,6 +643,13 @@ extension AudioEngine {
         refillRadioIfNeeded()
         playbackLog.info("Gapless auto-advance to: \(nextSong.title) (index \(nextIndex))")
         startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
+
+        #if DEBUG
+        PlaybackEventLog.record(
+            "autoAdvance end index=\(nextIndex) isPlaying=\(isPlaying) "
+            + "session=\(AudioSessionDiagnostics.believedState.rawValue) "
+            + PlaybackStateDescribe.snapshot(gaplessPlayer))
+        #endif
     }
 
     /// Jump to a specific index in the existing queue without replacing it.

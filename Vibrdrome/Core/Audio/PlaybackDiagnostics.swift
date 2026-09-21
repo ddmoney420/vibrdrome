@@ -56,3 +56,37 @@ enum PlaybackEventLog {
 
     static var snapshot: [String] { lines }
 }
+
+/// Sanitized one-word descriptions of AVPlayer state for the pullable event log. Carry no URLs,
+/// tokens or credentials — just the closed-set status of the transport.
+enum PlaybackStateDescribe {
+    static func timeControl(_ status: AVPlayer.TimeControlStatus?) -> String {
+        switch status {
+        case .paused: "paused"
+        case .waitingToPlayAtSpecifiedRate: "waiting"
+        case .playing: "playing"
+        case nil: "nil"
+        @unknown default: "unknown"
+        }
+    }
+
+    static func itemStatus(_ status: AVPlayerItem.Status?) -> String {
+        switch status {
+        case .unknown: "unknown"
+        case .readyToPlay: "ready"
+        case .failed: "failed"
+        case nil: "nil"
+        @unknown default: "unknown"
+        }
+    }
+
+    /// A sanitized snapshot of a queue player's transport for one log line.
+    @MainActor
+    static func snapshot(_ player: AVQueuePlayer?) -> String {
+        guard let player else { return "player=nil" }
+        let itemError = player.currentItem?.error.map { "\($0._domain)#\($0._code)" } ?? "none"
+        return "rate=\(player.rate) tc=\(timeControl(player.timeControlStatus)) "
+            + "item=\(itemStatus(player.currentItem?.status)) itemErr=\(itemError) "
+            + "queued=\(player.items().count)"
+    }
+}

@@ -120,9 +120,16 @@ extension AudioEngine {
         }
         let lookaheadReady = (lookaheadItem?.status == .readyToPlay)
 
-        switch GaplessAdvanceDecision.decide(
+        let decision = GaplessAdvanceDecision.decide(
             currentItemIsEndItem: currentIsEnd, hasLookahead: hasLookahead,
-            lookaheadQueued: lookaheadQueued, lookaheadReady: lookaheadReady) {
+            lookaheadQueued: lookaheadQueued, lookaheadReady: lookaheadReady)
+        #if DEBUG
+        PlaybackEventLog.record(
+            "trackEnd decision=\(decision) currentIsEnd=\(currentIsEnd) "
+            + "hasLookahead=\(hasLookahead) queued=\(lookaheadQueued) ready=\(lookaheadReady) "
+            + PlaybackStateDescribe.snapshot(gaplessPlayer))
+        #endif
+        switch decision {
         case .autoAdvance:
             handleAutoAdvance()
         case .awaitPromotion:
@@ -146,11 +153,19 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .map { $0 === lookahead }
             .eraseToAnyPublisher()
+        #if DEBUG
+        PlaybackEventLog.record("awaitPromotion armed \(PlaybackStateDescribe.snapshot(gaplessPlayer))")
+        #endif
         promotionWaiter.arm(
             promotion: promotion,
             timeoutSeconds: AudioEngine.lookaheadPromotionTimeout
         ) { [weak self] promoted in
             guard let self, self.generationValue == observerGeneration else { return }
+            #if DEBUG
+            PlaybackEventLog.record(
+                "awaitPromotion \(promoted ? "promoted -> autoAdvance" : "timeout -> reload") "
+                + PlaybackStateDescribe.snapshot(self.gaplessPlayer))
+            #endif
             if promoted {
                 self.handleAutoAdvance()
             } else {

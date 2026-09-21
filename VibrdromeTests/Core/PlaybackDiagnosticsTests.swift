@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import Vibrdrome
@@ -59,6 +60,24 @@ struct PlaybackDiagnosticsTests {
             #expect(line.lowercased().contains("token") == false)
             #expect(line.lowercased().contains("password") == false)
         }
+    }
+
+    /// The transport describers map the closed AVFoundation status sets to sanitized words, so the
+    /// advance-path event log reads unambiguously and never carries a URL/token.
+    @Test func transportDescribersMapKnownStates() {
+        #expect(PlaybackStateDescribe.timeControl(.paused) == "paused")
+        #expect(PlaybackStateDescribe.timeControl(.playing) == "playing")
+        #expect(PlaybackStateDescribe.timeControl(.waitingToPlayAtSpecifiedRate) == "waiting")
+        #expect(PlaybackStateDescribe.timeControl(nil) == "nil")
+        #expect(PlaybackStateDescribe.itemStatus(.readyToPlay) == "ready")
+        #expect(PlaybackStateDescribe.itemStatus(.failed) == "failed")
+        #expect(PlaybackStateDescribe.itemStatus(.unknown) == "unknown")
+        #expect(PlaybackStateDescribe.itemStatus(nil) == "nil")
+    }
+
+    /// A nil player snapshots without crashing and says so.
+    @Test func transportSnapshotHandlesNilPlayer() {
+        #expect(PlaybackStateDescribe.snapshot(nil) == "player=nil")
     }
 
     /// Router instance IDs are monotonic, so a capture can tell a reused router from a reconstructed
