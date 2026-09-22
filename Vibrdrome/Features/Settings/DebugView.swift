@@ -14,6 +14,10 @@ struct DebugView: View {
     @State private var showExportSheet = false
     @State private var exportText = ""
 
+    /// Bumped whenever the diagnostics content changes, so a capture proves which build wrote it.
+    /// "advance-v1" == the legacy gapless auto-advance instrumentation.
+    private static let diagnosticsRevision = "advance-v1"
+
     var body: some View {
         List {
             serverSection
@@ -470,6 +474,7 @@ struct DebugView: View {
     private func exportLogs() {
         var lines: [String] = []
         lines.append("=== Vibrdrome Debug Export ===")
+        lines.append("Diagnostics revision: \(Self.diagnosticsRevision)")
         lines.append("Date: \(Date())")
         lines.append("")
         lines.append("Server URL: \(appState.serverURL)")
@@ -509,8 +514,13 @@ struct DebugView: View {
         lines.append(contentsOf: persistentDiagnosticsLines())
         lines.append(contentsOf: legacyTransportAndSessionLines())
 
-        exportText = lines.joined(separator: "\n")
-        writeExportFile(exportText)
+        let bodyText = lines.joined(separator: "\n")
+        let saved = writeExportFile(bodyText)
+        // Surface the write outcome on-screen: `try?` used to swallow failures, so a tap could look
+        // successful while no file was written (and a pull would return a stale capture).
+        exportText = saved
+            ? "✅ Saved to debug-export.txt at \(Date())\n\n\(bodyText)"
+            : "⚠️ FILE WRITE FAILED — nothing saved to debug-export.txt\n\n\(bodyText)"
         showExportSheet = true
     }
 
@@ -666,11 +676,17 @@ struct DebugView: View {
     /// The export is also written to Documents so it can be pulled from a Mac without touching the
     /// phone (`devicectl device copy files --domain-type appDataContainer`). Fixed name, overwritten
     /// each export — the timestamp lives inside the file.
-    private func writeExportFile(_ text: String) {
+    @discardableResult
+    private func writeExportFile(_ text: String) -> Bool {
         guard let documents = FileManager.default.urls(for: .documentDirectory,
-                                                       in: .userDomainMask).first else { return }
-        try? text.write(to: documents.appendingPathComponent("debug-export.txt"),
-                        atomically: true, encoding: .utf8)
+                                                       in: .userDomainMask).first else { return false }
+        do {
+            try text.write(to: documents.appendingPathComponent("debug-export.txt"),
+                           atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            return false
+        }
     }
 }
 
