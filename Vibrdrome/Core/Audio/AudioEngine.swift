@@ -30,6 +30,12 @@ final class AudioEngine {
 
     var isPlaying = false
 
+    /// True when a legacy track was asked to play but never produced an audible item within the
+    /// start watchdog's budget (see `AudioEngine+StartRecovery.swift`). Set only at give-up, when
+    /// `isPlaying` is forced false — so the UI can show an honest "couldn't start" state instead of
+    /// claiming playback is active. Cleared by the next explicit play/resume.
+    var playbackStartFailed = false
+
     /// Set while this engine has handed its session to the persistent backend.
     ///
     /// Written only by `quiesceForPersistentSession()` and cleared only by an explicit new legacy
@@ -224,6 +230,23 @@ final class AudioEngine {
     var pendingStallRecovery: Task<Void, Never>?
     var stallObservers: Set<AnyCancellable> = []
     var stallNotifToken: NSObjectProtocol?
+
+    // MARK: - Track-Start Watchdog (never-started / empty-player recovery)
+
+    /// Fills the blind spot the stall recovery above deliberately excludes (`stallItemHasPlayed`):
+    /// a legacy track whose audible item never lands or never becomes ready, leaving the app
+    /// showing "playing" over silence. See `AudioEngine+StartRecovery.swift`. Distinct ownership:
+    /// this watchdog handles a missing item / `noItemToPlayReason` / stuck `.unknown`; an item that
+    /// reaches `.failed` is left to the existing item-status retry; `ready`/`playing` disarms it.
+    static let startWatchdogNoItemGrace: TimeInterval = 2.5   // no item / noItemToPlay → act fast
+    static let startWatchdogUnknownGrace: TimeInterval = 15.0 // item present but never ready → patient
+    static let startWatchdogMaxAttempts = 2                   // rebuilds before failing honestly
+
+    var startWatchdogTask: Task<Void, Never>?
+    var startWatchdogSongId: String?     // intended song identity that armed the watchdog
+    var startWatchdogGeneration: Int?    // playback generation that armed it — fences every action
+    var startWatchdogArmedAt: Date?      // start of the current attempt's grace window
+    var startWatchdogAttempts = 0        // rebuilds already performed for the current intended song
 
     /// Seconds of contiguous buffered media ahead of `current` (0 if the playhead isn't in a range).
     static func bufferedAhead(in item: AVPlayerItem, current: Double) -> Double {

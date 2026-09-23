@@ -270,6 +270,16 @@ extension AudioEngine {
         }
         #endif
 
+        // A prior start gave up honestly (playbackStartFailed). An explicit Play is a fresh retry:
+        // route through play() for full setup + a re-armed watchdog, covering both the empty-player
+        // and stuck-.unknown cases (a bare resume would replay a stuck/empty item).
+        if playbackStartFailed, let song = currentSong {
+            let savedTime = currentTime
+            play(song: song)
+            if savedTime > 0 { seek(to: savedTime) }
+            return
+        }
+
         // Cold start: no player loaded (e.g. restored from saved queue).
         // Route through play()/playRadio() for full setup.
         if gaplessPlayer == nil {
@@ -468,6 +478,8 @@ extension AudioEngine {
             return
         }
         submitScrobbleIfNeeded()
+        disarmStartWatchdog(reason: "stop")
+        playbackStartFailed = false
         tearDownCurrentMode()
         activeMode = .gapless
         stopRadioMode()
@@ -716,6 +728,10 @@ extension AudioEngine {
         // on the debounced replacePlayerItem → removeItemEndObserver path.
         promotionWaiter.cancel()
         playbackSwapTask?.cancel()
+        // A new swap supersedes any prior track's start watchdog; the swap below re-arms. A new
+        // start attempt also clears any prior honest-failure state.
+        disarmStartWatchdog(reason: "newSwap")
+        playbackStartFailed = false
         #if DEBUG
         PlaybackEventLog.record(
             "swap scheduled \"\(currentSong?.title ?? currentRadioStation?.name ?? "?")\" "
@@ -734,6 +750,9 @@ extension AudioEngine {
                 self.applyEffectiveVolume()
                 self.gaplessPlayer?.rate = self.playbackRate
                 self.prepareLookahead()
+                // Watch this start: a legacy song must not sit at isPlaying=true with no audible
+                // item. Radio/crossfade are excluded (radio never routes here; crossfade differs).
+                if let songId = self.currentSong?.id { self.armStartWatchdog(songId: songId) }
             case .crossfade:
                 self.startCrossfadePlayback(url: url)
                 self.applyEffectiveVolume()

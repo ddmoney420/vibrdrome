@@ -184,6 +184,13 @@ struct MiniPlayerView: View {
     }
 
     private var displaySubtitle: String {
+        // Honest failure state: a legacy start that gave up sets AudioEngine.playbackStartFailed and
+        // forces isPlaying=false, so the play button already reads "play". Surface the reason here.
+        // Read directly (not via the façade) because this flag is legacy-engine-specific; the
+        // @Observable access still drives SwiftUI updates.
+        if AudioEngine.shared.playbackStartFailed {
+            return "Couldn't start playback. Tap Play to retry."
+        }
         if let song = engine.currentSong {
             // Show "Up Next: [title]" if there's a next track, otherwise artist.
             //
