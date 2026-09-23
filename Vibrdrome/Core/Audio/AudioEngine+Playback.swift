@@ -381,6 +381,9 @@ extension AudioEngine {
 
     func next() {
         guard !queue.isEmpty else { return }
+        #if DEBUG
+        PlaybackEventLog.record("next() from index=\(currentIndex) queue=\(queue.count)")
+        #endif
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -707,9 +710,18 @@ extension AudioEngine {
         // on the debounced replacePlayerItem → removeItemEndObserver path.
         promotionWaiter.cancel()
         playbackSwapTask?.cancel()
+        #if DEBUG
+        PlaybackEventLog.record(
+            "swap scheduled \"\(currentSong?.title ?? currentRadioStation?.name ?? "?")\" "
+            + "index=\(currentIndex) src=\(url.isFileURL ? "local" : "stream") mode=\(mode) "
+            + "admits=\(admitsTransportRebuild)")
+        #endif
         playbackSwapTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled, let self else { return }
+            #if DEBUG
+            PlaybackEventLog.record("swap fired mode=\(mode)")
+            #endif
             switch mode {
             case .gapless:
                 self.replacePlayerItem(with: url)

@@ -15,8 +15,8 @@ struct DebugView: View {
     @State private var exportText = ""
 
     /// Bumped whenever the diagnostics content changes, so a capture proves which build wrote it.
-    /// "advance-v1" == the legacy gapless auto-advance instrumentation.
-    private static let diagnosticsRevision = "advance-v1"
+    /// "swap-v1" == legacy play/next + debounced swap + replacePlayerItem instrumentation.
+    private static let diagnosticsRevision = "swap-v1"
 
     var body: some View {
         List {

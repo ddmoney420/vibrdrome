@@ -689,7 +689,12 @@ final class AudioEngine {
         // put a second live transport underneath it. Scene activation and CarPlay connection both
         // reach this through restoration, so the refusal has to be here rather than at those call
         // sites.
-        guard admitsTransportRebuild else { return }
+        guard admitsTransportRebuild else {
+            #if DEBUG
+            PlaybackEventLog.record("replacePlayerItem REFUSED (admitsTransportRebuild=false)")
+            #endif
+            return
+        }
         tearDownObservers()
         clearLookahead()
         generation += 1
@@ -718,5 +723,11 @@ final class AudioEngine {
         }
 
         setupObservers(for: item)
+        #if DEBUG
+        PlaybackEventLog.record(
+            "replacePlayerItem inserted src=\(url.isFileURL ? "local" : "stream") "
+            + "itemStatus=\(PlaybackStateDescribe.itemStatus(item.status)) "
+            + "queued=\(gaplessPlayer?.items().count ?? -1)")
+        #endif
     }
 }
