@@ -15,8 +15,9 @@ struct DebugView: View {
     @State private var exportText = ""
 
     /// Bumped whenever the diagnostics content changes, so a capture proves which build wrote it.
-    /// "swap-v1" == legacy play/next + debounced swap + replacePlayerItem instrumentation.
-    private static let diagnosticsRevision = "swap-v1"
+    /// "load-timing-v1" == swap-v1 + timestamps, item.status/buffer transitions, failed-retry,
+    /// previous()/skipToIndex() markers, and live buffer state in the export.
+    private static let diagnosticsRevision = "load-timing-v1"
 
     var body: some View {
         List {
@@ -567,6 +568,7 @@ struct DebugView: View {
         lines.append("Legacy queued items: \(state.queuedItemCount)")
         lines.append("Legacy transport active: \(state.isTransportActive)")
         lines.append("Legacy admits transport rebuild: \(engine.admitsTransportRebuild)")
+        lines.append(contentsOf: Self.bufferLines(for: player?.currentItem))
 
         lines.append("")
         lines.append("=== Audio Session ===")
@@ -594,6 +596,18 @@ struct DebugView: View {
         lines.append("=== Recent playback events (oldest first) ===")
         lines.append(contentsOf: events.isEmpty ? ["none"] : events)
         return lines
+    }
+
+    /// Live buffer state for the current item — shows whether a "long pause" is the player waiting
+    /// on the stream to buffer (empty / not-likely-to-keep-up) vs a genuinely stuck load.
+    private static func bufferLines(for item: AVPlayerItem?) -> [String] {
+        guard let item else { return [] }
+        let buffered = item.loadedTimeRanges.first?.timeRangeValue.duration.seconds ?? 0
+        return [
+            "Legacy buffer empty: \(item.isPlaybackBufferEmpty)",
+            "Legacy likely to keep up: \(item.isPlaybackLikelyToKeepUp)",
+            "Legacy buffered ahead: \(String(format: "%.1f s", buffered))"
+        ]
     }
 
     private static func describe(_ status: AVPlayer.TimeControlStatus?) -> String {

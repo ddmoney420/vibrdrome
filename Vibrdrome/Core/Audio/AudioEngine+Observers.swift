@@ -54,6 +54,9 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] empty in
                 guard let self, self.generationValue == observerGeneration else { return }
+                #if DEBUG
+                PlaybackEventLog.record("bufferEmpty=\(empty)")
+                #endif
                 self.isBuffering = empty
                 if empty { self.armStallRecovery(reason: "bufferEmpty") }
             })
@@ -62,6 +65,11 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 guard let self, self.generationValue == observerGeneration else { return }
+                #if DEBUG
+                PlaybackEventLog.record("item.status -> \(PlaybackStateDescribe.itemStatus(status))"
+                    + (status == .failed
+                       ? " err=\(item.error.map { "\($0._domain)#\($0._code)" } ?? "none")" : ""))
+                #endif
                 if status == .failed {
                     let errorDesc = item.error?.localizedDescription ?? "unknown"
                     observerLog.warning("Player item failed: \(errorDesc) — attempting resume retry")
@@ -69,6 +77,9 @@ extension AudioEngine {
                     if let song = self.currentSong {
                         let resumeTime = self.currentTime
                         Task { @MainActor in
+                            #if DEBUG
+                            PlaybackEventLog.record("item failed -> auto-retry play in 2s")
+                            #endif
                             try? await Task.sleep(for: .seconds(2))
                             guard self.generationValue == observerGeneration else { return }
                             self.play(song: song)

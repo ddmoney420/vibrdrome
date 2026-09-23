@@ -41,14 +41,14 @@ struct PlaybackDiagnosticsTests {
         #expect(AudioSessionDiagnostics.lastResult.hasPrefix("error:"))
     }
 
-    /// The event log is bounded and keeps insertion order (oldest first).
+    /// The event log is bounded (to the last 80) and keeps insertion order (oldest first).
     @Test func eventLogIsBoundedAndOrdered() {
-        for index in 0..<60 { PlaybackEventLog.record("event \(index)") }
+        for index in 0..<100 { PlaybackEventLog.record("event \(index)") }
         let snapshot = PlaybackEventLog.snapshot
-        #expect(snapshot.count <= 40, "event log grew unbounded: \(snapshot.count)")
+        #expect(snapshot.count <= 80, "event log grew unbounded: \(snapshot.count)")
         // The last recorded event survives; the earliest were dropped.
-        #expect(snapshot.last?.contains("event 59") == true)
-        #expect(snapshot.contains { $0.contains("event 0 ") } == false,
+        #expect(snapshot.last?.hasSuffix("event 99") == true)
+        #expect(snapshot.contains { $0.hasSuffix("event 0") } == false,
                 "the oldest events were not evicted")
     }
 

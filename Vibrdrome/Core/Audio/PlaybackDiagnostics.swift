@@ -45,13 +45,22 @@ enum AudioSessionDiagnostics {
 enum PlaybackEventLog {
     private static var lines: [String] = []
     private static var counter = 0
+    private static let maxLines = 80
 
-    /// Append one event. Bounded to the last 40. Callers pass only closed/sanitized values — never
-    /// URLs, tokens, or credentials.
+    /// Wall-clock stamp so durations between events (e.g. item insert → readyToPlay = the startup
+    /// pause) are computable straight from the log.
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    /// Append one timestamped event. Bounded to the last `maxLines`. Callers pass only
+    /// closed/sanitized values — never URLs, tokens, or credentials.
     static func record(_ event: String) {
         counter += 1
-        lines.append("#\(counter) \(event)")
-        if lines.count > 40 { lines.removeFirst(lines.count - 40) }
+        lines.append("#\(counter) \(timeFormatter.string(from: Date())) \(event)")
+        if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
     }
 
     static var snapshot: [String] { lines }

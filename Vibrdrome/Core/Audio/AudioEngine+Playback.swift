@@ -398,6 +398,9 @@ extension AudioEngine {
     }
 
     func previous() {
+        #if DEBUG
+        PlaybackEventLog.record("previous() from index=\(currentIndex) queue=\(queue.count)")
+        #endif
         if !isPlaying && currentTime > 0 && duration > 0 && currentTime >= duration - 1 {
             // Paused at end of track — go to previous track
         } else if currentTime > 3 {
@@ -659,6 +662,9 @@ extension AudioEngine {
     /// Unlike play(song:from:at:), this preserves the full queue intact.
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
+        #if DEBUG
+        PlaybackEventLog.record("skipToIndex(\(index)) from index=\(currentIndex)")
+        #endif
         if isUITesting {
             currentIndex = index
             currentSong = queue[index]
