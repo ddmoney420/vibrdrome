@@ -186,4 +186,15 @@ protocol ApplicationPlaybackControlling: PlaybackTransportControlling, PlaybackQ
                                           PlaybackStateProviding, PlaybackModeControlling,
                                           PlaybackRadioControlling, PlaybackProcessingControlling,
                                           PlaybackDownloadStateProviding, PlaybackHistoryProviding,
-                                          PlaybackPersistenceControlling {}
+                                          PlaybackPersistenceControlling {
+    /// Recover from an OS media-services reset (`AVError.mediaServicesWereReset`, -11819), which
+    /// invalidates every AVPlayer/AVAudioEngine object. A protocol requirement (not just an
+    /// extension) so it dispatches through the façade to the router's real implementation. Default
+    /// no-op below: only the router (orchestrator) and the legacy adapter (which disposes its player
+    /// objects) act on it.
+    func handleMediaServicesReset()
+}
+
+extension ApplicationPlaybackControlling {
+    func handleMediaServicesReset() {}
+}

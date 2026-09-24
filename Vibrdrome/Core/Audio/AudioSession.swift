@@ -78,6 +78,18 @@ final class AudioSessionManager: @unchecked Sendable {
         ) { notification in
             Self.handleRouteChange(notification)
         }
+
+        // Media services (mediaserverd) can reset — every AVPlayer/AVAudioEngine object is then
+        // invalidated and new items fail with AVError.mediaServicesWereReset (-11819). Observe it so
+        // the router can discard the orphaned objects and recover (Apple QA1749). Registered once at
+        // launch; observers survive the reset, so this does not need re-registering.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: session,
+            queue: .main
+        ) { _ in
+            Self.handleMediaServicesReset()
+        }
         #endif
     }
 
@@ -124,6 +136,15 @@ final class AudioSessionManager: @unchecked Sendable {
             @unknown default:
                 break
             }
+        }
+    }
+
+    private static func handleMediaServicesReset() {
+        sessionLog.error("Media services were reset — routing recovery through the playback façade")
+        // Through the façade so recovery dispatches by ownership: the router discards the orphaned
+        // persistent engine and hands the legacy path its own reset. Serialized on the main actor.
+        Task { @MainActor in
+            playback.handleMediaServicesReset()
         }
     }
 

@@ -135,6 +135,24 @@ struct StartWatchdogTests {
 
     // MARK: - Disarm mechanism (used by Stop / new swap / success / give-up)
 
+    /// A media-services reset makes the legacy path report an honest not-playing/recoverable state
+    /// and clears the pending-work budgets — never a phantom playing. It does NOT auto-resume.
+    @Test func mediaServicesResetReportsHonestNotPlaying() {
+        let engine = AudioEngine.shared
+        engine.isPlaying = true
+        engine.playbackStartFailed = false
+        engine.failedRetryCount = 2
+        engine.failedRetrySongId = "x"
+
+        engine.handleMediaServicesReset()
+
+        #expect(engine.isPlaying == false, "reset must not leave the UI claiming playback")
+        #expect(engine.playbackStartFailed == true, "reset must surface the recoverable state")
+        #expect(engine.isBuffering == false)
+        #expect(engine.failedRetryCount == 0, "reset must clear the failed-item budget")
+        #expect(engine.startWatchdogGeneration == nil, "reset must disarm the start watchdog")
+    }
+
     /// Disarm clears every fencing field so no stale check can fire — the mechanism Stop and a new
     /// swap rely on to cancel a pending watchdog.
     @Test func disarmClearsWatchdogState() {

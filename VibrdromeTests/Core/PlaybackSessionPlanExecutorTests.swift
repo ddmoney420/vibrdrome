@@ -918,6 +918,11 @@ final class PersistentPortSpy: PersistentPlaybackSessionPort {
         isTransportActive = false
     }
 
+    func invalidateForMediaServicesReset() {
+        record("invalidateForMediaServicesReset")
+        isTransportActive = false
+    }
+
     /// Simulate the render clock reporting another audible occurrence.
     func fireAudibleObserver() { observer?() }
 }

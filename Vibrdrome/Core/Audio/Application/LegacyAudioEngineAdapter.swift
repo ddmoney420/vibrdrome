@@ -41,6 +41,7 @@ final class LegacyAudioEngineAdapter: ApplicationPlaybackControlling {
     func previous() { count("previous"); engine.previous() }
     func seek(to time: TimeInterval) { count("seek"); engine.seek(to: time) }
     func skipToIndex(_ index: Int) { count("skipToIndex"); engine.skipToIndex(index) }
+    func handleMediaServicesReset() { count("handleMediaServicesReset"); engine.handleMediaServicesReset() }
 
     // MARK: - Queue
 

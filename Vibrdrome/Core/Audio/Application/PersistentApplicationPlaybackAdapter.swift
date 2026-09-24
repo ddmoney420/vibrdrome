@@ -729,4 +729,17 @@ final class PersistentApplicationPlaybackAdapter: PersistentTransportRouting {
         // adapter later regains resumes publishing without the UI re-toggling.
         endVisualizerSession()
     }
+
+    /// Discard this backend's async work on a media-services reset (-11819) WITHOUT operating the
+    /// now-dead audio graph. Unlike `quiesce()`, this deliberately does NOT call `controller.stop()`:
+    /// the AVAudioEngine is orphaned by the reset and must be dropped, not stopped (Apple QA1749).
+    /// The router discards the retained assembly immediately after, so the engine is never reused.
+    /// Cancels the heartbeat so no stale tick can touch a torn-down session and clears presentation.
+    func invalidateForMediaServicesReset() {
+        count("invalidateForMediaServicesReset")
+        heartbeat.cancel()
+        nowPlaying.reset()
+        publishedBoundaryCount = 0
+        endVisualizerSession()
+    }
 }

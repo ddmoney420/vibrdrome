@@ -860,6 +860,34 @@ struct PlaybackAuthorityRoutingTests {
         #expect(AudioEngine.shared.legacyTransportState.isTransportActive == false)
     }
 
+    /// A media-services reset discards the retained persistent assembly (and releases authority) so
+    /// the next persistent play builds a FRESH engine — the old AVAudioEngine belongs to a dead
+    /// media-server epoch. Idempotent: a second reset changes nothing.
+    @Test func mediaServicesResetDiscardsPersistentAssemblyAndRebuilds() throws {
+        let router = ApplicationPlaybackRouter(
+            legacy: PlaybackSpy(), persistentBuilder: ProductionPersistentPlaybackAssemblyBuilder())
+
+        let first = try router.preparePersistentBackend()
+        #expect(router.persistentAssembly === first)
+        #expect(router.persistentPreparationState == .ready)
+
+        router.handleMediaServicesReset()
+
+        #expect(router.persistentAssembly == nil, "the stale assembly was not discarded")
+        #expect(router.persistentPreparationState == .notConstructed)
+        #expect(router.ownership.authority == PlaybackAuthority.none,
+                "reset must not leave persistent authority")
+
+        // Idempotent: a second reset is harmless.
+        router.handleMediaServicesReset()
+        #expect(router.persistentAssembly == nil)
+
+        // The next persistent play builds a fresh engine, not the orphaned one.
+        let second = try router.preparePersistentBackend()
+        #expect(second !== first, "reset must force a fresh assembly on the next preparation")
+        #expect(router.persistentPreparationState == .ready)
+    }
+
     /// Release every resource a routing test may have taken: authority, persistent transport,
     /// the audible callback and any selection still in flight. Awaited, so on return the
     /// persistent side is genuinely clean.
@@ -1016,6 +1044,11 @@ final class PersistentPortDouble: PersistentPlaybackSessionPort {
         spy.heartbeatDiagnostics.isRunning = true
         spy.heartbeatDiagnostics.sessionGeneration = sessionGeneration
         spy.heartbeatDiagnostics.startCount += 1
+    }
+
+    func invalidateForMediaServicesReset() {
+        spy.record("invalidateForMediaServicesReset")
+        spy.isPlaying = false
     }
 
     func tearDown(preserveAudioSession: Bool) async {

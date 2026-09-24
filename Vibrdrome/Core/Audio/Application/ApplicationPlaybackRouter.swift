@@ -84,6 +84,8 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// The persistent side of the current session, built at most once per process.
     private var persistentPort: (any PersistentPlaybackSessionPort)?
     private var planExecutor: PlaybackSessionPlanExecutor?
+    /// Guards media-services-reset recovery so a burst of notifications produces exactly one cleanup.
+    private var isHandlingMediaServicesReset = false
 
     /// DEBUG diagnostics: a process-local identity so a capture can prove whether it came from the
     /// same router instance that played Persistent, or a reconstructed one (e.g. after relaunch) —
@@ -406,6 +408,63 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
         await port.tearDown(preserveAudioSession: true)
         port.clearAudibleObserver()
         ownership.release()
+    }
+
+    /// Recover from an OS media-services reset (-11819): every AVPlayer/AVAudioEngine object belongs
+    /// to a dead media-server epoch. Discard the persistent assembly (and its port/executor) so the
+    /// next Play lazily builds a fresh engine, invalidate any selection in flight, hand the legacy
+    /// path its own reset, and never leave authority/backend/isPlaying claiming persistent playback.
+    /// Serialized on the main actor and idempotent, so a burst of notifications runs one cleanup and
+    /// a reset arriving mid-teardown cannot spawn a competing one. Does NOT auto-resume — recovery
+    /// waits for an explicit Play (Apple QA1749).
+    func handleMediaServicesReset() {
+        guard !isHandlingMediaServicesReset else { return }
+        isHandlingMediaServicesReset = true
+        defer { isHandlingMediaServicesReset = false }
+
+        let authorityBefore = ownership.authority.rawValue
+        let backendBefore = selectedBackend.rawValue
+        routingLog.error("""
+            RESET.observed media services reset — authority=\(authorityBefore, privacy: .public) \
+            backend=\(backendBefore, privacy: .public)
+            """)
+        #if DEBUG
+        PlaybackEventLog.record("RESET.observed authority=\(authorityBefore) backend=\(backendBefore)")
+        #endif
+
+        // Invalidate any selection in flight so a plan that finishes after the reset cannot start a
+        // session on the dead epoch (reuses the existing planning generation).
+        _ = supersedePendingSelection()
+
+        // Discard the persistent side — drop the orphaned engine rather than operate it. Nil-ing the
+        // assembly resets `preparePersistentBackend()` so the next persistent play builds fresh.
+        if persistentAssembly != nil || persistentPort != nil {
+            persistentPort?.invalidateForMediaServicesReset()
+            persistentPort = nil
+            planExecutor = nil
+            persistentAssembly = nil
+            persistentPreparationState = .notConstructed
+            routingLog.error("RESET.persistentInvalidated")
+            #if DEBUG
+            PlaybackEventLog.record("RESET.persistentInvalidated")
+            #endif
+        }
+        // Never leave authority/selection claiming a persistent session that no longer exists.
+        ownership.release()
+        sessionSelectionState = .idle
+        isReplacingSession = false
+
+        // Hand the legacy path its own reset (dispose players/observers, honest not-playing).
+        legacy.handleMediaServicesReset()
+        routingLog.error("RESET.legacyInvalidated")
+        #if DEBUG
+        PlaybackEventLog.record("RESET.legacyInvalidated")
+        #endif
+
+        routingLog.error("RESET.completed")
+        #if DEBUG
+        PlaybackEventLog.record("RESET.completed")
+        #endif
     }
 
     /// A plan that will not be executed must not stay adoptable.

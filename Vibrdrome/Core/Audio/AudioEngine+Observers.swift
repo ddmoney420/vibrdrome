@@ -156,6 +156,35 @@ extension AudioEngine {
         failedRetrySongId = nil
     }
 
+    /// Recover the legacy path from a media-services reset (-11819): the AVPlayer objects belong to a
+    /// dead media-server epoch, so cancel all pending recovery/start work, dispose the players and
+    /// observers, and report an honest not-playing state. Per Apple QA1749 we do NOT auto-resume —
+    /// the next explicit Play builds fresh objects and reactivates the session. Current song/queue
+    /// metadata is retained so Play can resume in place.
+    func handleMediaServicesReset() {
+        disarmStartWatchdog(reason: "mediaReset")
+        resetFailedItemRetries()
+        playbackSwapTask?.cancel()
+        pendingStallRecovery?.cancel()
+        promotionWaiter.cancel()
+        disarmStallRecovery(reason: "mediaReset", silent: true)
+        // Dispose the orphaned players + observers so a fresh Play constructs new ones.
+        incrementGeneration()
+        tearDownObservers()
+        clearLookahead()
+        disposeGaplessPlayerForReset()
+        crossfadeController.tearDown()
+        isCrossfading = false
+        isPlaying = false
+        isBuffering = false
+        playbackStartFailed = true
+        NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
+        recoveryEvent("RESET.legacyInvalidated")
+        #if DEBUG
+        PlaybackEventLog.record("RESET.legacyInvalidated")
+        #endif
+    }
+
     func setupTrackEndObserver(
         for item: AVPlayerItem, generation observerGeneration: Int
     ) {

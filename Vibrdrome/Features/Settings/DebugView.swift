@@ -15,9 +15,9 @@ struct DebugView: View {
     @State private var exportText = ""
 
     /// Bumped whenever the diagnostics content changes, so a capture proves which build wrote it.
-    /// "load-timing-v1" == swap-v1 + timestamps, item.status/buffer transitions, failed-retry,
-    /// previous()/skipToIndex() markers, and live buffer state in the export.
-    private static let diagnosticsRevision = "load-timing-v1"
+    /// "reset-recovery-v1" == load-timing-v1 + start watchdog (START.*) + bounded failed-item retry
+    /// (FAILED.*) + session-preserving handoff + media-services-reset recovery (RESET.*).
+    private static let diagnosticsRevision = "reset-recovery-v1"
 
     var body: some View {
         List {

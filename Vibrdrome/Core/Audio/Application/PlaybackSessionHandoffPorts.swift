@@ -31,6 +31,7 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func clearAudibleObserver() {}
     func start(sessionGeneration: UInt64) async throws {}
     func tearDown(preserveAudioSession: Bool) async {}
+    func invalidateForMediaServicesReset() {}
 
     func play(song: Song, from newQueue: [Song]?, at index: Int) {}
     func pause() {}
@@ -239,5 +240,12 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
         await assembly.backend.settleTransport()
         assembly.backend.resetAfterFailure()
         await assembly.backend.settleTransport()
+    }
+
+    func invalidateForMediaServicesReset() {
+        // Drop the orphaned engine's async work; do NOT operate the dead graph. The router discards
+        // this assembly immediately after, so nothing here is reused.
+        application.invalidateForMediaServicesReset()
+        clearAudibleObserver()
     }
 }

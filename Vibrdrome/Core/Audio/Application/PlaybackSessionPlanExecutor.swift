@@ -163,6 +163,12 @@ protocol PersistentPlaybackSessionPort: AnyObject {
     /// next continuation) leaves the AVAudioSession active — no redundant deactivate/reactivate over
     /// a live route. A genuine final stop passes `false` and deactivates as before.
     func tearDown(preserveAudioSession: Bool) async
+
+    /// Discard this backend's async work on a media-services reset WITHOUT operating the now-dead
+    /// audio graph (Apple QA1749: drop orphaned audio objects, don't stop them). Synchronous and
+    /// idempotent: cancels the heartbeat and clears observers/presentation; the caller discards the
+    /// assembly right after so the engine is never reused. NOT a substitute for `tearDown`.
+    func invalidateForMediaServicesReset()
 }
 
 // MARK: - Executor

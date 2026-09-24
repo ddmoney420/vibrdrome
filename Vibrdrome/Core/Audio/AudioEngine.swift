@@ -439,6 +439,15 @@ final class AudioEngine {
         }
     }
 
+    /// Dispose the legacy queue player so a media-services-reset recovery drops the orphaned object
+    /// (its media-server epoch is dead) and the next play builds a fresh one. The setter is
+    /// file-private, so this lives alongside the property.
+    func disposeGaplessPlayerForReset() {
+        gaplessPlayer?.pause()
+        gaplessPlayer?.removeAllItems()
+        gaplessPlayer = nil
+    }
+
     // MARK: - Volume
 
     var volume: Float {
