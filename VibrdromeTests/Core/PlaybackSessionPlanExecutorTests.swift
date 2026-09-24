@@ -911,8 +911,10 @@ final class PersistentPortSpy: PersistentPlaybackSessionPort {
         isTransportActive = true
     }
 
-    func tearDown() async {
+    private(set) var lastTearDownPreserveAudioSession: Bool?
+    func tearDown(preserveAudioSession: Bool) async {
         record("tearDown")
+        lastTearDownPreserveAudioSession = preserveAudioSession
         isTransportActive = false
     }
 

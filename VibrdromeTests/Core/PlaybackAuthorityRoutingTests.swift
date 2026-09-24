@@ -1018,7 +1018,7 @@ final class PersistentPortDouble: PersistentPlaybackSessionPort {
         spy.heartbeatDiagnostics.startCount += 1
     }
 
-    func tearDown() async {
+    func tearDown(preserveAudioSession: Bool) async {
         spy.record("tearDown")
         spy.isPlaying = false
         if spy.heartbeatDiagnostics.isRunning {

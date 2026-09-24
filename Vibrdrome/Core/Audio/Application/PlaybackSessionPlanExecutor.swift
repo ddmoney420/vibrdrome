@@ -158,7 +158,11 @@ protocol PersistentPlaybackSessionPort: AnyObject {
     /// node stopped, refill drained, recycle tokens reconciled, pool reclaimed, sources and
     /// converters closed, backend idle. Replacement paths await it before granting another backend,
     /// which is what keeps the owner count at one *in resources*, not just in authority.
-    func tearDown() async
+    ///
+    /// `preserveAudioSession: true` on a replacement (legacy takes over the shared session on the
+    /// next continuation) leaves the AVAudioSession active — no redundant deactivate/reactivate over
+    /// a live route. A genuine final stop passes `false` and deactivates as before.
+    func tearDown(preserveAudioSession: Bool) async
 }
 
 // MARK: - Executor
@@ -355,7 +359,9 @@ final class PlaybackSessionPlanExecutor {
         -> PlaybackSessionExecutionOutcome {
         guard ownership.isFallbackPermitted else { return .persistentRetained(reason) }
 
-        await persistent.tearDown()
+        // Handoff to legacy: legacy re-activates the shared session on the next continuation, so
+        // preserve it rather than deactivate/reactivate over a live route.
+        await persistent.tearDown(preserveAudioSession: true)
         count("tearDownPersistent")
         persistent.clearAudibleObserver()
         count("clearAudibleObserver")

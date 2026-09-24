@@ -130,7 +130,7 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     func releaseSessionForTesting() async {
         supersedePendingSelection()
         if let port = persistentPort {
-            await port.tearDown()
+            await port.tearDown(preserveAudioSession: false)
             port.clearAudibleObserver()
         }
         ownership.release()
@@ -401,7 +401,9 @@ final class ApplicationPlaybackRouter: ApplicationPlaybackControlling {
     /// revoked before anything else is granted.
     private func releasePersistentIfActive() async {
         guard ownership.authority == .persistent, let port = persistentPort else { return }
-        await port.tearDown()
+        // Replacement: the incoming legacy session re-activates the shared session immediately, so
+        // preserve it here rather than deactivate/reactivate over a live route (the -11819 trigger).
+        await port.tearDown(preserveAudioSession: true)
         port.clearAudibleObserver()
         ownership.release()
     }

@@ -269,6 +269,14 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// Called on stop, following existing session-deactivation policy.
     var deactivateAudioSession: (() -> Void)?
 
+    /// One-shot: when true, the next teardown releases transport resources but does NOT deactivate
+    /// the shared AVAudioSession, because another backend (legacy) is taking the session over on the
+    /// same continuation. Set by the handoff path (`PersistentAssemblySessionPort.tearDown`) and
+    /// consumed (reset to false) inside `releaseTransportResources`. A genuine stop leaves it false
+    /// and deactivates as before. This avoids the redundant setActive(false)→setActive(true) churn
+    /// over a live (CarPlay) route that can trigger a media-services reset (-11819).
+    var preserveAudioSessionForReplacement = false
+
     init(engine: PersistentGaplessEngine = PersistentGaplessEngine()) {
         self.engine = engine
     }
@@ -407,6 +415,10 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
     /// closes the sources — follows it on the same actor turn rather than racing it. A refill
     /// wakeup that arrives mid-teardown waits its turn on the actor and then finds nothing to do.
     private func releaseTransportResources() async {
+        // Consume the one-shot handoff flag up front: a replacement keeps the shared session active
+        // for the incoming backend; a genuine stop deactivates it below as before.
+        let preserveSession = preserveAudioSessionForReplacement
+        preserveAudioSessionForReplacement = false
         commandedClockResetInProgress = true
         lastRawSampleTime = nil
         lastRawSampleRate = nil
@@ -439,7 +451,14 @@ final class GaplessRealTimeBackend: GaplessRenderBackend {
         // The persistent side must hold no audio-session claim once its session has ended, whether
         // it ended by stopping or by failing. A start that failed before activation deactivates a
         // session it never activated, which is harmless: the next owner activates on its own start.
-        deactivateAudioSession?()
+        //
+        // EXCEPT during a handoff: the incoming legacy backend re-activates the SAME shared session
+        // on the very next continuation, so deactivating here is pure churn — and that
+        // setActive(false)→setActive(true) cycle over a live CarPlay route can trip a media-services
+        // reset (-11819). Skip it when handing off; a genuine stop still deactivates.
+        if !preserveSession {
+            deactivateAudioSession?()
+        }
     }
 
     // MARK: - Scheduling

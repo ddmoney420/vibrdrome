@@ -345,6 +345,54 @@ struct GaplessBackendFailureRecoveryTests {
         }
     }
 
+    // MARK: - 10b. Session preservation across a handoff
+
+    /// A handoff teardown releases all transport resources but PRESERVES the shared AVAudioSession,
+    /// because the incoming legacy backend re-activates it immediately. This removes the redundant
+    /// setActive(false)->setActive(true) churn over a live route (the -11819 media-services-reset
+    /// trigger in CarPlay J).
+    @Test func handoffTeardownPreservesTheAudioSession() async throws {
+        try await withTemporaryDirectory { directory in
+            let files = try makeFiles(["t0"], in: directory)
+            let assembly = makeAssembly(files: files, directory: directory)
+            let backend = assembly.backend
+            var deactivations = 0
+            backend.deactivateAudioSession = { deactivations += 1 }
+            assembly.session.replaceQueue(songIDs: ["t0"])
+            try await assembly.controller.play()
+            #expect(backend.state == .playing)
+
+            backend.preserveAudioSessionForReplacement = true   // handoff, not a genuine stop
+            backend.stop()
+            await backend.settleTransport()
+
+            #expect(backend.state == .idle, "resources must still be released on a handoff")
+            #expect(deactivations == 0, "a handoff must NOT deactivate the shared session")
+            #expect(backend.preserveAudioSessionForReplacement == false,
+                    "the one-shot preserve flag was not consumed")
+        }
+    }
+
+    /// A genuine stop (nothing takes over) still deactivates the session exactly once — unchanged.
+    @Test func genuineStopDeactivatesTheAudioSession() async throws {
+        try await withTemporaryDirectory { directory in
+            let files = try makeFiles(["t0"], in: directory)
+            let assembly = makeAssembly(files: files, directory: directory)
+            let backend = assembly.backend
+            var deactivations = 0
+            backend.deactivateAudioSession = { deactivations += 1 }
+            assembly.session.replaceQueue(songIDs: ["t0"])
+            try await assembly.controller.play()
+            #expect(backend.state == .playing)
+
+            backend.stop()   // preserve flag stays false → deactivate as before
+            await backend.settleTransport()
+
+            #expect(backend.state == .idle)
+            #expect(deactivations == 1, "a genuine stop must deactivate the shared session once")
+        }
+    }
+
     // MARK: - 11. The point of the whole change
 
     /// A failed first start, then a successful second start, on the **same backend instance** —

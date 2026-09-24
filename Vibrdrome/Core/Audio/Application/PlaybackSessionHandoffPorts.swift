@@ -30,7 +30,7 @@ final class InertPersistentSessionPort: PersistentPlaybackSessionPort, Persisten
     func installAudibleObserver(_ observer: @escaping @MainActor () -> Void) {}
     func clearAudibleObserver() {}
     func start(sessionGeneration: UInt64) async throws {}
-    func tearDown() async {}
+    func tearDown(preserveAudioSession: Bool) async {}
 
     func play(song: Song, from newQueue: [Song]?, at index: Int) {}
     func pause() {}
@@ -230,7 +230,11 @@ final class PersistentAssemblySessionPort: PersistentPlaybackSessionPort {
     /// stopped, refill drained, recycle reconciled, pool reclaimed, sources closed, backend idle —
     /// has actually completed. A replacement granted before that would be built on a graph the old
     /// session still holds.
-    func tearDown() async {
+    func tearDown(preserveAudioSession: Bool) async {
+        // Tell the backend whether this teardown is a handoff (keep the shared session active for the
+        // incoming backend) or a genuine stop (deactivate). Set before quiesce(), which is what
+        // orders the transport release that consumes it.
+        assembly.backend.preserveAudioSessionForReplacement = preserveAudioSession
         application.quiesce()
         await assembly.backend.settleTransport()
         assembly.backend.resetAfterFailure()
