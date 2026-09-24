@@ -479,6 +479,7 @@ extension AudioEngine {
         }
         submitScrobbleIfNeeded()
         disarmStartWatchdog(reason: "stop")
+        resetFailedItemRetries()
         playbackStartFailed = false
         tearDownCurrentMode()
         activeMode = .gapless
@@ -729,8 +730,10 @@ extension AudioEngine {
         promotionWaiter.cancel()
         playbackSwapTask?.cancel()
         // A new swap supersedes any prior track's start watchdog; the swap below re-arms. A new
-        // start attempt also clears any prior honest-failure state.
+        // start attempt after an honest give-up also clears the failure state and the failed-item
+        // budget so an explicit Play gets a fresh chance (the retry loop itself leaves it false).
         disarmStartWatchdog(reason: "newSwap")
+        if playbackStartFailed { resetFailedItemRetries() }
         playbackStartFailed = false
         #if DEBUG
         PlaybackEventLog.record(

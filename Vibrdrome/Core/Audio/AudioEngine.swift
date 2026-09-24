@@ -248,6 +248,17 @@ final class AudioEngine {
     var startWatchdogArmedAt: Date?      // start of the current attempt's grace window
     var startWatchdogAttempts = 0        // rebuilds already performed for the current intended song
 
+    // MARK: - Bounded item-failure retry
+
+    /// Budget for consecutive AVPlayerItem `.failed` results on the SAME song: the initial failure
+    /// plus (max - 1) reloads, then an honest give-up. Replaces the old unbounded 2s reload, which
+    /// looped forever when every rebuilt item failed instantly (the -11819 media-services-reset
+    /// storm in CarPlay J). Owns `.failed` items only; the start watchdog owns never-started ones.
+    static let maxConsecutiveItemFailures = 3   // initial + 2 retries
+
+    var failedRetryCount = 0
+    var failedRetrySongId: String?
+
     /// Seconds of contiguous buffered media ahead of `current` (0 if the playhead isn't in a range).
     static func bufferedAhead(in item: AVPlayerItem, current: Double) -> Double {
         var best = 0.0

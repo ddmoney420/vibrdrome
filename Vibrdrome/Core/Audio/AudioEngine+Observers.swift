@@ -6,6 +6,9 @@ import os.log
 
 private let observerLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
 
+/// Outcome of a bounded item-failure evaluation. Pure/testable.
+enum ItemFailurePolicy: Equatable { case retry, giveUp, stopNoSong }
+
 // MARK: - Observer Setup & Teardown
 
 extension AudioEngine {
@@ -70,32 +73,87 @@ extension AudioEngine {
                     + (status == .failed
                        ? " err=\(item.error.map { "\($0._domain)#\($0._code)" } ?? "none")" : ""))
                 #endif
+                if status == .readyToPlay {
+                    // A ready item is a fresh success — clear the consecutive-failure budget.
+                    self.resetFailedItemRetries()
+                }
                 if status == .failed {
-                    let errorDesc = item.error?.localizedDescription ?? "unknown"
-                    observerLog.warning("Player item failed: \(errorDesc) — attempting resume retry")
-                    // Auto-retry: reload and seek to where we were instead of restarting
-                    if let song = self.currentSong {
-                        let resumeTime = self.currentTime
-                        Task { @MainActor in
-                            #if DEBUG
-                            PlaybackEventLog.record("item failed -> auto-retry play in 2s")
-                            #endif
-                            try? await Task.sleep(for: .seconds(2))
-                            guard self.generationValue == observerGeneration else { return }
-                            self.play(song: song)
-                            if resumeTime > 5 {
-                                self.seek(to: resumeTime - 2) // Resume slightly before failure point
-                            }
-                        }
-                    } else {
-                        item.audioMix = nil
-                        self.isPlaying = false
-                        self.isBuffering = false
-                    }
+                    self.handleItemFailed(item, generation: observerGeneration)
                 }
             })
 
         setupStallRecoveryObservers(for: item, generation: observerGeneration)
+    }
+
+    /// Bounded reaction to an AVPlayerItem reaching `.failed`. Owns `.failed` items (the initial
+    /// start watchdog owns never-started ones). Reloads the same song up to
+    /// `maxConsecutiveItemFailures - 1` times, then fails honestly instead of the old unbounded 2s
+    /// retry — which looped forever when every rebuilt item failed instantly (-11819 storm).
+    /// Consecutive-failure count for the current song: increments while the song is unchanged,
+    /// resets to 1 when the song changed (a new song's first failure). Pure.
+    static func nextFailureCount(priorCount: Int, priorSongId: String?, currentSongId: String?) -> Int {
+        priorSongId == currentSongId ? priorCount + 1 : 1
+    }
+
+    /// Bounded item-failure policy: no song → stop; under the budget → reload; at the budget → give
+    /// up honestly. `failureCount` is 1-based (1 == the initial failure). Pure.
+    static func itemFailureDecision(hasSong: Bool, failureCount: Int) -> ItemFailurePolicy {
+        guard hasSong else { return .stopNoSong }
+        return failureCount < maxConsecutiveItemFailures ? .retry : .giveUp
+    }
+
+    func handleItemFailed(_ item: AVPlayerItem, generation observerGeneration: Int) {
+        // Per-song budget: a different song starts fresh (pure, so the counting is testable).
+        failedRetryCount = AudioEngine.nextFailureCount(
+            priorCount: failedRetryCount, priorSongId: failedRetrySongId, currentSongId: currentSong?.id)
+        failedRetrySongId = currentSong?.id
+        let errorDesc = item.error?.localizedDescription ?? "unknown"
+        observerLog.warning("""
+            Player item failed: \(errorDesc) \
+            (failure \(self.failedRetryCount)/\(AudioEngine.maxConsecutiveItemFailures))
+            """)
+
+        switch AudioEngine.itemFailureDecision(
+            hasSong: currentSong != nil, failureCount: failedRetryCount) {
+        case .stopNoSong:
+            // No song context — nothing to reload; stop cleanly (preserves prior behavior).
+            item.audioMix = nil
+            isPlaying = false
+            isBuffering = false
+        case .retry:
+            guard let song = currentSong else { return }
+            let resumeTime = currentTime
+            #if DEBUG
+            PlaybackEventLog.record("item failed -> auto-retry play in 2s (failure \(failedRetryCount))")
+            #endif
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                guard self.generationValue == observerGeneration,
+                      self.failedRetrySongId == self.currentSong?.id else { return }
+                self.play(song: song)
+                if resumeTime > 5 {
+                    self.seek(to: resumeTime - 2) // Resume slightly before failure point
+                }
+            }
+        case .giveUp:
+            // Budget exhausted: fail honestly rather than loop forever.
+            let songId = currentSong?.id ?? "?"
+            recoveryEvent("FAILED.giveUp song=\(songId) after \(failedRetryCount) consecutive failures")
+            #if DEBUG
+            PlaybackEventLog.record("FAILED.giveUp song=\(songId) after \(failedRetryCount) failures")
+            #endif
+            disarmStartWatchdog(reason: "failedGiveUp")
+            gaplessPlayer?.pause()
+            isPlaying = false
+            playbackStartFailed = true
+            NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
+        }
+    }
+
+    /// Clear the consecutive-failure budget on a fresh success / new song / stop.
+    func resetFailedItemRetries() {
+        failedRetryCount = 0
+        failedRetrySongId = nil
     }
 
     func setupTrackEndObserver(
@@ -275,6 +333,7 @@ extension AudioEngine {
             if isPlaying { armStallRecovery(reason: "pausedAfterStall"); scheduleStallRecoveryCheck() }
         case .playing:
             stallItemHasPlayed = true   // a later not-playing transition is now a real stall
+            resetFailedItemRetries()    // playback actually began — fresh success clears the budget
             if stallRecoveryArmed {
                 if stallRecoveryAttempts > 0 {
                     recoveryEvent("RECOVERY.success after \(self.stallRecoveryAttempts) attempt(s)")
