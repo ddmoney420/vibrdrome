@@ -154,6 +154,13 @@ final class GaplessPlaybackController {
     /// few tracks in. Play instance is unique per play, which is exactly what this needs.
     private(set) var audiblePlayInstance: GaplessPlayInstanceID?
 
+    /// True while a manual reschedule (`restartFromCurrentItem`) is in flight. The heartbeat `tick()`
+    /// must not drain/advance the session during it: the session clock is reset to 0 while the
+    /// backend clock stays continuous, so a tick would leap the session past boundaries and overshoot
+    /// the audible track. Set/cleared only around `restartFromCurrentItem` (all on the main actor,
+    /// so `tick()` can only interleave at its await points).
+    private var isRestartingTransport = false
+
     /// ReplayGain settings applied at each boundary.
     /// Invoked when a play occurrence first becomes audible, as observed by the render clock.
     ///
@@ -339,6 +346,9 @@ final class GaplessPlaybackController {
     /// of the audible item, and queue replacement. The graph is never rebuilt.
     private func restartFromCurrentItem(sourceOffsetFrames: AVAudioFramePosition = 0,
                                         resumePlaying: Bool = true) async throws {
+        // Fence the heartbeat out for the whole reschedule (see `isRestartingTransport` / `tick()`).
+        isRestartingTransport = true
+        defer { isRestartingTransport = false }
         await backend.settleTransport()
         await backend.resetTail()
         await replenishTail(sourceOffsetFrames: sourceOffsetFrames)
@@ -510,6 +520,13 @@ final class GaplessPlaybackController {
     /// Boundaries come from the clock, so the window advances on **audible** progress rather than on
     /// scheduling callbacks — a track is "current" when it is being heard, not when it was queued.
     func tick() async {
+        // A manual reschedule (Next/Previous/seek) resets the session clock to 0 while the backend
+        // clock stays on its continuous timeline. A tick landing at one of `restartFromCurrentItem`'s
+        // await points would compute a huge `delta` and leap the session past boundaries — applying
+        // the wrong one (the audible track overshoots by one). Skip the drain+advance entirely while
+        // a reschedule is in flight; the node is stopped during it, so no boundary is missed, and the
+        // first tick after it applies only the correct first boundary of the new tail.
+        guard !isRestartingTransport else { return }
         await backend.observeBoundaries()
         let events = backend.drainBoundaryEvents()
         let clockFrame = backend.renderFrame
