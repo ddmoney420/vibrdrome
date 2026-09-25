@@ -32,6 +32,10 @@ enum NativeVizTrace {
     private static let startedAt = Date()
 
     static func record(_ message: String) {
+        // DEBUG-only. Release must never auto-write a diagnostic file without user action, so the
+        // whole breadcrumb (os_log + the pullable Documents/nativeviz-trace.txt) is compiled out of
+        // Release. Callers stay un-gated and hit this no-op, keeping the DEBUG investigation intact.
+        #if DEBUG
         vizLog.debug("\(message, privacy: .public)")
         let stamp = String(format: "%.2f", Date().timeIntervalSince(startedAt))
         let inits = nativeVizSurfaceInits.load(ordering: .relaxed)
@@ -42,6 +46,7 @@ enum NativeVizTrace {
         try? lines.joined(separator: "\n").write(
             to: documents.appendingPathComponent("nativeviz-trace.txt"),
             atomically: true, encoding: .utf8)
+        #endif
     }
 }
 
