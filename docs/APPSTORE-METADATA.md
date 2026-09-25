@@ -1,5 +1,14 @@
 # App Store Metadata -- Vibrdrome
 
+## What's New (v1.0.0 Beta Build 60)
+
+- New: optional Gapless Engine (Beta) -- enable it in Settings > Player for seamless transitions on supported music. Off by default.
+- Improved playback reliability with better recovery from stream stalls, failed track loads, and system audio interruptions.
+- Now Playing more accurately follows track changes, elapsed time, and playback state.
+- Visualizer improvements, including smoother scene transitions and reliable manual scene switching.
+- Improved CarPlay playback state and Now Playing accuracy.
+- Fixed an issue where internet radio could remain silent after switching playback sources.
+
 ## What's New (v1.0.0 Beta Build 59)
 
 - Fixed playback getting stuck when streaming to some AirPlay TVs.

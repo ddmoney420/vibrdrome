@@ -123,6 +123,7 @@ Access settings from the **Settings** tab:
 - **Playback Quality** -- Set bitrate limits separately for Wi-Fi and cellular connections. Lower bitrates save data and battery; higher bitrates improve audio quality.
 - **Appearance** -- Choose a theme (light, dark, or system), pick an accent color, and adjust text size via Dynamic Type. On iOS 26, enable **Liquid Glass** to give the Now Playing toolbar and mini player a frosted, glass-like background.
 - **Cache** -- Clear the image or audio cache to free storage.
+- **Player > Gapless Engine (Beta)** -- Optional. When enabled, supported music plays through a new gapless engine for seamless transitions between tracks. It is **off by default**, and only supported music uses it -- everything else (including internet radio) keeps playing on the standard engine. You can turn it on or off at any time; the choice is remembered.
 
 ## CarPlay
 

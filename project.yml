@@ -90,7 +90,7 @@ targets:
         DEVELOPMENT_TEAM: 85JD2B827Q
         PRODUCT_BUNDLE_IDENTIFIER: com.vibrdrome.app
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "59"
+        CURRENT_PROJECT_VERSION: "60"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "YES"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CARPLAY_ENABLED"
@@ -135,7 +135,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.vibrdrome.app.widget
         CODE_SIGN_ENTITLEMENTS: VibrdromeWidget/VibrdromeWidget.entitlements
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "59"
+        CURRENT_PROJECT_VERSION: "60"
     # Generated, not referenced — see the note on the Vibrdrome target above. The widget reads the
     # shared container, so losing this App Group silently breaks the widget's data access.
     entitlements:
@@ -157,7 +157,7 @@ targets:
         DEVELOPMENT_TEAM: 85JD2B827Q
         PRODUCT_BUNDLE_IDENTIFIER: com.vibrdrome.app.watchkitapp
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "59"
+        CURRENT_PROJECT_VERSION: "60"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "6.0"
 
