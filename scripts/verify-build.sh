@@ -80,9 +80,20 @@ require() {
 require swiftlint xcodebuild
 
 # --- SwiftLint ---
-swiftlint lint --quiet > "$LOGDIR/lint.log" 2>&1
-v=$(grep -cE ': (warning|error):' "$LOGDIR/lint.log")
-if [ "$v" -eq 0 ]; then emit PASS "SwiftLint" "0 violations"; else emit FAIL "SwiftLint" "$v violations"; fi
+# Same binary + same config + same strictness as CI (.github/workflows/ci.yml): the version is
+# pinned in .swiftlint-version, and we lint with --config .swiftlint.yml --strict. A green run
+# here therefore means a green CI SwiftLint job. Version drift is a hard FAIL, not a silent pass;
+# --quiet only trims progress/summary lines and does not change violations or the exit code.
+SL_EXPECTED="$(cat .swiftlint-version)"
+SL_ACTUAL="$(swiftlint version 2>/dev/null)"
+if [ "$SL_ACTUAL" != "$SL_EXPECTED" ]; then
+  emit FAIL "SwiftLint" "version mismatch: expected $SL_EXPECTED, got ${SL_ACTUAL:-none} (see .swiftlint-version)"
+elif swiftlint lint --config .swiftlint.yml --strict --quiet > "$LOGDIR/lint.log" 2>&1; then
+  emit PASS "SwiftLint" "0 violations (strict, $SL_EXPECTED)"
+else
+  v=$(grep -cE ': (warning|error):' "$LOGDIR/lint.log")
+  emit FAIL "SwiftLint" "$v violations (strict, $SL_EXPECTED)"
+fi
 
 # --- Entitlements ---
 # project.yml GENERATES the entitlement files rather than referencing them, so a spec regression
