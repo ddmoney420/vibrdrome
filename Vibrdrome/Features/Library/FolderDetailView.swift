@@ -84,7 +84,7 @@ struct FolderDetailView: View {
     private func songRow(_ child: DirectoryChild, index: Int) -> some View {
         Button {
             let allSongs = songs.map { $0.toSong() }
-            AudioEngine.shared.play(song: allSongs[index], from: allSongs, at: index)
+            ApplicationPlayback.shared.play(song: allSongs[index], from: allSongs, at: index)
         } label: {
             HStack(spacing: 12) {
                 if showAlbumArtInLists {
@@ -146,7 +146,7 @@ struct FolderDetailView: View {
             Button {
                 let allSongs = songs.map { $0.toSong() }
                 guard let first = allSongs.first else { return }
-                AudioEngine.shared.play(song: first, from: allSongs)
+                ApplicationPlayback.shared.play(song: first, from: allSongs)
             } label: {
                 Label("Play All", systemImage: "play.fill")
             }
@@ -154,7 +154,7 @@ struct FolderDetailView: View {
             Button {
                 let allSongs = songs.map { $0.toSong() }.shuffled()
                 guard let first = allSongs.first else { return }
-                AudioEngine.shared.play(song: first, from: allSongs)
+                ApplicationPlayback.shared.play(song: first, from: allSongs)
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
             }

@@ -1,6 +1,10 @@
 import SwiftUI
 import Network
 
+/// Value used to push an overflow ("More") tab's browse root by value, keeping the More stack
+/// fully value-based so value-based cells inside the pushed view resolve and render on top.
+private struct MoreTabNavItem: Hashable { let id: String }
+
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
@@ -21,7 +25,7 @@ struct ContentView: View {
     @AppStorage(UserDefaultsKeys.showGenresTab) private var showGenresTab = false
     @AppStorage(UserDefaultsKeys.showFavoritesTab) private var showFavoritesTab = true
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     /// Baseline gap between the mini player and a phone that has a bottom
     /// safe-area inset (notched). These phones get their home-indicator inset
@@ -109,20 +113,16 @@ struct ContentView: View {
         #endif
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
-            switch newPhase {
-            case .background:
-                engine.savePlayQueue(client: appState.subsonicClient)
-                engine.saveQueueLocally()
-                engine.createBookmarkIfNeeded(client: appState.subsonicClient)
-            case .active:
-                engine.restorePlayQueue(client: appState.subsonicClient)
-                engine.refreshPlaybackState()
+            // Playback lifecycle: saves on .background, restores on .active. Runs first so the
+            // .active follow-up below still happens after the restore, as it always has.
+            ScenePlaybackLifecycleActions.handleIOSScenePhase(
+                newPhase, client: appState.subsonicClient
+            )
+            if newPhase == .active {
                 handleWidgetCommand()
                 if !isOffline {
                     autoSyncIfNeeded()
                 }
-            default:
-                break
             }
         }
         .overlay(alignment: .top) {
@@ -340,8 +340,10 @@ struct ContentView: View {
     /// A tab's content as a real tab: its root wrapped in its own NavigationStack.
     @ViewBuilder
     private func tabView(for id: String) -> some View {
-        NavigationStack { tabRootContent(for: id) }
-            .libraryNavigationDestinations()
+        NavigationStack {
+            tabRootContent(for: id)
+                .libraryNavigationDestinations()
+        }
     }
 
     /// App-owned "More" menu. A single NavigationStack listing the overflow
@@ -352,14 +354,14 @@ struct ContentView: View {
         NavigationStack {
             List {
                 ForEach(ids, id: \.self) { id in
-                    NavigationLink {
-                        tabRootContent(for: id)
-                    } label: {
+                    NavigationLink(value: MoreTabNavItem(id: id)) {
                         Label(tabLabel(id), systemImage: tabIcon(id))
                     }
                 }
             }
             .navigationTitle("More")
+            .navigationDestination(for: MoreTabNavItem.self) { tabRootContent(for: $0.id) }
+            .libraryNavigationDestinations()
         }
     }
 

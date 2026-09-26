@@ -496,7 +496,11 @@ struct LibraryView: View {
                         songCard(song)
                             .trackContextMenu(song: song, queue: starredSongs, index: index)
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: starredSongs, at: starredSongs.firstIndex(where: { $0.id == song.id }) ?? 0)
+                                ApplicationPlayback.shared.play(
+                                    song: song,
+                                    from: starredSongs,
+                                    at: starredSongs.firstIndex(where: { $0.id == song.id }) ?? 0
+                                )
                             }
                     }
                 }
@@ -625,7 +629,7 @@ struct LibraryView: View {
         do {
             let songs = try await appState.subsonicClient.getRandomSongs(size: 50, musicFolderId: folderId)
             guard let first = songs.first else { return }
-            AudioEngine.shared.play(song: first, from: songs)
+            ApplicationPlayback.shared.play(song: first, from: songs)
         } catch {}
     }
 
@@ -637,7 +641,7 @@ struct LibraryView: View {
             guard let album = albums.first else { return }
             let detail = try await appState.subsonicClient.getAlbum(id: album.id)
             guard let songs = detail.song, let first = songs.first else { return }
-            AudioEngine.shared.play(song: first, from: songs)
+            ApplicationPlayback.shared.play(song: first, from: songs)
         } catch {}
     }
 
@@ -794,7 +798,7 @@ struct LibraryView: View {
         }
         .contextMenu {
             Button {
-                AudioEngine.shared.startRadio(artistName: artist.name)
+                ApplicationPlayback.shared.startRadio(artistName: artist.name)
             } label: {
                 Label("Start Artist Radio", systemImage: "antenna.radiowaves.left.and.right")
             }

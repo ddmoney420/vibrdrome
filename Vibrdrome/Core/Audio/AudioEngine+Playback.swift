@@ -33,6 +33,11 @@ extension AudioEngine {
     }
 
     func play(song: Song, from newQueue: [Song]? = nil, at index: Int = 0) {
+        // An explicit new legacy session is the one legitimate way transport comes back after a
+        // handover to the persistent backend — it is what the router calls for a legacy plan, for a
+        // pre-audible fallback, and for radio. Everything else stays refused.
+        admitTransportForNewLegacySession()
+
         // UI testing: update observable state only, skip AVPlayer operations
         if isUITesting {
             playForUITesting(song: song, newQueue: newQueue, index: index)
@@ -41,7 +46,12 @@ extension AudioEngine {
 
         // Ensure audio session is active (may have been deactivated since app launch)
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .legacyPlay, error: nil)
+        } catch {
+            AudioSessionDiagnostics.record(.activate, source: .legacyPlay, error: error)
+        }
         #endif
 
         submitScrobbleIfNeeded()
@@ -74,7 +84,6 @@ extension AudioEngine {
             playingFromContext = nil
         }
         scrobbleSubmitted = false
-        if isNewTrack { repeatOneUsed = false }
         trackStartTime = Date()
         currentTime = 0
         duration = 0
@@ -161,6 +170,15 @@ extension AudioEngine {
     }
 
     func playRadio(station: InternetRadioStation) {
+        // Un-quiesce legacy transport, exactly as `play(song:)` does. This is the real fix for
+        // silent radio after a Persistent → radio handoff: the handoff quiesces legacy
+        // (`admitsTransportRebuild` → false), and `replacePlayerItem` refuses to build a player
+        // item while quiesced — so the stream never started. `play(song:)` already admits here for
+        // artist/mix radio; the internet-station path was the one start that missed it (its own
+        // comment even claimed radio was covered). Must run before the isUITesting return, matching
+        // `play(song:)`, and before `replacePlayerItem`.
+        admitTransportForNewLegacySession()
+
         if isUITesting {
             currentSong = nil
             currentRadioStation = station
@@ -172,6 +190,18 @@ extension AudioEngine {
 
         submitScrobbleIfNeeded()
         guard let url = URL(string: station.streamUrl) else { return }
+
+        // Activate the session before starting transport, exactly as `play(song:)` does — radio
+        // otherwise relied on an already-active session, which the persistent engine now
+        // deactivates on teardown. Secondary to the admit above, but keeps parity with play(song:).
+        #if os(iOS)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .radio, error: nil)
+        } catch {
+            AudioSessionDiagnostics.record(.activate, source: .radio, error: error)
+        }
+        #endif
 
         if activeMode != .gapless {
             tearDownCurrentMode()
@@ -233,10 +263,22 @@ extension AudioEngine {
         #if os(iOS)
         do {
             try AVAudioSession.sharedInstance().setActive(true)
+            AudioSessionDiagnostics.record(.activate, source: .legacyResume, error: nil)
         } catch {
+            AudioSessionDiagnostics.record(.activate, source: .legacyResume, error: error)
             playbackLog.error("Failed to reactivate audio session: \(error)")
         }
         #endif
+
+        // A prior start gave up honestly (playbackStartFailed). An explicit Play is a fresh retry:
+        // route through play() for full setup + a re-armed watchdog, covering both the empty-player
+        // and stuck-.unknown cases (a bare resume would replay a stuck/empty item).
+        if playbackStartFailed, let song = currentSong {
+            let savedTime = currentTime
+            play(song: song)
+            if savedTime > 0 { seek(to: savedTime) }
+            return
+        }
 
         // Cold start: no player loaded (e.g. restored from saved queue).
         // Route through play()/playRadio() for full setup.
@@ -349,6 +391,9 @@ extension AudioEngine {
 
     func next() {
         guard !queue.isEmpty else { return }
+        #if DEBUG
+        PlaybackEventLog.record("next() from index=\(currentIndex) queue=\(queue.count)")
+        #endif
         submitScrobbleIfNeeded()
 
         if isCrossfading {
@@ -357,14 +402,15 @@ extension AudioEngine {
             isCrossfading = false
         }
 
-        // Manual next always advances — reset repeat-one state
-        repeatOneUsed = false
         guard advanceIndex(), currentIndex < queue.count else { return }
         play(song: queue[currentIndex])
         refillRadioIfNeeded()
     }
 
     func previous() {
+        #if DEBUG
+        PlaybackEventLog.record("previous() from index=\(currentIndex) queue=\(queue.count)")
+        #endif
         if !isPlaying && currentTime > 0 && duration > 0 && currentTime >= duration - 1 {
             // Paused at end of track — go to previous track
         } else if currentTime > 3 {
@@ -432,6 +478,9 @@ extension AudioEngine {
             return
         }
         submitScrobbleIfNeeded()
+        disarmStartWatchdog(reason: "stop")
+        resetFailedItemRetries()
+        playbackStartFailed = false
         tearDownCurrentMode()
         activeMode = .gapless
         stopRadioMode()
@@ -550,22 +599,11 @@ extension AudioEngine {
     }
 
     private func handleTrackEndRepeatOne() {
-        // Repeat once then advance
-        if !repeatOneUsed {
-            guard let song = currentSong else { return }
-            repeatOneUsed = true
-            play(song: song)
-        } else {
-            repeatOneUsed = false
-            if isCrossfading {
-                incrementGeneration()
-                crossfadeController.forceComplete()
-                isCrossfading = false
-            }
-            guard advanceIndex() else { return }
-            play(song: queue[currentIndex])
-            refillRadioIfNeeded()
-        }
+        // Repeat One loops the current item indefinitely — until the repeat mode changes, the
+        // user navigates (Next/Previous), or the queue is replaced. Each completed replay goes
+        // through play(), which submits at most one scrobble per completion.
+        guard let song = currentSong else { return }
+        play(song: song)
     }
 
     func handleAutoAdvance() {
@@ -573,8 +611,15 @@ extension AudioEngine {
         // Explicitly record the outgoing song (it fully played to completion)
         if let current = currentSong { recordSongAsPlayed(current) }
 
+        #if DEBUG
+        PlaybackEventLog.record("autoAdvance begin \(PlaybackStateDescribe.snapshot(gaplessPlayer))")
+        #endif
+
         guard let nextIndex = lookaheadIndex, nextIndex < queue.count else {
             playbackLog.warning("Auto-advance but no valid lookahead index")
+            #if DEBUG
+            PlaybackEventLog.record("autoAdvance abort: no valid lookahead index")
+            #endif
             return
         }
 
@@ -617,12 +662,22 @@ extension AudioEngine {
         refillRadioIfNeeded()
         playbackLog.info("Gapless auto-advance to: \(nextSong.title) (index \(nextIndex))")
         startPredownloadIfNeeded(startIndex: currentIndex, queue: queue)
+
+        #if DEBUG
+        PlaybackEventLog.record(
+            "autoAdvance end index=\(nextIndex) isPlaying=\(isPlaying) "
+            + "session=\(AudioSessionDiagnostics.believedState.rawValue) "
+            + PlaybackStateDescribe.snapshot(gaplessPlayer))
+        #endif
     }
 
     /// Jump to a specific index in the existing queue without replacing it.
     /// Unlike play(song:from:at:), this preserves the full queue intact.
     func skipToIndex(_ index: Int) {
         guard index >= 0, index < queue.count else { return }
+        #if DEBUG
+        PlaybackEventLog.record("skipToIndex(\(index)) from index=\(currentIndex)")
+        #endif
         if isUITesting {
             currentIndex = index
             currentSong = queue[index]
@@ -651,7 +706,6 @@ extension AudioEngine {
         currentSong = song
         currentRadioStation = nil
         scrobbleSubmitted = false
-        repeatOneUsed = false
         trackStartTime = Date()
         currentTime = 0
         duration = 0
@@ -670,16 +724,38 @@ extension AudioEngine {
     /// but the AVPlayer item swap is delayed briefly so spam-tapping collapses
     /// into a single replacement rather than churning the audio session.
     func scheduleDebouncedPlayerSwap(url: URL, mode: PlaybackMode) {
+        // A new player-item swap (manual next/previous, skipToIndex, new play) supersedes any
+        // pending end-of-track promotion wait — cancel it synchronously here rather than relying
+        // on the debounced replacePlayerItem → removeItemEndObserver path.
+        promotionWaiter.cancel()
         playbackSwapTask?.cancel()
+        // A new swap supersedes any prior track's start watchdog; the swap below re-arms. A new
+        // start attempt after an honest give-up also clears the failure state and the failed-item
+        // budget so an explicit Play gets a fresh chance (the retry loop itself leaves it false).
+        disarmStartWatchdog(reason: "newSwap")
+        if playbackStartFailed { resetFailedItemRetries() }
+        playbackStartFailed = false
+        #if DEBUG
+        PlaybackEventLog.record(
+            "swap scheduled \"\(currentSong?.title ?? currentRadioStation?.name ?? "?")\" "
+            + "index=\(currentIndex) src=\(url.isFileURL ? "local" : "stream") mode=\(mode) "
+            + "admits=\(admitsTransportRebuild)")
+        #endif
         playbackSwapTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(50))
             guard !Task.isCancelled, let self else { return }
+            #if DEBUG
+            PlaybackEventLog.record("swap fired mode=\(mode)")
+            #endif
             switch mode {
             case .gapless:
                 self.replacePlayerItem(with: url)
                 self.applyEffectiveVolume()
                 self.gaplessPlayer?.rate = self.playbackRate
                 self.prepareLookahead()
+                // Watch this start: a legacy song must not sit at isPlaying=true with no audible
+                // item. Radio/crossfade are excluded (radio never routes here; crossfade differs).
+                if let songId = self.currentSong?.id { self.armStartWatchdog(songId: songId) }
             case .crossfade:
                 self.startCrossfadePlayback(url: url)
                 self.applyEffectiveVolume()

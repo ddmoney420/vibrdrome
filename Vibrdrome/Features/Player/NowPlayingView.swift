@@ -45,7 +45,7 @@ struct NowPlayingView: View {
     @State var macSheet: MacNowPlayingSheet?
     #endif
 
-    var engine: AudioEngine { AudioEngine.shared }
+    var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var artWidth: CGFloat {
         340 // Used by macOS path; iOS uses GeometryReader

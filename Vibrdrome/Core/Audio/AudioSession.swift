@@ -14,6 +14,25 @@ final class AudioSessionManager: @unchecked Sendable {
     /// leaves the user stuck paused after returning to CarPlay.
     @MainActor private static var wasPlayingBeforeInterruption = false
 
+    /// The playback façade interruption handling drives.
+    ///
+    /// Routed rather than reaching `AudioEngine.shared` directly: an interruption must pause
+    /// whichever backend owns the session, and reaching the engine paused a quiesced player while
+    /// the persistent engine kept playing.
+    @MainActor
+    static var playback: any ApplicationPlaybackControlling {
+        #if DEBUG
+        if let override = playbackOverrideForTesting { return override }
+        #endif
+        return ApplicationPlayback.shared
+    }
+
+    #if DEBUG
+    /// Test seam: lets a test point interruption handling at its own router rather than the
+    /// process-wide composition point.
+    @MainActor static var playbackOverrideForTesting: (any ApplicationPlaybackControlling)?
+    #endif
+
     func configure() {
         guard !isConfigured else { return }
         isConfigured = true
@@ -32,7 +51,14 @@ final class AudioSessionManager: @unchecked Sendable {
             try session.setCategory(
                 .playback, mode: .default, policy: .longFormAudio, options: []
             )
-            try session.setActive(true)
+            // Do NOT activate the session here. Configuring the category at launch
+            // is harmless, but activating it interrupts other apps' audio (e.g.
+            // Spotify) on cold launch even though the user hasn't pressed Play (#134).
+            // Activation happens only when playback actually starts or resumes
+            // (`AudioEngine.play(song:)` / `resume()`), and is re-established by the
+            // interruption `.ended` handler below. #45 Now-Playing still surfaces
+            // because `preloadCurrentSong()` loads the AVPlayerItem + sets
+            // NowPlayingInfoCenter — activation is not required for that.
         } catch {
             print("Failed to configure audio session: \(error)")
         }
@@ -51,6 +77,18 @@ final class AudioSessionManager: @unchecked Sendable {
             queue: .main
         ) { notification in
             Self.handleRouteChange(notification)
+        }
+
+        // Media services (mediaserverd) can reset — every AVPlayer/AVAudioEngine object is then
+        // invalidated and new items fail with AVError.mediaServicesWereReset (-11819). Observe it so
+        // the router can discard the orphaned objects and recover (Apple QA1749). Registered once at
+        // launch; observers survive the reset, so this does not need re-registering.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: session,
+            queue: .main
+        ) { _ in
+            Self.handleMediaServicesReset()
         }
         #endif
     }
@@ -73,24 +111,40 @@ final class AudioSessionManager: @unchecked Sendable {
         Task { @MainActor in
             switch type {
             case .began:
-                wasPlayingBeforeInterruption = AudioEngine.shared.isPlaying
+                // Through the façade, not the engine: an interruption must pause whichever
+                // backend owns the session. Reaching AudioEngine directly paused a quiesced
+                // player while the persistent engine kept playing.
+                wasPlayingBeforeInterruption = playback.isPlaying
                 sessionLog.info("Interruption began: wasPlaying=\(wasPlayingBeforeInterruption)")
-                AudioEngine.shared.pause()
+                playback.pause()
             case .ended:
                 let shouldRestore = shouldResume || wasPlayingBeforeInterruption
                 sessionLog.info("Interruption ended: shouldResume=\(shouldResume) wasPlaying=\(wasPlayingBeforeInterruption) -> restore=\(shouldRestore)")
                 do {
                     try AVAudioSession.sharedInstance().setActive(true)
+                    AudioSessionDiagnostics.record(.activate, source: .interruptionEnded, error: nil)
                 } catch {
+                    AudioSessionDiagnostics.record(.activate, source: .interruptionEnded, error: error)
                     sessionLog.error("Failed to reactivate audio session: \(error.localizedDescription)")
                 }
                 if shouldRestore {
-                    AudioEngine.shared.resume()
+                    // Resume, never re-play: this continues the existing session on its current
+                    // owner and must not start a new one or re-run selection.
+                    playback.resume()
                 }
                 wasPlayingBeforeInterruption = false
             @unknown default:
                 break
             }
+        }
+    }
+
+    private static func handleMediaServicesReset() {
+        sessionLog.error("Media services were reset — routing recovery through the playback façade")
+        // Through the façade so recovery dispatches by ownership: the router discards the orphaned
+        // persistent engine and hands the legacy path its own reset. Serialized on the main actor.
+        Task { @MainActor in
+            playback.handleMediaServicesReset()
         }
     }
 
@@ -110,7 +164,7 @@ final class AudioSessionManager: @unchecked Sendable {
         if reason == .oldDeviceUnavailable && session.currentRoute.outputs.isEmpty {
             sessionLog.info("Pausing: old device unavailable with no remaining outputs")
             Task { @MainActor in
-                AudioEngine.shared.pause()
+                playback.pause()
             }
         }
     }

@@ -426,7 +426,7 @@ struct MacHomeView: View {
                         .trackContextMenu(song: song, queue: model.starredSongs, index: index)
                         .onTapGesture {
                             if song.albumId == nil {
-                                AudioEngine.shared.play(song: song, from: model.starredSongs, at: index)
+                                ApplicationPlayback.shared.play(song: song, from: model.starredSongs, at: index)
                             }
                         }
                     }

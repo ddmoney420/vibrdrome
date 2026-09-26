@@ -141,17 +141,17 @@ struct AlbumGridCard: View {
     }
 
     private var isThisAlbumPlaying: Bool {
-        AudioEngine.shared.isPlaying &&
-        AudioEngine.shared.currentSong?.albumId == album.id
+        ApplicationPlayback.shared.isPlaying &&
+        ApplicationPlayback.shared.currentSong?.albumId == album.id
     }
 
     private var playButton: some View {
         Button {
             guard !isLoadingPlay else { return }
             if isThisAlbumPlaying {
-                AudioEngine.shared.pause()
-            } else if AudioEngine.shared.currentSong?.albumId == album.id {
-                AudioEngine.shared.togglePlayPause()
+                ApplicationPlayback.shared.pause()
+            } else if ApplicationPlayback.shared.currentSong?.albumId == album.id {
+                ApplicationPlayback.shared.togglePlayPause()
             } else {
                 isLoadingPlay = true
                 Task {
@@ -160,7 +160,7 @@ struct AlbumGridCard: View {
                         let detail = try await appState.subsonicClient.getAlbum(id: album.id)
                         let songs = detail.song ?? []
                         guard let first = songs.first else { return }
-                        AudioEngine.shared.play(song: first, from: songs, at: 0)
+                        ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
                     } catch {}
                 }
             }

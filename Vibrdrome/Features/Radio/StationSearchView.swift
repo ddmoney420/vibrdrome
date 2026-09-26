@@ -52,7 +52,7 @@ struct StationSearchView: View {
         "metal", "country", "soul", "funk", "latin"
     ]
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         NavigationStack {

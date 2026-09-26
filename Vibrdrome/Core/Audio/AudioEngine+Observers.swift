@@ -6,6 +6,9 @@ import os.log
 
 private let observerLog = Logger(subsystem: "com.vibrdrome.app", category: "Audio")
 
+/// Outcome of a bounded item-failure evaluation. Pure/testable.
+enum ItemFailurePolicy: Equatable { case retry, giveUp, stopNoSong }
+
 // MARK: - Observer Setup & Teardown
 
 extension AudioEngine {
@@ -54,6 +57,9 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] empty in
                 guard let self, self.generationValue == observerGeneration else { return }
+                #if DEBUG
+                PlaybackEventLog.record("bufferEmpty=\(empty)")
+                #endif
                 self.isBuffering = empty
                 if empty { self.armStallRecovery(reason: "bufferEmpty") }
             })
@@ -62,29 +68,121 @@ extension AudioEngine {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 guard let self, self.generationValue == observerGeneration else { return }
+                #if DEBUG
+                PlaybackEventLog.record("item.status -> \(PlaybackStateDescribe.itemStatus(status))"
+                    + (status == .failed
+                       ? " err=\(item.error.map { "\($0._domain)#\($0._code)" } ?? "none")" : ""))
+                #endif
+                if status == .readyToPlay {
+                    // A ready item is a fresh success — clear the consecutive-failure budget.
+                    self.resetFailedItemRetries()
+                }
                 if status == .failed {
-                    let errorDesc = item.error?.localizedDescription ?? "unknown"
-                    observerLog.warning("Player item failed: \(errorDesc) — attempting resume retry")
-                    // Auto-retry: reload and seek to where we were instead of restarting
-                    if let song = self.currentSong {
-                        let resumeTime = self.currentTime
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(2))
-                            guard self.generationValue == observerGeneration else { return }
-                            self.play(song: song)
-                            if resumeTime > 5 {
-                                self.seek(to: resumeTime - 2) // Resume slightly before failure point
-                            }
-                        }
-                    } else {
-                        item.audioMix = nil
-                        self.isPlaying = false
-                        self.isBuffering = false
-                    }
+                    self.handleItemFailed(item, generation: observerGeneration)
                 }
             })
 
         setupStallRecoveryObservers(for: item, generation: observerGeneration)
+    }
+
+    /// Bounded reaction to an AVPlayerItem reaching `.failed`. Owns `.failed` items (the initial
+    /// start watchdog owns never-started ones). Reloads the same song up to
+    /// `maxConsecutiveItemFailures - 1` times, then fails honestly instead of the old unbounded 2s
+    /// retry — which looped forever when every rebuilt item failed instantly (-11819 storm).
+    /// Consecutive-failure count for the current song: increments while the song is unchanged,
+    /// resets to 1 when the song changed (a new song's first failure). Pure.
+    static func nextFailureCount(priorCount: Int, priorSongId: String?, currentSongId: String?) -> Int {
+        priorSongId == currentSongId ? priorCount + 1 : 1
+    }
+
+    /// Bounded item-failure policy: no song → stop; under the budget → reload; at the budget → give
+    /// up honestly. `failureCount` is 1-based (1 == the initial failure). Pure.
+    static func itemFailureDecision(hasSong: Bool, failureCount: Int) -> ItemFailurePolicy {
+        guard hasSong else { return .stopNoSong }
+        return failureCount < maxConsecutiveItemFailures ? .retry : .giveUp
+    }
+
+    func handleItemFailed(_ item: AVPlayerItem, generation observerGeneration: Int) {
+        // Per-song budget: a different song starts fresh (pure, so the counting is testable).
+        failedRetryCount = AudioEngine.nextFailureCount(
+            priorCount: failedRetryCount, priorSongId: failedRetrySongId, currentSongId: currentSong?.id)
+        failedRetrySongId = currentSong?.id
+        let errorDesc = item.error?.localizedDescription ?? "unknown"
+        observerLog.warning("""
+            Player item failed: \(errorDesc) \
+            (failure \(self.failedRetryCount)/\(AudioEngine.maxConsecutiveItemFailures))
+            """)
+
+        switch AudioEngine.itemFailureDecision(
+            hasSong: currentSong != nil, failureCount: failedRetryCount) {
+        case .stopNoSong:
+            // No song context — nothing to reload; stop cleanly (preserves prior behavior).
+            item.audioMix = nil
+            isPlaying = false
+            isBuffering = false
+        case .retry:
+            guard let song = currentSong else { return }
+            let resumeTime = currentTime
+            #if DEBUG
+            PlaybackEventLog.record("item failed -> auto-retry play in 2s (failure \(failedRetryCount))")
+            #endif
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                guard self.generationValue == observerGeneration,
+                      self.failedRetrySongId == self.currentSong?.id else { return }
+                self.play(song: song)
+                if resumeTime > 5 {
+                    self.seek(to: resumeTime - 2) // Resume slightly before failure point
+                }
+            }
+        case .giveUp:
+            // Budget exhausted: fail honestly rather than loop forever.
+            let songId = currentSong?.id ?? "?"
+            recoveryEvent("FAILED.giveUp song=\(songId) after \(failedRetryCount) consecutive failures")
+            #if DEBUG
+            PlaybackEventLog.record("FAILED.giveUp song=\(songId) after \(failedRetryCount) failures")
+            #endif
+            disarmStartWatchdog(reason: "failedGiveUp")
+            gaplessPlayer?.pause()
+            isPlaying = false
+            playbackStartFailed = true
+            NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
+        }
+    }
+
+    /// Clear the consecutive-failure budget on a fresh success / new song / stop.
+    func resetFailedItemRetries() {
+        failedRetryCount = 0
+        failedRetrySongId = nil
+    }
+
+    /// Recover the legacy path from a media-services reset (-11819): the AVPlayer objects belong to a
+    /// dead media-server epoch, so cancel all pending recovery/start work, dispose the players and
+    /// observers, and report an honest not-playing state. Per Apple QA1749 we do NOT auto-resume —
+    /// the next explicit Play builds fresh objects and reactivates the session. Current song/queue
+    /// metadata is retained so Play can resume in place.
+    func handleMediaServicesReset() {
+        disarmStartWatchdog(reason: "mediaReset")
+        resetFailedItemRetries()
+        playbackSwapTask?.cancel()
+        pendingStallRecovery?.cancel()
+        promotionWaiter.cancel()
+        disarmStallRecovery(reason: "mediaReset", silent: true)
+        // Dispose the orphaned players + observers so a fresh Play constructs new ones.
+        incrementGeneration()
+        tearDownObservers()
+        clearLookahead()
+        disposeGaplessPlayerForReset()
+        crossfadeController.tearDown()
+        isCrossfading = false
+        isPlaying = false
+        isBuffering = false
+        playbackStartFailed = true
+        NowPlayingManager.shared.updatePlaybackState(isPlaying: false, elapsed: currentTime)
+        recoveryEvent("RESET.legacyInvalidated")
+        #if DEBUG
+        PlaybackEventLog.record("RESET.legacyInvalidated")
+        #endif
     }
 
     func setupTrackEndObserver(
@@ -100,16 +198,78 @@ extension AudioEngine {
                 Task { @MainActor in
                     guard let self,
                           self.generationValue == observerGeneration else { return }
-
-                    if self.gaplessPlayer?.currentItem !== endItem
-                        && self.hasLookahead {
-                        self.handleAutoAdvance()
-                    } else {
-                        self.handleTrackEnd()
-                    }
+                    self.handleItemDidPlayToEnd(endItem: endItem, generation: observerGeneration)
                 }
             }
         )
+    }
+
+    /// Route an item's end-of-play to the correct advance path. When the queue player already
+    /// promoted the next item, advance immediately. When it has a ready, queued lookahead but
+    /// hasn't promoted it synchronously yet, wait for the actual promotion event rather than
+    /// reloading an already-buffered track (the end-of-track race). Otherwise reload.
+    func handleItemDidPlayToEnd(endItem: AVPlayerItem, generation observerGeneration: Int) {
+        let currentIsEnd = (gaplessPlayer?.currentItem === endItem)
+        let lookaheadQueued: Bool
+        if let lookahead = lookaheadItem, let player = gaplessPlayer {
+            lookaheadQueued = player.items().contains(lookahead)
+        } else {
+            lookaheadQueued = false
+        }
+        let lookaheadReady = (lookaheadItem?.status == .readyToPlay)
+
+        let decision = GaplessAdvanceDecision.decide(
+            currentItemIsEndItem: currentIsEnd, hasLookahead: hasLookahead,
+            lookaheadQueued: lookaheadQueued, lookaheadReady: lookaheadReady)
+        #if DEBUG
+        PlaybackEventLog.record(
+            "trackEnd decision=\(decision) currentIsEnd=\(currentIsEnd) "
+            + "hasLookahead=\(hasLookahead) queued=\(lookaheadQueued) ready=\(lookaheadReady) "
+            + PlaybackStateDescribe.snapshot(gaplessPlayer))
+        #endif
+        switch decision {
+        case .autoAdvance:
+            handleAutoAdvance()
+        case .awaitPromotion:
+            if let lookahead = lookaheadItem {
+                awaitLookaheadPromotion(lookahead: lookahead, generation: observerGeneration)
+            } else {
+                handleTrackEnd()
+            }
+        case .reload:
+            handleTrackEnd()
+        }
+    }
+
+    /// Wait (event-driven) for `AVQueuePlayer` to promote `lookahead` to `currentItem`, then take
+    /// the existing `handleAutoAdvance()` path. Falls back to the existing reload path if the
+    /// promotion doesn't occur within `lookaheadPromotionTimeout`. The wait is cancelled if the
+    /// item-end observer is torn down (replace / stop / skip / generation change).
+    func awaitLookaheadPromotion(lookahead: AVPlayerItem, generation observerGeneration: Int) {
+        guard let player = gaplessPlayer else { handleTrackEnd(); return }
+        let promotion = player.publisher(for: \.currentItem)
+            .receive(on: DispatchQueue.main)
+            .map { $0 === lookahead }
+            .eraseToAnyPublisher()
+        #if DEBUG
+        PlaybackEventLog.record("awaitPromotion armed \(PlaybackStateDescribe.snapshot(gaplessPlayer))")
+        #endif
+        promotionWaiter.arm(
+            promotion: promotion,
+            timeoutSeconds: AudioEngine.lookaheadPromotionTimeout
+        ) { [weak self] promoted in
+            guard let self, self.generationValue == observerGeneration else { return }
+            #if DEBUG
+            PlaybackEventLog.record(
+                "awaitPromotion \(promoted ? "promoted -> autoAdvance" : "timeout -> reload") "
+                + PlaybackStateDescribe.snapshot(self.gaplessPlayer))
+            #endif
+            if promoted {
+                self.handleAutoAdvance()
+            } else {
+                self.handleTrackEnd()
+            }
+        }
     }
 
     func setupLookaheadEndObserver(for item: AVPlayerItem) {
@@ -202,6 +362,7 @@ extension AudioEngine {
             if isPlaying { armStallRecovery(reason: "pausedAfterStall"); scheduleStallRecoveryCheck() }
         case .playing:
             stallItemHasPlayed = true   // a later not-playing transition is now a real stall
+            resetFailedItemRetries()    // playback actually began — fresh success clears the budget
             if stallRecoveryArmed {
                 if stallRecoveryAttempts > 0 {
                     recoveryEvent("RECOVERY.success after \(self.stallRecoveryAttempts) attempt(s)")

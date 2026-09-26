@@ -1,5 +1,17 @@
 # Regression Testing Checklist
 
+## Build 60 — Gapless Engine (Beta), playback reliability, visualizer/CarPlay/radio
+
+- [ ] Settings → Player: **Gapless Engine (Beta)** toggle present, footer "Uses the new gapless playback engine for supported music."; absence of a saved preference resolves **OFF** (no migration of the old DEBUG key)
+- [ ] Beta OFF: eligible music plays on the standard engine; pause/resume; Next; Classic + Native visualizer; internet radio audible; UI state matches reality
+- [ ] Beta OFF preference persists across terminate/relaunch
+- [ ] Beta ON: supported stereo music plays from the start; ≥2 automatic track boundaries seamless; Now Playing follows track changes and elapsed time; Classic + Native visualizer; pause/resume; manual Next; background/foreground continuity
+- [ ] Beta ON preference persists across terminate/relaunch
+- [ ] Beta ON + internet radio (Legacy fallback): radio remains audible, no stuck/silent playback, state matches reality
+- [ ] Playback recovery: stream stall / failed track load / audio interruption recovers or fails honestly (never an indefinite silent "playing"); explicit Play rebuilds and recovers
+- [ ] Media-services reset (if it occurs): one recovery, honest stopped state, then explicit Play produces fresh audible playback — no retry storm
+- [ ] Regression: users who never enable the beta see unchanged Legacy playback, CarPlay, Now Playing, and visualizers
+
 ## Build 59 — AirPlay TV playback fix
 
 - [ ] AirPlay to a TV / Apple TV: playback starts normally (no stuck loading indicator)

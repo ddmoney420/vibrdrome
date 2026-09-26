@@ -16,8 +16,30 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Install SwiftLint
-        run: brew install swiftlint
+      # Pinned to the exact version in .swiftlint-version (the single source of truth) instead of
+      # an unversioned `brew install swiftlint`, which drifts to whatever release is current and
+      # silently changes rules and line-length counting. Prepend to PATH so this binary wins over
+      # any SwiftLint pre-installed on the runner image.
+      - name: Install SwiftLint (pinned)
+        run: |
+          set -euo pipefail
+          EXPECTED="$(cat .swiftlint-version)"
+          curl -fsSL -o /tmp/swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/${EXPECTED}/portable_swiftlint.zip"
+          mkdir -p "$HOME/swiftlint-pinned"
+          unzip -o /tmp/swiftlint.zip swiftlint -d "$HOME/swiftlint-pinned"
+          chmod +x "$HOME/swiftlint-pinned/swiftlint"
+          echo "$HOME/swiftlint-pinned" >> "$GITHUB_PATH"
+      - name: Verify SwiftLint version
+        run: |
+          set -euo pipefail
+          EXPECTED="$(cat .swiftlint-version)"
+          ACTUAL="$(swiftlint version)"
+          echo "SwiftLint expected=${EXPECTED} actual=${ACTUAL}"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::SwiftLint version mismatch: expected ${EXPECTED}, got ${ACTUAL}"
+            exit 1
+          fi
       - name: Lint
         run: swiftlint lint --config .swiftlint.yml --strict
 

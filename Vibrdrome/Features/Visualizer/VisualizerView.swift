@@ -161,7 +161,7 @@ struct VisualizerView: View {
     @State private var nsWindow: NSWindow?
     #endif
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
     private let audioSpectrum = AudioSpectrum.shared
 
     private var preset: VisualizerPreset {

@@ -87,8 +87,20 @@ struct AudioEngineTests {
         engine.play(song: songs[4], from: songs, at: 4)
         engine.repeatMode = .all
 
-        // repeat-all: gapless loops the same track index for lookahead
-        #expect(engine.nextSongIndex() == 4)
+        // repeat-all at the last track wraps to the first — cycles the whole queue
+        // (previously this incorrectly returned the current index, re-looping one track).
+        #expect(engine.nextSongIndex() == 0)
+    }
+
+    @Test func nextIndexMidQueueRepeatAllAdvances() async {
+        resetEngine()
+        let engine = AudioEngine.shared
+        let songs = makeSongs(5)
+        engine.play(song: songs[2], from: songs, at: 2)
+        engine.repeatMode = .all
+
+        // repeat-all mid-queue advances to the next index, not the same one
+        #expect(engine.nextSongIndex() == 3)
     }
 
     @Test func nextIndexRepeatOneReturnsNil() async {
@@ -723,5 +735,26 @@ struct AudioEngineTests {
         queue.allowsExternalPlayback = true
         AudioEngine.configureExternalPlayback(queue)
         #expect(queue.allowsExternalPlayback == false)
+    }
+
+    /// Radio after a persistent handoff must re-admit legacy transport, or `replacePlayerItem`
+    /// refuses to build the stream item and the station plays silently. Regression for the device
+    /// bug where internet radio was inaudible after a persistent session: `playRadio(station:)`
+    /// missed the `admitTransportForNewLegacySession()` that `play(song:)` already performs.
+    @Test @MainActor func playRadioReAdmitsTransportAfterQuiesce() async {
+        resetEngine()
+        let engine = AudioEngine.shared
+        engine.quiesceForPersistentSession()
+        #expect(engine.admitsTransportRebuild == false, "precondition: legacy should be quiesced")
+
+        let station = InternetRadioStation(
+            id: "r1", name: "Probe FM", streamUrl: "https://example.invalid/stream",
+            homePageUrl: nil, coverArt: nil)
+        engine.playRadio(station: station)
+
+        #expect(engine.admitsTransportRebuild,
+                "playRadio left legacy quiesced — replacePlayerItem would refuse the stream")
+        #expect(engine.currentRadioStation?.id == "r1")
+        engine.admitTransportForNewLegacySession()   // leave the shared engine in its default state
     }
 }

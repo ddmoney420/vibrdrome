@@ -1,5 +1,16 @@
 # Vibrdrome Device Testing Checklist
 
+## Build 60 — Gapless Engine (Beta), playback reliability, visualizer/CarPlay/radio
+
+- [ ] Settings → Player shows **Gapless Engine (Beta)** with the copy "Uses the new gapless playback engine for supported music."; a fresh install (no saved choice) resolves **OFF**
+- [ ] Beta OFF: normal music plays; pause/resume; Next; Classic + Native visualizer; internet radio audible — no beta-specific failure
+- [ ] Beta OFF persists across terminate/relaunch
+- [ ] Beta ON: supported stereo music plays; ≥2 automatic boundaries are seamless; Now Playing + elapsed time advance; Classic + Native visualizer; pause/resume; Next; background/foreground
+- [ ] Beta ON persists across terminate/relaunch
+- [ ] Beta ON + internet radio: radio stays audible, no stuck/silent playback (Legacy fallback)
+- [ ] Recovery: a failed/interrupted stream recovers or fails honestly (no infinite silent "playing"); tapping Play recovers
+- [ ] Regression: ordinary Legacy playback, CarPlay Now Playing, and visualizers unchanged for users who never opt in
+
 ## Build 59 — AirPlay TV playback fix
 
 - [ ] AirPlay to a TV / Apple TV → plays normally (previously stuck on a loading indicator)

@@ -4,6 +4,24 @@ All notable changes to Vibrdrome (iOS/macOS) are documented here.
 
 ## v1.0.0
 
+### Build 60 -- September 24, 2026
+
+**New:**
+- Optional Gapless Engine (Beta): enable it in Settings -> Player for seamless transitions on supported music. Off by default, and only supported music uses it -- everything else keeps playing on the standard engine.
+
+**Playback reliability:**
+- Better automatic recovery from stream stalls, failed track loads, and system audio interruptions, so playback no longer gets stuck on silence.
+- Now Playing more accurately follows track changes, elapsed time, and playback state.
+
+**Visualizer:**
+- Smoother scene transitions and reliable manual scene switching.
+
+**CarPlay:**
+- Improved playback-state and Now Playing accuracy.
+
+**Bug fixes:**
+- Fixed an issue where internet radio could remain silent after switching playback sources.
+
 ### Build 59 -- July 12, 2026
 
 **Bug fixes:**

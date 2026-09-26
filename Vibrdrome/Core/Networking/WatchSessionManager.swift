@@ -29,24 +29,9 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     func sendNowPlayingUpdate(title: String, artist: String, album: String, isPlaying: Bool) {
         guard isReady else { return }
-        let engine = AudioEngine.shared
-
-        var context: [String: Any] = [
-            "title": title,
-            "artist": artist,
-            "album": album,
-            "isPlaying": isPlaying,
-            "elapsed": engine.currentTime,
-            "duration": engine.duration,
-            "isStarred": engine.currentSong?.starred != nil,
-            "isShuffleOn": engine.shuffleEnabled,
-            "repeatMode": repeatModeString(engine.repeatMode),
-            "sleepTimerActive": SleepTimer.shared.isActive,
-        ]
-
-        // Send queue (up next, max 20)
-        let upNext = engine.upNext.prefix(20)
-        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.displayArtist ?? ""] }
+        let context = WatchPlaybackActions.nowPlayingContext(
+            title: title, artist: artist, album: album, isPlaying: isPlaying
+        )
 
         try? wcSession?.updateApplicationContext(context)
 
@@ -58,23 +43,9 @@ final class WatchSessionManager: NSObject, ObservableObject {
     func sendNowPlayingUpdate(title: String, artist: String, album: String,
                               isPlaying: Bool, coverArtData: Data?) {
         guard isReady else { return }
-        let engine = AudioEngine.shared
-
-        var context: [String: Any] = [
-            "title": title,
-            "artist": artist,
-            "album": album,
-            "isPlaying": isPlaying,
-            "elapsed": engine.currentTime,
-            "duration": engine.duration,
-            "isStarred": engine.currentSong?.starred != nil,
-            "isShuffleOn": engine.shuffleEnabled,
-            "repeatMode": repeatModeString(engine.repeatMode),
-            "sleepTimerActive": SleepTimer.shared.isActive,
-        ]
-
-        let upNext = engine.upNext.prefix(20)
-        context["queue"] = upNext.map { ["title": $0.title, "artist": $0.displayArtist ?? ""] }
+        var context = WatchPlaybackActions.nowPlayingContext(
+            title: title, artist: artist, album: album, isPlaying: isPlaying
+        )
 
         // Include art in the same message so watch processes everything in one snapshot
         if let artData = coverArtData {
@@ -94,23 +65,21 @@ final class WatchSessionManager: NSObject, ObservableObject {
 
     func sendPlaybackStateUpdate(isPlaying: Bool) {
         guard isReady, wcSession?.isReachable == true else { return }
-        let engine = AudioEngine.shared
-        wcSession?.sendMessage([
-            "isPlaying": isPlaying,
-            "elapsed": engine.currentTime,
-            "sleepTimerActive": SleepTimer.shared.isActive,
-        ], replyHandler: nil)
+        wcSession?.sendMessage(
+            WatchPlaybackActions.playbackStateContext(isPlaying: isPlaying),
+            replyHandler: nil
+        )
     }
 
     /// Re-send current now playing state (e.g. after watch app installs or session activates)
     private func sendCurrentStateIfPlaying() {
-        let engine = AudioEngine.shared
-        guard let song = engine.currentSong else { return }
+        let playback = WatchPlaybackActions.playback
+        guard let song = playback.currentSong else { return }
         sendNowPlayingUpdate(
             title: song.title,
             artist: song.displayArtist ?? "Unknown Artist",
             album: song.album ?? "",
-            isPlaying: engine.isPlaying
+            isPlaying: playback.isPlaying
         )
     }
 
@@ -184,33 +153,11 @@ extension WatchSessionManager: WCSessionDelegate {
 
     @MainActor @discardableResult
     private func handlePlaybackCommand(_ command: String, volume: Float?) -> Bool {
-        let engine = AudioEngine.shared
-        switch command {
-        case "togglePlayPause": engine.togglePlayPause()
-        case "next": engine.next()
-        case "previous": engine.previous()
-        case "setVolume": if let volume { engine.volume = volume }
-        case "toggleStar":
-            guard let song = engine.currentSong else { return true }
-            Task {
-                if song.starred != nil {
-                    try? await OfflineActionQueue.shared.unstar(id: song.id)
-                } else {
-                    try? await OfflineActionQueue.shared.star(id: song.id)
-                }
-            }
-        case "toggleShuffle": engine.toggleShuffle()
-        case "cycleRepeat": engine.cycleRepeatMode()
-        case "startRadio":
-            if let song = engine.currentSong { engine.startRadioFromSong(song) }
-        default: return false
-        }
-        return true
+        WatchPlaybackActions.handlePlaybackCommand(command, volume: volume)
     }
 
     @MainActor @discardableResult
     private func handleLibraryCommand(_ command: String) -> Bool {
-        let engine = AudioEngine.shared
         switch command {
         case "playFavorites":
             Task { await playStarred(shuffle: false) }
@@ -220,18 +167,14 @@ extension WatchSessionManager: WCSessionDelegate {
             Task {
                 guard let songs = try? await SubsonicClientProvider.shared.client?.getRandomSongs(size: 50),
                       let first = songs.first else { return }
-                engine.play(song: first, from: songs, at: 0)
+                WatchPlaybackActions.playback.play(song: first, from: songs, at: 0)
             }
         case let cmd where cmd.hasPrefix("playAlbum:"):
             Task { await playAlbum(id: String(cmd.dropFirst("playAlbum:".count))) }
         case let cmd where cmd.hasPrefix("playPlaylist:"):
             Task { await playPlaylist(id: String(cmd.dropFirst("playPlaylist:".count))) }
         case let cmd where cmd.hasPrefix("skipToIndex:"):
-            if let index = Int(cmd.dropFirst("skipToIndex:".count)) {
-                let abs = engine.currentIndex + 1 + index
-                guard abs < engine.queue.count else { return true }
-                engine.play(song: engine.queue[abs], from: engine.queue, at: abs)
-            }
+            WatchPlaybackActions.handleSkipToIndexCommand(cmd)
         default: return false
         }
         return true
@@ -253,28 +196,21 @@ extension WatchSessionManager: WCSessionDelegate {
         guard let starred = try? await SubsonicClientProvider.shared.client?.getStarred(),
               let songs = starred.song, !songs.isEmpty else { return }
         let list = shuffle ? songs.shuffled() : songs
-        AudioEngine.shared.play(song: list[0], from: list, at: 0)
+        WatchPlaybackActions.playback.play(song: list[0], from: list, at: 0)
     }
 
     private func playAlbum(id: String) async {
         guard let album = try? await SubsonicClientProvider.shared.client?.getAlbum(id: id),
               let songs = album.song, let first = songs.first else { return }
-        AudioEngine.shared.play(song: first, from: songs, at: 0)
+        WatchPlaybackActions.playback.play(song: first, from: songs, at: 0)
     }
 
     private func playPlaylist(id: String) async {
         guard let playlist = try? await SubsonicClientProvider.shared.client?.getPlaylist(id: id),
               let songs = playlist.entry, let first = songs.first else { return }
-        AudioEngine.shared.play(song: first, from: songs, at: 0)
+        WatchPlaybackActions.playback.play(song: first, from: songs, at: 0)
     }
 
-    private func repeatModeString(_ mode: RepeatMode) -> String {
-        switch mode {
-        case .off: "off"
-        case .all: "all"
-        case .one: "one"
-        }
-    }
 }
 
 /// Provides access to the current SubsonicClient from watch commands.

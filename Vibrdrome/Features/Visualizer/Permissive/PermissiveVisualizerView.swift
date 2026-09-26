@@ -2,8 +2,15 @@ import Combine
 import MetalKit
 import QuartzCore
 import SwiftUI
+import Synchronization
 import os
 import simd
+
+/// DEBUG: counts every `NativeVisualizerSurface` value SwiftUI constructs. File-scope + atomic so
+/// the struct's nonisolated `init` can bump it. Stamped into each breadcrumb: if this jumps by
+/// hundreds across the swipe-to-black stall, the surface is being recreated ~10×/s and resetting
+/// its `autoTicker` (a plain `let` publisher); if it barely moves, the timer is starved instead.
+private let nativeVizSurfaceInits = Atomic<Int>(0)
 
 /// Production host for the native Metal feedback visualizer. Embedded as the "Native"
 /// mode inside `VisualizerView`, which supplies the close/playback controls. Auto-rotates
@@ -11,9 +18,48 @@ import simd
 /// spectrum ribbon + particle swarm over the Metal field. Reads `AudioSpectrum` scalar
 /// bass/mid/treble (with a synthesized fallback when nothing is playing). A horizontal
 /// swipe in the host bumps `advanceToken` to jump to the next scene.
+/// DEBUG-only breadcrumb trace for the manual-swipe-to-black investigation.
+///
+/// Both channels, because device log streaming is unreliable on this iOS/host pairing (`log collect`
+/// needs sudo the harness can't supply, `idevicesyslog` never attaches, and `Logger.debug` isn't
+/// streamed): each breadcrumb goes to os_log AND to a bounded file the Mac pulls with
+/// `devicectl device copy from ... Documents/nativeviz-trace.txt` — the channel the debug export
+/// already proved. Only the meaningful, low-frequency transition steps call this.
+@MainActor
+enum NativeVizTrace {
+    private static let vizLog = Logger(subsystem: "com.vibrdrome.app", category: "NativeViz")
+    private static var lines: [String] = []
+    private static let startedAt = Date()
+
+    static func record(_ message: String) {
+        // DEBUG-only. Release must never auto-write a diagnostic file without user action, so the
+        // whole breadcrumb (os_log + the pullable Documents/nativeviz-trace.txt) is compiled out of
+        // Release. Callers stay un-gated and hit this no-op, keeping the DEBUG investigation intact.
+        #if DEBUG
+        vizLog.debug("\(message, privacy: .public)")
+        let stamp = String(format: "%.2f", Date().timeIntervalSince(startedAt))
+        let inits = nativeVizSurfaceInits.load(ordering: .relaxed)
+        lines.append("[\(stamp)] (inits=\(inits)) \(message)")
+        if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+        guard let documents = FileManager.default.urls(for: .documentDirectory,
+                                                       in: .userDomainMask).first else { return }
+        try? lines.joined(separator: "\n").write(
+            to: documents.appendingPathComponent("nativeviz-trace.txt"),
+            atomically: true, encoding: .utf8)
+        #endif
+    }
+}
+
 struct NativeVisualizerSurface: View {
     /// Incremented by the host (VisualizerView) on a manual "next scene" gesture.
     var advanceToken: Int = 0
+
+    /// DEBUG: bump the recreation counter each time SwiftUI constructs this value. `init` is
+    /// nonisolated; the counter is a file-scope atomic so this is race-free without isolation.
+    init(advanceToken: Int = 0) {
+        self.advanceToken = advanceToken
+        nativeVizSurfaceInits.wrappingAdd(1, ordering: .relaxed)
+    }
 
     @State private var presetIndex = 0
     private let presets = PermissivePresetLibrary.presets
@@ -35,6 +81,9 @@ struct NativeVisualizerSurface: View {
     @State private var transitionStart: Date?     // non-nil while a fade is in progress
     @State private var didSwitch = false          // whether the scene was already swapped (at full black)
     @State private var dwellDeadline = Date()
+    /// DEBUG: counts autoTicker firings so the breadcrumb log can show the 10 Hz timer is still
+    /// alive (heartbeat every ~2 s) — the difference between a dead timer and a stuck transition.
+    @State private var tickHeartbeat = 0
 
     // ── Overlay/Compositing v1 (A13): one fixed audio-reactive spectrum ribbon, SwiftUI-only,
     // reading AudioSpectrum.shared.bands. Sits UNDER the A12 fade so transitions cover it. ──────
@@ -46,9 +95,16 @@ struct NativeVisualizerSurface: View {
     @State private var field = ParticleField(count: 80)
     private static let particlesEnabled = true
     private static let particleIntensity = 0.7
-    // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME — it can't die and
-    // never depends on animation-completion callbacks (those were dropping → scenes got stuck).
-    private let autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    // Combine timer drives the whole dwell/fade state machine by ELAPSED TIME, never by animation-
+    // completion callbacks (those were dropping → scenes got stuck).
+    //
+    // **`@State`, not `let`.** SwiftUI reconstructs this surface value ~17×/s (the host re-renders
+    // continuously), and a `let` publisher was rebuilt on every reconstruction — cancelled and
+    // recreated faster than its own 0.1 s interval, so `tick()` almost never fired and a
+    // fade-to-black sat black until the re-render storm happened to pause >0.1 s (measured: ~31 s).
+    // `@State` is created once and preserved across reconstructions, so the timer actually ticks —
+    // which is what "it can't die" was always meant to guarantee.
+    @State private var autoTicker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     /// Preset indices eligible for the auto-rotation bag.
     private var eligibleIndices: [Int] {
@@ -87,6 +143,7 @@ struct NativeVisualizerSurface: View {
         }
         presetIndex = idx
         lastFamily = family(idx)
+        NativeVizTrace.record("advanceToNext -> presetIndex \(idx) sceneMode \(self.presets[idx].sceneMode)")
     }
 
     private func nextDwell() -> Double {
@@ -96,26 +153,39 @@ struct NativeVisualizerSurface: View {
     /// Start a fade-to-black. The visual tween is `withAnimation`; the *switch* and *reset* are
     /// decided by elapsed time in tick(), so a dropped animation completion can never strand it.
     @MainActor private func beginTransition() {
-        guard transitionStart == nil else { return }
+        guard transitionStart == nil else {
+            NativeVizTrace.record("beginTransition IGNORED (already transitioning)")
+            return
+        }
         transitionStart = Date()
         didSwitch = false
         withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 1.0 }
+        NativeVizTrace.record("beginTransition START fadeOpacity->1")
     }
 
     /// Combine tick (~0.1s): advances any in-flight transition by elapsed time, else auto-advances
     /// when the dwell deadline passes. Purely time-driven → cannot get stuck.
     private func tick() {
+        tickHeartbeat += 1
+        if tickHeartbeat % 20 == 0 {
+            NativeVizTrace.record("""
+                tick alive #\(self.tickHeartbeat) transitionStart=\(self.transitionStart != nil) \
+                fadeOpacity=\(String(format: "%.2f", self.fadeOpacity)) presetIndex=\(self.presetIndex)
+                """)
+        }
         if let start = transitionStart {
             let elapsed = Date().timeIntervalSince(start)
             if elapsed >= Self.fadeSeconds, !didSwitch {
                 advanceToNext()                           // switch only at full black
                 didSwitch = true
                 withAnimation(.easeInOut(duration: Self.fadeSeconds)) { fadeOpacity = 0.0 }
+                NativeVizTrace.record("tick SWITCH at full black, fadeOpacity->0")
             }
             if elapsed >= 2 * Self.fadeSeconds {          // fade-in done → transition complete
                 transitionStart = nil
                 didSwitch = false
                 fadeOpacity = 0.0
+                NativeVizTrace.record("tick COMPLETE, transition cleared")
             }
             return
         }
@@ -126,6 +196,7 @@ struct NativeVisualizerSurface: View {
     }
 
     private func manualNext() {
+        NativeVizTrace.record("manualNext (swipe) transitionStart=\(self.transitionStart != nil)")
         dwellDeadline = Date().addingTimeInterval(nextDwell())       // a manual swipe restarts the dwell
         beginTransition()
     }
@@ -149,6 +220,7 @@ struct NativeVisualizerSurface: View {
             .overlay { Color.black.opacity(fadeOpacity).ignoresSafeArea().allowsHitTesting(false) }
             // Seed the bag + jump into the native rotation when the surface appears.
             .onAppear {
+                NativeVizTrace.record("surface onAppear (bagEmpty=\(self.bag.isEmpty))")
                 if bag.isEmpty {
                     refillBag()
                     advanceToNext()    // jump into the native rotation at startup

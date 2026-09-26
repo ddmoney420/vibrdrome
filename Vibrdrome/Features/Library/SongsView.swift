@@ -433,7 +433,7 @@ struct SongsView: View {
                         songRow(song)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                                ApplicationPlayback.shared.play(song: song, from: cachedDisplayedSongs, at: index)
                             }
                             .accessibilityIdentifier("songRow_\(song.id)")
                             .trackContextMenu(song: song)
@@ -473,7 +473,7 @@ struct SongsView: View {
                                 songCard(song)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        AudioEngine.shared.play(song: song, from: cachedDisplayedSongs, at: index)
+                                        ApplicationPlayback.shared.play(song: song, from: cachedDisplayedSongs, at: index)
                                     }
                                     .accessibilityIdentifier("songCard_\(song.id)")
                                     .trackContextMenu(song: song)
@@ -493,7 +493,7 @@ struct SongsView: View {
         HStack(spacing: 12) {
             Button {
                 let songs = cachedDisplayedSongs
-                AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                ApplicationPlayback.shared.play(song: songs[0], from: songs, at: 0)
             } label: {
                 Label("Play All", systemImage: "play.fill")
                     .font(.subheadline)
@@ -506,7 +506,7 @@ struct SongsView: View {
 
             Button {
                 let shuffled = cachedDisplayedSongs.shuffled()
-                AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                ApplicationPlayback.shared.play(song: shuffled[0], from: shuffled, at: 0)
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
                     .font(.subheadline)

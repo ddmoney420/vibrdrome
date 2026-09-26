@@ -30,6 +30,7 @@ struct PlayerSettingsView: View {
     @AppStorage(UserDefaultsKeys.wifiMaxBitRate) private var wifiMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.cellularMaxBitRate) private var cellularMaxBitRate: Int = 0
     @AppStorage(UserDefaultsKeys.gaplessPlayback) private var gaplessPlayback: Bool = true
+    @AppStorage(UserDefaultsKeys.gaplessEngineBeta) private var gaplessEngineBeta: Bool = false
     @AppStorage(UserDefaultsKeys.autoSuggestEnabled) private var autoSuggestEnabled: Bool = true
     @AppStorage(UserDefaultsKeys.crossfadeDuration) private var crossfadeDuration: Int = 0
     @AppStorage(UserDefaultsKeys.crossfadeCurve) private var crossfadeCurve: String = "linear"
@@ -85,6 +86,7 @@ struct PlayerSettingsView: View {
         List {
             behaviorSection
             playbackSection
+            gaplessEngineBetaSection
             scrobblingSection
             controlsSection
             songDisplaySection
@@ -288,7 +290,7 @@ struct PlayerSettingsView: View {
             }
             .accessibilityIdentifier("equalizerToggle")
             .onChange(of: eqEnabled) { _, newValue in
-                AudioEngine.shared.applyEQToggle(enabled: newValue)
+                ApplicationPlayback.shared.applyEQToggle(enabled: newValue)
             }
 
             NavigationLink {
@@ -300,6 +302,35 @@ struct PlayerSettingsView: View {
             .accessibilityIdentifier("eqSettingsLink")
         } header: {
             settingSectionHeader("Playback", icon: "play.circle.fill", color: .purple)
+        }
+    }
+
+    // MARK: - Gapless Engine (Beta) Section
+
+    private var gaplessEngineBetaSection: some View {
+        Section {
+            Toggle(isOn: $gaplessEngineBeta) {
+                Label("Gapless Engine (Beta)", systemImage: "waveform.badge.magnifyingglass")
+                    .foregroundColor(.primary)
+            }
+            .accessibilityIdentifier("gaplessEngineBetaToggle")
+            .onChange(of: gaplessEngineBeta) { _, newValue in
+                // Observational only — the preference already changed via @AppStorage; this records
+                // the transition and the live playback context for the beta-OFF investigation. It
+                // must not stop playback, replan, or move authority (it does none of those).
+                #if DEBUG
+                let router = ApplicationPlayback.router
+                PlaybackEventLog.record("""
+                    beta \(newValue ? "OFF->ON" : "ON->OFF"): \
+                    playing=\(ApplicationPlayback.shared.isPlaying) \
+                    authority=\(router?.ownership.authority.rawValue ?? "?") \
+                    backend=\(router?.selectedBackend.rawValue ?? "?") \
+                    gen=\(router?.pendingPlanningGeneration ?? 0)
+                    """)
+                #endif
+            }
+        } footer: {
+            Text("Uses the new gapless playback engine for supported music.")
         }
     }
 

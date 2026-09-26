@@ -225,9 +225,11 @@ extension AudioEngine {
         guard !isUITesting else { return }
         guard let song = currentSong else { return }
 
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
-        #endif
+        // Do NOT activate the audio session here. This runs at cold launch /
+        // restore to surface #45 Now-Playing, but activating would interrupt
+        // other apps' audio before the user presses Play (#134). Loading the
+        // AVPlayerItem below + setting NowPlayingInfoCenter is what #45 needs;
+        // activation is deferred to explicit play/resume.
 
         if activeMode != .gapless {
             tearDownCurrentMode()

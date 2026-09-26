@@ -15,7 +15,7 @@ struct TrackRow: View {
     @State private var isStarred = false
 
     private var isCurrentlyPlaying: Bool {
-        AudioEngine.shared.currentSong?.id == song.id
+        ApplicationPlayback.shared.currentSong?.id == song.id
     }
 
     var body: some View {
@@ -59,7 +59,7 @@ struct TrackRow: View {
             Button {
                 let wasStarred = isStarred
                 isStarred = !wasStarred
-                AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: !wasStarred)
+                ApplicationPlayback.shared.updateQueueSongStarred(id: song.id, starred: !wasStarred)
                 NotificationCenter.default.post(
                     name: .songStarredChanged,
                     object: nil,
@@ -80,7 +80,7 @@ struct TrackRow: View {
                         }
                     } catch {
                         isStarred = wasStarred
-                        AudioEngine.shared.updateQueueSongStarred(id: song.id, starred: wasStarred)
+                        ApplicationPlayback.shared.updateQueueSongStarred(id: song.id, starred: wasStarred)
                         NotificationCenter.default.post(
                             name: .songStarredChanged,
                             object: nil,
@@ -125,17 +125,17 @@ struct TrackRow: View {
             // Inline menu
             Menu {
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.addToQueue(song)
+                    ApplicationPlayback.shared.addToQueue(song)
                 } label: {
                     Label("Add to Queue", systemImage: "text.append")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
@@ -156,7 +156,7 @@ struct TrackRow: View {
         .contentShape(Rectangle())
         .swipeActions(edge: .leading) {
             Button {
-                AudioEngine.shared.addToQueueNext(song)
+                ApplicationPlayback.shared.addToQueueNext(song)
                 #if os(iOS)
                 Haptics.light()
                 #endif
@@ -167,7 +167,7 @@ struct TrackRow: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button {
-                AudioEngine.shared.addToQueue(song)
+                ApplicationPlayback.shared.addToQueue(song)
                 #if os(iOS)
                 Haptics.light()
                 #endif

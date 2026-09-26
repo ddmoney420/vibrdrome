@@ -12,6 +12,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         // C3: Clean up any existing manager before creating a new one
         carPlayManager?.tearDown()
+        CarPlayConnectionState.shared.recordConnect()
         self.interfaceController = interfaceController
         self.carPlayManager = CarPlayManager(interfaceController: interfaceController)
         carPlayManager?.setupRootTemplate()
@@ -19,14 +20,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         // Ensure remote commands are active for CarPlay controls
         RemoteCommandManager.shared.setup()
 
-        // Refresh now playing info so CarPlay picks up current playback state
-        if let song = AudioEngine.shared.currentSong {
-            NowPlayingManager.shared.update(song: song, isPlaying: AudioEngine.shared.isPlaying)
-            NowPlayingManager.shared.updateElapsedTime(AudioEngine.shared.currentTime)
-        } else {
-            // No current song — try restoring saved queue
-            AudioEngine.shared.restorePlayQueue(client: AppState.shared.subsonicClient)
-        }
+        // Refresh now playing info so CarPlay picks up current playback state, or restore the
+        // saved queue when nothing is loaded. Stays the last step of connection, after manager
+        // construction, template setup and remote-command registration.
+        CarPlayScenePlaybackActions.syncNowPlayingOrRestoreQueue(
+            client: AppState.shared.subsonicClient
+        )
     }
 
     func templateApplicationScene(
@@ -34,6 +33,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         didDisconnectInterfaceController interfaceController: CPInterfaceController
     ) {
         carPlayManager?.tearDown()
+        CarPlayConnectionState.shared.recordDisconnect()
         self.carPlayManager = nil
         self.interfaceController = nil
     }

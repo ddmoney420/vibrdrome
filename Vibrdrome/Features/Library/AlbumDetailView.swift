@@ -297,7 +297,7 @@ struct AlbumDetailView: View {
         HStack(spacing: 12) {
             Button {
                 if let songs = album.song, let first = songs.first {
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                    ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
                 }
             } label: {
                 Label("Play", systemImage: "play.fill")
@@ -314,7 +314,7 @@ struct AlbumDetailView: View {
             Button {
                 if var songs = album.song, !songs.isEmpty {
                     songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    ApplicationPlayback.shared.play(song: songs[0], from: songs, at: 0)
                 }
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
@@ -530,7 +530,7 @@ struct AlbumDetailView: View {
                 if var songs = album.song, !songs.isEmpty {
                     Haptics.medium()
                     songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                    ApplicationPlayback.shared.play(song: songs[0], from: songs, at: 0)
                 }
             } label: {
                 Image(systemName: "shuffle")
@@ -545,7 +545,7 @@ struct AlbumDetailView: View {
             Button {
                 if let songs = album.song, let first = songs.first {
                     Haptics.medium()
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
+                    ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -586,7 +586,7 @@ struct AlbumDetailView: View {
                     #if os(iOS)
                     Haptics.light()
                     #endif
-                    AudioEngine.shared.addToQueueNext(songs)
+                    ApplicationPlayback.shared.addToQueueNext(songs)
                 }
             } label: { SwiftUI.Label("Play Next", systemImage: "text.insert") }
 
@@ -595,7 +595,7 @@ struct AlbumDetailView: View {
                     #if os(iOS)
                     Haptics.light()
                     #endif
-                    AudioEngine.shared.addToQueue(songs)
+                    ApplicationPlayback.shared.addToQueue(songs)
                 }
             } label: { SwiftUI.Label("Add to Queue", systemImage: "text.append") }
 
@@ -646,7 +646,7 @@ struct AlbumDetailView: View {
                     if isSelecting {
                         toggleSelection(song.id)
                     } else {
-                        AudioEngine.shared.play(song: song, from: songs, at: index)
+                        ApplicationPlayback.shared.play(song: song, from: songs, at: index)
                     }
                 }
                 .accessibilityIdentifier("trackRow_\(index)")

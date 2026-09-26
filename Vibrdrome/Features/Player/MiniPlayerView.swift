@@ -11,7 +11,7 @@ struct MiniPlayerView: View {
     @AppStorage(UserDefaultsKeys.enableMiniPlayerSwipe) private var enableMiniPlayerSwipe = true
     @State private var dominantColor: Color?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var shouldSpin: Bool {
         engine.isPlaying && !disableSpinningArt && !reduceMotion
@@ -133,12 +133,12 @@ struct MiniPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
@@ -184,9 +184,22 @@ struct MiniPlayerView: View {
     }
 
     private var displaySubtitle: String {
+        // Honest failure state: a legacy start that gave up sets AudioEngine.playbackStartFailed and
+        // forces isPlaying=false, so the play button already reads "play". Surface the reason here.
+        // Read directly (not via the façade) because this flag is legacy-engine-specific; the
+        // @Observable access still drives SwiftUI updates.
+        if AudioEngine.shared.playbackStartFailed {
+            return "Couldn't start playback. Tap Play to retry."
+        }
         if let song = engine.currentSong {
-            // Show "Up Next: [title]" if there's a next track, otherwise artist
-            guard let index = engine.nextSongIndex() else {return song.displayArtist ?? ""}
+            // Show "Up Next: [title]" if there's a next track, otherwise artist.
+            //
+            // Range-checked rather than trusted. The index and the queue come from the backend that
+            // owns the session, and a command can land between the two reads — so treating the
+            // index as a guarantee is a trap, not a shortcut. It crashed exactly that way when the
+            // index came from one backend and the queue from another.
+            guard let index = engine.nextSongIndex(),
+                  engine.queue.indices.contains(index) else { return song.displayArtist ?? "" }
             return "Next: \(engine.queue[index].title)"
         }
 
@@ -284,7 +297,7 @@ struct MacMiniPlayerView: View {
         sidebarSelectionRaw = "nowPlaying"
     }
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -591,12 +604,12 @@ struct MacMiniPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
@@ -663,7 +676,7 @@ struct PopOutPlayerView: View {
     @AppStorage(UserDefaultsKeys.enableMiniPlayerTint) private var enableMiniPlayerTint = false
     @State private var dominantColor: Color?
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var shouldSpin: Bool {
         engine.isPlaying && !disableSpinningArt && !reduceMotion
@@ -785,12 +798,12 @@ struct PopOutPlayerView: View {
                     }
                 }
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }

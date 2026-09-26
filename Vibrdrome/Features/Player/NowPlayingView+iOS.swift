@@ -402,7 +402,7 @@ extension NowPlayingView {
             Button {
                 guard let song = engine.currentSong else { return }
                 Haptics.light()
-                AudioEngine.shared.startSongSimilarityMix(song)
+                ApplicationPlayback.shared.startSongSimilarityMix(song)
             } label: {
                 Image(systemName: "dot.radiowaves.left.and.right")
                     .frame(minWidth: 44, minHeight: 44)

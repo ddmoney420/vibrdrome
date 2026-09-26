@@ -22,7 +22,7 @@ struct MacTrackTableRow: View {
     private var isDownloaded: Bool { downloadedSongIds.contains(song.id) }
 
     private var isCurrentlyPlaying: Bool {
-        AudioEngine.shared.currentSong?.id == song.id
+        ApplicationPlayback.shared.currentSong?.id == song.id
     }
 
     private var isSelected: Bool { selectedSongId == song.id }
@@ -55,7 +55,7 @@ struct MacTrackTableRow: View {
         // Double-click: play
         .onTapGesture(count: 2) {
             selectedSongId = song.id
-            AudioEngine.shared.play(song: song, from: queue, at: index)
+            ApplicationPlayback.shared.play(song: song, from: queue, at: index)
         }
         .trackContextMenu(song: song, queue: queue, index: index)
         .accessibilityLabel("\(song.title), \(song.displayArtist ?? "Unknown Artist")")
@@ -267,17 +267,17 @@ struct MacTrackTableRow: View {
             // Context menu button
             Menu {
                 Button {
-                    AudioEngine.shared.addToQueueNext(song)
+                    ApplicationPlayback.shared.addToQueueNext(song)
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
-                    AudioEngine.shared.addToQueue(song)
+                    ApplicationPlayback.shared.addToQueue(song)
                 } label: {
                     Label("Add to Queue", systemImage: "text.append")
                 }
                 Button {
-                    AudioEngine.shared.startRadioFromSong(song)
+                    ApplicationPlayback.shared.startRadioFromSong(song)
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }

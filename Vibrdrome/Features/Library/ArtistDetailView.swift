@@ -160,7 +160,7 @@ struct ArtistDetailView: View {
             if let artist {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        AudioEngine.shared.startRadio(artistName: artist.name)
+                        ApplicationPlayback.shared.startRadio(artistName: artist.name)
                     } label: {
                         Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                     }
@@ -265,7 +265,7 @@ struct ArtistDetailView: View {
         HStack(spacing: 12) {
             Button {
                 if !topSongs.isEmpty {
-                    AudioEngine.shared.play(song: topSongs[0], from: topSongs, at: 0)
+                    ApplicationPlayback.shared.play(song: topSongs[0], from: topSongs, at: 0)
                 }
             } label: {
                 Label("Play Top Tracks", systemImage: "play.fill")
@@ -280,7 +280,7 @@ struct ArtistDetailView: View {
             .accessibilityIdentifier("artistPlayButton")
 
             Button {
-                AudioEngine.shared.startRadio(artistName: artist.name)
+                ApplicationPlayback.shared.startRadio(artistName: artist.name)
             } label: {
                 Label("Artist Radio", systemImage: "dot.radiowaves.left.and.right")
                     .fontWeight(.semibold)
@@ -503,7 +503,7 @@ struct ArtistDetailView: View {
                         TrackRow(song: song, showTrackNumber: false)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                AudioEngine.shared.play(song: song, from: topSongs, at: index)
+                                ApplicationPlayback.shared.play(song: song, from: topSongs, at: index)
                             }
                             .trackContextMenu(song: song, queue: topSongs, index: index)
                     }
@@ -627,7 +627,7 @@ struct ArtistDetailView: View {
             if let artist {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        AudioEngine.shared.startRadio(artistName: artist.name)
+                        ApplicationPlayback.shared.startRadio(artistName: artist.name)
                     } label: {
                         Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                     }

@@ -369,23 +369,23 @@ struct PlaylistsView: View {
     private func playlistContextMenu(_ playlist: Playlist) -> some View {
         Button {
             playlistAction(playlist) { songs in
-                if let first = songs.first { AudioEngine.shared.play(song: first, from: songs, at: 0) }
+                if let first = songs.first { ApplicationPlayback.shared.play(song: first, from: songs, at: 0) }
             }
         } label: { Label("Play", systemImage: "play.fill") }
 
         Button {
             playlistAction(playlist) { songs in
                 var shuffled = songs; shuffled.shuffle()
-                if let first = shuffled.first { AudioEngine.shared.play(song: first, from: shuffled, at: 0) }
+                if let first = shuffled.first { ApplicationPlayback.shared.play(song: first, from: shuffled, at: 0) }
             }
         } label: { Label("Shuffle", systemImage: "shuffle") }
 
         Button {
-            playlistAction(playlist) { songs in AudioEngine.shared.addToQueueNext(songs) }
+            playlistAction(playlist) { songs in ApplicationPlayback.shared.addToQueueNext(songs) }
         } label: { Label("Play Next", systemImage: "text.insert") }
 
         Button {
-            playlistAction(playlist) { songs in AudioEngine.shared.addToQueue(songs) }
+            playlistAction(playlist) { songs in ApplicationPlayback.shared.addToQueue(songs) }
         } label: { Label("Add to Queue", systemImage: "text.append") }
 
         Divider()

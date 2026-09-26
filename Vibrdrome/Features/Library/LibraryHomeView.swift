@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Value used to push a Library-home category by value, keeping the stack fully value-based so
+/// value-based cells inside the pushed view (e.g. AlbumsView's album cells) resolve and render
+/// on top instead of behind the intermediate list.
+private enum LibraryHomePanel: Hashable {
+    case playlists, artists, albums, songs, genres, downloaded
+}
+
 /// Apple Music-style Library tab — a single entry point to Playlists, Artists,
 /// Albums, Songs, Genres, and Downloaded, with a Recently Added carousel below.
 struct LibraryHomeView: View {
@@ -10,12 +17,12 @@ struct LibraryHomeView: View {
     var body: some View {
         List {
             Section {
-                categoryRow("Playlists", systemImage: "music.note.list", destination: AnyView(PlaylistsView()))
-                categoryRow("Artists", systemImage: "music.mic", destination: AnyView(ArtistsView()))
-                categoryRow("Albums", systemImage: "square.stack", destination: AnyView(AlbumsView(listType: .alphabeticalByName, title: "Albums")))
-                categoryRow("Songs", systemImage: "music.note", destination: AnyView(SongsView()))
-                categoryRow("Genres", systemImage: "guitars", destination: AnyView(GenresView()))
-                categoryRow("Downloaded", systemImage: "arrow.down.circle", destination: AnyView(DownloadsView()))
+                categoryRow("Playlists", systemImage: "music.note.list", panel: .playlists)
+                categoryRow("Artists", systemImage: "music.mic", panel: .artists)
+                categoryRow("Albums", systemImage: "square.stack", panel: .albums)
+                categoryRow("Songs", systemImage: "music.note", panel: .songs)
+                categoryRow("Genres", systemImage: "guitars", panel: .genres)
+                categoryRow("Downloaded", systemImage: "arrow.down.circle", panel: .downloaded)
             }
             .listRowSeparator(.visible)
 
@@ -38,6 +45,16 @@ struct LibraryHomeView: View {
             }
         }
         .listStyle(.plain)
+        .navigationDestination(for: LibraryHomePanel.self) { panel in
+            switch panel {
+            case .playlists: PlaylistsView()
+            case .artists: ArtistsView()
+            case .albums: AlbumsView(listType: .alphabeticalByName, title: "Albums")
+            case .songs: SongsView()
+            case .genres: GenresView()
+            case .downloaded: DownloadsView()
+            }
+        }
         .navigationTitle("Library")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
@@ -47,10 +64,8 @@ struct LibraryHomeView: View {
     }
 
     @ViewBuilder
-    private func categoryRow(_ title: String, systemImage: String, destination: AnyView) -> some View {
-        NavigationLink {
-            destination
-        } label: {
+    private func categoryRow(_ title: String, systemImage: String, panel: LibraryHomePanel) -> some View {
+        NavigationLink(value: panel) {
             Label(title, systemImage: systemImage)
                 .font(.title3)
                 .foregroundStyle(.tint)

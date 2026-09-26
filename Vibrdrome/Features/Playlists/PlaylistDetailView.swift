@@ -126,7 +126,7 @@ struct PlaylistDetailView: View {
                         Button {
                             if let songs = playlist?.entry, !songs.isEmpty {
                                 for song in songs {
-                                    AudioEngine.shared.addToQueue(song)
+                                    ApplicationPlayback.shared.addToQueue(song)
                                 }
                             }
                         } label: {
@@ -522,8 +522,8 @@ struct PlaylistDetailView: View {
         HStack(spacing: 16) {
             Button {
                 if let songs = playlist.entry, let first = songs.first {
-                    AudioEngine.shared.play(song: first, from: songs, at: 0)
-                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
+                    ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
+                    ApplicationPlayback.shared.playingFromContext = "Playlist: \(playlist.name)"
                 }
             } label: {
                 Label("Play", systemImage: "play.fill")
@@ -535,8 +535,8 @@ struct PlaylistDetailView: View {
             Button {
                 if var songs = playlist.entry, !songs.isEmpty {
                     songs.shuffle()
-                    AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
-                    AudioEngine.shared.playingFromContext = "Playlist: \(playlist.name)"
+                    ApplicationPlayback.shared.play(song: songs[0], from: songs, at: 0)
+                    ApplicationPlayback.shared.playingFromContext = "Playlist: \(playlist.name)"
                 }
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
@@ -548,14 +548,14 @@ struct PlaylistDetailView: View {
             Menu {
                 Button {
                     if let songs = playlist.entry, !songs.isEmpty {
-                        AudioEngine.shared.addToQueueNext(songs)
+                        ApplicationPlayback.shared.addToQueueNext(songs)
                     }
                 } label: {
                     Label("Play Next", systemImage: "text.insert")
                 }
                 Button {
                     if let songs = playlist.entry, !songs.isEmpty {
-                        AudioEngine.shared.addToQueue(songs)
+                        ApplicationPlayback.shared.addToQueue(songs)
                     }
                 } label: {
                     Label("Add to Queue", systemImage: "text.append")
@@ -653,8 +653,8 @@ struct PlaylistDetailView: View {
     }
 
     private func playFromPlaylist(song: Song, songs: [Song], index: Int) {
-        AudioEngine.shared.play(song: song, from: songs, at: index)
-        AudioEngine.shared.playingFromContext = "Playlist: \(playlist?.name ?? "")"
+        ApplicationPlayback.shared.play(song: song, from: songs, at: index)
+        ApplicationPlayback.shared.playingFromContext = "Playlist: \(playlist?.name ?? "")"
     }
 
     private func removeFromPlaylist(at offsets: IndexSet, songs: [Song]) {

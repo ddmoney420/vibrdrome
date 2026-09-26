@@ -31,8 +31,9 @@ xcodebuild -project Vibrdrome.xcodeproj -scheme Vibrdrome \
 # SwiftLint
 swiftlint
 
-# Regenerate Xcode project (ALWAYS restore entitlements after!)
+# Regenerate Xcode project (entitlements are now generated from project.yml — see below)
 xcodegen generate
+scripts/verify-entitlements.sh   # confirms CarPlay + App Group survived
 ```
 
 ## CI / Build Policy
@@ -87,24 +88,63 @@ Run in order before every TestFlight build. Every step is mandatory -- no "if ap
 15. Update `docs/APPSTORE-METADATA.md` "What's New" block for the new build, and refresh any description lines the build affects
 16. Update `TESTING.md` -- test items for every new feature and regression area
 17. Increment `CURRENT_PROJECT_VERSION` in `project.yml` (all 3 targets)
-18. Regenerate xcodegen and restore entitlements
+18. Regenerate xcodegen, then run `scripts/verify-entitlements.sh` (no manual restore needed)
 
 The pre-commit hook (`scripts/hooks/pre-commit`) enforces steps 9-16: if `project.yml`'s `CURRENT_PROJECT_VERSION` bumps in a commit, the required doc files must be touched in the same commit. Do not bypass with `--no-verify`; the hook is the safety net.
 
-## Post-XcodeGen Entitlements Restore
+## XcodeGen and entitlements (fixed — no manual restore)
 
-`xcodegen generate` clears entitlements. ALWAYS restore both files after:
+**The old "xcodegen clears entitlements, always restore them" ritual is obsolete.** The cause was in
+`project.yml`: `targets.<name>.entitlements` is a file **generation** directive, not a reference to
+a hand-maintained file. It carried a `path` with no `properties`, so every `xcodegen generate` wrote
+an empty `<dict/>` over the real entitlements and dropped CarPlay audio and the App Group.
 
-**Vibrdrome/Vibrdrome.entitlements** — needs:
-- `com.apple.developer.carplay-audio` = true
-- `com.apple.security.application-groups` = ["group.com.vibrdrome.app"]
+`project.yml` now declares the required keys under `entitlements.properties` for both targets, so
+generation reproduces them instead of erasing them. Verified behaviour:
 
-**VibrdromeWidget/VibrdromeWidget.entitlements** — needs:
-- `com.apple.security.application-groups` = ["group.com.vibrdrome.app"]
+- Files already correct → `xcodegen generate` leaves them untouched (mtime unchanged, zero diff).
+- File wiped or deleted → generation **restores** it from the spec.
+
+**Adding or removing an entitlement:** edit `entitlements.properties` in `project.yml`, run
+`xcodegen generate`, then `scripts/verify-entitlements.sh`. Editing the `.entitlements` file alone
+works until the next generation, which will not know about the change.
+
+`scripts/verify-entitlements.sh` is the backstop. It reads the tracked entitlement files (the
+artifacts that actually get code-signed) rather than a build log, and `verify-build.sh` runs it as
+a first-class check — so a spec regression fails verification instead of surfacing months later as
+"the app no longer appears in CarPlay".
+
+Required keys:
+
+**Vibrdrome/Vibrdrome.entitlements** — `com.apple.developer.carplay-audio` = true,
+`com.apple.security.application-groups` = ["group.com.vibrdrome.app"],
+`com.apple.security.files.user-selected.read-write` = true
+
+**VibrdromeWidget/VibrdromeWidget.entitlements** —
+`com.apple.security.application-groups` = ["group.com.vibrdrome.app"]
+
+`Vibrdrome/Vibrdrome-macOS.entitlements` is referenced only by the `CODE_SIGN_ENTITLEMENTS[sdk=macosx*]`
+build setting, is not generated, and deliberately omits CarPlay.
+
+## Adding a new test file — safe sequence
+
+`VibrdromeTests` sources are listed individually in the generated project, and the project does not
+use Xcode's synchronized folders. A new test file is **not compiled until the project is
+regenerated**, so a green run that silently skipped your new tests is the failure mode to avoid.
+
+1. Write the file under `VibrdromeTests/`.
+2. `xcodegen generate`
+3. `scripts/verify-entitlements.sh` — confirm nothing was lost.
+4. `xcodebuild ... build-for-testing` — catches compile errors faster than a full test run.
+5. `./scripts/verify-build.sh` — must print `RESULT: PASS`.
+6. **Confirm the test count went up** by the number of tests you added, and that your suite is named
+   in `build-logs/test-unit-tests.log`. A test file that was never added to the target still lets the
+   suite pass — the count is what proves it ran.
 
 ## Key Patterns
 
-- `xcodegen` clears entitlements — must restore CarPlay + App Groups entitlements after (see above)
+- Entitlements are generated from `project.yml` (`entitlements.properties`) — change them there, not
+  in the `.entitlements` file; `scripts/verify-entitlements.sh` guards it (see above)
 - Swift extensions can't access private — use internal or accessor methods
 - Song is a value type — track mutable state via `@State`
 - Subsonic JSON arrays may be omitted (not empty) — always `[T]?`

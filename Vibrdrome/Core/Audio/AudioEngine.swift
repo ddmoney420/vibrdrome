@@ -29,6 +29,18 @@ final class AudioEngine {
     // MARK: - State
 
     var isPlaying = false
+
+    /// True when a legacy track was asked to play but never produced an audible item within the
+    /// start watchdog's budget (see `AudioEngine+StartRecovery.swift`). Set only at give-up, when
+    /// `isPlaying` is forced false — so the UI can show an honest "couldn't start" state instead of
+    /// claiming playback is active. Cleared by the next explicit play/resume.
+    var playbackStartFailed = false
+
+    /// Set while this engine has handed its session to the persistent backend.
+    ///
+    /// Written only by `quiesceForPersistentSession()` and cleared only by an explicit new legacy
+    /// session; read through `admitsTransportRebuild`. See `AudioEngine+Quiescence.swift`.
+    var isQuiescedForPersistentSession = false
     var currentSong: Song? {
         didSet {
             if let old = oldValue, old.id != currentSong?.id {
@@ -138,12 +150,6 @@ final class AudioEngine {
     var repeatMode: RepeatMode = .off
     var shufflePlayCount = 0
 
-    // MARK: - Repeat-One Tracking
-
-    /// Tracks whether repeat-one has already replayed the current track.
-    /// When true, the next track-end advances instead of replaying.
-    var repeatOneUsed = false
-
     // MARK: - Artist Radio (methods in AudioEngine+Radio.swift)
 
     var isRadioMode = false
@@ -185,6 +191,10 @@ final class AudioEngine {
     private var bufferingObserver: AnyCancellable?
     private var statusObserver: AnyCancellable?
 
+    /// One-shot wait bridging the end-of-track / lookahead-promotion race
+    /// (see `setupTrackEndObserver`). Cancelled on item-end teardown.
+    let promotionWaiter = GaplessPromotionWaiter()
+
     /// Scrobble tracking
     var scrobbleSubmitted = false
     var trackStartTime: Date?
@@ -201,6 +211,9 @@ final class AudioEngine {
     var stallAutoRecoveryEnabled: Bool {
         UserDefaults.standard.object(forKey: Self.stallAutoRecoveryKey) as? Bool ?? true
     }
+    /// Ceiling for waiting on the queue player to promote a ready lookahead before falling back
+    /// to the reload path. The race is normally resolved in ~10ms; this is only a safety net.
+    static let lookaheadPromotionTimeout: TimeInterval = 0.25
     static let stallRecoveryMaxAttempts = 3
     static let stallRecoveryBufferThreshold: Double = 10.0  // buffered-ahead seconds = "ample"
     static let stallRecoveryMinInterval: TimeInterval = 1.5  // anti-thrash between attempts
@@ -217,6 +230,34 @@ final class AudioEngine {
     var pendingStallRecovery: Task<Void, Never>?
     var stallObservers: Set<AnyCancellable> = []
     var stallNotifToken: NSObjectProtocol?
+
+    // MARK: - Track-Start Watchdog (never-started / empty-player recovery)
+
+    /// Fills the blind spot the stall recovery above deliberately excludes (`stallItemHasPlayed`):
+    /// a legacy track whose audible item never lands or never becomes ready, leaving the app
+    /// showing "playing" over silence. See `AudioEngine+StartRecovery.swift`. Distinct ownership:
+    /// this watchdog handles a missing item / `noItemToPlayReason` / stuck `.unknown`; an item that
+    /// reaches `.failed` is left to the existing item-status retry; `ready`/`playing` disarms it.
+    static let startWatchdogNoItemGrace: TimeInterval = 2.5   // no item / noItemToPlay → act fast
+    static let startWatchdogUnknownGrace: TimeInterval = 15.0 // item present but never ready → patient
+    static let startWatchdogMaxAttempts = 2                   // rebuilds before failing honestly
+
+    var startWatchdogTask: Task<Void, Never>?
+    var startWatchdogSongId: String?     // intended song identity that armed the watchdog
+    var startWatchdogGeneration: Int?    // playback generation that armed it — fences every action
+    var startWatchdogArmedAt: Date?      // start of the current attempt's grace window
+    var startWatchdogAttempts = 0        // rebuilds already performed for the current intended song
+
+    // MARK: - Bounded item-failure retry
+
+    /// Budget for consecutive AVPlayerItem `.failed` results on the SAME song: the initial failure
+    /// plus (max - 1) reloads, then an honest give-up. Replaces the old unbounded 2s reload, which
+    /// looped forever when every rebuilt item failed instantly (the -11819 media-services-reset
+    /// storm in CarPlay J). Owns `.failed` items only; the start watchdog owns never-started ones.
+    static let maxConsecutiveItemFailures = 3   // initial + 2 retries
+
+    var failedRetryCount = 0
+    var failedRetrySongId: String?
 
     /// Seconds of contiguous buffered media ahead of `current` (0 if the playhead isn't in a range).
     static func bufferedAhead(in item: AVPlayerItem, current: Double) -> Double {
@@ -282,6 +323,9 @@ final class AudioEngine {
     func setTimeObserver(player: AVPlayer?) { timeObserverPlayer = player }
     func setItemEndObserver(_ observer: Any?) { itemEndObserver = observer }
     func removeItemEndObserver() {
+        // Tearing down the item-end observer (replace / stop / mode change / skip / auto-advance)
+        // invalidates any in-flight promotion wait for that item.
+        promotionWaiter.cancel()
         if let itemEndObserver {
             NotificationCenter.default.removeObserver(itemEndObserver)
             self.itemEndObserver = nil
@@ -395,6 +439,15 @@ final class AudioEngine {
         }
     }
 
+    /// Dispose the legacy queue player so a media-services-reset recovery drops the orphaned object
+    /// (its media-server epoch is dead) and the next play builds a fresh one. The setter is
+    /// file-private, so this lives alongside the property.
+    func disposeGaplessPlayerForReset() {
+        gaplessPlayer?.pause()
+        gaplessPlayer?.removeAllItems()
+        gaplessPlayer = nil
+    }
+
     // MARK: - Volume
 
     var volume: Float {
@@ -493,7 +546,6 @@ final class AudioEngine {
         case .all: repeatMode = .one
         case .one: repeatMode = .off
         }
-        repeatOneUsed = false
         if activeMode == .gapless { prepareLookahead() }
     }
 
@@ -558,30 +610,49 @@ final class AudioEngine {
 
     // MARK: - Gapless Lookahead
 
+    /// Pure next-index policy for sequential (non-shuffle) queue playback. Isolated so the
+    /// repeat semantics are unit-testable without driving the player.
+    /// - Repeat Off: advance while another item exists, else `nil` (end-of-queue policy applies).
+    /// - Repeat All: advance, wrapping to `0` after the last item — cycles the whole queue.
+    /// - Repeat One: the same index (current track).
+    /// A one-item queue yields `0` for both All and One; an empty queue yields `nil`.
+    nonisolated static func nextSequentialIndex(current: Int, count: Int, repeatMode: RepeatMode) -> Int? {
+        guard count > 0 else { return nil }
+        switch repeatMode {
+        case .one:
+            return current
+        case .all:
+            return (current + 1) % count
+        case .off:
+            let next = current + 1
+            return next < count ? next : nil
+        }
+    }
+
     func nextSongIndex() -> Int? {
         guard !queue.isEmpty else { return nil }
-        if repeatMode == .all { return currentIndex }  // Gapless loop of same track
-        if repeatMode == .one { return nil }  // Handled in handleTrackEnd
+        // Repeat One loops the current track via `handleTrackEnd`, NOT the lookahead, so it
+        // deliberately provides no advance index here (preserving its existing mechanism and its
+        // crossfade/predownload behavior). Its logical same-index policy is covered by
+        // `nextSequentialIndex` for testing/consistency.
+        if repeatMode == .one { return nil }
         if currentRadioStation != nil { return nil }
 
         if shuffleEnabled {
+            // Shuffle + Repeat All must NOT stick on the current index (the prior bug): only a
+            // one-item queue replays index 0; otherwise pick the next smart-shuffle item.
             guard queue.count > 1 else {
                 return repeatMode == .all ? currentIndex : nil
             }
             return smartShuffleNextIndex()
-        } else {
-            let next = currentIndex + 1
-            if next < queue.count {
-                return next
-            } else if repeatMode == .all {
-                return 0
-            } else {
-                return nil
-            }
         }
+        return Self.nextSequentialIndex(
+            current: currentIndex, count: queue.count, repeatMode: repeatMode)
     }
 
     func prepareLookahead() {
+        // Predownload completion calls this directly, so it can arrive during a persistent session.
+        guard admitsTransportRebuild else { return }
         guard activeMode == .gapless,
               gaplessEnabled,
               let nextIdx = nextSongIndex() else {
@@ -657,6 +728,16 @@ final class AudioEngine {
     }
 
     func replacePlayerItem(with url: URL) {
+        // The persistent backend owns audio: building an item here would re-arm the observers and
+        // put a second live transport underneath it. Scene activation and CarPlay connection both
+        // reach this through restoration, so the refusal has to be here rather than at those call
+        // sites.
+        guard admitsTransportRebuild else {
+            #if DEBUG
+            PlaybackEventLog.record("replacePlayerItem REFUSED (admitsTransportRebuild=false)")
+            #endif
+            return
+        }
         tearDownObservers()
         clearLookahead()
         generation += 1
@@ -685,5 +766,11 @@ final class AudioEngine {
         }
 
         setupObservers(for: item)
+        #if DEBUG
+        PlaybackEventLog.record(
+            "replacePlayerItem inserted src=\(url.isFileURL ? "local" : "stream") "
+            + "itemStatus=\(PlaybackStateDescribe.itemStatus(item.status)) "
+            + "queued=\(gaplessPlayer?.items().count ?? -1)")
+        #endif
     }
 }

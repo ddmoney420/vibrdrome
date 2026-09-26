@@ -5,7 +5,7 @@ struct MacContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
 
-    private var engine: AudioEngine { AudioEngine.shared }
+    private var engine: any ApplicationPlaybackControlling { ApplicationPlayback.shared }
 
     private var windowTitle: String {
         if let song = engine.currentSong {
@@ -37,22 +37,16 @@ struct MacContentView: View {
         .navigationTitle(appState.libraryCache.isReady ? windowTitle : "Vibrdrome")
         .onChange(of: scenePhase) { _, newPhase in
             guard appState.isConfigured else { return }
-            switch newPhase {
-            case .inactive:
-                // macOS rarely gets .background; save on .inactive
-                engine.savePlayQueue(client: appState.subsonicClient)
-                engine.saveQueueLocally()
-                engine.createBookmarkIfNeeded(client: appState.subsonicClient)
-            case .active:
-                engine.restorePlayQueue(client: appState.subsonicClient)
-                engine.refreshPlaybackState()
-                if UserDefaults.standard.bool(forKey: UserDefaultsKeys.exportAutoSyncOnForeground) {
-                    Task {
-                        await PlaylistExportManager.shared.syncAllActive(client: appState.subsonicClient)
-                    }
+            // Playback lifecycle: macOS rarely gets .background, so it saves on .inactive.
+            // Runs first so the .active follow-up below still happens after the restore.
+            ScenePlaybackLifecycleActions.handleMacScenePhase(
+                newPhase, client: appState.subsonicClient
+            )
+            if newPhase == .active,
+               UserDefaults.standard.bool(forKey: UserDefaultsKeys.exportAutoSyncOnForeground) {
+                Task {
+                    await PlaylistExportManager.shared.syncAllActive(client: appState.subsonicClient)
                 }
-            default:
-                break
             }
         }
         .sheet(isPresented: Bindable(appState).requiresReAuth) {

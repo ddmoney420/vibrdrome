@@ -171,7 +171,7 @@ func playAllShuffleButtons(for songs: [Song]) -> some View {
     HStack(spacing: 12) {
         Button {
             guard let first = songs.first else { return }
-            AudioEngine.shared.play(song: first, from: songs, at: 0)
+            ApplicationPlayback.shared.play(song: first, from: songs, at: 0)
         } label: {
             Label("Play All", systemImage: "play.fill")
                 .font(.subheadline)
@@ -185,7 +185,7 @@ func playAllShuffleButtons(for songs: [Song]) -> some View {
         Button {
             let shuffled = songs.shuffled()
             guard let first = shuffled.first else { return }
-            AudioEngine.shared.play(song: first, from: shuffled, at: 0)
+            ApplicationPlayback.shared.play(song: first, from: shuffled, at: 0)
         } label: {
             Label("Shuffle", systemImage: "shuffle")
                 .font(.subheadline)
@@ -221,7 +221,7 @@ struct DownloadedCollectionView: View {
                             let all = songs.map { $0.toSong() }
                             let song = download.toSong()
                             let index = all.firstIndex(where: { $0.id == song.id }) ?? 0
-                            AudioEngine.shared.play(song: song, from: all, at: index)
+                            ApplicationPlayback.shared.play(song: song, from: all, at: index)
                         }
                 }
                 .onDelete { offsets in

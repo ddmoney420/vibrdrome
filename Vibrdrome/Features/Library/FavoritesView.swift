@@ -188,7 +188,7 @@ struct FavoritesView: View {
             List {
                 HStack(spacing: 12) {
                     Button {
-                        AudioEngine.shared.play(song: songs[0], from: songs, at: 0)
+                        ApplicationPlayback.shared.play(song: songs[0], from: songs, at: 0)
                     } label: {
                         Label("Play All", systemImage: "play.fill")
                             .font(.subheadline)
@@ -201,7 +201,7 @@ struct FavoritesView: View {
 
                     Button {
                         let shuffled = songs.shuffled()
-                        AudioEngine.shared.play(song: shuffled[0], from: shuffled, at: 0)
+                        ApplicationPlayback.shared.play(song: shuffled[0], from: shuffled, at: 0)
                     } label: {
                         Label("Shuffle", systemImage: "shuffle")
                             .font(.subheadline)
@@ -237,7 +237,7 @@ struct FavoritesView: View {
                                 if isSelecting {
                                     toggleSelection(song.id)
                                 } else {
-                                    AudioEngine.shared.play(song: song, from: songs, at: index)
+                                    ApplicationPlayback.shared.play(song: song, from: songs, at: index)
                                 }
                             }
                     }
